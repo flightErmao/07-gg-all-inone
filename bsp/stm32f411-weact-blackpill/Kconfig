@@ -2,7 +2,7 @@ mainmenu "RT-Thread Configuration"
 
 BSP_DIR := .
 
-RTT_DIR := ../../..
+RTT_DIR := ../../kernel/rtthread
 
 PKGS_DIR := packages
 
@@ -15,7 +15,7 @@ config SOC_STM32F411RE
 
 source "$(RTT_DIR)/Kconfig"
 osource "$PKGS_DIR/Kconfig"
-rsource "../libraries/Kconfig"
+rsource "./libraries/Kconfig"
 
 if !RT_USING_NANO
 rsource "board/Kconfig"
