@@ -1,3 +1,6 @@
 [submodule "kernel/rtthread"]
 	path = kernel/rtthread
 	url = git@github.com:Tool-01-middleware/rt-thread.git
+[submodule "tools/env_win"]
+	path = tools/env_win
+	url = git@github.com:Tool-01-middleware/env-windows.git
