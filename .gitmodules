@@ -1,0 +1,3 @@
+[submodule "kernel/rtthread"]
+	path = kernel/rtthread
+	url = git@github.com:Tool-01-middleware/rt-thread.git
