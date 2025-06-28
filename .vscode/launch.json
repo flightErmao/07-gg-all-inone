@@ -1,0 +1,27 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "411CE 8M",
+            "type": "cortex-debug",
+            "request": "launch",
+            "cwd": "${workspaceRoot}",
+            "executable": "bsp/stm32f411-weact-blackpill/rt-thread.elf",            
+            "serverpath": "${env:JLINK_SERVER}",
+            "servertype": "jlink",
+            "device": "STM32F411CE",
+            "interface": "swd",
+            "armToolchainPath": "${workspaceRoot}/tools/toolchain/arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi/bin",
+            "serialNumber": "", //If you have more than one J-Link probe, add the serial number here.
+            // "svdFile": "target/amov/icf5/GD32F4xx.svd",
+            "runToMain": true,
+            "showDevDebugOutput": "raw",
+            "openOCDLaunchCommands": [
+                "adapter_khz 4000"
+            ]
+        }
+    ]
+}
