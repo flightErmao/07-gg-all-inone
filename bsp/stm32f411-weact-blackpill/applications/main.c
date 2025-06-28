@@ -15,15 +15,30 @@
 #ifndef RT_USING_NANO
 #include <rtdevice.h>
 #endif /* RT_USING_NANO */
+#include <vconsole.h>
 
 /* defined the LED0 pin: PC13 */
 #define LED0_PIN               GET_PIN(C, 13)
+
+int usb_change_shell(void)
+{
+    static rt_device_t usb_device = RT_NULL;
+    usb_device = rt_device_find("vcom");
+    if (usb_device == RT_NULL)
+    {
+        rt_kprintf("not found vcom device!\n");
+        return -1;
+    }
+    vconsole_switch(usb_device);
+    return 0;
+}
+// MSH_CMD_EXPORT(usb_change_shell, usb change shell);
 
 int main(void)
 {
     /* set LED0 pin mode to output */
     rt_pin_mode(LED0_PIN, PIN_MODE_OUTPUT);
-
+    usb_change_shell();
     while (1)
     {
         rt_pin_write(LED0_PIN, PIN_HIGH);
