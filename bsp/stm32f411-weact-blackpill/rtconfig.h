@@ -255,6 +255,8 @@
 
 /* tools packages */
 
+#define PKG_USING_VCONSOLE
+#define PKG_USING_VCONSOLE_LATEST_VERSION
 /* end of tools packages */
 
 /* system packages */
