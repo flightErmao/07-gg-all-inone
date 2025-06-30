@@ -1,0 +1,26 @@
+from building import *
+
+cwd = GetCurrentDir()
+src  = []
+group = []
+path = [cwd]
+
+# 获取当前目录下的所有 .c 文件
+src  = Glob('./*.c')
+
+# 定义编译组
+group = DefineGroup('IMU', src, depend = [''], CPPPATH = path)
+
+env = DefaultEnvironment()
+env.Append(CXXFLAGS=['-std=c++11'])
+env.Append(LINKFLAGS=['-lstdc++'])
+
+list = os.listdir(cwd)
+for item in list:
+    item_path = os.path.join(cwd, item)
+    if os.path.isdir(item_path) and os.path.isfile(os.path.join(item_path, 'SConscript')):
+        # 注意：这里应该使用 os.path.join(cwd, item, 'SConscript') 或者直接使用 item_path
+        # 确保路径正确，并假设 SConscript 是在子目录中
+        group = group + SConscript(os.path.join(cwd, item, 'SConscript'))
+
+Return('group')

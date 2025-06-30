@@ -433,4 +433,12 @@
 
 /* end of Hardware Drivers Config */
 
+/* DriverFramework_Config */
+
+/* L2_DEVICE_CONFIG */
+
+#define BSP_USING_ICM42688
+/* end of L2_DEVICE_CONFIG */
+/* end of DriverFramework_Config */
+
 #endif

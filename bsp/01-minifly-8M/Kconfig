@@ -20,3 +20,5 @@ rsource "./libraries/Kconfig"
 if !RT_USING_NANO
 rsource "board/Kconfig"
 endif
+
+source "../../driverframework/Kconfig"

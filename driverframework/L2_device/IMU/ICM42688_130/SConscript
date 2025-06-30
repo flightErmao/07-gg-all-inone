@@ -1,0 +1,14 @@
+from building import *
+
+Import("env")  # 加上这一行
+
+cwd = GetCurrentDir()
+path = [cwd]
+src = Glob("./*.c")
+
+group = DefineGroup("IMU_ICM42688", src, depend=["BSP_USING_ICM42688"], CPPPATH=path)
+# group = DefineGroup("IMU_ICM42688", src, [], CPPPATH=path)
+
+print(env["CPPDEFINES"])
+
+Return("group")
