@@ -9,7 +9,7 @@
             "type": "cortex-debug",
             "request": "launch",
             "cwd": "${workspaceRoot}",
-            "executable": "bsp/stm32f411-weact-blackpill/rt-thread.elf",            
+            "executable": "bsp/01-minifly-8M/rt-thread.elf",
             "serverpath": "${env:JLINK_SERVER}",
             "servertype": "jlink",
             "device": "STM32F411CE",
