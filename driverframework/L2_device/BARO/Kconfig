@@ -1,0 +1,1 @@
+source "$BSP_DIR/../../driverframework/L2_device/BARO/SPL16_001/Kconfig"

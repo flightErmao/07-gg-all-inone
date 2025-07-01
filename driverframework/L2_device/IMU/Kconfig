@@ -1,0 +1,1 @@
+source "$BSP_DIR/../../driverframework/L2_device/IMU/ICM42688_130/Kconfig"
