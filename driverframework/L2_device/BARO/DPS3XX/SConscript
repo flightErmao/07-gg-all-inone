@@ -1,0 +1,15 @@
+from building import *
+
+cwd = GetCurrentDir()
+path = []
+src = []
+
+src = Glob("./*.c")
+src += Glob("./*.cpp")
+path = [cwd]
+path += [os.path.join(cwd, 'util')]
+
+# 定义编译组
+group = DefineGroup("DPS368", src, depend=["BSP_USING_DPS368"], CPPPATH=path)
+
+Return("group")

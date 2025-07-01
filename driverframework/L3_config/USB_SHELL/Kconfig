@@ -1,0 +1,4 @@
+menuconfig BSP_USING_USBD
+        bool "Enable USB Device"
+        select RT_USING_USB_DEVICE
+        default n

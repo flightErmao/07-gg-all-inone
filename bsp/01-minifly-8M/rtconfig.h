@@ -145,6 +145,8 @@
 #define RT_USING_SERIAL
 #define RT_USING_SERIAL_V1
 #define RT_SERIAL_RB_BUFSZ 64
+#define RT_USING_I2C
+#define RT_USING_I2C_BITOPS
 #define RT_USING_PIN
 /* end of Device Drivers */
 
@@ -359,6 +361,9 @@
 
 /* samples: kernel and components samples */
 
+#define PKG_USING_PERIPHERAL_SAMPLES
+#define PKG_USING_PERIPHERAL_SAMPLES_LATEST_VERSION
+#define PERIPHERAL_SAMPLES_USING_DRV
 /* end of samples: kernel and components samples */
 
 /* entertainment: terminal games and other interesting software packages */
@@ -414,31 +419,21 @@
 #define SOC_FAMILY_STM32
 #define SOC_SERIES_STM32F4
 
-/* Hardware Drivers Config */
-
-/* Onboard Peripheral Drivers */
-
-/* end of Onboard Peripheral Drivers */
-
-/* On-chip Peripheral Drivers */
-
-#define BSP_USING_GPIO
-#define BSP_USING_UART
-#define BSP_STM32_UART_V1_TX_TIMEOUT 2000
-#define BSP_USING_UART1
-#define BSP_USING_USBD
-/* end of On-chip Peripheral Drivers */
-
-/* Board extended module Drivers */
-
-/* end of Hardware Drivers Config */
-
 /* DriverFramework_Config */
 
 /* L2_DEVICE_CONFIG */
 
-#define BSP_USING_ICM42688
 /* end of L2_DEVICE_CONFIG */
+
+/* L3_ONBOARD_CONFIG */
+
+#define BSP_USING_I2C
+#define BSP_USING_USBD
+#define BSP_USING_GPIO
+#define BSP_USING_UART
+#define BSP_STM32_UART_V1_TX_TIMEOUT 2000
+#define BSP_USING_UART1
+/* end of L3_ONBOARD_CONFIG */
 /* end of DriverFramework_Config */
 
 #endif

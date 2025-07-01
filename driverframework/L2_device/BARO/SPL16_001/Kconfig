@@ -1,0 +1,46 @@
+menuconfig BSP_USING_SPL16_001
+    bool "ENANLE: BARO_SPL16_001"
+    default n
+    select RT_USING_I2C
+    if BSP_USING_SPL16_001
+        menuconfig SPL16001_ID1
+            bool "Enable: SPL16001_ID1"
+            default n
+            if SPL16001_ID1
+                config SPL16001_DEVICE_NAME_ID1
+                    string "Device Name"
+                    default "spl16001_id1"
+                    help
+                        Device Name for ID1
+                config SPL16001_I2C_NAME_ID1
+                    string "I2C Device"
+                    default "hwi2c1"
+                    help
+                        I2C Device name for ID1
+                config SPL16001_I2C_ADDRESS_ID1
+                    hex "I2C Address"
+                    default 0x77
+                    help
+                        I2C Address for ID1
+            endif
+        menuconfig SPL16001_ID2
+            bool "Enable: SPL16001_ID2"
+            default n
+            if SPL16001_ID2
+                config SPL16001_DEVICE_NAME_ID2
+                    string "Device Name"
+                    default "spl16001_id2"
+                    help
+                        Device Name for ID2
+                config SPL16001_I2C_NAME_ID2
+                    string "I2C Device"
+                    default "hwi2c2"
+                    help
+                        I2C Device name for ID2 
+                config SPL16001_I2C_ADDRESS_ID2
+                    hex "I2C Address"
+                    default 0x77
+                    help
+                        I2C Address for ID2
+            endif
+    endif

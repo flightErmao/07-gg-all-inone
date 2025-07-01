@@ -1,0 +1,16 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+src = []
+path = []
+
+src += Glob("./*.c")
+path += [cwd]
+
+# 定义编译组
+group = DefineGroup("VCONSOLE_SWITCH", src, depend=["PKG_USING_VCONSOLE"], CPPPATH=path)
+
+env = DefaultEnvironment()
+
+Return("group")

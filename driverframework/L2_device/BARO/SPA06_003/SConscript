@@ -1,0 +1,11 @@
+from building import *
+
+cwd = GetCurrentDir()
+path = [cwd]
+src  = Glob('./*.c')
+src  += Glob('./*.cpp')
+
+# 定义编译组
+group = DefineGroup('SPA06_003', src, depend = ['DEVICE_SPA06_003'], CPPPATH = path)
+
+Return('group')

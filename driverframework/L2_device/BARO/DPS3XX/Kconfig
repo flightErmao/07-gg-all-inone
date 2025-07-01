@@ -1,0 +1,14 @@
+menuconfig BSP_USING_DPS368
+    bool "ENANLE: BARO_DPS368"
+    default n
+    if BSP_USING_DPS368
+        config SENSOR_NAME_DPS368
+            string "BARO DPS368 NAME"
+            default "dsp368"
+        config SENSOR_I2C_NAME_DPS368
+            string "BARO DPS368 I2C NAME"
+            default "hwi2c1"
+        config SENSOR_DPS368_I2C_ADDR
+            int "DPS368_I2C_ADDR"
+            default 0x76
+    endif

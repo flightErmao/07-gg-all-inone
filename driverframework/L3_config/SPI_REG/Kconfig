@@ -1,0 +1,48 @@
+menuconfig BSP_USING_SPI
+    bool "Enable SPI BUS"
+    default n
+    select RT_USING_SPI
+    if BSP_USING_SPI
+        menuconfig BSP_USING_SPI1
+            bool "Enable SPI1 BUS"
+            default n
+            depends on BSP_USING_SPI
+            if BSP_USING_SPI1
+                config BSP_SPI1_TX_USING_DMA
+                    bool "Enable SPI1 TX DMA"
+                    default n
+                config BSP_SPI1_RX_USING_DMA
+                    bool "Enable SPI1 RX DMA"
+                    default n
+                menuconfig BSP_USING_SPI10
+                    bool "Enable SPI10 SLAVE BUS"
+                    default n
+                    if BSP_USING_SPI10
+                        config SPI_SLAVE_NAME_SPI10
+                        string "SPI10 SLAVE BUS NAME"
+                        default "spi10"
+                    endif
+            endif
+        menuconfig BSP_USING_SPI2
+            bool "Enable SPI2 BUS"
+            default n
+            depends on BSP_USING_SPI
+            if BSP_USING_SPI2
+                config BSP_SPI2_TX_USING_DMA
+                    bool "Enable SPI2 TX DMA"                    
+                    default n
+                config BSP_SPI2_RX_USING_DMA
+                    bool "Enable SPI2 RX DMA"
+                    default n                
+                menuconfig BSP_USING_SPI20
+                    bool "Enable SPI20 SLAVE BUS"
+                    default n
+                    if BSP_USING_SPI20
+                        config SPI_SLAVE_NAME_SPI20
+                        string "SPI20 SLAVE BUS NAME"
+                        default "spi20"
+                    endif
+            endif
+    endif
+
+
