@@ -7,8 +7,6 @@
 #define DBG_LVL DBG_LOG
 #include <rtdbg.h>
 
-#define IIC_MAX_WIRTE_COUNT 512
-
 typedef struct {
   struct baro_device baro_dev;
   I2cInterface_t i2c_interface;
