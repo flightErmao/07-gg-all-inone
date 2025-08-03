@@ -93,4 +93,36 @@ if exist "%ENV_WIN_ROOT%.git" (
 echo Git assume-unchanged setup completed.
 echo.
 
+REM Set git assume-unchanged for main repository files
+echo Setting git assume-unchanged for main repository files...
+
+REM Check and set assume-unchanged for .vscode/settings.json
+if exist ".vscode\settings.json" (
+    echo Found: .vscode/settings.json
+    git update-index --assume-unchanged ".vscode/settings.json" 2>nul
+    if %errorlevel% equ 0 (
+        echo   - Successfully set assume-unchanged for settings.json
+    ) else (
+        echo   - Warning: Failed to set assume-unchanged for settings.json
+    )
+) else (
+    echo   - settings.json not found, skipping
+)
+
+REM Check and set assume-unchanged for .vscode/launch.json
+if exist ".vscode\launch.json" (
+    echo Found: .vscode/launch.json
+    git update-index --assume-unchanged ".vscode/launch.json" 2>nul
+    if %errorlevel% equ 0 (
+        echo   - Successfully set assume-unchanged for launch.json
+    ) else (
+        echo   - Warning: Failed to set assume-unchanged for launch.json
+    )
+) else (
+    echo   - launch.json not found, skipping
+)
+
+echo Main repository assume-unchanged setup completed.
+echo.
+
 call tools\env_win\env.bat "%BSP_PATH%" 
