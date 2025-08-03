@@ -1,0 +1,8 @@
+menuconfig BSP_USING_TASK_2_GPS_TEST
+    bool "ENABLE: TASK_2_GPS_TEST"
+    default n
+    help
+        Enable GPS test task that periodically calls GPS test interface.
+        
+        When enabled, the system creates an independent thread to run the GPS test task,
+        with a timer triggering every 1000ms to call the GPS test step function.
