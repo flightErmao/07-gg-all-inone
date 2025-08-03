@@ -1,0 +1,16 @@
+from building import *
+import os
+ 
+cwd     = GetCurrentDir()
+CPPPATH = [cwd]
+src  = []
+ 
+group = []
+ 
+list = os.listdir(cwd)
+for item in list:
+    item_path = os.path.join(cwd, item)
+    if os.path.isdir(item_path) and os.path.isfile(os.path.join(item_path, 'SConscript')):
+        group = group + SConscript(os.path.join(cwd, item, 'SConscript'))
+ 
+Return('group')

@@ -1,0 +1,33 @@
+menuconfig BSP_USING_TASK_1_LED_BLINK
+    bool "ENABLE: TASK_1_LED_BLINK"
+    default n
+    help
+        Enable LED blink task that periodically calls Simulink model interface.
+        
+        When enabled, the system creates an independent thread to run the LED blink task,
+        with a timer triggering every 500ms to call the Simulink model's step function.
+        
+    if BSP_USING_TASK_1_LED_BLINK
+        config TASK_1_LED_BLINK_PRIORITY
+            int "LED Blink Task Priority"
+            default 5
+            range 1 10
+            help
+                Set the thread priority for LED blink task.
+                Lower values indicate higher priority.
+
+        config TASK_1_LED_BLINK_TIMER_INTERVAL
+            int "LED Blink Timer Interval (ms)"
+            default 500
+            range 100 10000
+            help
+                Set the timer interval for LED blink task.
+                Unit: milliseconds
+
+        config TASK_1_LED_BLINK_DEBUG
+            bool "Enable LED Blink Task Debug Info"
+            default y
+            help
+                Enable debug output information for LED blink task.
+                Includes task start, stop, timer trigger and other information.
+    endif 

@@ -1,0 +1,30 @@
+from building import *
+
+Import("env")
+
+# 获取当前目录
+cwd = GetCurrentDir()
+
+# 定义源文件路径 - 使用相对于项目根目录的路径
+task_path = "../../../src/task/led_blink"
+model_path = "../../../src/model/led_blink"
+lib_path = "../../../src/model/led_blink/lib"
+
+# 获取src目录下的源文件
+src = Glob(f"{task_path}/*.c")
+
+# 添加LED闪烁接口的源文件
+src += Glob(f"{model_path}/*.c")
+
+# 添加LED闪烁模型的lib源文件
+src += Glob(f"{lib_path}/*.c")
+
+# 定义头文件路径 - 使用相对于项目根目录的路径
+path = [f"#{task_path}", f"#{model_path}", f"#{lib_path}"]
+
+# 使用独立的环境定义group
+group = DefineGroup("TASK_1_LED_BLINK", src, 
+                   depend=["BSP_USING_TASK_1_LED_BLINK"], 
+                   CPPPATH=path)
+
+Return("group") 
