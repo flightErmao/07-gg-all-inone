@@ -1,0 +1,44 @@
+menuconfig BSP_USING_TASK_04_BARO_TEST
+    bool "ENABLE: TASK_BARO_TEST"
+    default n
+    help
+       open baro report task
+
+    if BSP_USING_TASK_04_BARO_TEST
+
+        config TASK_SEND_DATA_ANOTC
+            bool "Enable send data to ANOTC telemetry"
+            default y            
+            help
+                Enable sending barometer data to ANOTC telemetry system
+
+        config TASK_CONFIG_BARO_PRINTF
+            bool "Enable barometer data printf"
+            default n            
+            help
+                Enable printing barometer data to console
+
+        choice BARO_SENSOR_SELECTION
+            prompt "Select barometer sensor"
+            default BARO_REPORT_USING_SPL16_001            
+            help
+                Select which barometer sensor to use
+
+            config BARO_REPORT_USING_SPL16_001
+                bool "SPL16_001 barometer"
+                help
+                    Use SPL16_001 barometer sensor
+
+            config BARO_REPORT_USING_DPS368
+                bool "DPS368 barometer"
+                help
+                    Use DPS368 barometer sensor
+
+            config BARO_REPORT_USING_SPA06_003
+                bool "SPA06_003 barometer"
+                help
+                    Use SPA06_003 barometer sensor
+        endchoice
+
+        comment "Select barometer and device name in L1_module -> MODULE_BARO_REPORT"
+    endif 

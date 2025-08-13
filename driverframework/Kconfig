@@ -1,5 +1,6 @@
 menu "DriverFramework_Config"
     source "$BSP_DIR/../../driverframework/L0_task/Kconfig"
+    # source "$BSP_DIR/../../driverframework/L1_module/Kconfig"
     # source "driverframework/L1_tool/Kconfig"
     source "$BSP_DIR/../../driverframework/L2_device/Kconfig"
     source "$BSP_DIR/../../driverframework/L3_config/Kconfig"

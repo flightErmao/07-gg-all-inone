@@ -1,0 +1,5 @@
+menuconfig BSP_USING_TASK_03_ANOTC_TELEM
+    bool "ENABLE: TASK_ANOTC"
+    default n
+    help
+       open anotc task
