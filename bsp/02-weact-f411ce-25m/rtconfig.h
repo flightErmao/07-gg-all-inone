@@ -173,6 +173,7 @@
 
 /* end of Interprocess Communication (IPC) */
 /* end of POSIX (Portable Operating System Interface) layer */
+#define RT_USING_CPLUSPLUS
 /* end of C/C++ and POSIX layer */
 
 /* Network */
@@ -431,6 +432,10 @@
 
 /* L2_DEVICE_CONFIG */
 
+#define BSP_USING_DPS368
+#define SENSOR_NAME_DPS368 "dsp368"
+#define SENSOR_I2C_NAME_DPS368 "hwi2c1"
+#define SENSOR_DPS368_I2C_ADDR 0x76
 /* end of L2_DEVICE_CONFIG */
 
 /* L3_ONBOARD_CONFIG */
