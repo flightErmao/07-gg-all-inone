@@ -1,1 +1,3 @@
 **/*.o
+bsp/02-weact-f411ce-25m/board/CubeMX_Config/Src/main.c
+bsp/02-weact-f411ce-25m/board/CubeMX_Config/Src/system_stm32f4xx.c
