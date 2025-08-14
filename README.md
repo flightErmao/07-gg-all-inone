@@ -12,6 +12,9 @@ git update-index --assume-unchanged .vscode/settings.json
 
 git update-index --assume-unchanged .vscode/launch.json
 
+
 3. 下载大文件
    git lfs install
    git lfs pull
+4. `git update-index --no-assume-unchanged .vscode/launch.json`
+   恢复上传

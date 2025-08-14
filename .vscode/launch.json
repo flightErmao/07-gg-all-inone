@@ -5,11 +5,49 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "411CE 8M",
+            "name": "01-minifly-8M",
             "type": "cortex-debug",
             "request": "launch",
             "cwd": "${workspaceRoot}",
-            "executable": "bsp/01-minifly-8M/rt-thread.elf",
+            "executable": "target/01-minifly-8M/rt-thread.elf",
+            "serverpath": "${env:JLINK_SERVER}",
+            "servertype": "jlink",
+            "device": "STM32F411CE",
+            "interface": "swd",
+            "armToolchainPath": "${workspaceRoot}/tools/toolchain/arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi/bin",
+            "serialNumber": "", //If you have more than one J-Link probe, add the serial number here.
+            // "svdFile": "target/amov/icf5/GD32F4xx.svd",
+            "runToMain": true,
+            "showDevDebugOutput": "raw",
+            "openOCDLaunchCommands": [
+                "adapter_khz 4000"
+            ]
+        },
+                {
+            "name": "02-weact-f411ce-25m",
+            "type": "cortex-debug",
+            "request": "launch",
+            "cwd": "${workspaceRoot}",
+            "executable": "target/02-weact-f411ce-25m/rt-thread.elf",
+            "serverpath": "${env:JLINK_SERVER}",
+            "servertype": "jlink",
+            "device": "STM32F411CE",
+            "interface": "swd",
+            "armToolchainPath": "${workspaceRoot}/tools/toolchain/arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi/bin",
+            "serialNumber": "", //If you have more than one J-Link probe, add the serial number here.
+            // "svdFile": "target/amov/icf5/GD32F4xx.svd",
+            "runToMain": true,
+            "showDevDebugOutput": "raw",
+            "openOCDLaunchCommands": [
+                "adapter_khz 4000"
+            ]
+        },
+        {
+            "name": "03-lcd-f411ce-25m",
+            "type": "cortex-debug",
+            "request": "launch",
+            "cwd": "${workspaceRoot}",
+            "executable": "target/03-lcd-f411ce-25M/rt-thread.elf",
             "serverpath": "${env:JLINK_SERVER}",
             "servertype": "jlink",
             "device": "STM32F411CE",
