@@ -1,16 +1,16 @@
 @echo off
 
-REM Auto call tools/env_win/env.bat, support selecting project in bsp by argument
+REM Auto call tools/env_win/env.bat, support selecting project in target by argument
 setlocal
 set PROJ=%1
 
 if "%PROJ%"=="" (
-    set BSP_PATH=%~dp0bsp
+    set BSP_PATH=%~dp0target
 ) else if "%PROJ%"=="01" (
-    set BSP_PATH=%~dp0bsp\01-minifly-8M
+    set BSP_PATH=%~dp0target\01-minifly-8M
 ) else (
     echo Unknown project number: %PROJ%
-    set BSP_PATH=%~dp0bsp
+    set BSP_PATH=%~dp0target
     @REM exit /b 1
 )
 
