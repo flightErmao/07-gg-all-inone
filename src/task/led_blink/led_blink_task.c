@@ -4,6 +4,8 @@
 #include <board.h>
 #include <rtthread.h>
 #include <drv_gpio.h>
+#include <ctype.h>
+#include <rtconfig.h>
 
 // 包含LED闪烁接口头文件
 #include "../../model/led_blink/led_blink_interface.h"
@@ -12,7 +14,47 @@
 #define LED_BLINK_TASK_NAME "led_blink_task"
 
 // LED引脚定义
-#define LED0_PIN GET_PIN(C, 13)  // LED引脚定义，与main中保持一致
+// 通过 Kconfig 字符串配置解析 LED 引脚，形如 "PC13"
+// 若解析失败，将回退到 PC13
+static rt_base_t parse_led_pin_from_config(const char* pin_name) {
+  if (pin_name == RT_NULL) {
+    return (rt_base_t)(2 * 16 + 13);  // PC13
+  }
+
+  const char* s = pin_name;
+  // 允许可选的前缀 'P'
+  if (s[0] == 'P' || s[0] == 'p') {
+    s++;
+  }
+  // 读取端口字母
+  if (s[0] == '\0' || !isalpha((unsigned char)s[0])) {
+    return (rt_base_t)(2 * 16 + 13);
+  }
+  char port_char = (char)toupper((unsigned char)s[0]);
+  s++;
+
+  // 读取数字部分
+  int pin_num = 0;
+  int has_digit = 0;
+  while (*s) {
+    if (!isdigit((unsigned char)*s)) break;
+    has_digit = 1;
+    pin_num = pin_num * 10 + (*s - '0');
+    s++;
+  }
+  if (!has_digit) {
+    return (rt_base_t)(2 * 16 + 13);
+  }
+
+  // 映射端口字母到索引（A->0, B->1, C->2, ...）
+  if (port_char < 'A' || port_char > 'Z') {
+    return (rt_base_t)(2 * 16 + 13);
+  }
+  int port_index = port_char - 'A';
+
+  // STM32 驱动版编码：port*16 + pin
+  return (rt_base_t)(port_index * 16 + pin_num);
+}
 
 // 事件定义
 #define LED_BLINK_EVENT_STEP (1 << 0)  // LED闪烁步进事件
@@ -42,8 +84,12 @@ static rt_err_t led_blink_task_init_resources(void) {
 
   printf("[%s] 开始初始化LED任务资源\n", LED_BLINK_TASK_NAME);
 
-  // 初始化LED引脚
-  led_pin = LED0_PIN;
+  // 初始化LED引脚（从 Kconfig 字符串解析）
+#ifdef TASK_1_LED_BLINK_PIN
+  led_pin = parse_led_pin_from_config(TASK_1_LED_BLINK_PIN);
+#else
+  led_pin = parse_led_pin_from_config("PC13");
+#endif
   rt_pin_mode(led_pin, PIN_MODE_OUTPUT);
   rt_pin_write(led_pin, PIN_LOW);  // 初始状态设为低电平
   printf("[%s] LED引脚初始化完成，引脚: %d\n", LED_BLINK_TASK_NAME, led_pin);

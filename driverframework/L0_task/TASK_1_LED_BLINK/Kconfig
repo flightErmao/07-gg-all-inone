@@ -24,10 +24,11 @@ menuconfig BSP_USING_TASK_1_LED_BLINK
                 Set the timer interval for LED blink task.
                 Unit: milliseconds
 
-        config TASK_1_LED_BLINK_DEBUG
-            bool "Enable LED Blink Task Debug Info"
-            default y
+        config TASK_1_LED_BLINK_PIN
+            string "LED0 Pin (e.g. PA0, PC13)"
+            default "PC13"
             help
-                Enable debug output information for LED blink task.
-                Includes task start, stop, timer trigger and other information.
+                Enter the LED0 GPIO pin in format like "PA0", "PB1", "PC13".
+                The tool will parse it and map to the correct pin number at runtime.
+
     endif 
