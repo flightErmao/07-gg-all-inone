@@ -1,0 +1,7 @@
+1. 如何使用configs下面的文件来生成固化
+（1） menuconfig --config=.\configs\01-base-f411ce-lcd --silent && scons
+（2） 如果env不支持，则进入env之后，使用： 来修复；
+cd ..\..\tools\env_win\tools\scripts
+pip uninstall -y env
+pip install -U .
+cd ..\..\..\..\target\02-weact-f411ce-25m
