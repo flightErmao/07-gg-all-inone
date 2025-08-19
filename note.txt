@@ -5,3 +5,4 @@ cd ..\..\tools\env_win\tools\scripts
 pip uninstall -y env
 pip install -U .
 cd ..\..\..\..\target\02-weact-f411ce-25m
+menuconfig --config=..\..\..\configs\01-base\01-base_f411ce-8m-minifly --silent && scons
