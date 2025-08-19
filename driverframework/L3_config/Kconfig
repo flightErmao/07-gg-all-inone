@@ -3,6 +3,7 @@ menu "L3_ONBOARD_CONFIG"
     source "$BSP_DIR/../../driverframework/L3_config/I2C_REG/Kconfig"
     source "$BSP_DIR/../../driverframework/L3_config/USB_SHELL/Kconfig"
     source "$BSP_DIR/libraries/HAL_Drivers/drivers/Kconfig"
+    source "$BSP_DIR/../../driverframework/L3_config/BOARD/Kconfig"
     
     config BSP_USING_GPIO
         bool "Enable GPIO"
