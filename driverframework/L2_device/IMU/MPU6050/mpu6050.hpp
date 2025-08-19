@@ -1,5 +1,9 @@
 #pragma once
+#ifdef __cplusplus
 #include <cstdint>
+#else
+#include <stdint.h>
+#endif
 
 // 错误码定义
 #define MPU_EOK 0     // 无错误
@@ -11,11 +15,22 @@ extern "C" {
 #endif
 
 extern int drv_mpu6050_i2c_init(const char* i2c_device_name, const char* device_name);
+// 新增C接口，基于单例对象
+extern int drv_mpu6050_set_i2c_addr(uint8_t addr);
+extern int drv_mpu6050_set_delay(void (*delay_ms)(unsigned int));
+extern int drv_mpu6050_set_i2c_funcs(int8_t (*write_func)(uint8_t, uint8_t, uint8_t*, uint8_t),
+                                     int8_t (*read_func)(uint8_t, uint8_t, uint8_t*, uint8_t));
+extern int drv_mpu6050_read(int pos, void* data, int size);
+extern int drv_mpu6050_get_accel(int16_t* ax, int16_t* ay, int16_t* az);
+extern int drv_mpu6050_get_gyro(int16_t* gx, int16_t* gy, int16_t* gz);
+extern int drv_mpu6050_get_temp(float* temp);
+extern int drv_mpu6050_self_test();
 
 #ifdef __cplusplus
 }
 #endif
 
+#ifdef __cplusplus
 /**
  * @class MPU6050
  * @brief MPU6050 惯性测量单元驱动类
@@ -33,6 +48,11 @@ class MPU6050 {
    * @brief 延时函数指针类型
    */
   typedef void (*delay_ms_func_t)(unsigned int ms);
+
+  /**
+   * @brief 获取单例实例
+   */
+  static MPU6050& instance();
 
   /**
    * @brief 构造函数
@@ -119,6 +139,7 @@ class MPU6050 {
  private:
   uint8_t dev_addr_ = {};
   bool is_init_ = false;
+  mpu_device_t device_ = {};  // 补充与cpp一致的成员
 
   int8_t (*i2c_bus_write_)(uint8_t, uint8_t, uint8_t*, uint8_t) = nullptr;
   int8_t (*i2c_bus_read_)(uint8_t, uint8_t, uint8_t*, uint8_t) = nullptr;
@@ -153,3 +174,4 @@ class MPU6050 {
   void setDLPFMode(uint8_t mode);              // 设置数字低通滤波模式
   uint8_t setRate(uint16_t rate);
 };
+#endif

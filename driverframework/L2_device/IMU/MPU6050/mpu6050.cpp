@@ -16,6 +16,12 @@ MPU6050::~MPU6050() {
   // 不再依赖RTThread关闭设备
 }
 
+// 单例实现
+MPU6050& MPU6050::instance() {
+  static MPU6050 s_instance;
+  return s_instance;
+}
+
 // 设置延时函数指针
 void MPU6050::setDelayMs(delay_ms_func_t func) { delay_ms_ = func; }
 
@@ -23,6 +29,9 @@ void MPU6050::setDelayMs(delay_ms_func_t func) { delay_ms_ = func; }
 void MPU6050::delayMs(unsigned int ms) {
   if (delay_ms_ != nullptr) {
     delay_ms_(ms);
+  } else {
+    // 回退到全局C延时（若已由平台提供）
+    delay_ms(ms);
   }
 }
 
@@ -264,14 +273,57 @@ void MPU6050::setDLPFMode(uint8_t mode) {
 
 uint8_t MPU6050::setRate(uint16_t rate) {
   uint8_t data;
-  if (rate > 1000) return 1;
-  if (rate < 4) return 1;
-  data = 1000 / rate - 1;
+  if (rate == 0) {
+    // 特殊处理: 0 表示 1000Hz => 分频寄存器为 0
+    data = 0;
+  } else {
+    if (rate > 1000 || rate < 4) return 1;
+    data = (uint8_t)(1000 / rate - 1);
+  }
   return i2cBusWriteByte(dev_addr_, MPU6500_RA_SMPLRT_DIV, data);
 }
 
-// 兼容C接口
+// 兼容C接口（基于单例）
 extern "C" int drv_mpu6050_i2c_init(const char* i2c_device_name, const char* device_name) {
-  static MPU6050 mpu;
-  return mpu.init();
+  (void)i2c_device_name;
+  (void)device_name;
+  return MPU6050::instance().init();
 }
+
+extern "C" int drv_mpu6050_set_i2c_addr(uint8_t addr) {
+  MPU6050::instance().setI2cAddr(addr);
+  return MPU_EOK;
+}
+
+extern "C" int drv_mpu6050_set_delay(void (*delay_ms_cb)(unsigned int)) {
+  MPU6050::instance().setDelayMs(delay_ms_cb);
+  return MPU_EOK;
+}
+
+extern "C" int drv_mpu6050_set_i2c_funcs(int8_t (*write_func)(uint8_t, uint8_t, uint8_t*, uint8_t),
+                                         int8_t (*read_func)(uint8_t, uint8_t, uint8_t*, uint8_t)) {
+  int8_t w = MPU6050::instance().setI2cBusWrite(write_func);
+  int8_t r = MPU6050::instance().setI2cBusRead(read_func);
+  return (w == 0 && r == 0) ? MPU_EOK : MPU_ERROR;
+}
+
+extern "C" int drv_mpu6050_read(int pos, void* data, int size) {
+  return MPU6050::instance().read_data(pos, data, size);
+}
+
+extern "C" int drv_mpu6050_get_accel(int16_t* ax, int16_t* ay, int16_t* az) {
+  uint8_t res = MPU6050::instance().getAccelerometer(ax, ay, az);
+  return (res == 0) ? MPU_EOK : MPU_ERROR;
+}
+
+extern "C" int drv_mpu6050_get_gyro(int16_t* gx, int16_t* gy, int16_t* gz) {
+  uint8_t res = MPU6050::instance().getGyroscope(gx, gy, gz);
+  return (res == 0) ? MPU_EOK : MPU_ERROR;
+}
+
+extern "C" int drv_mpu6050_get_temp(float* temp) {
+  uint8_t res = MPU6050::instance().getTemperature(temp);
+  return (res == 0) ? MPU_EOK : MPU_ERROR;
+}
+
+extern "C" int drv_mpu6050_self_test() { return (int)MPU6050::instance().selfTest(); }
