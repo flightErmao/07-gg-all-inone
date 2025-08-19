@@ -2,7 +2,7 @@ mainmenu "RT-Thread Configuration"
 
 BSP_DIR := .
 
-RTT_DIR := ../../kernel/rtthread
+RTT_DIR := ../../../kernel/rtthread
 
 PKGS_DIR := packages
 
