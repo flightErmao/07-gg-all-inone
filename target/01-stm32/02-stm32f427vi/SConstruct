@@ -1,13 +1,21 @@
+# =============================================================================
+# RT-Thread STM32F427VI BSP Build Configuration
+# =============================================================================
+
 import os
 import sys
 import rtconfig
 
+# =============================================================================
+# 1. RT-Thread 内核路径设置
+# =============================================================================
 if os.getenv('RTT_ROOT'):
     RTT_ROOT = os.getenv('RTT_ROOT')
 else:
-    RTT_ROOT = os.path.normpath(os.getcwd() + '/../../..')
+    RTT_ROOT = os.path.normpath(os.getcwd() + '/../../../kernel/rtthread')
 
-sys.path = sys.path + [os.path.join(RTT_ROOT, 'tools')]
+# 添加 RT-Thread 工具路径和当前目录到Python路径
+sys.path = sys.path + [os.path.join(RTT_ROOT, 'tools'), os.getcwd()]
 try:
     from building import *
 except:
@@ -15,6 +23,9 @@ except:
     print(RTT_ROOT)
     exit(-1)
 
+# =============================================================================
+# 2. 依赖包检查
+# =============================================================================
 def bsp_pkg_check():
     import subprocess
 
@@ -35,8 +46,14 @@ def bsp_pkg_check():
 
 RegisterPreBuildingAction(bsp_pkg_check)
 
+# =============================================================================
+# 3. 构建目标设置
+# =============================================================================
 TARGET = 'rt-thread.' + rtconfig.TARGET_EXT
 
+# =============================================================================
+# 4. 编译环境配置
+# =============================================================================
 DefaultEnvironment(tools=[])
 env = Environment(tools = ['mingw'],
     AS = rtconfig.AS, ASFLAGS = rtconfig.AFLAGS,
@@ -46,31 +63,76 @@ env = Environment(tools = ['mingw'],
     LINK = rtconfig.LINK, LINKFLAGS = rtconfig.LFLAGS)
 env.PrependENVPath('PATH', rtconfig.EXEC_PATH)
 
+# ICCARM 平台特殊配置
 if rtconfig.PLATFORM in ['iccarm']:
     env.Replace(CCCOM = ['$CC $CFLAGS $CPPFLAGS $_CPPDEFFLAGS $_CPPINCFLAGS -o $TARGET $SOURCES'])
     env.Replace(ARFLAGS = [''])
     env.Replace(LINKCOM = env["LINKCOM"] + ' --map rt-thread.map')
 
+# =============================================================================
+# 5. 路径变量定义和计算
+# =============================================================================
+# 当前 BSP 目录
+BSP_DIR = os.path.abspath('./')
+
+# 项目根目录（相对于当前 BSP 目录）
+PROJECT_ROOT = os.path.normpath(os.path.join(BSP_DIR, '../../../'))
+
+# 关键路径计算
+RTT_DIR = os.path.join(PROJECT_ROOT, 'kernel/rtthread')  # RT-Thread 内核路径
+PKGS_DIR = os.path.join(BSP_DIR, 'packages')             # 包目录路径
+driverframework_path = os.path.join(PROJECT_ROOT, 'driverframework')  # 驱动框架路径
+
+# 计算 libraries 路径（优先使用当前目录下的，否则使用上级目录的）
+if os.path.exists(BSP_DIR + '/libraries'):
+    libraries_path_prefix = BSP_DIR + '/libraries'
+else:
+    libraries_path_prefix = os.path.dirname(BSP_DIR) + '/libraries'
+
+# =============================================================================
+# 6. 导出必要的变量到构建环境
+# =============================================================================
+# 导出路径变量（供 Kconfig 系统使用）
+Export('BSP_DIR')
+Export('RTT_DIR')
+Export('PKGS_DIR')
+Export('libraries_path_prefix')
+Export('driverframework_path')
+Export('PROJECT_ROOT')
+
+# 导出构建环境变量（供 SConscript 使用）
 Export('env')
 Export('RTT_ROOT')
 Export('rtconfig')
 
-SDK_ROOT = os.path.abspath('./')
+# 设置包含路径
+packages_path = os.path.join(BSP_DIR, 'packages')
+env.Append(CPPPATH=[
+    # 包路径
+    os.path.join(packages_path, 'stm32f4_cmsis_driver-latest/Include'),
+    os.path.join(packages_path, 'stm32f4_hal_driver-latest/Inc'),
+    os.path.join(packages_path, 'CMSIS-Core-latest/Include'),
+    # BSP 本地路径
+    os.path.join(BSP_DIR, 'board'),
+    os.path.join(BSP_DIR, 'board/CubeMX_Config/Inc'),
+    # 共享库路径
+    os.path.join(libraries_path_prefix, 'HAL_Drivers/Inc'),
+    os.path.join(libraries_path_prefix, 'CMSIS/Device/ST/STM32F4xx/Include'),
+    os.path.join(libraries_path_prefix, 'CMSIS/Include')
+])
 
-if os.path.exists(SDK_ROOT + '/libraries'):
-    libraries_path_prefix = SDK_ROOT + '/libraries'
-else:
-    libraries_path_prefix = os.path.dirname(SDK_ROOT) + '/libraries'
-
-# prepare building environment
+# =============================================================================
+# 7. 构建过程
+# =============================================================================
+# 准备构建环境
 objs = PrepareBuilding(env, RTT_ROOT, has_libcpu=False)
 
+# 设置库类型
 rtconfig.BSP_LIBRARY_TYPE = None
 
-# include drivers
-objs.extend(SConscript(os.path.join(libraries_path_prefix, 'HAL_Drivers', 'SConscript'),variant_dir='build/libraries/HAL_Drivers', duplicate=0))
+# 包含 HAL 驱动程序
+objs.extend(SConscript(os.path.join(libraries_path_prefix, 'HAL_Drivers', 'SConscript'),
+                      variant_dir='build/libraries/HAL_Drivers', duplicate=0))
 
-# objs.extend(SConscript(os.path.join(os.getcwd(), 'board', 'ports', 'SConscript')))
-
-# make a building
+# 执行构建
 DoBuilding(TARGET, objs)

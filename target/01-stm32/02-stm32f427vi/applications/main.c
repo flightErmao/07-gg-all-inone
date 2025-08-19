@@ -9,26 +9,12 @@
  * 2023-12-03     Meco Man     support nano version
  */
 
-#include <board.h>
-#include <rtthread.h>
-#include <drv_gpio.h>
-#ifndef RT_USING_NANO
-#include <rtdevice.h>
-#endif /* RT_USING_NANO */
-
-/* defined the LED_G pin: PF14 */
-#define LED0_PIN    GET_PIN(F, 14)
-
-int main(void)
-{
-    /* set LED0 pin mode to output */
-    rt_pin_mode(LED0_PIN, PIN_MODE_OUTPUT);
-
-    while (1)
-    {
-        rt_pin_write(LED0_PIN, PIN_HIGH);
-        rt_thread_mdelay(500);
-        rt_pin_write(LED0_PIN, PIN_LOW);
-        rt_thread_mdelay(500);
-    }
-}
+ #include <board.h>
+ #include <rtthread.h>
+ 
+ int main(void) {
+   while (1) {
+     rt_thread_mdelay(1000);  // 延时1000ms
+   }
+ }
+ 

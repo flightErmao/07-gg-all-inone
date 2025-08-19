@@ -1,10 +1,12 @@
 mainmenu "RT-Thread Configuration"
 
+# Define path variables (relative to current BSP directory)
 BSP_DIR := .
-
-RTT_DIR := ../../../kernel/rtthread
-
-PKGS_DIR := packages
+PROJECT_ROOT := ../../..
+RTT_DIR := $(PROJECT_ROOT)/kernel/rtthread
+PKGS_DIR := $(PROJECT_ROOT)/tools/env_win/packages/packages
+libraries_path_prefix := ../libraries
+driverframework_path := $(PROJECT_ROOT)/driverframework
 
 config SOC_STM32F427II
     bool
@@ -14,9 +16,6 @@ config SOC_STM32F427II
     default y
 
 source "$(RTT_DIR)/Kconfig"
-osource "$PKGS_DIR/Kconfig"
-rsource "../libraries/Kconfig"
-
-if !RT_USING_NANO
-rsource "board/Kconfig"
-endif
+osource "$(PKGS_DIR)/Kconfig"
+rsource "$(libraries_path_prefix)/Kconfig"
+source "$(driverframework_path)/Kconfig"
