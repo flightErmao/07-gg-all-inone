@@ -16,12 +16,17 @@ if BOARD_CONFIG
 
         config MCU_HSE_8MHZ
             bool "8 MHz"
+
+        config MCU_HSE_24MHZ
+            bool "24 MHz"
+
     endchoice
 
     config HSE_VALUE
         int
         default 25000000 if MCU_HSE_25MHZ
         default 8000000 if MCU_HSE_8MHZ
+        default 24000000 if MCU_HSE_24MHZ
         help
             Numeric value in Hz for the selected HSE frequency.
 endif 

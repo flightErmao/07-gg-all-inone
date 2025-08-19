@@ -9,7 +9,7 @@
             "type": "cortex-debug",
             "request": "launch",
             "cwd": "${workspaceRoot}",
-            "executable": "target/01-stm32f411ce/rt-thread.elf",
+            "executable": "target/01-stm32/01-stm32f411ce/rt-thread.elf",
             "serverpath": "${env:JLINK_SERVER}",
             "servertype": "jlink",
             "device": "STM32F411CE",

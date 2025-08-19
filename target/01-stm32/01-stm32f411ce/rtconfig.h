@@ -361,9 +361,6 @@
 
 /* samples: kernel and components samples */
 
-#define PKG_USING_PERIPHERAL_SAMPLES
-#define PKG_USING_PERIPHERAL_SAMPLES_LATEST_VERSION
-#define PERIPHERAL_SAMPLES_USING_DRV
 /* end of samples: kernel and components samples */
 
 /* entertainment: terminal games and other interesting software packages */
@@ -437,8 +434,8 @@
 
 #define BSP_USING_USBD
 #define BOARD_CONFIG
-#define MCU_HSE_25MHZ
-#define HSE_VALUE 25000000
+#define MCU_HSE_8MHZ
+#define HSE_VALUE 8000000
 #define BSP_USING_GPIO
 #define BSP_USING_UART
 #define BSP_STM32_UART_V1_TX_TIMEOUT 2000

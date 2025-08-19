@@ -1,6 +1,6 @@
 menu "L0_TASK_CONFIG"
-    source "$BSP_DIR/../../driverframework/L0_task/TASK_1_LED_BLINK/Kconfig"
-    source "$BSP_DIR/../../driverframework/L0_task/TASK_2_GPS_TEST/Kconfig"
-    source "$BSP_DIR/../../driverframework/L0_task/TASK_03_ANOTC_TELEM/Kconfig"
-    source "$BSP_DIR/../../driverframework/L0_task/TASK_04_BARO_TEST/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L0_task/TASK_1_LED_BLINK/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L0_task/TASK_2_GPS_TEST/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L0_task/TASK_03_ANOTC_TELEM/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L0_task/TASK_04_BARO_TEST/Kconfig"
 endmenu
