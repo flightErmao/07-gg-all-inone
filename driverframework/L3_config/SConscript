@@ -11,8 +11,8 @@ list = os.listdir(cwd)
 for item in list:
     item_path = os.path.join(cwd, item)
     if os.path.isdir(item_path) and os.path.isfile(os.path.join(item_path, 'SConscript')):
-        # 注意：这里应该使用 os.path.join(cwd, item, 'SConscript') 或者直接使用 item_path
-        # 确保路径正确，并假设 SConscript 是在子目录中
-        group = group + SConscript(os.path.join(cwd, item, 'SConscript'))
+        # 为所有子目录自动使用variant_dir创建构建目录
+        group = group + SConscript(os.path.join(cwd, item, 'SConscript'), 
+                                  variant_dir=item, duplicate=0)
  
 Return('group')
