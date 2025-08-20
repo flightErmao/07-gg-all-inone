@@ -80,7 +80,6 @@ PROJECT_ROOT = os.path.normpath(os.path.join(BSP_DIR, '../../../'))
 
 # 关键路径计算
 RTT_DIR = os.path.join(PROJECT_ROOT, 'kernel/rtthread')  # RT-Thread 内核路径
-PKGS_DIR = os.path.join(BSP_DIR, 'packages')             # 包目录路径
 driverframework_path = os.path.join(PROJECT_ROOT, 'driverframework')  # 驱动框架路径
 
 # 计算 libraries 路径（优先使用当前目录下的，否则使用上级目录的）
@@ -95,7 +94,6 @@ else:
 # 导出路径变量（供 Kconfig 系统使用）
 Export('BSP_DIR')
 Export('RTT_DIR')
-Export('PKGS_DIR')
 Export('libraries_path_prefix')
 Export('driverframework_path')
 Export('PROJECT_ROOT')
