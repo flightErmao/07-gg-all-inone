@@ -72,35 +72,22 @@ if rtconfig.PLATFORM in ['iccarm']:
 # =============================================================================
 # 5. 路径变量定义和计算
 # =============================================================================
-# 当前 BSP 目录
-BSP_DIR = os.path.abspath('./')
 
-# 项目根目录（相对于当前 BSP 目录）
-PROJECT_ROOT = os.path.normpath(os.path.join(BSP_DIR, '../../../'))
-
-# 关键路径计算
-RTT_DIR = os.path.join(PROJECT_ROOT, 'kernel/rtthread')  # RT-Thread 内核路径
+BSP_DIR = os.path.abspath('./')                                     # 当前 BSP 目录
+PROJECT_ROOT = os.path.normpath(os.path.join(BSP_DIR, '../../../')) # 项目根目录（相对于当前 BSP 目录）
+RTT_DIR = os.path.join(PROJECT_ROOT, 'kernel/rtthread')             # RT-Thread 内核路径
 driverframework_path = os.path.join(PROJECT_ROOT, 'driverframework')  # 驱动框架路径
-
-# 计算 libraries 路径（优先使用当前目录下的，否则使用上级目录的）
-if os.path.exists(BSP_DIR + '/libraries'):
-    libraries_path_prefix = BSP_DIR + '/libraries'
-else:
-    libraries_path_prefix = os.path.dirname(BSP_DIR) + '/libraries'
+libraries_path_prefix = os.path.join(PROJECT_ROOT, 'kernel', 'rtthread', 'bsp', 'stm32', 'libraries') ## 计算 libraries 路径（改为使用内核路径中的 libraries）
 
 # =============================================================================
 # 6. 导出必要的变量到构建环境
 # =============================================================================
-# 导出路径变量（供 Kconfig 系统使用）
 Export('BSP_DIR')
+Export('RTT_ROOT')
 Export('RTT_DIR')
-Export('libraries_path_prefix')
 Export('driverframework_path')
 Export('PROJECT_ROOT')
-
-# 导出构建环境变量（供 SConscript 使用）
 Export('env')
-Export('RTT_ROOT')
 Export('rtconfig')
 
 # =============================================================================
