@@ -14,16 +14,16 @@
 extern "C" {
 #endif
 
-extern int drv_mpu6050_init();
-extern int drv_mpu6050_set_delay(void (*delay_ms)(unsigned int));
-extern int drv_mpu6050_set_i2c_funcs(int8_t (*write_func)(uint8_t, uint8_t, uint8_t*, uint8_t),
+extern int drv_mpu6500_init();
+extern int drv_mpu6500_set_delay(void (*delay_ms)(unsigned int));
+extern int drv_mpu6500_set_i2c_funcs(int8_t (*write_func)(uint8_t, uint8_t, uint8_t*, uint8_t),
                                      int8_t (*read_func)(uint8_t, uint8_t, uint8_t*, uint8_t));
-extern int drv_mpu6050_read(int pos, void* data, int size);
-extern int drv_mpu6050_get_accel(int16_t* ax, int16_t* ay, int16_t* az);
-extern int drv_mpu6050_get_gyro(int16_t* gx, int16_t* gy, int16_t* gz);
-extern int drv_mpu6050_get_temp(float* temp);
-extern int drv_mpu6050_self_test();
-extern int drv_mpu6050_set_i2c_addr(uint8_t addr);
+extern int drv_mpu6500_read(int pos, void* data, int size);
+extern int drv_mpu6500_get_accel(int16_t* ax, int16_t* ay, int16_t* az);
+extern int drv_mpu6500_get_gyro(int16_t* gx, int16_t* gy, int16_t* gz);
+extern int drv_mpu6500_get_temp(float* temp);
+extern int drv_mpu6500_self_test();
+extern int drv_mpu6500_set_i2c_addr(uint8_t addr);
 
 #ifdef __cplusplus
 }
@@ -31,10 +31,10 @@ extern int drv_mpu6050_set_i2c_addr(uint8_t addr);
 
 #ifdef __cplusplus
 /**
- * @class MPU6050
- * @brief MPU6050 惯性测量单元驱动类
+ * @class mpu6500
+ * @brief mpu6500 惯性测量单元驱动类
  */
-class MPU6050 {
+class mpu6500 {
  public:
   /**
    * @brief 设备结构体
@@ -51,17 +51,17 @@ class MPU6050 {
   /**
    * @brief 获取单例实例
    */
-  static MPU6050& instance();
+  static mpu6500& instance();
 
   /**
    * @brief 构造函数
    */
-  explicit MPU6050();
+  explicit mpu6500();
 
   /**
    * @brief 析构函数
    */
-  ~MPU6050();
+  ~mpu6500();
 
   /**
    * @brief 初始化设备

@@ -1,8 +1,8 @@
 #pragma once
 
 /**
- * @file mpu6050_regs.h
- * @brief MPU6050 寄存器定义和相关宏
+ * @file mpu6500_regs.h
+ * @brief mpu6500 寄存器定义和相关宏
  */
 
 // 传感器配置参数

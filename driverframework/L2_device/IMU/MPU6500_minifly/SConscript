@@ -9,6 +9,6 @@ src += Glob("./*.cpp")
 path = [cwd]
 
 # 定义编译组
-group = DefineGroup("MPU6050", src, depend=["BSP_USING_MPU6050_MINIFLY"], CPPPATH=path)
+group = DefineGroup("mpu6500", src, depend=["BSP_USING_MPU6500_MINIFLY"], CPPPATH=path)
 
 Return("group")
