@@ -1,22 +1,16 @@
 from building import *
-
-Import("env")
+import os
 
 # 获取当前目录
 cwd = GetCurrentDir()
+path = [cwd]
+src = []
+group = []
 
-# 定义源文件路径 - 使用相对于项目根目录的路径
-task_path = "../../../src/task/03_anotc_telem"
+# 获取当前目录下的所有源文件
+src = Glob("./*.c")
 
-# 获取src目录下的源文件
-src = Glob(f"{task_path}/*.c")
+# 定义编译组
+group = DefineGroup("TASK_03_ANOTC_TELEM", src, depend=["BSP_USING_TASK_03_ANOTC_TELEM"], CPPPATH=path)
 
-# 定义头文件路径 - 使用相对于项目根目录的路径
-path = [f"#{task_path}"]
-
-# 使用独立的环境定义group
-group = DefineGroup("TASK_03_ANOTC_TELEM", src, 
-                   depend=["BSP_USING_TASK_03_ANOTC_TELEM"], 
-                   CPPPATH=path)
-
-Return("group") 
+Return('group')

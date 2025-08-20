@@ -8,7 +8,7 @@
 #include <rtconfig.h>
 
 // 包含LED闪烁接口头文件
-#include "../../model/led_blink/led_blink_interface.h"
+#include "led_blink_interface.h"
 
 // 任务相关定义
 #define LED_BLINK_TASK_NAME "led_blink_task"

@@ -1,0 +1,5 @@
+menuconfig L1_MODULE_LED_BLINK
+    bool "ENABLE: LED_BLINK"
+    default n
+    help
+       open led blink module

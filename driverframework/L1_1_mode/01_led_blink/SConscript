@@ -1,0 +1,18 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+src  = []
+group = []
+path = [cwd]
+
+# 获取当前目录下的所有 .c 文件
+src  = Glob('./*.c')
+src += Glob('./lib/*.c')
+
+path += [cwd + '/lib']
+
+# 定义编译组
+group = DefineGroup('led_blink', src, depend = ['L1_MODULE_LED_BLINK'], CPPPATH = path)
+
+Return('group') 
