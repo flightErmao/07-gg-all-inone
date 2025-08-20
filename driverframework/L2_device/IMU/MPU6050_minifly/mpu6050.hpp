@@ -23,6 +23,7 @@ extern int drv_mpu6050_get_accel(int16_t* ax, int16_t* ay, int16_t* az);
 extern int drv_mpu6050_get_gyro(int16_t* gx, int16_t* gy, int16_t* gz);
 extern int drv_mpu6050_get_temp(float* temp);
 extern int drv_mpu6050_self_test();
+extern int drv_mpu6050_set_i2c_addr(uint8_t addr);
 
 #ifdef __cplusplus
 }
@@ -138,6 +139,7 @@ class MPU6050 {
   uint8_t dev_addr_ = {};
   bool is_init_ = false;
   mpu_device_t device_ = {};  // 补充与cpp一致的成员
+  uint8_t buffer[14];
 
   int8_t (*i2c_bus_write_)(uint8_t, uint8_t, uint8_t*, uint8_t) = nullptr;
   int8_t (*i2c_bus_read_)(uint8_t, uint8_t, uint8_t*, uint8_t) = nullptr;
@@ -171,5 +173,18 @@ class MPU6050 {
   void setAccelDLPF(uint8_t bandwidth);        // 设置加速度计低通滤波
   void setDLPFMode(uint8_t mode);              // 设置数字低通滤波模式
   uint8_t setRate(uint16_t rate);
+
+  // 下面为在 cpp 中新增的内部方法声明
+  int mpu6500Init();
+  void mpu6500SetWaitForExternalSensorEnabled(bool enabled);
+  void mpu6500SetInterruptMode(bool mode);
+  void mpu6500SetInterruptDrive(bool drive);
+  void mpu6500SetInterruptLatch(bool latch);
+  void mpu6500SetInterruptLatchClear(bool clear);
+  void mpu6500SetSlaveReadWriteTransitionEnabled(bool enabled);
+  void mpu6500SetMasterClockSpeed(uint8_t speed);
+  void mpu6500SetI2CMasterModeEnabled(bool enabled);
+  void mpu6500SetIntDataReadyEnabled(bool enabled);
+  int mpu6500SlaveSensorInit();
 };
 #endif

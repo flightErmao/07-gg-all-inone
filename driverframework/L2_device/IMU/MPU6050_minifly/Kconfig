@@ -11,7 +11,7 @@ menuconfig BSP_USING_MPU6050_MINIFLY
             default "hwi2c1"
         config SENSOR_MPU6050_MINIFLY_I2C_ADDR
             int "MPU6050_MINIFLY_I2C_ADDR"
-            default 0x68
+            default 0x69
     endif
     
     

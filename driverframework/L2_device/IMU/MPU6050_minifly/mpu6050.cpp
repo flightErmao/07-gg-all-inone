@@ -1,6 +1,7 @@
 #include "mpu6050.hpp"
 #include "mpu6050_regs.h"  // 添加寄存器定义头文件
 #include <cstring>
+#include <cstdio>
 
 MPU6050::MPU6050() {
   // 替换为通用初始化，不依赖RTThread
@@ -30,38 +31,111 @@ void MPU6050::delayMs(unsigned int ms) {
   // 移除对未定义的全局delay_ms函数的调用
 }
 
-int MPU6050::init() {
+int MPU6050::mpu6500Init() {
   if (is_init_) return MPU_EOK;
 
-  // 重写init函数，模拟原mpu6050_init流程
-  reset();  // 复位MPU6500
+  // vTaskDelay(10);
+  delayMs(10);
+
+  // mpu6500Reset(); // 复位MPU6500（直接置位复位位，避免 reset() 内部固定 100ms 延时）
+  i2cdevWriteBit(dev_addr_, MPU6500_RA_PWR_MGMT_1, MPU6500_PWR1_DEVICE_RESET_BIT, 1);
+
+  // vTaskDelay(20); // 等待寄存器复位
   delayMs(20);
 
-  uint8_t temp = getDeviceID();        // 使用公共函数whoAmI替代内部函数getDeviceID
-  if (temp == 0x68 || temp == 0x69) {  // MPU6050的正确设备ID
-    // 设备ID正确
+  // 读取设备ID并校验（0x38 或 0x39）
+  uint8_t temp = getDeviceID();
+  if (temp == 0x38 || temp == 0x39) {
+    std::printf("MPU9250 I2C connection [OK].\n");
   } else {
-    // 设备连接失败
+    std::printf("MPU9250 I2C connection [FAIL].\n");
     return MPU_ERROR;
   }
 
+  // 唤醒与基础配置
   setSleepEnabled(false);  // 唤醒MPU6500
-
   delayMs(10);
-  setClockSource(MPU6500_CLOCK_PLL_XGYRO);  // 设置X轴陀螺作为时钟
-  delayMs(10);
-
+  setClockSource(MPU6500_CLOCK_PLL_XGYRO);       // 设置X轴陀螺作为时钟
+  delayMs(10);                                   // 等待时钟稳定
   setTempSensorEnabled(true);                    // 使能温度传感器
   setIntEnabled(false);                          // 关闭中断
-  setI2CBypassEnabled(true);                     // 旁路模式，磁力计和气压连接到主IIC
-  setFullScaleGyroRange(SENSORS_GYRO_FS_CFG);    // 设置陀螺量程
-  setFullScaleAccelRange(SENSORS_ACCEL_FS_CFG);  // 设置加速计量程
-  setAccelDLPF(MPU6500_ACCEL_DLPF_BW_41);        // 设置加速计数字低通滤波
+  setI2CBypassEnabled(true);                     // 旁路模式
+  setFullScaleGyroRange(SENSORS_GYRO_FS_CFG);    // 陀螺量程
+  setFullScaleAccelRange(SENSORS_ACCEL_FS_CFG);  // 加速计量程
+  setAccelDLPF(MPU6500_ACCEL_DLPF_BW_41);        // 加速度计DLPF
 
-  setRate(0);                       // 设置采样速率: 1000 / (1 + 0) = 1000Hz
-  setDLPFMode(MPU6500_DLPF_BW_98);  // 设置陀螺数字低通滤波
+  // 采样率与陀螺DLPF
+  setRate(0);                       // 1000Hz
+  setDLPFMode(MPU6500_DLPF_BW_98);  // 陀螺DLPF
 
   is_init_ = true;
+  return MPU_EOK;
+}
+
+void MPU6050::mpu6500SetWaitForExternalSensorEnabled(bool enabled) {
+  i2cdevWriteBit(dev_addr_, MPU6500_RA_I2C_MST_CTRL, MPU6500_WAIT_FOR_ES_BIT, enabled);
+}
+
+void MPU6050::mpu6500SetInterruptMode(bool mode) {
+  i2cdevWriteBit(dev_addr_, MPU6500_RA_INT_PIN_CFG, MPU6500_INTCFG_INT_LEVEL_BIT, mode);
+}
+
+void MPU6050::mpu6500SetInterruptDrive(bool drive) {
+  i2cdevWriteBit(dev_addr_, MPU6500_RA_INT_PIN_CFG, MPU6500_INTCFG_INT_OPEN_BIT, drive);
+}
+
+void MPU6050::mpu6500SetInterruptLatch(bool latch) {
+  i2cdevWriteBit(dev_addr_, MPU6500_RA_INT_PIN_CFG, MPU6500_INTCFG_LATCH_INT_EN_BIT, latch);
+}
+
+void MPU6050::mpu6500SetInterruptLatchClear(bool clear) {
+  i2cdevWriteBit(dev_addr_, MPU6500_RA_INT_PIN_CFG, MPU6500_INTCFG_INT_RD_CLEAR_BIT, clear);
+}
+
+void MPU6050::mpu6500SetSlaveReadWriteTransitionEnabled(bool enabled) {
+  i2cdevWriteBit(dev_addr_, MPU6500_RA_I2C_MST_CTRL, MPU6500_I2C_MST_P_NSR_BIT, enabled);
+}
+
+void MPU6050::mpu6500SetMasterClockSpeed(uint8_t speed) {
+  i2cdevWriteBits(dev_addr_, MPU6500_RA_I2C_MST_CTRL, MPU6500_I2C_MST_CLK_BIT, MPU6500_I2C_MST_CLK_LENGTH, speed);
+}
+
+void MPU6050::mpu6500SetI2CMasterModeEnabled(bool enabled) {
+  i2cdevWriteBit(dev_addr_, MPU6500_RA_USER_CTRL, MPU6500_USERCTRL_I2C_MST_EN_BIT, enabled);
+}
+
+void MPU6050::mpu6500SetIntDataReadyEnabled(bool enabled) {
+  i2cdevWriteBit(dev_addr_, MPU6500_RA_INT_ENABLE, MPU6500_INTERRUPT_DATA_RDY_BIT, enabled);
+}
+
+int MPU6050::mpu6500SlaveSensorInit() {
+  // mpu6500SetSlave4MasterDelay(19);  // 从机读取速率: 100Hz = (1000Hz / (1 + 9))
+
+  setI2CBypassEnabled(false);  // 主机模式
+  mpu6500SetWaitForExternalSensorEnabled(true);
+  mpu6500SetInterruptMode(0);                        // 中断高电平有效
+  mpu6500SetInterruptDrive(0);                       // 推挽输出
+  mpu6500SetInterruptLatch(0);                       // 中断锁存模式(0=50us-pulse, 1=latch-until-int-cleared)
+  mpu6500SetInterruptLatchClear(1);                  // 中断清除模式(0=status-read-only, 1=any-register-read)
+  mpu6500SetSlaveReadWriteTransitionEnabled(false);  // 关闭从机读写传输
+  mpu6500SetMasterClockSpeed(13);                    // 设置i2c速度400kHz
+
+  mpu6500SetI2CMasterModeEnabled(true);  // 使能mpu6500主机模式
+  mpu6500SetIntDataReadyEnabled(true);   // 数据就绪中断使能
+}
+
+int MPU6050::init() {
+  if (mpu6500Init() != MPU_EOK) {
+    return MPU_ERROR;
+  }
+
+  delayMs(150);
+
+  // 初始化从机传感器
+  if (mpu6500SlaveSensorInit() != MPU_EOK) {
+    return MPU_ERROR;
+  }
+
   return MPU_EOK;
 }
 
@@ -227,9 +301,8 @@ void MPU6050::reset() {
 }
 
 uint8_t MPU6050::getDeviceID() {
-  uint8_t data;
-  i2cBusReadByte(dev_addr_, MPU6500_RA_WHO_AM_I, &data);
-  return data;
+  i2cdevReadBits(dev_addr_, MPU6500_RA_WHO_AM_I, MPU6500_WHO_AM_I_BIT, MPU6500_WHO_AM_I_LENGTH, buffer);
+  return buffer[0];
 }
 
 void MPU6050::setSleepEnabled(bool enabled) {
