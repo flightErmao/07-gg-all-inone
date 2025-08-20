@@ -1,7 +1,6 @@
 **/*.o
-bsp/02-weact-f411ce-25m/board/CubeMX_Config/Src/main.c
-bsp/02-weact-f411ce-25m/board/CubeMX_Config/Src/system_stm32f4xx.c
-target/01-stm32/02-stm32f427vi/board/CubeMX_Config/Drivers/*
-target/01-stm32/02-stm32f427vi/board/CubeMX_Config/MDK-ARM/*
-target/01-stm32/02-stm32f427vi/board/CubeMX_Config/Src/main.c
-target/01-stm32/02-stm32f427vi/board/CubeMX_Config/Src/system_stm32f4xx.c
+**/*/board/CubeMX_Config/Src/main.c
+**/*/board/CubeMX_Config/Src/system_stm32f4xx.c
+**/*/board/CubeMX_Config/Drivers/*
+**/*/board/CubeMX_Config/MDK-ARM/*
+**/*.old
