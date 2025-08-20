@@ -16,7 +16,12 @@ for item in list:
     item_path = os.path.join(cwd, item)
     if os.path.isdir(item_path) and os.path.isfile(os.path.join(item_path, 'SConscript')):
         # 执行子目录的SConscript并合并编译组
-        sub_group = SConscript(os.path.join(item_path, 'SConscript'))
+        if item == 'L2_device':
+            # 为L2_device添加variant_dir参数，使用相对路径
+            sub_group = SConscript(os.path.join(item_path, 'SConscript'), 
+                                  variant_dir='L2_device', duplicate=0)
+        else:
+            sub_group = SConscript(os.path.join(item_path, 'SConscript'))
         if sub_group:
             group = group + sub_group
 

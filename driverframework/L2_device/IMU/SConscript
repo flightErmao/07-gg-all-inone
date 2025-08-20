@@ -20,6 +20,12 @@ for item in list:
     if os.path.isdir(item_path) and os.path.isfile(os.path.join(item_path, 'SConscript')):
         # 注意：这里应该使用 os.path.join(cwd, item, 'SConscript') 或者直接使用 item_path
         # 确保路径正确，并假设 SConscript 是在子目录中
-        group = group + SConscript(os.path.join(cwd, item, 'SConscript'))
+        if item == 'MPU6050_minifly':
+            # 为MPU6050_minifly添加variant_dir参数，使用相对路径
+            sub_group = SConscript(os.path.join(cwd, item, 'SConscript'), 
+                                  variant_dir='MPU6050_minifly', duplicate=0)
+        else:
+            sub_group = SConscript(os.path.join(cwd, item, 'SConscript'))
+        group = group + sub_group
 
 Return('group')
