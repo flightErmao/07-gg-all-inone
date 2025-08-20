@@ -1,0 +1,14 @@
+menuconfig TASK_05_SENSOR_MINIFLY
+    bool "ENABLE: TASK_05_SENSOR_MINIFLY"
+    default n
+    select BSP_USING_MPU6500_MINIFLY
+    help
+        Enable sensor test task that periodically calls sensor test interface.
+    if TASK_05_SENSOR_MINIFLY
+        config TASK_SENSOR_MINIFLY_IMU_NAME
+            string "IMU device name for sensor_minifly task"
+            default "mpu6500_minifly"
+            help
+                IMU device name used by sensor_minifly task. Default is the MPU6500 MINIFLY device name.
+
+    endif

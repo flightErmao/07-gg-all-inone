@@ -35,5 +35,6 @@ int task_anotc_telem(void);
 void anotc_telem_sendUserDataLine6_float(uint8_t group, float *buf_data_cat, msg_send_method_e method);
 void setUserData_float(uint8_t index, float *buf, float value);
 void sendUserDatafloat3(uint8_t group, float a, float b, float c);
+void sendUserDatafloat6(uint8_t group, float a, float b, float c, float d, float e, float f);
 
 #endif /*ATKP_H*/

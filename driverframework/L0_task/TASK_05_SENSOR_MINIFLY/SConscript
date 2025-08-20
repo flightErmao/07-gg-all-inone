@@ -1,0 +1,16 @@
+from building import *
+import os
+
+# 获取当前目录
+cwd = GetCurrentDir()
+path = [cwd]
+src = []
+group = []
+
+# 获取当前目录下的所有源文件
+src = Glob("./*.c")
+
+# 定义编译组
+group = DefineGroup("TASK_05_SENSOR_MINIFLY", src, depend=["TASK_05_SENSOR_MINIFLY"], CPPPATH=path)
+
+Return('group')

@@ -3,4 +3,5 @@ menu "L0_TASK_CONFIG"
     source "$(PROJECT_ROOT)/driverframework/L0_task/TASK_2_GPS_TEST/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L0_task/TASK_03_ANOTC_TELEM/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L0_task/TASK_04_BARO_TEST/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L0_task/TASK_05_SENSOR_MINIFLY/Kconfig"
 endmenu

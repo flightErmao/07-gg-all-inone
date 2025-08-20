@@ -250,6 +250,51 @@ void sendUserDatafloat3(uint8_t group, float a,float b,float c)
     anotc_telem_stash_msg_to_mq(&p);
 }
 
+void sendUserDatafloat6(uint8_t group, float a, float b, float c, float d, float e, float f) {
+  uint8_t _cnt = 0;
+  atkp_t p;
+
+  p.msgID = UP_USER_DATA1 + group - 1;
+
+  float temp = a;
+  p.data[_cnt++] = BYTE3(temp);
+  p.data[_cnt++] = BYTE2(temp);
+  p.data[_cnt++] = BYTE1(temp);
+  p.data[_cnt++] = BYTE0(temp);
+
+  temp = b;
+  p.data[_cnt++] = BYTE3(temp);
+  p.data[_cnt++] = BYTE2(temp);
+  p.data[_cnt++] = BYTE1(temp);
+  p.data[_cnt++] = BYTE0(temp);
+
+  temp = c;
+  p.data[_cnt++] = BYTE3(temp);
+  p.data[_cnt++] = BYTE2(temp);
+  p.data[_cnt++] = BYTE1(temp);
+  p.data[_cnt++] = BYTE0(temp);
+
+  temp = d;
+  p.data[_cnt++] = BYTE3(temp);
+  p.data[_cnt++] = BYTE2(temp);
+  p.data[_cnt++] = BYTE1(temp);
+  p.data[_cnt++] = BYTE0(temp);
+
+  temp = e;
+  p.data[_cnt++] = BYTE3(temp);
+  p.data[_cnt++] = BYTE2(temp);
+  p.data[_cnt++] = BYTE1(temp);
+  p.data[_cnt++] = BYTE0(temp);
+
+  temp = f;
+  p.data[_cnt++] = BYTE3(temp);
+  p.data[_cnt++] = BYTE2(temp);
+  p.data[_cnt++] = BYTE1(temp);
+  p.data[_cnt++] = BYTE0(temp);
+
+  p.dataLen = _cnt;
+  anotc_telem_stash_msg_to_mq(&p);
+}
 
 static void setUserData_int16(uint8_t index, int16_t *buf, int16_t value)
 {
