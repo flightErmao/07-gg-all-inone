@@ -1,26 +1,17 @@
-menuconfig BSP_USING_MPU6050
-    bool "ENANLE: IMU_MPU6050"
+menuconfig BSP_USING_MPU6050_MINIFLY
+    bool "ENANLE: IMU_MPU6050_MINIFLY"
     default n
-    select RT_USING_I2C
-    if BSP_USING_MPU6050
-        menuconfig MPU6050_ID1
-            bool "Enable: MPU6050_ID1"
-            default n
-            if MPU6050_ID1
-                config MPU6050_DEVICE_NAME_ID1
-                    string "Device Name"
-                    default "MPU6050_ID1"
-                    help
-                        Device Name for ID1
-                config MPU6050_I2C_NAME_ID1
-                    string "I2C Device"
-                    default "hwi2c1"
-                    help
-                        I2C Device name for ID1
-                config MPU6050_I2C_ADDRESS_ID1
-                    hex "I2C Address"
-                    default 0x77
-                    help
-                        I2C Address for ID1
-            endif
+    select BSP_USING_I2C
+    if BSP_USING_MPU6050_MINIFLY
+        config SENSOR_NAME_MPU6050_MINIFLY
+            string "IMU MPU6050 MINIFLY NAME"
+            default "mpu6050_minifly"
+        config SENSOR_I2C_NAME_MPU6050_MINIFLY
+            string "IMU MPU6050 MINIFLY I2C NAME"
+            default "hwi2c1"
+        config SENSOR_MPU6050_MINIFLY_I2C_ADDR
+            int "MPU6050_MINIFLY_I2C_ADDR"
+            default 0x68
     endif
+    
+    

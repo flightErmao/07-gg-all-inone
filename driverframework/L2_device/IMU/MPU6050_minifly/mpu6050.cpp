@@ -2,9 +2,6 @@
 #include "mpu6050_regs.h"  // 添加寄存器定义头文件
 #include <cstring>
 
-// 通用延时函数，需要外部实现
-extern "C" void delay_ms(unsigned int ms);
-
 MPU6050::MPU6050() {
   // 替换为通用初始化，不依赖RTThread
   device_.user_data = nullptr;  // 用户可以在此存储I2C设备句柄
@@ -29,10 +26,8 @@ void MPU6050::setDelayMs(delay_ms_func_t func) { delay_ms_ = func; }
 void MPU6050::delayMs(unsigned int ms) {
   if (delay_ms_ != nullptr) {
     delay_ms_(ms);
-  } else {
-    // 回退到全局C延时（若已由平台提供）
-    delay_ms(ms);
   }
+  // 移除对未定义的全局delay_ms函数的调用
 }
 
 int MPU6050::init() {
@@ -284,11 +279,7 @@ uint8_t MPU6050::setRate(uint16_t rate) {
 }
 
 // 兼容C接口（基于单例）
-extern "C" int drv_mpu6050_i2c_init(const char* i2c_device_name, const char* device_name) {
-  (void)i2c_device_name;
-  (void)device_name;
-  return MPU6050::instance().init();
-}
+extern "C" int drv_mpu6050_init() { return MPU6050::instance().init(); }
 
 extern "C" int drv_mpu6050_set_i2c_addr(uint8_t addr) {
   MPU6050::instance().setI2cAddr(addr);
@@ -325,5 +316,3 @@ extern "C" int drv_mpu6050_get_temp(float* temp) {
   uint8_t res = MPU6050::instance().getTemperature(temp);
   return (res == 0) ? MPU_EOK : MPU_ERROR;
 }
-
-extern "C" int drv_mpu6050_self_test() { return (int)MPU6050::instance().selfTest(); }

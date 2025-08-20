@@ -1,18 +1,23 @@
-from building import *  # 确保这个导入是正确的，并且提供了必要的函数和变量（如果有的话）
+from building import *
 import os
- 
-cwd     = GetCurrentDir()
+
+# 导入必要的变量
+Import('env')
+
+cwd = GetCurrentDir()
 CPPPATH = [cwd]
-src  = []
- 
+src = []
+
 group = []  # 初始化 group 变量为空列表
- 
+
+# 遍历子目录，查找并执行SConscript
 list = os.listdir(cwd)
 for item in list:
     item_path = os.path.join(cwd, item)
     if os.path.isdir(item_path) and os.path.isfile(os.path.join(item_path, 'SConscript')):
-        # 注意：这里应该使用 os.path.join(cwd, item, 'SConscript') 或者直接使用 item_path
-        # 确保路径正确，并假设 SConscript 是在子目录中
-        group = group + SConscript(os.path.join(cwd, item, 'SConscript'))
- 
+        # 执行子目录的SConscript并合并编译组
+        sub_group = SConscript(os.path.join(item_path, 'SConscript'))
+        if sub_group:
+            group = group + sub_group
+
 Return('group')

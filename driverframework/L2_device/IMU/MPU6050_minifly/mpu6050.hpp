@@ -14,9 +14,7 @@
 extern "C" {
 #endif
 
-extern int drv_mpu6050_i2c_init(const char* i2c_device_name, const char* device_name);
-// 新增C接口，基于单例对象
-extern int drv_mpu6050_set_i2c_addr(uint8_t addr);
+extern int drv_mpu6050_init();
 extern int drv_mpu6050_set_delay(void (*delay_ms)(unsigned int));
 extern int drv_mpu6050_set_i2c_funcs(int8_t (*write_func)(uint8_t, uint8_t, uint8_t*, uint8_t),
                                      int8_t (*read_func)(uint8_t, uint8_t, uint8_t*, uint8_t));

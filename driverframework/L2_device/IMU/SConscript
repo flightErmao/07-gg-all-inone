@@ -1,4 +1,5 @@
 from building import *
+import os
 
 cwd = GetCurrentDir()
 src  = []
@@ -12,8 +13,6 @@ src  = Glob('./*.c')
 group = DefineGroup('IMU', src, depend = [''], CPPPATH = path)
 
 env = DefaultEnvironment()
-env.Append(CXXFLAGS=['-std=c++11'])
-env.Append(LINKFLAGS=['-lstdc++'])
 
 list = os.listdir(cwd)
 for item in list:
