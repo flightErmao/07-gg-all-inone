@@ -1,5 +1,6 @@
 
 #include "task_anotc_telem.h"
+#include <rtdevice.h>
 
 #ifdef BSP_USING_UART1
 #define ANOTC_TELEM_UART_NAME "uart1"
@@ -128,19 +129,7 @@ typedef enum
     DOWN_REMOTER = 0x50,
 } downmsgID_e;
 
-struct serial_configure
-{
-    rt_uint32_t baud_rate;
-
-    rt_uint32_t data_bits : 4;
-    rt_uint32_t stop_bits : 2;
-    rt_uint32_t parity : 2;
-    rt_uint32_t bit_order : 1;
-    rt_uint32_t invert : 1;
-    rt_uint32_t bufsz : 16;
-    rt_uint32_t flowcontrol : 1;
-    rt_uint32_t reserved : 5;
-};
+/* 使用 rtdevice.h 中的 struct serial_configure 定义，删除本地重复定义 */
 
 rt_align(RT_ALIGN_SIZE) static rt_uint8_t task_anotc_telem_cache_stack[THREAD_STACK_SIZE];
 static struct rt_thread task_anotc_telem_cache_tid;
@@ -148,6 +137,8 @@ rt_align(RT_ALIGN_SIZE) static rt_uint8_t task_anotc_telem_dispatch_stack[THREAD
 static struct rt_thread task_anotc_telem_dispatch_tid;
 
 static rt_device_t anotc_telem_dev = RT_NULL;
+static char anotc_output_name[8] = "uart1"; /* 默认输出设备名称 */
+extern int usb_change_shell(void); /* 切换vconsole到USB */
 static rt_uint8_t msg_pool[POOL_SIZE_BYTE];
 static struct rt_messagequeue mq;
 
@@ -308,7 +299,8 @@ static rt_err_t task_dev_init(void)
         return RT_EOK;
     }
 
-    rt_device_t new_dev = rt_device_find(ANOTC_TELEM_UART_NAME);
+    /* 根据当前选择的输出设备名称查找设备 */
+    rt_device_t new_dev = rt_device_find(anotc_output_name);
     if (new_dev == NULL)
     {
         return RT_ERROR;
@@ -319,23 +311,77 @@ static rt_err_t task_dev_init(void)
     {
         return RT_ERROR;
     }
-    struct serial_configure config;
-    config.baud_rate = ANOTC_TELEM_BAUD_RATE;
-    config.data_bits = 8;
-    config.stop_bits = 0;
-    config.parity = 0;
-    config.bit_order = 0;
-    config.invert = 0;
-    config.bufsz = 64;
-    config.flowcontrol = 0;
-    config.reserved = 0;
-    if (rt_device_control(new_dev, RT_DEVICE_CTRL_CONFIG, &config) != RT_EOK)
+
+    /* 仅在UART类设备上进行串口参数配置；USB CDC(vcom)无需配置为serial_configure */
+    if (!strncmp(anotc_output_name, "uart", 4))
     {
-        return RT_ERROR;
+        struct serial_configure config = RT_SERIAL_CONFIG_DEFAULT;
+        config.baud_rate = ANOTC_TELEM_BAUD_RATE;
+        config.bufsz = 64;
+        if (rt_device_control(new_dev, RT_DEVICE_CTRL_CONFIG, &config) != RT_EOK)
+        {
+            rt_device_close(new_dev);
+            return RT_ERROR;
+        }
     }
 
     /* set new device */
     anotc_telem_dev = new_dev;
+    return RT_EOK;
+}
+
+/* 切换输出设备: 目标可为 "uart1" / "uart2" / "usb"(映射到"vcom") */
+static int anotc_telem_switch_output(const char *target)
+{
+    if (target == RT_NULL)
+    {
+        return -RT_EINVAL;
+    }
+
+    char next_name[8] = {0};
+    if (!strcmp(target, "usb"))
+    {
+        strncpy(next_name, "vcom", sizeof(next_name) - 1);
+    }
+    else if (!strcmp(target, "uart1"))
+    {
+        strncpy(next_name, "uart1", sizeof(next_name) - 1);
+    }
+    else if (!strcmp(target, "uart2"))
+    {
+        strncpy(next_name, "uart2", sizeof(next_name) - 1);
+    }
+    else
+    {
+        rt_kprintf("未知设备: %s\n", target);
+        return -RT_ERROR;
+    }
+
+    /* 若当前设备已打开，则先关闭 */
+    if (anotc_telem_dev)
+    {
+        rt_device_close(anotc_telem_dev);
+        anotc_telem_dev = RT_NULL;
+    }
+
+    /* 更新名称并重新初始化设备 */
+    strncpy(anotc_output_name, next_name, sizeof(anotc_output_name) - 1);
+    if (task_dev_init() != RT_EOK)
+    {
+        rt_kprintf("切换到 %s 失败\n", anotc_output_name);
+        return -RT_ERROR;
+    }
+
+    rt_kprintf("anotc 输出已切换到: %s\n", anotc_output_name);
+
+    /* 切到USB时，顺带切换vconsole到USB终端 */
+    if (!strcmp(target, "usb"))
+    {
+#ifdef PKG_USING_VCONSOLE
+        usb_change_shell();
+#endif
+    }
+
     return RT_EOK;
 }
 
@@ -412,6 +458,34 @@ int task_anotc_telem(void)
 
     return 0;
 }
+
+/* 命令: anotc out <uart1|uart2|usb> */
+static int cmd_anotc(int argc, char **argv)
+{
+    if (argc < 2)
+    {
+        rt_kprintf("anotc 命令用法:\n");
+        rt_kprintf("  anotc out <uart1|uart2|usb>  - 切换输出设备 (默认uart1)\n");
+        rt_kprintf("当前输出: %s\n", anotc_output_name);
+        return 0;
+    }
+
+    if (!rt_strcmp(argv[1], "out"))
+    {
+        if (argc < 3)
+        {
+            rt_kprintf("缺少设备参数，支持: uart1|uart2|usb\n");
+            return -1;
+        }
+        return anotc_telem_switch_output(argv[2]);
+    }
+
+    rt_kprintf("未知子命令: %s\n", argv[1]);
+    rt_kprintf("使用 'anotc' 查看帮助\n");
+    return -1;
+}
+
+MSH_CMD_EXPORT_ALIAS(cmd_anotc, anotc, anotc telem output switch command);
 
 #ifdef BSP_USING_TASK_03_ANOTC_TELEM
 INIT_APP_EXPORT(task_anotc_telem);

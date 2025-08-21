@@ -5,7 +5,7 @@
         if BSP_USING_I2C
             menuconfig BSP_USING_HARD_I2C1
                 bool "Enable HARD I2C1"
-                default n
+                default y
                 if BSP_USING_HARD_I2C1
                     config BSP_I2C1_TX_USING_DMA
                         bool "Enable HARD I2C1 TX DMA"

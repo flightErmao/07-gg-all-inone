@@ -44,10 +44,20 @@ int mpu6500::mpu6500Init() {
   delayMs(20);
 
   // 读取设备ID并校验（0x38 或 0x39）
-  uint8_t temp = getDeviceID();
-  if (temp == 0x38 || temp == 0x39) {
-    std::printf("MPU9250 I2C connection [OK].\n");
-  } else {
+  uint8_t retry_times_max = 3;  // 最大重试次数
+  bool success = false;
+  uint8_t device_id = 0;
+  for (uint8_t i = 0; i < retry_times_max; i++) {
+    device_id = getDeviceID();
+    if (device_id == 0x38 || device_id == 0x39) {
+      success = true;
+      break;  // 成功读取设备ID
+    }
+    delayMs(10);  // 等待10ms后重试
+    i2cdevWriteBit(dev_addr_, MPU6500_RA_PWR_MGMT_1, MPU6500_PWR1_DEVICE_RESET_BIT, 1);
+    delayMs(20);  // 等待10ms后重试
+  }
+  if (!success) {
     std::printf("MPU9250 I2C connection [FAIL].\n");
     return MPU_ERROR;
   }

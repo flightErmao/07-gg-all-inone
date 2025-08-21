@@ -14,4 +14,6 @@ int usb_change_shell(void)
     return 0;
 }
 
+#ifdef PKG_USING_VCONSOLE
 INIT_FS_EXPORT(usb_change_shell);
+#endif

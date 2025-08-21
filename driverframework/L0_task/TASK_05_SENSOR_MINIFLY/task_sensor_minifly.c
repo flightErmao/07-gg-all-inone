@@ -54,6 +54,7 @@ static void sensor_minifly_thread_entry(void *parameter) {
         int16_t gz = ((uint16_t)raw[12] << 8) | raw[13];
 
         sendUserDatafloat6(IMU_DATA, (float)ax, (float)ay, (float)az, (float)gx, (float)gy, (float)gz);
+        rt_thread_mdelay(100);
       } else {
         static int err_cnt = 0;
         if (++err_cnt % 100 == 0) {
