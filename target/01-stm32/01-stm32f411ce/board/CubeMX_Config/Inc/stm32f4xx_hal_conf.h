@@ -18,6 +18,7 @@
   *
   ******************************************************************************
   */
+#include "rtconfig.h"
 /* USER CODE END Header */
 
 /* Define to prevent recursive inclusion -------------------------------------*/

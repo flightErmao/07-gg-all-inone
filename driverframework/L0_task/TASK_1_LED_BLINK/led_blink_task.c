@@ -96,6 +96,15 @@ static rt_err_t led_blink_task_init_resources(void) {
 
   // 初始化LED闪烁接口
   led_blink_interface_init();
+  
+  // 设置LED闪烁周期（使用Kconfig配置的定时器间隔）
+#ifdef TASK_1_LED_BLINK_TIMER_INTERVAL
+  led_blink_set_period_ms(TASK_1_LED_BLINK_TIMER_INTERVAL);
+  printf("[%s] LED闪烁周期设置为: %d ms\n", LED_BLINK_TASK_NAME, TASK_1_LED_BLINK_TIMER_INTERVAL);
+#else
+  led_blink_set_period_ms(500);  // 默认500ms周期
+  printf("[%s] LED闪烁周期设置为默认值: 500 ms\n", LED_BLINK_TASK_NAME);
+#endif
 
   // 创建事件对象
   led_blink_event = rt_event_create("led_blink_event", RT_IPC_FLAG_FIFO);
