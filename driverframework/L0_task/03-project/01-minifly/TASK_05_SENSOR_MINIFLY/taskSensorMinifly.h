@@ -4,8 +4,7 @@
 #include <rtthread.h>
 #include "axis.h"
 
-rt_err_t sensor_minifly_read_acc(Axis3f *out);
-rt_err_t sensor_minifly_read_gyro(Axis3f *out);
+void sensorsAcquire(sensorData_t *sensors);
 
 #endif
 

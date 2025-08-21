@@ -66,7 +66,6 @@ static void task_dev_init(void) {
 
 static void sensor_minifly_thread_entry(void *parameter) {
   RT_UNUSED(parameter);
-
   task_dev_init();
 
   /* init queues */
@@ -78,19 +77,15 @@ static void sensor_minifly_thread_entry(void *parameter) {
 
   while (1) {
     if (dev_sensor_imu) {
-      uint8_t raw[14] = {0};
-      int rb = rt_device_read(dev_sensor_imu, reg_start, raw, 14);
-      if (rb == 14) {
-        int16_t ax = ((uint16_t)raw[0] << 8) | raw[1];
-        int16_t ay = ((uint16_t)raw[2] << 8) | raw[3];
-        int16_t az = ((uint16_t)raw[4] << 8) | raw[5];
-        // int16_t temp_raw = ((uint16_t)raw[6] << 8) | raw[7];
-        int16_t gx = ((uint16_t)raw[8] << 8) | raw[9];
-        int16_t gy = ((uint16_t)raw[10] << 8) | raw[11];
-        int16_t gz = ((uint16_t)raw[12] << 8) | raw[13];
+      uint8_t raw[SENSORS_MPU6500_BUFF_LEN] = {0};
+      int rb = rt_device_read(dev_sensor_imu, reg_start, raw, SENSORS_MPU6500_BUFF_LEN);
+      if (rb == SENSORS_MPU6500_BUFF_LEN) {
+        processAccGyroMeasurements(raw);
+        storeOneFrameImuData(raw, getSysTickCnt());
 
         Axis3f acc = { .x = (float)ax, .y = (float)ay, .z = (float)az };
         Axis3f gyro = { .x = (float)gx, .y = (float)gy, .z = (float)gz };
+
         mq_overwrite(&mq_acc, &acc, sizeof(acc));
         mq_overwrite(&mq_gyro, &gyro, sizeof(gyro));
         sendUserDatafloat6(IMU_DATA, acc.x, acc.y, acc.z, gyro.x, gyro.y, gyro.z);
@@ -111,6 +106,11 @@ static void sensor_minifly_thread_entry(void *parameter) {
       rt_thread_mdelay(20);
     }
   }
+}
+
+void sensorsAcquire(sensorData_t *sensors) {
+  sensor_minifly_read_gyro(&sensors->gyro);
+  sensor_minifly_read_acc(&sensors->acc);
 }
 
 static void task_thread_init(void) {
