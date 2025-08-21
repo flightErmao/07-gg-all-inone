@@ -1,7 +1,9 @@
 menu "L0_TASK_CONFIG"
-    source "$(PROJECT_ROOT)/driverframework/L0_task/TASK_1_LED_BLINK/Kconfig"
-    source "$(PROJECT_ROOT)/driverframework/L0_task/TASK_2_GPS_TEST/Kconfig"
-    source "$(PROJECT_ROOT)/driverframework/L0_task/TASK_03_ANOTC_TELEM/Kconfig"
-    source "$(PROJECT_ROOT)/driverframework/L0_task/TASK_04_BARO_TEST/Kconfig"
-    source "$(PROJECT_ROOT)/driverframework/L0_task/TASK_05_SENSOR_MINIFLY/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L0_task/01-demo/TASK_01_LED_BLINK/Kconfig"
+
+    source "$(PROJECT_ROOT)/driverframework/L0_task/02-tools/TASK_02_GPS_TEST/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L0_task/02-tools/TASK_03_ANOTC_TELEM/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L0_task/02-tools/TASK_04_BARO_TEST/Kconfig"
+    
+    source "$(PROJECT_ROOT)/driverframework/L0_task/03-project/01-minifly/TASK_05_SENSOR_MINIFLY/Kconfig"
 endmenu
