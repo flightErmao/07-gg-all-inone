@@ -2,132 +2,9 @@
 #include "task_anotc_telem.h"
 #include <rtdevice.h>
 
-#ifdef BSP_USING_UART1
-#define ANOTC_TELEM_UART_NAME "uart1"
-#endif
-#ifdef BSP_USING_UART2
-#define ANOTC_TELEM_UART_NAME "uart2"
-#endif
+/* 线程与消息队列配置已移至 task_anotc_telem.h */
 
 // #define TASK_ANOTC_PIN_DEBUG_EN
-
-// 数据拆分宏定义
-#define BYTE0(dwTemp) (*((uint8_t *)(&dwTemp)))
-#define BYTE1(dwTemp) (*((uint8_t *)(&dwTemp) + 1))
-#define BYTE2(dwTemp) (*((uint8_t *)(&dwTemp) + 2))
-#define BYTE3(dwTemp) (*((uint8_t *)(&dwTemp) + 3))
-
-// 数据返回周期时间（单位ms）
-#define PERIOD_USERDATA 1
-
-#define ATKP_RX_QUEUE_SIZE 10 /*ATKP包接收队列消息个数*/
-
-#define USER_FRAME_F1 1
-#define USER_FRAME_F2 2
-#define USER_FRAME_F3 3
-
-/*上行帧头*/
-#define UP_BYTE1 0xAA
-#define UP_BYTE2 0xAA
-
-/*下行帧头*/
-#define DOWN_BYTE1 0xAA
-#define DOWN_BYTE2 0xAF
-
-#define ATKP_MAX_DATA_SIZE 128
-#define ATKP_PROTOCOL_HEAD_SIZE 6
-#define ATKP_ANOTC_TELEM_BUF_SIZE (ATKP_MAX_DATA_SIZE + ATKP_PROTOCOL_HEAD_SIZE)
-
-/*下行指令*/
-#define D_COMMAND_ACC_CALIB 0x01
-#define D_COMMAND_GYRO_CALIB 0x02
-#define D_COMMAND_MAG_CALIB 0x04
-#define D_COMMAND_BARO_CALIB 0x05
-#define D_COMMAND_ACC_CALIB_EXIT 0x20
-#define D_COMMAND_ACC_CALIB_STEP1 0x21
-#define D_COMMAND_ACC_CALIB_STEP2 0x22
-#define D_COMMAND_ACC_CALIB_STEP3 0x23
-#define D_COMMAND_ACC_CALIB_STEP4 0x24
-#define D_COMMAND_ACC_CALIB_STEP5 0x25
-#define D_COMMAND_ACC_CALIB_STEP6 0x26
-#define D_COMMAND_FLIGHT_LOCK 0xA0
-#define D_COMMAND_FLIGHT_ULOCK 0xA1
-
-#define D_ACK_READ_PID 0x01
-#define D_ACK_READ_VERSION 0xA0
-#define D_ACK_RESET_PARAM 0xA1
-
-#define THREAD_PRIORITY 25
-#define THREAD_STACK_SIZE 2048
-#define THREAD_TIMESLICE 5
-#define MSG_NUM 30
-#define POOL_SIZE_BYTE (sizeof(atkp_t) * MSG_NUM)
-#define ANOTC_TELEM_BAUD_RATE 115200
-
-/*通讯数据结构*/
-typedef struct
-{
-    uint8_t msgID;
-    uint8_t dataLen;
-    uint8_t data[ATKP_MAX_DATA_SIZE];
-} atkp_t;
-
-/*上行指令ID*/
-typedef enum
-{
-    UP_VERSION = 0x00,
-    UP_STATUS = 0x01,
-    UP_SENSER = 0x02,
-    UP_RCDATA = 0x03,
-    UP_GPSDATA = 0x04,
-    UP_POWER = 0x05,
-    UP_MOTOR = 0x06,
-    UP_SENSER2 = 0x07,
-    UP_FLYMODE = 0x0A,
-    UP_SPEED = 0x0B,
-    UP_PID1 = 0x10,
-    UP_PID2 = 0x11,
-    UP_PID3 = 0x12,
-    UP_PID4 = 0x13,
-    UP_PID5 = 0x14,
-    UP_PID6 = 0x15,
-    UP_RADIO = 0x40,
-    UP_MSG = 0xEE,
-    UP_CHECK = 0xEF,
-
-    UP_REMOTER = 0x50,
-    UP_PRINTF = 0x51,
-
-    UP_USER_DATA1 = 0xF1,
-    UP_USER_DATA2 = 0xF2,
-    UP_USER_DATA3 = 0xF3,
-    UP_USER_DATA4 = 0xF4,
-    UP_USER_DATA5 = 0xF5,
-    UP_USER_DATA6 = 0xF6,
-    UP_USER_DATA7 = 0xF7,
-    UP_USER_DATA8 = 0xF8,
-    UP_USER_DATA9 = 0xF9,
-    UP_USER_DATA10 = 0xFA,
-} upmsgID_e;
-
-/*下行指令ID*/
-typedef enum
-{
-    DOWN_COMMAND = 0x01,
-    DOWN_ACK = 0x02,
-    DOWN_RCDATA = 0x03,
-    DOWN_POWER = 0x05,
-    DOWN_FLYMODE = 0x0A,
-    DOWN_PID1 = 0x10,
-    DOWN_PID2 = 0x11,
-    DOWN_PID3 = 0x12,
-    DOWN_PID4 = 0x13,
-    DOWN_PID5 = 0x14,
-    DOWN_PID6 = 0x15,
-    DOWN_RADIO = 0x40,
-
-    DOWN_REMOTER = 0x50,
-} downmsgID_e;
 
 /* 使用 rtdevice.h 中的 struct serial_configure 定义，删除本地重复定义 */
 
@@ -182,6 +59,34 @@ void anotc_telem_stash_msg_to_mq(atkp_t *p)
 }
 
 
+/* 通用: 发送 N 个 float 数据，支持同步/异步 */
+static void anotc_telem_send_floats(uint8_t group, const float *values, uint8_t count, msg_send_method_e method)
+{
+    uint8_t _cnt = 0;
+    atkp_t p;
+
+    p.msgID = UP_USER_DATA1 + group - 1;
+
+    for (uint8_t i = 0; i < count; i++)
+    {
+        float temp = values[i];
+        p.data[_cnt++] = BYTE3(temp);
+        p.data[_cnt++] = BYTE2(temp);
+        p.data[_cnt++] = BYTE1(temp);
+        p.data[_cnt++] = BYTE0(temp);
+    }
+
+    p.dataLen = _cnt;
+    if (method == MSG_ASYNC)
+    {
+        anotc_telem_stash_msg_to_mq(&p);
+    }
+    else
+    {
+        anotc_telem_uartSendPacket(&p);
+    }
+}
+
 static void sendUserDataLine6_int16(uint8_t group, int16_t *buf_data_cat, msg_send_method_e method)
 {
     uint8_t _cnt = 0;
@@ -215,80 +120,48 @@ static void sendUserDataLine6_int16(uint8_t group, int16_t *buf_data_cat, msg_se
 
 void sendUserDatafloat3(uint8_t group, float a,float b,float c)
 {
-    uint8_t _cnt = 0;
-    atkp_t p;
-
-    p.msgID = UP_USER_DATA1 + group - 1;
-
-    float temp = a;
-    p.data[_cnt++] = BYTE3(temp);
-    p.data[_cnt++] = BYTE2(temp);
-    p.data[_cnt++] = BYTE1(temp);
-    p.data[_cnt++] = BYTE0(temp);
-
-    temp = b;
-    p.data[_cnt++] = BYTE3(temp);
-    p.data[_cnt++] = BYTE2(temp);
-    p.data[_cnt++] = BYTE1(temp);
-    p.data[_cnt++] = BYTE0(temp);
-
-    temp = c;
-    p.data[_cnt++] = BYTE3(temp);
-    p.data[_cnt++] = BYTE2(temp);
-    p.data[_cnt++] = BYTE1(temp);
-    p.data[_cnt++] = BYTE0(temp);
-    p.dataLen = _cnt;
-    anotc_telem_stash_msg_to_mq(&p);
+    float values[3] = {a, b, c};
+    anotc_telem_send_floats(group, values, 3, MSG_ASYNC);
 }
 
 void sendUserDatafloat6(uint8_t group, float a, float b, float c, float d, float e, float f) {
-  uint8_t _cnt = 0;
-  atkp_t p;
-
-  p.msgID = UP_USER_DATA1 + group - 1;
-
-  float temp = a;
-  p.data[_cnt++] = BYTE3(temp);
-  p.data[_cnt++] = BYTE2(temp);
-  p.data[_cnt++] = BYTE1(temp);
-  p.data[_cnt++] = BYTE0(temp);
-
-  temp = b;
-  p.data[_cnt++] = BYTE3(temp);
-  p.data[_cnt++] = BYTE2(temp);
-  p.data[_cnt++] = BYTE1(temp);
-  p.data[_cnt++] = BYTE0(temp);
-
-  temp = c;
-  p.data[_cnt++] = BYTE3(temp);
-  p.data[_cnt++] = BYTE2(temp);
-  p.data[_cnt++] = BYTE1(temp);
-  p.data[_cnt++] = BYTE0(temp);
-
-  temp = d;
-  p.data[_cnt++] = BYTE3(temp);
-  p.data[_cnt++] = BYTE2(temp);
-  p.data[_cnt++] = BYTE1(temp);
-  p.data[_cnt++] = BYTE0(temp);
-
-  temp = e;
-  p.data[_cnt++] = BYTE3(temp);
-  p.data[_cnt++] = BYTE2(temp);
-  p.data[_cnt++] = BYTE1(temp);
-  p.data[_cnt++] = BYTE0(temp);
-
-  temp = f;
-  p.data[_cnt++] = BYTE3(temp);
-  p.data[_cnt++] = BYTE2(temp);
-  p.data[_cnt++] = BYTE1(temp);
-  p.data[_cnt++] = BYTE0(temp);
-
-  p.dataLen = _cnt;
-  anotc_telem_stash_msg_to_mq(&p);
+  float values[6] = {a, b, c, d, e, f};
+  anotc_telem_send_floats(group, values, 6, MSG_ASYNC);
 }
 
 static void setUserData_int16(uint8_t index, int16_t *buf, int16_t value)
 {
+    buf[index] = value;
+}
+
+/* 对外：发送6路int16（同步/异步） */
+void sendUserDataLine6_int16_sync(uint8_t group, int16_t *buf_data_cat)
+{
+    sendUserDataLine6_int16(group, buf_data_cat, MSG_SYNC);
+}
+
+void sendUserDataLine6_int16_async(uint8_t group, int16_t *buf_data_cat)
+{
+    sendUserDataLine6_int16(group, buf_data_cat, MSG_ASYNC);
+}
+
+/* 兼容接口：发送6路float（同步/异步由参数决定） */
+void anotc_telem_sendUserDataLine6_float(uint8_t group, float *buf_data_cat, msg_send_method_e method)
+{
+    if (buf_data_cat == RT_NULL)
+    {
+        return;
+    }
+    anotc_telem_send_floats(group, buf_data_cat, 6, method);
+}
+
+/* 兼容接口：设置 float 缓冲区的某一项 */
+void setUserData_float(uint8_t index, float *buf, float value)
+{
+    if (buf == RT_NULL)
+    {
+        return;
+    }
     buf[index] = value;
 }
 
