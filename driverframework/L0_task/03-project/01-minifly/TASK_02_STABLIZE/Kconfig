@@ -1,0 +1,14 @@
+menuconfig TASK_02_STABLIZE
+    bool "ENABLE: TASK_02_STABLIZE"
+    default n
+    select BSP_USING_MPU6500_MINIFLY
+    help
+        Enable sensor test task that periodically calls sensor test interface.
+    if TASK_02_STABLIZE
+        config TASK_STABLIZE_IMU_NAME
+            string "IMU device name for stablize task"
+            default "mpu6500_minifly"
+            help
+                IMU device name used by stablize task. Default is the MPU6500 MINIFLY device name.
+
+    endif

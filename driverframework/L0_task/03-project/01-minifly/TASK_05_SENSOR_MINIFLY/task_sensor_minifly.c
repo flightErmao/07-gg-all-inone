@@ -4,6 +4,8 @@
 #include "task_anotc_telem.h"
 #include "imu.h"
 #include <rtdevice.h>
+#include "axis.h"
+#include "task_sensor_minifly.h"
 
 #define DBG_TAG "task_sensor_minifly"
 #define DBG_LVL DBG_LOG
@@ -17,6 +19,36 @@ static struct rt_thread task_tid_sensor_minifly;
 static rt_uint8_t task_stack_sensor_minifly[THREAD_STACK_SIZE];
 
 static rt_device_t dev_sensor_imu = RT_NULL;
+
+/* queues for acc/gyro */
+#define MQ_LEN 1
+#define MQ_ITEM_SIZE_ACC (sizeof(Axis3f))
+#define MQ_ITEM_SIZE_GYRO (sizeof(Axis3f))
+static RT_ALIGN(RT_ALIGN_SIZE) rt_uint8_t acc_pool[MQ_ITEM_SIZE_ACC * MQ_LEN];
+static RT_ALIGN(RT_ALIGN_SIZE) rt_uint8_t gyro_pool[MQ_ITEM_SIZE_GYRO * MQ_LEN];
+static struct rt_messagequeue mq_acc;
+static struct rt_messagequeue mq_gyro;
+
+static void mq_overwrite(struct rt_messagequeue *mq, const void *msg, rt_size_t size)
+{
+  if (rt_mq_send(mq, msg, size) != RT_EOK)
+  {
+    rt_mq_control(mq, RT_IPC_CMD_RESET, RT_NULL);
+    rt_mq_send(mq, msg, size);
+  }
+}
+
+rt_err_t sensor_minifly_read_acc(Axis3f *out)
+{
+  if (!out) return -RT_EINVAL;
+  return rt_mq_recv(&mq_acc, out, sizeof(Axis3f), 0) > 0 ? RT_EOK : -RT_ETIMEOUT;
+}
+
+rt_err_t sensor_minifly_read_gyro(Axis3f *out)
+{
+  if (!out) return -RT_EINVAL;
+  return rt_mq_recv(&mq_gyro, out, sizeof(Axis3f), 0) > 0 ? RT_EOK : -RT_ETIMEOUT;
+}
 
 static void task_dev_init(void) {
   rt_device_t dev_temp = RT_NULL;
@@ -37,6 +69,10 @@ static void sensor_minifly_thread_entry(void *parameter) {
 
   task_dev_init();
 
+  /* init queues */
+  rt_mq_init(&mq_acc, "mq_acc", acc_pool, MQ_ITEM_SIZE_ACC, sizeof(acc_pool), RT_IPC_FLAG_PRIO);
+  rt_mq_init(&mq_gyro, "mq_gyr", gyro_pool, MQ_ITEM_SIZE_GYRO, sizeof(gyro_pool), RT_IPC_FLAG_PRIO);
+
   // 原始寄存器起始地址：加速度 X 高字节
   const rt_off_t reg_start = 0x3B;  // MPU6500_RA_ACCEL_XOUT_H
 
@@ -53,7 +89,11 @@ static void sensor_minifly_thread_entry(void *parameter) {
         int16_t gy = ((uint16_t)raw[10] << 8) | raw[11];
         int16_t gz = ((uint16_t)raw[12] << 8) | raw[13];
 
-        sendUserDatafloat6(IMU_DATA, (float)ax, (float)ay, (float)az, (float)gx, (float)gy, (float)gz);
+        Axis3f acc = { .x = (float)ax, .y = (float)ay, .z = (float)az };
+        Axis3f gyro = { .x = (float)gx, .y = (float)gy, .z = (float)gz };
+        mq_overwrite(&mq_acc, &acc, sizeof(acc));
+        mq_overwrite(&mq_gyro, &gyro, sizeof(gyro));
+        sendUserDatafloat6(IMU_DATA, acc.x, acc.y, acc.z, gyro.x, gyro.y, gyro.z);
         rt_thread_mdelay(10);
       } else {
         static int err_cnt = 0;
