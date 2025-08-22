@@ -361,6 +361,13 @@
 
 /* samples: kernel and components samples */
 
+#define PKG_USING_KERNEL_SAMPLES
+#define PKG_USING_KERNEL_SAMPLES_LATEST_VERSION
+#define PKG_USING_KERNEL_SAMPLES_EN
+#define KERNEL_SAMPLES_USING_MAILBOX
+#define KERNEL_SAMPLES_USING_MESSAGEQUEUE
+#define KERNEL_SAMPLES_USING_MEMPOOL
+#define KERNEL_SAMPLES_USING_PRODUCER_CONSUMER
 /* end of samples: kernel and components samples */
 
 /* entertainment: terminal games and other interesting software packages */
