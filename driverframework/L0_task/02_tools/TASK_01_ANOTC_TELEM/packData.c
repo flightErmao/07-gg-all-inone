@@ -77,11 +77,11 @@ void sendUserDatafloat6(uint8_t group, float a, float b, float c, float d, float
 #ifdef PROJECT_MINIFLY_SENSOR
 
 #include "sensorsTypes.h"
+#include "taskSensorMinifly.h"
+
 extern void sensorsAcquire(sensorData_t *sensors);
 
 void sendSensorImuData(uint16_t count_ms) {
-  sensorData_t sensors;
-
   if (!(count_ms % PERIOD_10ms)) {
     sensorsAcquire(&sensors);
     sendUserDatafloat6(1, sensors.acc_filter.x, sensors.acc_filter.y, sensors.acc_filter.z, sensors.gyro_filter.x,
@@ -95,5 +95,28 @@ int addPeriodFunListProjectMiniFlySensor(void) {
 }
 
 INIT_APP_EXPORT(addPeriodFunListProjectMiniFlySensor);
+
+#else
+
+/* 未启用PROJECT_MINIFLY_SENSOR时，注册假的IMU数据发送函数 */
+static void sendSensorImuData(uint16_t count_ms) {
+  static float fx = 0.0f, fy = 1.0f, fz = 2.0f;
+  static float gx = 3.0f, gy = 4.0f, gz = 5.0f;
+
+  if (!(count_ms % PERIOD_10ms)) {
+    /* 累加生成变化数据 */
+    fx += 0.1f; fy += 0.2f; fz += 0.3f;
+    gx += 0.4f; gy += 0.5f; gz += 0.6f;
+
+    sendUserDatafloat6(1, fx, fy, fz, gx, gy, gz);
+  }
+}
+
+static int addPeriodFunListFakeSensor(void) {
+  anotc_telem_add_sensor_func(sendSensorImuData);
+  return 0;
+}
+
+INIT_APP_EXPORT(addPeriodFunListFakeSensor);
 
 #endif

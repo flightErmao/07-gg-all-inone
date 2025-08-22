@@ -25,7 +25,6 @@ static struct rt_messagequeue device_send_mq_;
 /* 传感器函数列表管理 */
 static sensor_data_send_func_t sensor_func_list[MAX_SENSOR_FUNCS] = {0};
 static uint8_t sensor_func_count = 0;
-static rt_mutex_t sensor_func_mutex = RT_NULL;
 
 static void task_msg_init(void) {
   rt_err_t result;
@@ -46,36 +45,20 @@ static void task_msg_init(void) {
 static void taskAnotcMqSendEntry(void *param) {
   uint16_t count_ms = 0;
 
-  /* 初始化互斥锁 */
-  sensor_func_mutex = rt_mutex_create("sensor_mutex", RT_IPC_FLAG_PRIO);
-  if (sensor_func_mutex == RT_NULL) {
-    rt_kprintf("Failed to create sensor mutex!\n");
-    return;
-  }
-
   rt_kprintf("Sensor data task started\n");
 
   while (1) {
-    rt_mutex_take(sensor_func_mutex, RT_WAITING_FOREVER);
-
-    /* 遍历函数列表，调用每个传感器数据发送函数 */
     for (uint8_t i = 0; i < sensor_func_count; i++) {
       if (sensor_func_list[i] != RT_NULL) {
         sensor_func_list[i](count_ms);
       }
     }
-
-    rt_mutex_release(sensor_func_mutex);
-
     count_ms++;
     rt_thread_mdelay(1); /* 1ms周期 */
   }
 }
 
-/*anotc_telem接收到ATKPPacket预处理*/
 static void taskAnotcMqRecEntry(void *param) {
-  task_dev_init(TOOL_TASK_DEVICE_DEFAULT);
-  task_msg_init();
 
   atkp_t msg_temp;
   while (1) {
@@ -91,6 +74,8 @@ static void taskAnotcMqRecEntry(void *param) {
 }
 
 static int taskAnotcMqRec(void) {
+  task_dev_init(TOOL_TASK_DEVICE_DEFAULT);
+  task_msg_init();
   rt_thread_init(&taskAnotcMqRecTid, "taskAnotcMqRec", taskAnotcMqRecEntry, RT_NULL, taskAnotcMqRecStack,
                  THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
   rt_thread_startup(&taskAnotcMqRecTid);
@@ -107,7 +92,7 @@ static int taskAnotcMqSend(void) {
   return 0;
 }
 
-#ifdef BSP_USING_TASK_03_ANOTC_TELEM
+#ifdef TOOL_TASK_ANOTC_TELEM_EN
 INIT_APP_EXPORT(taskAnotcMqRec);
 INIT_APP_EXPORT(taskAnotcMqSend);
 #endif
@@ -123,37 +108,21 @@ void anotcMqStash(atkp_t *p) {
 
 /* 添加传感器数据发送函数到列表 */
 void anotc_telem_add_sensor_func(sensor_data_send_func_t func) {
-  if (func == RT_NULL || sensor_func_mutex == RT_NULL) {
+  if (func == RT_NULL) {
     return;
   }
 
-  rt_mutex_take(sensor_func_mutex, RT_WAITING_FOREVER);
+  for (uint8_t i = 0; i < sensor_func_count; i++) {
+    if (sensor_func_list[i] == func) {
+      return;
+    }
+  }
+
   if (sensor_func_count < MAX_SENSOR_FUNCS) {
     sensor_func_list[sensor_func_count++] = func;
     rt_kprintf("Added sensor func, total: %d\n", sensor_func_count);
   } else {
     rt_kprintf("Sensor func list full!\n");
   }
-  rt_mutex_release(sensor_func_mutex);
 }
 
-/* 从列表中移除传感器数据发送函数 */
-void anotc_telem_remove_sensor_func(sensor_data_send_func_t func) {
-  if (func == RT_NULL || sensor_func_mutex == RT_NULL) {
-    return;
-  }
-
-  rt_mutex_take(sensor_func_mutex, RT_WAITING_FOREVER);
-  for (uint8_t i = 0; i < sensor_func_count; i++) {
-    if (sensor_func_list[i] == func) {
-      /* 移除函数，将后面的函数前移 */
-      for (uint8_t j = i; j < sensor_func_count - 1; j++) {
-        sensor_func_list[j] = sensor_func_list[j + 1];
-      }
-      sensor_func_count--;
-      rt_kprintf("Removed sensor func, total: %d\n", sensor_func_count);
-      break;
-    }
-  }
-  rt_mutex_release(sensor_func_mutex);
-}
