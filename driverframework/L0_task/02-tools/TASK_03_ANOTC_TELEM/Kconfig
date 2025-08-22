@@ -1,5 +1,12 @@
-menuconfig BSP_USING_TASK_03_ANOTC_TELEM
-    bool "ENABLE: TASK_ANOTC"
+menuconfig TOOL_TASK_ANOTC_TELEM_EN
+    bool "ENABLE: TOOL_TASK_ANOTC_TELEM_EN"
     default n
     help
        open anotc task
+    if TOOL_TASK_ANOTC_TELEM_EN
+        config TOOL_TASK_DEVICE_DEFAULT
+        string "the default of send device"
+        default "uart1"
+        help
+            "the default of send device"
+    endif
