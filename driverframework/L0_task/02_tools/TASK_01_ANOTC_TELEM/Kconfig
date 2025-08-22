@@ -6,7 +6,13 @@ menuconfig TOOL_TASK_ANOTC_TELEM_EN
     if TOOL_TASK_ANOTC_TELEM_EN
         config TOOL_TASK_DEVICE_DEFAULT
         string "the default of send device"
-        default "uart1"
+        default "uart2"
         help
             "the default of send device"
+
+        config  TOOL_TASK_BAUD_RATE
+        int "the baud rate of send device"
+        default 1000000
+        help
+            "the baud rate of send device"
     endif

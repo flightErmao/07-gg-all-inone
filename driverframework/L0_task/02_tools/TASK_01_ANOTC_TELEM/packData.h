@@ -3,6 +3,14 @@
 
 #include <stdint.h>
 
+#define PERIOD_1ms 1
+#define PERIOD_10ms 10
+#define PERIOD_20ms 20
+#define PERIOD_30ms 30
+#define PERIOD_40ms 40
+#define PERIOD_50ms 50
+#define PERIOD_100ms 100
+
 /*上行指令ID*/
 typedef enum {
   UP_VERSION = 0x00,
@@ -52,5 +60,8 @@ typedef struct {
   uint8_t dataLen;
   uint8_t data[128];  // ATKP_MAX_DATA_SIZE
 } atkp_t;
+
+void sendUserDatafloat3(uint8_t group, float a, float b, float c);
+void sendUserDatafloat6(uint8_t group, float a, float b, float c, float d, float e, float f);
 
 #endif /* __PACK_DATA_H__ */

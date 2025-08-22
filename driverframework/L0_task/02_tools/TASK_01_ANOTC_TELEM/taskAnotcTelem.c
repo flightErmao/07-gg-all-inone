@@ -23,8 +23,8 @@ static rt_uint8_t msg_pool[POOL_SIZE_BYTE];
 static struct rt_messagequeue device_send_mq_;
 
 /* 传感器函数列表管理 */
-static sensor_data_send_func_t sensor_func_list[MAX_SENSOR_FUNCS] = {0};
-static uint8_t sensor_func_count = 0;
+static sensor_data_send_func_t sensor_func_list_[MAX_SENSOR_FUNCS] = {0};
+static uint8_t sensor_func_count_ = 0;
 
 static void task_msg_init(void) {
   rt_err_t result;
@@ -48,9 +48,9 @@ static void taskAnotcMqSendEntry(void *param) {
   rt_kprintf("Sensor data task started\n");
 
   while (1) {
-    for (uint8_t i = 0; i < sensor_func_count; i++) {
-      if (sensor_func_list[i] != RT_NULL) {
-        sensor_func_list[i](count_ms);
+    for (uint8_t i = 0; i < sensor_func_count_; i++) {
+      if (sensor_func_list_[i] != RT_NULL) {
+        sensor_func_list_[i](count_ms);
       }
     }
     count_ms++;
@@ -107,22 +107,21 @@ void anotcMqStash(atkp_t *p) {
 }
 
 /* 添加传感器数据发送函数到列表 */
-void anotc_telem_add_sensor_func(sensor_data_send_func_t func) {
+void anotcTelemAddSensorFunc(sensor_data_send_func_t func) {
   if (func == RT_NULL) {
     return;
   }
 
-  for (uint8_t i = 0; i < sensor_func_count; i++) {
-    if (sensor_func_list[i] == func) {
+  for (uint8_t i = 0; i < sensor_func_count_; i++) {
+    if (sensor_func_list_[i] == func) {
       return;
     }
   }
 
-  if (sensor_func_count < MAX_SENSOR_FUNCS) {
-    sensor_func_list[sensor_func_count++] = func;
-    rt_kprintf("Added sensor func, total: %d\n", sensor_func_count);
+  if (sensor_func_count_ < MAX_SENSOR_FUNCS) {
+    sensor_func_list_[sensor_func_count_++] = func;
+    rt_kprintf("Added sensor func, total: %d\n", sensor_func_count_);
   } else {
     rt_kprintf("Sensor func list full!\n");
   }
 }
-
