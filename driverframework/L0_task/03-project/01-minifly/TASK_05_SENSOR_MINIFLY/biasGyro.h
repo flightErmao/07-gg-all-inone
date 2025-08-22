@@ -1,12 +1,9 @@
-#ifndef FILTERS_H
-#define FILTERS_H
+#ifndef __BIASGYRO_H__
+#define __BIASGYRO_H__
 
-#include <stdint.h>
-#include <stdbool.h>
-#include "axis.h"
+#include "sensorsTypes.h"
 
 void sensorsBiasObjInit(void);
 bool processGyroBias(int16_t gx, int16_t gy, int16_t gz, Axis3f *gyroBiasOut);
 
 #endif
-

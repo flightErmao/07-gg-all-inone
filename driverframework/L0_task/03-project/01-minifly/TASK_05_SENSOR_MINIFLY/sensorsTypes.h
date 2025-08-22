@@ -1,10 +1,12 @@
 #ifndef __SENSORS_TYPES_H
 #define __SENSORS_TYPES_H
-#include "sys.h"
-#include "axis.h"
+#include "stdint.h"
+#include "stdbool.h"
 
-#if defined(__CC_ARM)
-#pragma anon_unions
+// 支持GCC匿名联合体
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
 #endif
 
 typedef union {
@@ -43,6 +45,16 @@ typedef union {
   float axis[3];
 } Axis3f;
 
+typedef struct {
+  Axis3f acc_raw;
+  Axis3f gyro_raw;
+  Axis3f acc_filter;
+  Axis3f gyro_filter;
+} sensorData_t;
 
+// 恢复GCC诊断设置
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 #endif /* __SENSORS_TYPES_H */

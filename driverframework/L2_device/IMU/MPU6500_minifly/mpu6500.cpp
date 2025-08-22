@@ -162,7 +162,7 @@ int mpu6500::read_data(int pos, void* data, int size) {
 
   // 这里假设pos是传感器寄存器地址，从该地址开始读取size个字节
   int8_t result =
-      i2cBusRead(dev_addr_, static_cast<uint8_t>(pos), static_cast<uint8_t>(size), static_cast<uint8_t*>(data));
+      i2cBusRead(dev_addr_, MPU6500_RA_ACCEL_XOUT_H, static_cast<uint8_t>(size), static_cast<uint8_t*>(data));
 
   if (result != 0) {
     // I2C读取出错

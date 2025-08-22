@@ -1,48 +1,20 @@
-#include <math.h>
-#include "stdio.h"
-#include "delay.h"
-#include "config.h"
-#include "config_param.h"
-#include "ledseq.h"
-#include "mpu6500.h"
-#include "sensors.h"
-#include "ak8963.h"
-#include "bmp280.h"
-#include "spl06.h"
-#include "filters.h"
-#include "FreeRTOS.h"
-#include "task.h"
+#include "biasGyro.h"
+#include "filterLpf2p.h"
+#include "sensorsProcess.h"
 
-#define SENSORS_GYRO_FS_CFG MPU6500_GYRO_FS_2000
+#define MPU6500_DEG_PER_LSB_2000 (float)((2 * 2000.0) / 65536.0)
 #define SENSORS_DEG_PER_LSB_CFG MPU6500_DEG_PER_LSB_2000
 
-#define SENSORS_ACCEL_FS_CFG MPU6500_ACCEL_FS_16
+#define MPU6500_G_PER_LSB_16 (float)((2 * 16) / 65536.0)
 #define SENSORS_G_PER_LSB_CFG MPU6500_G_PER_LSB_16
 
-
-#define GYRO_VARIANCE_BASE 4000
 #define SENSORS_ACC_SCALE_SAMPLES 200
 
-#define SENSORS_MPU6500_BUFF_LEN 14
-
-#define GYRO_LPF_CUTOFF_FREQ 80
-#define ACCEL_LPF_CUTOFF_FREQ 30
-
-static Axis3f gyroBias;
-static bool gyroBiasFound = false;
-
-static float accScaleSum = 0;
+static sensorData_t sensors;
 static float accScale = 1;
 
-static bool isInit = false;
-static sensorData_t sensors;
-
-static lpf2pData accLpf[3];
-static lpf2pData gyroLpf[3];
-
-static bool isMPUPresent = false;
-
 static bool processAccScale(int16_t ax, int16_t ay, int16_t az) {
+  static float accScaleSum = 0;
   static bool accBiasFound = false;
   static uint32_t accScaleSumCount = 0;
 
@@ -59,16 +31,10 @@ static bool processAccScale(int16_t ax, int16_t ay, int16_t az) {
   return accBiasFound;
 }
 
-void filterInitLpf2AccGyro(void)
-{
-	for (u8 i = 0; i < 3; i++)// 初始化加速计和陀螺二阶低通滤波
-	{
-		lpf2pInit(&gyroLpf[i], 1000, GYRO_LPF_CUTOFF_FREQ);
-		lpf2pInit(&accLpf[i],  1000, ACCEL_LPF_CUTOFF_FREQ);
-	}
-}
+sensorData_t processAccGyroMeasurements(const uint8_t* buffer) {
+  static Axis3f gyroBias;
+  static bool gyroBiasFound = false;
 
-void processAccGyroMeasurements(const uint8_t* buffer) {
   int16_t ay = (((int16_t)buffer[0]) << 8) | buffer[1];
   int16_t ax = ((((int16_t)buffer[2]) << 8) | buffer[3]);
   int16_t az = (((int16_t)buffer[4]) << 8) | buffer[5];
@@ -76,12 +42,12 @@ void processAccGyroMeasurements(const uint8_t* buffer) {
   int16_t gx = (((int16_t)buffer[10]) << 8) | buffer[11];
   int16_t gz = (((int16_t)buffer[12]) << 8) | buffer[13];
 
-  accRaw.x = ax;
-  accRaw.y = ay;
-  accRaw.z = az;
-  gyroRaw.x = gx - gyroBias.x;
-  gyroRaw.y = gy - gyroBias.y;
-  gyroRaw.z = gz - gyroBias.z;
+  sensors.acc_raw.x = ax;
+  sensors.acc_raw.y = ay;
+  sensors.acc_raw.z = az;
+  sensors.gyro_raw.x = gx;
+  sensors.gyro_raw.y = gy;
+  sensors.gyro_raw.z = gz;
 
   gyroBiasFound = processGyroBias(gx, gy, gz, &gyroBias);
 
@@ -89,22 +55,15 @@ void processAccGyroMeasurements(const uint8_t* buffer) {
     processAccScale(ax, ay, az);
   }
 
-  sensors.gyro.x = -(gx - gyroBias.x) * SENSORS_DEG_PER_LSB_CFG;
-  sensors.gyro.y = (gy - gyroBias.y) * SENSORS_DEG_PER_LSB_CFG;
-  sensors.gyro.z = (gz - gyroBias.z) * SENSORS_DEG_PER_LSB_CFG;
-  applyAxis3fLpf(gyroLpf, &sensors.gyro);
+  sensors.gyro_filter.x = -(gx - gyroBias.x) * SENSORS_DEG_PER_LSB_CFG;
+  sensors.gyro_filter.y = (gy - gyroBias.y) * SENSORS_DEG_PER_LSB_CFG;
+  sensors.gyro_filter.z = (gz - gyroBias.z) * SENSORS_DEG_PER_LSB_CFG;
+  applyAxis3fLpfGyro(&sensors.gyro_filter);
 
-  sensors.acc.x = -(ax)*SENSORS_G_PER_LSB_CFG / accScale;
-  sensors.acc.y = (ay)*SENSORS_G_PER_LSB_CFG / accScale;
-  sensors.acc.z = (az)*SENSORS_G_PER_LSB_CFG / accScale;
+  sensors.acc_filter.x = -(ax)*SENSORS_G_PER_LSB_CFG / accScale;
+  sensors.acc_filter.y = (ay)*SENSORS_G_PER_LSB_CFG / accScale;
+  sensors.acc_filter.z = (az)*SENSORS_G_PER_LSB_CFG / accScale;
+  applyAxis3fLpfAcc(&sensors.acc_filter);
 
-  applyAxis3fLpf(accLpf, &sensors.acc);
+  return sensors;
 }
-
-bool sensorsAreCalibrated() { return gyroBiasFound; }
-
-bool getIsMPU9250Present(void) {
-  bool value = isMPUPresent;
-  return value;
-}
-

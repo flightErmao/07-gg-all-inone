@@ -11,6 +11,6 @@ group = []
 src = Glob("./*.c")
 
 # 定义编译组
-group = DefineGroup("TASK_1_LED_BLINK", src, depend=["BSP_USING_TASK_1_LED_BLINK"], CPPPATH=path)
+group = DefineGroup("DEMO_TASK_LED", src, depend=["DEMO_TASK_LED"], CPPPATH=path)
 
-Return('group')
+Return("group")

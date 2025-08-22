@@ -1,12 +1,15 @@
-#include "filters.h"
+#include <math.h>
+#include <stdlib.h>
+#include "biasGyro.h"
 
 #define SENSORS_NBR_OF_BIAS_SAMPLES 1024
+#define GYRO_VARIANCE_BASE 4000 /* 陀螺仪零偏方差阈值 */
 
 typedef struct {
   Axis3f bias;
   bool isBiasValueFound;
   bool isBufferFilled;
-  Axis3i16* bufHead;
+  Axis3i16 *bufHead;
   Axis3i16 buffer[SENSORS_NBR_OF_BIAS_SAMPLES];
 } BiasObj;
 
@@ -22,7 +25,7 @@ static void sensorsAddBiasValue(BiasObj *bias, int16_t x, int16_t y, int16_t z) 
   bias->bufHead->y = y;
   bias->bufHead->z = z;
   bias->bufHead++;
-  if (bias->bufHead >= &bias->buffer[bias->bufferSize]) {
+  if (bias->bufHead >= &bias->buffer[SENSORS_NBR_OF_BIAS_SAMPLES]) {
     bias->bufHead = bias->buffer;
     bias->isBufferFilled = true;
   }
@@ -31,7 +34,7 @@ static void sensorsAddBiasValue(BiasObj *bias, int16_t x, int16_t y, int16_t z) 
 static void sensorsCalculateVarianceAndMean(const BiasObj *bias, Axis3f *variance_out, Axis3f *mean_out) {
   int64_t sum[3] = {0};
   int64_t sumsq[3] = {0};
-  for (uint32_t i = 0; i < bias->bufferSize; i++) {
+  for (uint32_t i = 0; i < SENSORS_NBR_OF_BIAS_SAMPLES; i++) {
     sum[0] += bias->buffer[i].x;
     sum[1] += bias->buffer[i].y;
     sum[2] += bias->buffer[i].z;
@@ -39,13 +42,13 @@ static void sensorsCalculateVarianceAndMean(const BiasObj *bias, Axis3f *varianc
     sumsq[1] += (int64_t)bias->buffer[i].y * bias->buffer[i].y;
     sumsq[2] += (int64_t)bias->buffer[i].z * bias->buffer[i].z;
   }
-  variance_out->x = (sumsq[0] - ((int64_t)sum[0] * sum[0]) / bias->bufferSize);
-  variance_out->y = (sumsq[1] - ((int64_t)sum[1] * sum[1]) / bias->bufferSize);
-  variance_out->z = (sumsq[2] - ((int64_t)sum[2] * sum[2]) / bias->bufferSize);
+  variance_out->x = (sumsq[0] - ((int64_t)sum[0] * sum[0]) / SENSORS_NBR_OF_BIAS_SAMPLES);
+  variance_out->y = (sumsq[1] - ((int64_t)sum[1] * sum[1]) / SENSORS_NBR_OF_BIAS_SAMPLES);
+  variance_out->z = (sumsq[2] - ((int64_t)sum[2] * sum[2]) / SENSORS_NBR_OF_BIAS_SAMPLES);
 
-  mean_out->x = (float)sum[0] / bias->bufferSize;
-  mean_out->y = (float)sum[1] / bias->bufferSize;
-  mean_out->z = (float)sum[2] / bias->bufferSize;
+  mean_out->x = (float)sum[0] / SENSORS_NBR_OF_BIAS_SAMPLES;
+  mean_out->y = (float)sum[1] / SENSORS_NBR_OF_BIAS_SAMPLES;
+  mean_out->z = (float)sum[2] / SENSORS_NBR_OF_BIAS_SAMPLES;
 }
 
 /*传感器查找偏置值*/
@@ -69,7 +72,7 @@ static bool sensorsFindBiasValue(BiasObj *bias) {
   return foundbias;
 }
 
-static bool processGyroBias(int16_t gx, int16_t gy, int16_t gz, Axis3f *gyroBiasOut) {
+bool processGyroBias(int16_t gx, int16_t gy, int16_t gz, Axis3f *gyroBiasOut) {
   sensorsAddBiasValue(&gyroBiasRunning, gx, gy, gz);
 
   if (!gyroBiasRunning.isBiasValueFound) {

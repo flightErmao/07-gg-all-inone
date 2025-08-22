@@ -1,10 +1,10 @@
-menuconfig TASK_05_SENSOR_MINIFLY
-    bool "ENABLE: TASK_05_SENSOR_MINIFLY"
+menuconfig PROJECT_MINIFLY_SENSOR
+    bool "ENABLE: PROJECT_MINIFLY_SENSOR"
     default n
     select BSP_USING_MPU6500_MINIFLY
     help
         Enable sensor test task that periodically calls sensor test interface.
-    if TASK_05_SENSOR_MINIFLY
+    if PROJECT_MINIFLY_SENSOR
         config TASK_SENSOR_MINIFLY_IMU_NAME
             string "IMU device name for sensor_minifly task"
             default "mpu6500_minifly"

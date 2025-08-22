@@ -1,5 +1,5 @@
-menuconfig BSP_USING_TASK_1_LED_BLINK
-    bool "ENABLE: TASK_1_LED_BLINK"
+menuconfig DEMO_TASK_LED
+    bool "ENABLE: DEMO_TASK_LED"
     default n
     help
         Enable LED blink task that periodically calls Simulink model interface.
@@ -7,7 +7,7 @@ menuconfig BSP_USING_TASK_1_LED_BLINK
         When enabled, the system creates an independent thread to run the LED blink task,
         with a timer triggering every 500ms to call the Simulink model's step function.
         
-    if BSP_USING_TASK_1_LED_BLINK
+    if DEMO_TASK_LED
         config TASK_1_LED_BLINK_PRIORITY
             int "LED Blink Task Priority"
             default 5

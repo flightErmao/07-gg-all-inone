@@ -96,7 +96,7 @@ static rt_err_t led_blink_task_init_resources(void) {
 
   // 初始化LED闪烁接口
   led_blink_interface_init();
-  
+
   // 设置LED闪烁周期（使用Kconfig配置的定时器间隔）
 #ifdef TASK_1_LED_BLINK_TIMER_INTERVAL
   led_blink_set_period_ms(TASK_1_LED_BLINK_TIMER_INTERVAL);
@@ -250,4 +250,6 @@ void led_blink_task_stop(void) {
 // 获取任务状态
 int led_blink_task_is_running(void) { return led_blink_running; }
 
+#ifdef DEMO_TASK_LED
 INIT_APP_EXPORT(led_blink_task_init);
+#endif
