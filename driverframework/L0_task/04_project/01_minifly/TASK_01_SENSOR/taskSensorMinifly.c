@@ -4,10 +4,11 @@
 #include "biasGyro.h"
 #include "filterLpf2p.h"
 #include "sensorsProcess.h"
+#include "floatConvert.h"
 
 /*task definition*/
 #define THREAD_PRIORITY 5
-#define THREAD_STACK_SIZE 2048
+#define THREAD_STACK_SIZE 4096
 #define THREAD_TIMESLICE 5
 
 #define SENSORS_MPU6500_BUFF_LEN 14
@@ -77,6 +78,18 @@ static void sensor_minifly_thread_entry(void *parameter) {
         sensors_data = processAccGyroMeasurements(sensor_buffer);
         mq_overwrite(&mq_acc, &sensors_data.acc_filter, sizeof(sensors_data.acc_filter));
         mq_overwrite(&mq_gyro, &sensors_data.gyro_filter, sizeof(sensors_data.gyro_filter));
+
+        static int cnt = 0;
+        if (++cnt % 3000 == 0) {
+          char ax[16], ay[16], az[16], gx[16], gy[16], gz[16];
+          float_to_string(sensors_data.acc_filter.x, ax, sizeof(ax));
+          float_to_string(sensors_data.acc_filter.y, ay, sizeof(ay));
+          float_to_string(sensors_data.acc_filter.z, az, sizeof(az));
+          float_to_string(sensors_data.gyro_filter.x, gx, sizeof(gx));
+          float_to_string(sensors_data.gyro_filter.y, gy, sizeof(gy));
+          float_to_string(sensors_data.gyro_filter.z, gz, sizeof(gz));
+          rt_kprintf("sensor_minifly_thread_entry: acc: %s, %s, %s, gyro: %s, %s, %s\n", ax, ay, az, gx, gy, gz);
+        }
 
       } else {
         static int err_cnt = 0;
