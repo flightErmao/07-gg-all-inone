@@ -11,6 +11,8 @@ group = []
 src = Glob("./*.c")
 
 # 定义编译组
-group = DefineGroup("TASK_2_GPS_TEST", src, depend=["BSP_USING_TASK_2_GPS_TEST"], CPPPATH=path)
+group = DefineGroup(
+    "WORK_TASK_GPS_TEST_EN", src, depend=["WORK_TASK_GPS_TEST_EN"], CPPPATH=path
+)
 
-Return('group')
+Return("group")

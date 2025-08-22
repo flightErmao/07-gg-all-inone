@@ -11,6 +11,11 @@ group = []
 src = Glob("./*.c")
 
 # 定义编译组
-group = DefineGroup("TASK_04_BARO_TEST", src, depend=["BSP_USING_TASK_04_BARO_TEST"], CPPPATH=path)
+group = DefineGroup(
+    "TAWORK_TASK_BARO_REPORT_ENSK_04_BARO_TEST",
+    src,
+    depend=["WORK_TASK_BARO_REPORT_EN"],
+    CPPPATH=path,
+)
 
-Return('group')
+Return("group")

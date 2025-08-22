@@ -1,10 +1,10 @@
-menuconfig BSP_USING_TASK_04_BARO_TEST
-    bool "ENABLE: TASK_BARO_TEST"
+menuconfig WORK_TASK_BARO_REPORT_EN
+    bool "ENABLE: WORK_TASK_BARO_REPORT_EN"
     default n
     help
        open baro report task
 
-    if BSP_USING_TASK_04_BARO_TEST
+    if WORK_TASK_BARO_REPORT_EN
 
         config TASK_SEND_DATA_ANOTC
             bool "Enable send data to ANOTC telemetry"

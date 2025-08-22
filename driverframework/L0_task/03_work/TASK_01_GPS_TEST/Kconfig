@@ -1,5 +1,5 @@
-menuconfig BSP_USING_TASK_2_GPS_TEST
-    bool "ENABLE: TASK_2_GPS_TEST"
+menuconfig WORK_TASK_GPS_TEST_EN
+    bool "ENABLE: WORK_TASK_GPS_TEST_EN"
     default n
     help
         Enable GPS test task that periodically calls GPS test interface.

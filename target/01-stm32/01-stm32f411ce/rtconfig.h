@@ -416,7 +416,7 @@
 #define SOC_FAMILY_STM32
 #define SOC_SERIES_STM32F4
 
-/* DriverFramework_Config */
+/* DriverFramework Config */
 
 /* L0_TASK_CONFIG */
 
@@ -456,6 +456,6 @@
 #define BSP_STM32_UART_V1_TX_TIMEOUT 2000
 #define BSP_USING_UART1
 /* end of L3_ONBOARD_CONFIG */
-/* end of DriverFramework_Config */
+/* end of DriverFramework Config */
 
 #endif

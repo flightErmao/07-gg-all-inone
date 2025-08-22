@@ -1,4 +1,4 @@
-menu "DriverFramework_Config"
+menu "DriverFramework Config"
     source "$(PROJECT_ROOT)/driverframework/L0_task/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L1_1_mode/Kconfig"
     # source "$(PROJECT_ROOT)/driverframework/L1_2_module/Kconfig"
