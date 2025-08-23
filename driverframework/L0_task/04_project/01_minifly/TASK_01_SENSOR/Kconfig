@@ -10,5 +10,10 @@ menuconfig PROJECT_MINIFLY_TASK_SENSOR_EN
             default "mpu6500_minifly"
             help
                 IMU device name used by sensor_minifly task. Default is the MPU6500 MINIFLY device name.
+        config PROJECT_MINIFLY_TASK_SENSOR_ATKP_LOG_EN
+            bool "ENABLE: PROJECT_MINIFLY_TASK_SENSOR_ATKP_LOG_EN"
+            default n
+            help
+                Enable ATKP logging for the sensor task.
 
     endif

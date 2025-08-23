@@ -92,7 +92,7 @@ static rt_err_t led_blink_task_init_resources(void) {
 #endif
   rt_pin_mode(led_pin, PIN_MODE_OUTPUT);
   rt_pin_write(led_pin, PIN_LOW);  // 初始状态设为低电平
-  printf("[%s] LED引脚初始化完成，引脚: %d\n", LED_BLINK_TASK_NAME, led_pin);
+  printf("[%s] LED引脚初始化完成，引脚: %ld\n", LED_BLINK_TASK_NAME, led_pin);
 
   // 初始化LED闪烁接口
   led_blink_interface_init();

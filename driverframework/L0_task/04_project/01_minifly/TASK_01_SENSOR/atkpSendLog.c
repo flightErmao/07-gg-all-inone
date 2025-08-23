@@ -6,7 +6,7 @@
 
 #ifdef TOOL_TASK_ANOTC_TELEM_EN
 
-#include "packData.h"
+#include "protocolAtkpInterface.h"
 #include "taskAnotcTelem.h"
 
 void sendSensorImuData(uint16_t count_ms) {
@@ -30,6 +30,8 @@ int addPeriodFunListProjectMiniFlySensor(void) {
   return 0;
 }
 
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_ATKP_LOG_EN
 INIT_APP_EXPORT(addPeriodFunListProjectMiniFlySensor);
+#endif
 
 #endif

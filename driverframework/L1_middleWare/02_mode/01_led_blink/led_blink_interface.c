@@ -76,7 +76,7 @@ void led_blink_interface_init(void) {
   /* Print initialization information */
   printf("[LED_BLINK] Initialized successfully\n");
   printf("[LED_BLINK] Model info: %s\n", led_blink_model_info.model_info);
-  printf("[LED_BLINK] Period: %u ms\n", led_blink_model_info.period_ms);
+  printf("[LED_BLINK] Period: %lu ms\n", led_blink_model_info.period_ms);
 }
 
 /**
@@ -114,5 +114,5 @@ uint32_t led_blink_get_period_ms(void) { return led_blink_model_info.period_ms; 
  */
 void led_blink_set_period_ms(uint32_t period_ms) {
   led_blink_model_info.period_ms = period_ms;
-  printf("[LED_BLINK] Period updated to %u ms\n", period_ms);
+  printf("[LED_BLINK] Period updated to %lu ms\n", period_ms);
 }

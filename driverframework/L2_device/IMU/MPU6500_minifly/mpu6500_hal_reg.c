@@ -78,9 +78,9 @@ static int8_t i2cBusWrite_wrap(uint8_t devAddress, uint8_t memAddress, uint8_t* 
 }
 static void delay_ms_wrap(unsigned int ms) { rt_thread_mdelay(ms); }
 
-static rt_size_t mpu6500_read_data(imu_dev_t imu, rt_off_t pos, void* data, rt_size_t size) {
+static rt_err_t mpu6500_read_data(imu_dev_t imu, rt_off_t pos, void* data, rt_size_t size) {
   if (data == NULL) {
-    return 0;
+    return -RT_EINVAL;
   }
   /* 在读取数据前等待中断事件（数据就绪） */
   if (mpu6500_int_event_inited) {
@@ -88,12 +88,13 @@ static rt_size_t mpu6500_read_data(imu_dev_t imu, rt_off_t pos, void* data, rt_s
     rt_event_recv(&mpu6500_int_event, mpu6500_INT_EVENT_FLAG, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR,
                   RT_WAITING_FOREVER, RT_NULL);
   }
-  return drv_mpu6500_read(pos, data, size);
+  rt_size_t read_size = drv_mpu6500_read(pos, data, size);
+  return (read_size > 0) ? RT_EOK : -RT_ERROR;
 }
 
 const static struct imu_ops mpu6500_dev = {
-    NULL,
-    mpu6500_read_data,
+    .imu_config = NULL,
+    .imu_read = mpu6500_read_data,
 };
 
 static struct imu_device imu_dev = {

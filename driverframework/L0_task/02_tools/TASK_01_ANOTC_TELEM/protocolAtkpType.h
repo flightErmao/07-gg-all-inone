@@ -1,15 +1,10 @@
-#ifndef __PACK_DATA_H__
-#define __PACK_DATA_H__
-
 #include <stdint.h>
 
-#define PERIOD_1ms 1
-#define PERIOD_10ms 10
-#define PERIOD_20ms 20
-#define PERIOD_30ms 30
-#define PERIOD_40ms 40
-#define PERIOD_50ms 50
-#define PERIOD_100ms 100
+/* 通用字节访问宏 */
+#define BYTE0(dwTemp) (*((uint8_t *)(&dwTemp)))
+#define BYTE1(dwTemp) (*((uint8_t *)(&dwTemp) + 1))
+#define BYTE2(dwTemp) (*((uint8_t *)(&dwTemp) + 2))
+#define BYTE3(dwTemp) (*((uint8_t *)(&dwTemp) + 3))
 
 /*上行指令ID*/
 typedef enum {
@@ -53,18 +48,3 @@ typedef enum {
   // 新增：光流质量对比数据
   UP_OPTICAL_FLOW_COMPARISON = 0xFC,
 } upmsgID_e;
-
-/* ATKP 数据结构 */
-typedef struct {
-  uint8_t msgID;
-  uint8_t dataLen;
-  uint8_t data[128];  // ATKP_MAX_DATA_SIZE
-} atkp_t;
-
-void sendUserDatafloat3(uint8_t group, float a, float b, float c);
-void sendUserDatafloat6(uint8_t group, float a, float b, float c, float d, float e, float f);
-void sendUserDatafloat6_u32(uint8_t group, float a, float b, float c, float d, float e, float f, uint32_t u32);
-void sendUserDatafloat12_u32(uint8_t group, float a, float b, float c, float d, float e, float f, float g, float h,
-                             float i, float j, float k, float l, uint32_t u32);
-
-#endif /* __PACK_DATA_H__ */

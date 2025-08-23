@@ -1,6 +1,7 @@
 #include "biasGyro.h"
 #include "filterLpf2p.h"
 #include "sensorsProcess.h"
+#include <math.h>
 
 #define MPU6500_DEG_PER_LSB_2000 (float)((2 * 2000.0) / 65536.0)
 #define SENSORS_DEG_PER_LSB_CFG MPU6500_DEG_PER_LSB_2000

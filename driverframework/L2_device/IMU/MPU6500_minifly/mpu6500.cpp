@@ -132,6 +132,8 @@ int mpu6500::mpu6500SlaveSensorInit() {
 
   mpu6500SetI2CMasterModeEnabled(true);  // 使能mpu6500主机模式
   mpu6500SetIntDataReadyEnabled(true);   // 数据就绪中断使能
+
+  return MPU_EOK;  // 返回成功状态
 }
 
 int mpu6500::init() {

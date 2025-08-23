@@ -1,12 +1,8 @@
 #include <rtthread.h>
+#include "protocolAtkpType.h"
+#include "protocolAtkpInterface.h"
 #include "deviceManager.h"
 #include "taskAnotcTelem.h"
-
-/* 通用字节访问宏 */
-#define BYTE0(dwTemp) (*((uint8_t *)(&dwTemp)))
-#define BYTE1(dwTemp) (*((uint8_t *)(&dwTemp) + 1))
-#define BYTE2(dwTemp) (*((uint8_t *)(&dwTemp) + 2))
-#define BYTE3(dwTemp) (*((uint8_t *)(&dwTemp) + 3))
 
 /* 消息发送方式 */
 typedef enum {
@@ -37,6 +33,7 @@ static void anotc_telem_send_floats(uint8_t group, const float *values, uint8_t 
   }
 }
 
+#ifdef UNUSED_FUNCTION_WARNING_SUPPRESS
 static void anotc_telem_send_int16(uint8_t group, int16_t *values, uint8_t count, msg_send_method_e method) {
   uint8_t _cnt = 0;
   atkp_t p;
@@ -55,6 +52,7 @@ static void anotc_telem_send_int16(uint8_t group, int16_t *values, uint8_t count
     anotcDeviceSendDirect(&p);
   }
 }
+#endif
 
 void sendUserDatafloat3(uint8_t group, float a, float b, float c) {
   float values[3] = {a, b, c};

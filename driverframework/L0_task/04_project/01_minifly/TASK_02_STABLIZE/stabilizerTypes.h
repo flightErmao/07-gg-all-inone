@@ -153,8 +153,8 @@ typedef struct {
   quaternion_t attitudeQuaternion;
   point_t position;
   velocity_t velocity;
-  acc_t acc;
-  bool isRCLocked;
+  bool armed;
+  uint8_t fly_mode;
 } state_t;
 
 typedef struct {

@@ -4,3 +4,9 @@
 [submodule "tools/env_win"]
 	path = tools/env_win
 	url = https://github.com/Tool-01-middleware/env-windows.git
+[submodule "target/01-stm32/01-stm32f411ce/packages/vconsole-latest"]
+	path = target/01-stm32/01-stm32f411ce/packages/vconsole-latest
+	url = git@github.com:Tool-01-middleware/vconsole.git
+[submodule "target/01-stm32/01-stm32f411ce/packages/uMCN-latest"]
+	path = target/01-stm32/01-stm32f411ce/packages/uMCN-latest
+	url = git@github.com:Tool-01-middleware/uMCN.git

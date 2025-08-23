@@ -4,3 +4,10 @@ menuconfig PROJECT_MINIFLY_TASK_STABLIZE_EN
     select PROJECT_MINIFLY_TASK_SENSOR_EN
     help
         Enable stabilize task that periodically calls stabilize interface.
+    if PROJECT_MINIFLY_TASK_STABLIZE_EN
+        config PROJECT_MINIFLY_TASK_STABLIZE_ATKP_LOG_EN
+            bool "ENABLE: PROJECT_MINIFLY_TASK_STABLIZE_ATKP_LOG_EN"
+            default n
+            help
+                Enable ATKP logging for the stabilize task.
+    endif

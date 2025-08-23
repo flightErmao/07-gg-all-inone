@@ -86,7 +86,7 @@ static void sensor_minifly_thread_entry(void *parameter) {
 
   while (1) {
     if (dev_sensor_imu) {
-      int rb = rt_device_read(dev_sensor_imu, NULL, sensor_buffer, SENSORS_MPU6500_BUFF_LEN);
+      int rb = rt_device_read(dev_sensor_imu, 0, sensor_buffer, SENSORS_MPU6500_BUFF_LEN);
       if (rb == SENSORS_MPU6500_BUFF_LEN) {
         uint32_t timestamp = rt_tick_get();
         sensors_data = processAccGyroMeasurements(sensor_buffer);
@@ -123,6 +123,7 @@ static int taskSensorThreadAutoStart(void) {
   rt_thread_init(&task_tid_sensor_minifly, "t_sensor6", sensor_minifly_thread_entry, RT_NULL, task_stack_sensor_minifly,
                  THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
   rt_thread_startup(&task_tid_sensor_minifly);
+  return 0;
 }
 
 #ifdef PROJECT_MINIFLY_TASK_SENSOR_EN
