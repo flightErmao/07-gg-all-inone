@@ -64,5 +64,7 @@ typedef struct {
 void sendUserDatafloat3(uint8_t group, float a, float b, float c);
 void sendUserDatafloat6(uint8_t group, float a, float b, float c, float d, float e, float f);
 void sendUserDatafloat6_u32(uint8_t group, float a, float b, float c, float d, float e, float f, uint32_t u32);
+void sendUserDatafloat12_u32(uint8_t group, float a, float b, float c, float d, float e, float f, float g, float h,
+                             float i, float j, float k, float l, uint32_t u32);
 
 #endif /* __PACK_DATA_H__ */

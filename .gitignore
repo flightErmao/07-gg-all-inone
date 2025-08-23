@@ -4,3 +4,5 @@
 **/*/board/CubeMX_Config/Drivers/*
 **/*/board/CubeMX_Config/MDK-ARM/*
 **/*.old
+python/01_sensor_minifly/imuraw.txt
+python/01_sensor_minifly/imuraw.csv
