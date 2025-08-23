@@ -15,8 +15,8 @@ void sendSensorImuData(uint16_t count_ms) {
     sensorsAcquire(&sensors);
     sendUserDatafloat6_u32(1, sensors.acc_filter.x, sensors.acc_filter.y, sensors.acc_filter.z, sensors.gyro_filter.x,
                            sensors.gyro_filter.y, sensors.gyro_filter.z, sensors.timestamp);
-    sendUserDatafloat6_u32(2, sensors.acc_raw.x, sensors.acc_raw.y, sensors.acc_raw.z, sensors.gyro_raw.x,
-                           sensors.gyro_raw.y, sensors.gyro_raw.z, sensors.timestamp);
+    // sendUserDatafloat6_u32(2, sensors.acc_raw.x, sensors.acc_raw.y, sensors.acc_raw.z, sensors.gyro_raw.x,
+    //                        sensors.gyro_raw.y, sensors.gyro_raw.z, sensors.timestamp);
   }
 }
 
