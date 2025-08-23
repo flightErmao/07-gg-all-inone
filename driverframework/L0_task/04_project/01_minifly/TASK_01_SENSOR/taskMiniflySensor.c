@@ -101,7 +101,7 @@ static void sensor_minifly_thread_entry(void *parameter) {
     } else {
       static int not_found = 0;
       if (++not_found % 30 == 0) {
-        rt_kprintf("imu read fail %d\n", not_found);
+        rt_kprintf("imu not found\n");
       }
       rt_thread_mdelay(100);
     }
