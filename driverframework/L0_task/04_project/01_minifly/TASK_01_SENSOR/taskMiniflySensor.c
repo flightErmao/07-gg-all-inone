@@ -50,8 +50,8 @@ static int sensor_imu_echo(void *parameter) {
 static void deviceInit(void) {
   rt_device_t dev_temp = RT_NULL;
 
-#ifdef TASK_SENSOR_MINIFLY_IMU_NAME
-  dev_temp = rt_device_find(TASK_SENSOR_MINIFLY_IMU_NAME);
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_IMU_NAME
+  dev_temp = rt_device_find(PROJECT_MINIFLY_TASK_SENSOR_IMU_NAME);
 #else
   dev_temp = rt_device_find(SENSOR_NAME_MPU6500_MINIFLY);
 #endif
@@ -119,12 +119,12 @@ void sensorsAcquire(sensorData_t *sensors) {
   }
 }
 
-static void sensorTaskThreadInit(void) {
+static int taskSensorThreadAutoStart(void) {
   rt_thread_init(&task_tid_sensor_minifly, "t_sensor6", sensor_minifly_thread_entry, RT_NULL, task_stack_sensor_minifly,
                  THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
   rt_thread_startup(&task_tid_sensor_minifly);
 }
 
 #ifdef PROJECT_MINIFLY_TASK_SENSOR_EN
-INIT_APP_EXPORT(sensorTaskThreadInit);
+INIT_APP_EXPORT(taskSensorThreadAutoStart);
 #endif

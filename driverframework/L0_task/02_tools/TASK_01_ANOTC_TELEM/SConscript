@@ -12,7 +12,7 @@ src = Glob("./*.c")
 
 # 定义编译组
 group = DefineGroup(
-    "TOOL_TASK_ANOTC_TELEM_EN", src, depend=["TOOL_TASK_ANOTC_TELEM_EN"], CPPPATH=path
+    "TASK_TOOL_01_ANOTC_TELEM_EN", src, depend=["TASK_TOOL_01_ANOTC_TELEM_EN"], CPPPATH=path
 )
 
 Return("group")

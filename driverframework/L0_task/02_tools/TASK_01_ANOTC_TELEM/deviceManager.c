@@ -59,7 +59,7 @@ rt_err_t task_dev_init(char* device_name) {
   /* 仅在UART类设备上进行串口参数配置；USB CDC(vcom)无需配置为serial_configure */
   if (!strncmp(device_name, "uart", 4)) {
     struct serial_configure config = RT_SERIAL_CONFIG_DEFAULT;
-    config.baud_rate = TOOL_TASK_BAUD_RATE;
+    config.baud_rate = TASK_TOOL_01_ANOTC_TELEM_BAUD_RATE;
     config.bufsz = 64;
     if (rt_device_control(new_dev, RT_DEVICE_CTRL_CONFIG, &config) != RT_EOK) {
       rt_device_close(new_dev);

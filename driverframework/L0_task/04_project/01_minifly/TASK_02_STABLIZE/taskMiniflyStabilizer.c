@@ -3,6 +3,7 @@
 #include "sensorsTypes.h"
 #include "taskMiniflyStabilizer.h"
 #include "sensfusion6.h"
+#include "taskMiniflySensor.h"
 
 /*task definition*/
 #define THREAD_PRIORITY 6
@@ -50,7 +51,7 @@ static void stabilizer_timer_callback(void* parameter) {
   rt_event_send(stabilizer_event, 0x01);
 }
 
-void stabilizerInit(void) {
+void taskStabilizerInit(void) {
   if (isInit) return;
 
   // 创建事件对象
@@ -104,12 +105,13 @@ static void stabilizer_minifly_thread_entry(void* parameter) {
 }
 
 // 任务初始化函数
-static void stabilizerTaskThreadInit(void) {
+static int taskStabilizerThreadAutoStart(void) {
+  taskStabilizerInit();
   rt_thread_init(&task_tid_stabilizer_minifly, "t_stabilizer", stabilizer_minifly_thread_entry, RT_NULL,
                  task_stack_stabilizer_minifly, THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
   rt_thread_startup(&task_tid_stabilizer_minifly);
 }
 
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_EN
-INIT_APP_EXPORT(stabilizerTaskThreadInit);
+INIT_APP_EXPORT(taskStabilizerThreadAutoStart);
 #endif

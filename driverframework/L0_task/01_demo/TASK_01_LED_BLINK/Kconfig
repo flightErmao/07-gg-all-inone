@@ -1,5 +1,5 @@
-menuconfig DEMO_TASK_LED
-    bool "ENABLE: DEMO_TASK_LED"
+menuconfig TASK_DEMO_01_LED_BLINK_EN
+    bool "ENABLE: TASK_DEMO_01_LED_BLINK_EN"
     default n
     help
         Enable LED blink task that periodically calls Simulink model interface.
@@ -7,8 +7,8 @@ menuconfig DEMO_TASK_LED
         When enabled, the system creates an independent thread to run the LED blink task,
         with a timer triggering every 500ms to call the Simulink model's step function.
         
-    if DEMO_TASK_LED
-        config TASK_1_LED_BLINK_PRIORITY
+    if TASK_DEMO_01_LED_BLINK_EN
+        config TASK_DEMO_01_LED_BLINK_PRIORITY
             int "LED Blink Task Priority"
             default 5
             range 1 10
@@ -16,7 +16,7 @@ menuconfig DEMO_TASK_LED
                 Set the thread priority for LED blink task.
                 Lower values indicate higher priority.
 
-        config TASK_1_LED_BLINK_TIMER_INTERVAL
+        config TASK_DEMO_01_LED_BLINK_TIMER_INTERVAL
             int "LED Blink Timer Interval (ms)"
             default 500
             range 100 10000
@@ -24,7 +24,7 @@ menuconfig DEMO_TASK_LED
                 Set the timer interval for LED blink task.
                 Unit: milliseconds
 
-        config TASK_1_LED_BLINK_PIN
+        config TASK_DEMO_01_LED_BLINK_PIN
             string "LED0 Pin (e.g. PA0, PC13)"
             default "PC13"
             help

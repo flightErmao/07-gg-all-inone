@@ -85,8 +85,8 @@ static rt_err_t led_blink_task_init_resources(void) {
   printf("[%s] 开始初始化LED任务资源\n", LED_BLINK_TASK_NAME);
 
   // 初始化LED引脚（从 Kconfig 字符串解析）
-#ifdef TASK_1_LED_BLINK_PIN
-  led_pin = parse_led_pin_from_config(TASK_1_LED_BLINK_PIN);
+#ifdef TASK_DEMO_01_LED_BLINK_PIN
+  led_pin = parse_led_pin_from_config(TASK_DEMO_01_LED_BLINK_PIN);
 #else
   led_pin = parse_led_pin_from_config("PC13");
 #endif
@@ -98,9 +98,9 @@ static rt_err_t led_blink_task_init_resources(void) {
   led_blink_interface_init();
 
   // 设置LED闪烁周期（使用Kconfig配置的定时器间隔）
-#ifdef TASK_1_LED_BLINK_TIMER_INTERVAL
-  led_blink_set_period_ms(TASK_1_LED_BLINK_TIMER_INTERVAL);
-  printf("[%s] LED闪烁周期设置为: %d ms\n", LED_BLINK_TASK_NAME, TASK_1_LED_BLINK_TIMER_INTERVAL);
+#ifdef TASK_DEMO_01_LED_BLINK_TIMER_INTERVAL
+  led_blink_set_period_ms(TASK_DEMO_01_LED_BLINK_TIMER_INTERVAL);
+  printf("[%s] LED闪烁周期设置为: %d ms\n", LED_BLINK_TASK_NAME, TASK_DEMO_01_LED_BLINK_TIMER_INTERVAL);
 #else
   led_blink_set_period_ms(500);  // 默认500ms周期
   printf("[%s] LED闪烁周期设置为默认值: 500 ms\n", LED_BLINK_TASK_NAME);
@@ -115,8 +115,9 @@ static rt_err_t led_blink_task_init_resources(void) {
   }
 
   // 创建定时器
-  led_blink_timer = rt_timer_create("led_blink_timer", led_blink_timer_callback, RT_NULL,
-                                    rt_tick_from_millisecond(TASK_1_LED_BLINK_TIMER_INTERVAL), RT_TIMER_FLAG_PERIODIC);
+  led_blink_timer =
+      rt_timer_create("led_blink_timer", led_blink_timer_callback, RT_NULL,
+                      rt_tick_from_millisecond(TASK_DEMO_01_LED_BLINK_TIMER_INTERVAL), RT_TIMER_FLAG_PERIODIC);
   if (led_blink_timer == RT_NULL) {
     printf("[%s] 创建定时器失败\n", LED_BLINK_TASK_NAME);
     rt_event_delete(led_blink_event);
@@ -144,7 +145,7 @@ static void led_blink_task_thread(void* parameter) {
   // 启动定时器
   rt_timer_start(led_blink_timer);
   led_blink_running = 1;
-  printf("[%s] 定时器已启动，间隔: %d ms\n", LED_BLINK_TASK_NAME, TASK_1_LED_BLINK_TIMER_INTERVAL);
+  printf("[%s] 定时器已启动，间隔: %d ms\n", LED_BLINK_TASK_NAME, TASK_DEMO_01_LED_BLINK_TIMER_INTERVAL);
 
   // 线程主循环 - 等待事件
   while (led_blink_running) {
@@ -212,9 +213,9 @@ int led_blink_task_init(void) {
 
   // 创建线程
   led_blink_thread = rt_thread_create(LED_BLINK_TASK_NAME, led_blink_task_thread, RT_NULL,
-                                      2048,                       // 栈大小
-                                      TASK_1_LED_BLINK_PRIORITY,  // 优先级
-                                      20);                        // 时间片
+                                      2048,                             // 栈大小
+                                      TASK_DEMO_01_LED_BLINK_PRIORITY,  // 优先级
+                                      20);                              // 时间片
   if (led_blink_thread == RT_NULL) {
     printf("[%s] 创建线程失败\n", LED_BLINK_TASK_NAME);
     return -1;
@@ -250,6 +251,6 @@ void led_blink_task_stop(void) {
 // 获取任务状态
 int led_blink_task_is_running(void) { return led_blink_running; }
 
-#ifdef DEMO_TASK_LED
+#ifdef TASK_DEMO_01_LED_BLINK_EN
 INIT_APP_EXPORT(led_blink_task_init);
 #endif

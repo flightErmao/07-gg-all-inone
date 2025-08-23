@@ -59,7 +59,6 @@ static void taskAnotcMqSendEntry(void *param) {
 }
 
 static void taskAnotcMqRecEntry(void *param) {
-
   atkp_t msg_temp;
   while (1) {
 #if (RTTHREAD_VERSION >= RT_VERSION_CHECK(5, 0, 1))
@@ -74,7 +73,7 @@ static void taskAnotcMqRecEntry(void *param) {
 }
 
 static int taskAnotcMqRec(void) {
-  task_dev_init(TOOL_TASK_DEVICE_DEFAULT);
+  task_dev_init(TASK_TOOL_01_ANOTC_TELEM_DEVICE_DEFAULT);
   task_msg_init();
   rt_thread_init(&taskAnotcMqRecTid, "taskAnotcMqRec", taskAnotcMqRecEntry, RT_NULL, taskAnotcMqRecStack,
                  THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
@@ -92,7 +91,7 @@ static int taskAnotcMqSend(void) {
   return 0;
 }
 
-#ifdef TOOL_TASK_ANOTC_TELEM_EN
+#ifdef TASK_TOOL_01_ANOTC_TELEM_EN
 INIT_APP_EXPORT(taskAnotcMqRec);
 INIT_APP_EXPORT(taskAnotcMqSend);
 #endif
