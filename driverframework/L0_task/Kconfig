@@ -7,5 +7,5 @@ menu "L0_TASK_CONFIG"
     source "$(PROJECT_ROOT)/driverframework/L0_task/03_work/TASK_02_BARO_TEST/Kconfig"
 
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/01_minifly/TASK_01_SENSOR/Kconfig"
-    #source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/01_minifly/TASK_02_STABLIZE/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/01_minifly/TASK_02_STABLIZE/Kconfig"
 endmenu

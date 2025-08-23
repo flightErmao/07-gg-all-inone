@@ -1,0 +1,7 @@
+menu "L1_MIDDLEWARE_CONFIG"
+
+    source "$(PROJECT_ROOT)/driverframework/L1_middleWare/01_module/01_floatConver/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L1_middleWare/01_module/02_maths/Kconfig"
+
+    source "$(PROJECT_ROOT)/driverframework/L1_middleWare/02_mode/01_led_blink/Kconfig"
+endmenu

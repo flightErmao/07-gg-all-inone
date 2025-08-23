@@ -1,10 +1,7 @@
 #ifndef __STABILIZER_TYPES_H
 #define __STABILIZER_TYPES_H
 #include <stdbool.h>
-
-#if defined(__CC_ARM)
-#pragma anon_unions
-#endif
+#include "sensorsTypes.h"
 
 #define RATE_5_HZ 5
 #define RATE_10_HZ 10
@@ -17,11 +14,33 @@
 #define RATE_1000_HZ 1000
 
 #define MAIN_LOOP_RATE RATE_1000_HZ
-#define MAIN_LOOP_DT (u32)(1000 / MAIN_LOOP_RATE)
+#define MAIN_LOOP_DT (uint32_t)(1000 / MAIN_LOOP_RATE) /*单位ms*/
 
 #define RATE_DO_EXECUTE(RATE_HZ, TICK) ((TICK % (MAIN_LOOP_RATE / RATE_HZ)) == 0)
 
-typedef enum { modeDisable = 0, modeVelocity, modeAbs } mode_e;
+/********************************************************************************
+ * 本程序只供学习使用，未经作者许可，不得用于其它任何用途
+ * ALIENTEK MiniFly
+ * 结构体类型定义
+ * 正点原子@ALIENTEK
+ * 技术论坛:www.openedv.com
+ * 创建日期:2017/5/12
+ * 版本：V1.3
+ * 版权所有，盗版必究。
+ * Copyright(C) 广州市星翼电子科技有限公司 2014-2024
+ * All rights reserved
+ ********************************************************************************/
+// 支持GCC匿名联合体
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
+
+typedef enum {
+  modeDisable = 0, /*关闭模式*/
+  modeVelocity,    /*速率模式*/
+  modeAbs          /*绝对值模式*/
+} mode_e;
 
 typedef enum {
   CENTER = 0,
@@ -32,25 +51,29 @@ typedef enum {
 } dir_e;
 
 typedef struct {
-  u32 timestamp;
+  uint32_t timestamp; /*时间戳*/
+
   float roll;
   float pitch;
   float yaw;
 } attitude_t;
 
 typedef struct {
-  u32 timestamp;
+  uint32_t timestamp; /*时间戳*/
+
   float x;
   float y;
   float z;
 } vec3_t;
 
-typedef struct vec3_t point_t;
-typedef struct vec3_t velocity_t;
-typedef struct vec3_t acc_t;
+typedef vec3_t point_t;
+typedef vec3_t velocity_t;
+typedef vec3_t acc_t;
 
+/* Orientation as a quaternion */
 typedef struct quaternion_s {
   uint32_t timestamp;
+
   union {
     struct {
       float q0;
@@ -105,30 +128,25 @@ typedef struct distanceMeasurement_s {
 } distanceMeasurement_t;
 
 typedef struct zRange_s {
-  uint32_t timestamp;
-  float distance;
-  float quality;
+  uint32_t timestamp;  // 时间戳
+  float distance;      // 测量距离
+  float quality;       // 可信度
 } zRange_t;
 
+/** Flow measurement**/
 typedef struct flowMeasurement_s {
   uint32_t timestamp;
   union {
     struct {
-      float dpixelx;
-      float dpixely;
+      float dpixelx;  // Accumulated pixel count x
+      float dpixely;  // Accumulated pixel count y
     };
-    float dpixel[2];
+    float dpixel[2];  // Accumulated pixel count
   };
-  float stdDevX;
-  float stdDevY;
-  float dt;
+  float stdDevX;  // Measurement standard deviation
+  float stdDevY;  // Measurement standard deviation
+  float dt;       // Time during which pixels were accumulated
 } flowMeasurement_t;
-
-typedef struct tofMeasurement_s {
-  uint32_t timestamp;
-  float distance;
-  float stdDev;
-} tofMeasurement_t;
 
 typedef struct {
   attitude_t attitude;
@@ -140,11 +158,11 @@ typedef struct {
 } state_t;
 
 typedef struct {
-  s16 roll;
-  s16 pitch;
-  s16 yaw;
+  int16_t roll;
+  int16_t pitch;
+  int16_t yaw;
   float thrust;
-  dir_e flipDir;
+  dir_e flipDir; /*翻滚方向*/
 } control_t;
 
 typedef struct {
@@ -154,15 +172,20 @@ typedef struct {
   mode_e roll;
   mode_e pitch;
   mode_e yaw;
-} mode_t;
+} stabilizer_mode_t;
 
 typedef struct {
-  attitude_t attitude;
-  attitude_t attitudeRate;
-  point_t position;
-  velocity_t velocity;
-  mode_t mode;
+  attitude_t attitude;      // deg
+  attitude_t attitudeRate;  // deg/s
+  point_t position;         // m
+  velocity_t velocity;      // m/s
+  stabilizer_mode_t mode;
   float thrust;
 } setpoint_t;
+
+// 恢复GCC诊断设置
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 #endif

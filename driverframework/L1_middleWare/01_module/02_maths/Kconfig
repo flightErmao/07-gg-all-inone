@@ -1,0 +1,5 @@
+menuconfig L1_MIDDLEWARE_01_MODULE_02_MATHS_EN
+    bool "ENABLE: L1_MIDDLEWARE_01_MODULE_02_MATHS_EN"
+    default n
+    help
+        Enable maths module that provides various mathematical functions.

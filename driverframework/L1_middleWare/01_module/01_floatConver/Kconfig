@@ -1,0 +1,5 @@
+menuconfig L1_MIDDLEWARE_01_MODULE_01_FLOATCONVER_EN
+    bool "ENABLE: L1_MIDDLEWARE_01_MODULE_01_FLOATCONVER_EN"    
+    default y
+    help
+        Enable float conversion module that provides various float conversion functions.

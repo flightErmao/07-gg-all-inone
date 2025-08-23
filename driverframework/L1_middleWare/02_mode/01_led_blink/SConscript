@@ -8,8 +8,11 @@ path = [cwd]
 
 # 获取当前目录下的所有 .c 文件
 src  = Glob('./*.c')
+src += Glob('./lib/*.c')
+
+path += [cwd + '/lib']
 
 # 定义编译组
-group = DefineGroup('filters', src, depend = [''], CPPPATH = path)
+group = DefineGroup('led_blink', src, depend = ['L1_MIDDLEWARE_02_MODE_01_LED_BLINK_EN'], CPPPATH = path)
 
 Return('group') 

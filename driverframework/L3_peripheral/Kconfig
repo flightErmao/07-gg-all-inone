@@ -1,9 +1,10 @@
-menu "L3_ONBOARD_CONFIG"
-    source "$(PROJECT_ROOT)/driverframework/L3_config/SPI_REG/Kconfig"
-    source "$(PROJECT_ROOT)/driverframework/L3_config/I2C_REG/Kconfig"
-    source "$(PROJECT_ROOT)/driverframework/L3_config/USB_SHELL/Kconfig"
-    source "$(PROJECT_ROOT)/driverframework/L3_config/BOARD/Kconfig"
+menu "L3_PERIPHERAL_CONFIG"
+    source "$(PROJECT_ROOT)/driverframework/L3_peripheral/BOARD/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L3_peripheral/SPI_REG/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L3_peripheral/I2C_REG/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L3_peripheral/USB_SHELL/Kconfig"
     
+
     config BSP_USING_GPIO
         bool "Enable GPIO"
         select RT_USING_PIN

@@ -119,12 +119,12 @@ void sensorsAcquire(sensorData_t *sensors) {
   }
 }
 
-static void task_thread_init(void) {
+static void sensorTaskThreadInit(void) {
   rt_thread_init(&task_tid_sensor_minifly, "t_sensor6", sensor_minifly_thread_entry, RT_NULL, task_stack_sensor_minifly,
                  THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
   rt_thread_startup(&task_tid_sensor_minifly);
 }
 
-#ifdef PROJECT_MINIFLY_SENSOR
-INIT_APP_EXPORT(task_thread_init);
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_EN
+INIT_APP_EXPORT(sensorTaskThreadInit);
 #endif

@@ -11,6 +11,6 @@ group = []
 src = Glob("./*.c")
 
 # 定义编译组
-group = DefineGroup("TASK_02_STABLIZE", src, depend=["TASK_02_STABLIZE"], CPPPATH=path)
+group = DefineGroup("PROJECT_MINIFLY_TASK_STABLIZE_EN", src, depend=["PROJECT_MINIFLY_TASK_STABLIZE_EN"], CPPPATH=path)
 
 Return('group')

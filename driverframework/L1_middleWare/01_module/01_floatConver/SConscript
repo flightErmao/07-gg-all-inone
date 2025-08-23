@@ -4,12 +4,12 @@ import os
 cwd = GetCurrentDir()
 src  = []
 group = []
-path = [cwd, os.path.join(cwd, 'filters')]
+path = [cwd]
 
 # 获取当前目录下的所有 .c 文件
-src  = Glob('./*.c') + Glob('./filters/*.c')
+src  = Glob('./*.c')
 
 # 定义编译组
-group = DefineGroup('other', src, depend = [''], CPPPATH = path)
+group = DefineGroup('01_floatConvert', src, depend = ['L1_MIDDLEWARE_01_MODULE_01_FLOATCONVER_EN'], CPPPATH = path)
 
 Return('group') 

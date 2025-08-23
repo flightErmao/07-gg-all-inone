@@ -1,9 +1,6 @@
 menu "DriverFramework Config"
     source "$(PROJECT_ROOT)/driverframework/L0_task/Kconfig"
-    source "$(PROJECT_ROOT)/driverframework/L1_1_mode/Kconfig"
-    # source "$(PROJECT_ROOT)/driverframework/L1_2_module/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L1_middleWare/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L2_device/Kconfig"
-    source "$(PROJECT_ROOT)/driverframework/L3_config/Kconfig"
-    # source "$(PROJECT_ROOT)/driverframework/L4_drv_new/Kconfig"
-    # source "$(PROJECT_ROOT)/driverframework/L5_msp/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L3_peripheral/Kconfig"
 endmenu

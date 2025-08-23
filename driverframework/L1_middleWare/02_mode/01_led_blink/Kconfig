@@ -1,0 +1,5 @@
+menuconfig L1_MIDDLEWARE_02_MODE_01_LED_BLINK_EN
+    bool "ENABLE: L1_MIDDLEWARE_02_MODE_01_LED_BLINK_EN"
+    default n
+    help
+       open led blink module

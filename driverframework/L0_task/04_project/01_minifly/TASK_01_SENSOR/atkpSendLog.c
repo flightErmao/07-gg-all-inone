@@ -1,7 +1,7 @@
 
 #include <rtthread.h>
 #include "sensorsTypes.h"
-#include "taskSensorMinifly.h"
+#include "taskMiniflySensor.h"
 #include "floatConvert.h"
 
 #ifdef TOOL_TASK_ANOTC_TELEM_EN
