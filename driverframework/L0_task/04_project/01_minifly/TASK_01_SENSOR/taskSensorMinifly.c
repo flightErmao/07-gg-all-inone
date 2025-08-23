@@ -86,12 +86,12 @@ static void sensor_minifly_thread_entry(void *parameter) {
 
   while (1) {
     if (dev_sensor_imu) {
-      sensors_data.timestamp = rt_tick_get();
       int rb = rt_device_read(dev_sensor_imu, NULL, sensor_buffer, SENSORS_MPU6500_BUFF_LEN);
       if (rb == SENSORS_MPU6500_BUFF_LEN) {
+        uint32_t timestamp = rt_tick_get();
         sensors_data = processAccGyroMeasurements(sensor_buffer);
+        sensors_data.timestamp = timestamp;
         mcn_publish(MCN_HUB(minifly_sensor_imu), &sensors_data);
-
       } else {
         static int err_cnt = 0;
         if (++err_cnt % 100 == 0) {
