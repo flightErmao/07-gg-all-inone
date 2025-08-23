@@ -5,6 +5,7 @@
 #include "filterLpf2p.h"
 #include "sensorsProcess.h"
 #include "floatConvert.h"
+#include "uMCN.h"
 
 /*task definition*/
 #define THREAD_PRIORITY 5
@@ -16,79 +17,34 @@
 static struct rt_thread task_tid_sensor_minifly;
 static rt_uint8_t task_stack_sensor_minifly[THREAD_STACK_SIZE];
 static rt_device_t dev_sensor_imu = RT_NULL;
-/* queues for acc/gyro */
-#define MQ_LEN 2  // 增加队列长度，避免数据覆盖
-#define MQ_ITEM_SIZE_ACC (sizeof(Axis3f))
-#define MQ_ITEM_SIZE_GYRO (sizeof(Axis3f))
 
-// 确保内存池大小足够且对齐
-static rt_uint8_t acc_pool[MQ_ITEM_SIZE_ACC * MQ_LEN] __attribute__((aligned(RT_ALIGN_SIZE)));
-static rt_uint8_t gyro_pool[MQ_ITEM_SIZE_GYRO * MQ_LEN] __attribute__((aligned(RT_ALIGN_SIZE)));
+// MCN主题声明和定义
+MCN_DECLARE(minifly_sensor_imu);
+MCN_DEFINE(minifly_sensor_imu, sizeof(sensorData_t));
 
-static struct rt_messagequeue mq_acc;
-static struct rt_messagequeue mq_gyro;
+// MCN订阅节点
+static McnNode_t sensor_sub_node = RT_NULL;
 
-// 优化的队列覆盖函数
-static void mq_overwrite(struct rt_messagequeue *mq, const void *msg, rt_size_t size) {
-  rt_err_t result = rt_mq_send(mq, msg, size);
-  if (result != RT_EOK) {
-    // 如果队列满，先清空队列再发送
-    rt_mq_control(mq, RT_IPC_CMD_RESET, RT_NULL);
-    result = rt_mq_send(mq, msg, size);
-    if (result != RT_EOK) {
-      rt_kprintf("mq_overwrite failed: %d\n", result);
-    } else {
-      // 记录队列重置事件
-      static int reset_cnt = 0;
-      if (++reset_cnt % 50 == 0) {
-        rt_kprintf("Queue reset count: %d\n", reset_cnt);
-      }
-    }
+// 简单的echo函数，打印所有传感器值
+static int sensor_imu_echo(void *parameter) {
+  sensorData_t sensor_data;
+
+  if (mcn_copy_from_hub((McnHub *)parameter, &sensor_data) != RT_EOK) {
+    return -1;
   }
-}
 
-static rt_err_t sensorMiniflyReadAcc(Axis3f *out) {
-  if (!out) return -RT_EINVAL;
+  char ax[16], ay[16], az[16], gx[16], gy[16], gz[16];
+  float_to_string(sensor_data.acc_filter.x, ax, sizeof(ax));
+  float_to_string(sensor_data.acc_filter.y, ay, sizeof(ay));
+  float_to_string(sensor_data.acc_filter.z, az, sizeof(az));
+  float_to_string(sensor_data.gyro_filter.x, gx, sizeof(gx));
+  float_to_string(sensor_data.gyro_filter.y, gy, sizeof(gy));
+  float_to_string(sensor_data.gyro_filter.z, gz, sizeof(gz));
 
-  rt_size_t recv_size = rt_mq_recv(&mq_acc, out, sizeof(Axis3f), 10);  // 10ms超时
+  rt_kprintf("Sensor IMU Echo - acc: %s, %s, %s, gyro: %s, %s, %s, timestamp: %lu\n", ax, ay, az, gx, gy, gz,
+             sensor_data.timestamp);
 
-  // 检查返回值：如果大于0表示成功接收，如果等于0表示超时，如果小于0表示错误
-  if (recv_size > 0) {
-    if (recv_size == sizeof(Axis3f)) {
-      return RT_EOK;
-    } else {
-      rt_kprintf("Read acc data size mismatch: expected %d, got %d\n", sizeof(Axis3f), recv_size);
-      return -RT_ERROR;
-    }
-  } else if (recv_size == 0) {
-    return -RT_ETIMEOUT;
-  } else {
-    // 负值表示错误码
-    rt_kprintf("Read acc data failed with error: %d\n", (int)recv_size);
-    return (rt_err_t)recv_size;
-  }
-}
-
-static rt_err_t sensorMiniflyReadGyro(Axis3f *out) {
-  if (!out) return -RT_EINVAL;
-
-  rt_size_t recv_size = rt_mq_recv(&mq_gyro, out, sizeof(Axis3f), 10);  // 10ms超时
-
-  // 检查返回值：如果大于0表示成功接收，如果等于0表示超时，如果小于0表示错误
-  if (recv_size > 0) {
-    if (recv_size == sizeof(Axis3f)) {
-      return RT_EOK;
-    } else {
-      rt_kprintf("Read gyro data size mismatch: expected %d, got %d\n", sizeof(Axis3f), recv_size);
-      return -RT_ERROR;
-    }
-  } else if (recv_size == 0) {
-    return -RT_ETIMEOUT;
-  } else {
-    // 负值表示错误码
-    rt_kprintf("Read gyro data failed with error: %d\n", (int)recv_size);
-    return (rt_err_t)recv_size;
-  }
+  return 0;
 }
 
 static void deviceInit(void) {
@@ -106,32 +62,16 @@ static void deviceInit(void) {
 }
 
 static void rtosToolsInit(void) {
-  /* init queues */
-  rt_err_t result;
-
-  // 参考 demo 的初始化方式，确保参数正确
-  result = rt_mq_init(&mq_acc,
-                      "mq_acc",           // 队列名称
-                      &acc_pool[0],       // 内存池指向acc_pool
-                      MQ_ITEM_SIZE_ACC,   // 每个消息的大小
-                      sizeof(acc_pool),   // 内存池的大小
-                      RT_IPC_FLAG_PRIO);  // 优先级标志
+  /* 初始化MCN主题 */
+  rt_err_t result = mcn_advertise(MCN_HUB(minifly_sensor_imu), sensor_imu_echo);
   if (result != RT_EOK) {
-    rt_kprintf("Failed to init mq_acc: %d\n", result);
-  } else {
-    rt_kprintf("mq_acc initialized: item_size=%d, pool_size=%d\n", MQ_ITEM_SIZE_ACC, sizeof(acc_pool));
+    rt_kprintf("Failed to advertise minifly_sensor_imu topic: %d\n", result);
   }
 
-  result = rt_mq_init(&mq_gyro,
-                      "mq_gyr",           // 队列名称
-                      &gyro_pool[0],      // 内存池指向gyro_pool
-                      MQ_ITEM_SIZE_GYRO,  // 每个消息的大小
-                      sizeof(gyro_pool),  // 内存池的大小
-                      RT_IPC_FLAG_PRIO);  // 优先级标志
-  if (result != RT_EOK) {
-    rt_kprintf("Failed to init mq_gyro: %d\n", result);
-  } else {
-    rt_kprintf("mq_gyro initialized: item_size=%d, pool_size=%d\n", MQ_ITEM_SIZE_GYRO, sizeof(gyro_pool));
+  /* 订阅MCN主题 */
+  sensor_sub_node = mcn_subscribe(MCN_HUB(minifly_sensor_imu), RT_NULL, RT_NULL);
+  if (sensor_sub_node == RT_NULL) {
+    rt_kprintf("Failed to subscribe to minifly_sensor_imu topic\n");
   }
 }
 
@@ -146,33 +86,11 @@ static void sensor_minifly_thread_entry(void *parameter) {
 
   while (1) {
     if (dev_sensor_imu) {
+      sensors_data.timestamp = rt_tick_get();
       int rb = rt_device_read(dev_sensor_imu, NULL, sensor_buffer, SENSORS_MPU6500_BUFF_LEN);
       if (rb == SENSORS_MPU6500_BUFF_LEN) {
         sensors_data = processAccGyroMeasurements(sensor_buffer);
-
-        // 调试：打印原始数据
-        static int debug_cnt = 0;
-        if (++debug_cnt % 100 == 0) {
-          char ax[16], ay[16], az[16], gx[16], gy[16], gz[16];
-          float_to_string(sensors_data.acc_filter.x, ax, sizeof(ax));
-          float_to_string(sensors_data.acc_filter.y, ay, sizeof(ay));
-          float_to_string(sensors_data.acc_filter.z, az, sizeof(az));
-          float_to_string(sensors_data.gyro_filter.x, gx, sizeof(gx));
-          float_to_string(sensors_data.gyro_filter.y, gy, sizeof(gy));
-          float_to_string(sensors_data.gyro_filter.z, gz, sizeof(gz));
-          rt_kprintf("Raw sensor data - acc: %s, %s, %s, gyro: %s, %s, %s\n", ax, ay, az, gx, gy, gz);
-        }
-
-        // 发送数据到队列
-        mq_overwrite(&mq_acc, &sensors_data.acc_filter, sizeof(sensors_data.acc_filter));
-        mq_overwrite(&mq_gyro, &sensors_data.gyro_filter, sizeof(sensors_data.gyro_filter));
-
-        // 调试：打印队列状态和性能信息
-        static int queue_debug_cnt = 0;
-        if (++queue_debug_cnt % 200 == 0) {
-          rt_kprintf("Queue status - acc: %d bytes sent, gyro: %d bytes sent, total: %d\n",
-                     sizeof(sensors_data.acc_filter), sizeof(sensors_data.gyro_filter), queue_debug_cnt);
-        }
+        mcn_publish(MCN_HUB(minifly_sensor_imu), &sensors_data);
 
       } else {
         static int err_cnt = 0;
@@ -183,34 +101,21 @@ static void sensor_minifly_thread_entry(void *parameter) {
     } else {
       static int not_found = 0;
       if (++not_found % 30 == 0) {
-        rt_kprintf("imu device not found, retrying...\n");
+        rt_kprintf("imu read fail %d\n", not_found);
       }
       rt_thread_mdelay(100);
     }
   }
 }
 
+// 包装的sensorsAcquire函数，使用MCN操作
 void sensorsAcquire(sensorData_t *sensors) {
   if (!sensors) return;
 
-  rt_err_t gyro_result = sensorMiniflyReadGyro(&sensors->gyro_filter);
-  rt_err_t acc_result = sensorMiniflyReadAcc(&sensors->acc_filter);
-
-  // 调试：打印读取结果
-  static int read_debug_cnt = 0;
-  if (++read_debug_cnt % 100 == 0) {
-    if (gyro_result == RT_EOK && acc_result == RT_EOK) {
-      char ax[16], ay[16], az[16], gx[16], gy[16], gz[16];
-      float_to_string(sensors->acc_filter.x, ax, sizeof(ax));
-      float_to_string(sensors->acc_filter.y, ay, sizeof(ay));
-      float_to_string(sensors->acc_filter.z, az, sizeof(az));
-      float_to_string(sensors->gyro_filter.x, gx, sizeof(gx));
-      float_to_string(sensors->gyro_filter.y, gy, sizeof(gy));
-      float_to_string(sensors->gyro_filter.z, gz, sizeof(gz));
-      rt_kprintf("Queue read success - acc: %s, %s, %s, gyro: %s, %s, %s\n", ax, ay, az, gx, gy, gz);
-    } else {
-      rt_kprintf("Queue read failed - gyro: %d, acc: %d\n", gyro_result, acc_result);
-    }
+  // 检查是否有新的传感器数据
+  if (mcn_poll(sensor_sub_node)) {
+    // 复制最新的传感器数据
+    mcn_copy(MCN_HUB(minifly_sensor_imu), sensor_sub_node, sensors);
   }
 }
 

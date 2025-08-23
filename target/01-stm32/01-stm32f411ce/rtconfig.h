@@ -147,6 +147,7 @@
 #define RT_SERIAL_RB_BUFSZ 64
 #define RT_USING_I2C
 #define RT_USING_PIN
+#define RT_USING_KTIME
 /* end of Device Drivers */
 
 /* C/C++ and POSIX layer */
@@ -164,6 +165,7 @@
 
 /* POSIX (Portable Operating System Interface) layer */
 
+#define RT_USING_POSIX_DELAY
 
 /* Interprocess Communication (IPC) */
 
@@ -270,6 +272,8 @@
 
 /* tools packages */
 
+#define PKG_USING_UMCN
+#define PKG_USING_UMCN_LATEST_VERSION
 #define PKG_USING_VCONSOLE
 #define PKG_USING_VCONSOLE_LATEST_VERSION
 /* end of tools packages */
@@ -361,18 +365,13 @@
 
 /* samples: kernel and components samples */
 
-#define PKG_USING_KERNEL_SAMPLES
-#define PKG_USING_KERNEL_SAMPLES_LATEST_VERSION
-#define PKG_USING_KERNEL_SAMPLES_EN
-#define KERNEL_SAMPLES_USING_MAILBOX
-#define KERNEL_SAMPLES_USING_MESSAGEQUEUE
-#define KERNEL_SAMPLES_USING_MEMPOOL
-#define KERNEL_SAMPLES_USING_PRODUCER_CONSUMER
 /* end of samples: kernel and components samples */
 
 /* entertainment: terminal games and other interesting software packages */
 
 /* end of entertainment: terminal games and other interesting software packages */
+#define PKG_USING_OPTPARSE
+#define PKG_USING_OPTPARSE_LATEST_VERSION
 /* end of miscellaneous packages */
 
 /* Arduino libraries */
