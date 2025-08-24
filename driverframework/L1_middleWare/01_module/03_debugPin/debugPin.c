@@ -68,10 +68,10 @@ static int debug_pin_init(void) {
   printf("[DEBUG_PIN] 开始初始化调试引脚\n");
 
   // 初始化DEBUG0引脚
-#ifdef DEBUG_PIN_DEBUG0_EN
+#ifdef L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_0_EN
   debug_pins[0].enabled = 1;
-#ifdef DEBUG_PIN_DEBUG0_PIN
-  debug_pins[0].rt_pin = parse_pin_name_from_config(DEBUG_PIN_DEBUG0_PIN);
+#ifdef L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_0_PIN
+  debug_pins[0].rt_pin = parse_pin_name_from_config(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_0_PIN);
 #else
   debug_pins[0].rt_pin = parse_pin_name_from_config("PC15");
 #endif
@@ -83,10 +83,10 @@ static int debug_pin_init(void) {
 #endif
 
   // 初始化DEBUG1引脚
-#ifdef DEBUG_PIN_DEBUG1_EN
+#ifdef L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_1_EN
   debug_pins[1].enabled = 1;
-#ifdef DEBUG_PIN_DEBUG1_PIN
-  debug_pins[1].rt_pin = parse_pin_name_from_config(DEBUG_PIN_DEBUG1_PIN);
+#ifdef L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_1_PIN
+  debug_pins[1].rt_pin = parse_pin_name_from_config(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_1_PIN);
 #else
   debug_pins[1].rt_pin = parse_pin_name_from_config("PB0");
 #endif
@@ -98,10 +98,10 @@ static int debug_pin_init(void) {
 #endif
 
   // 初始化DEBUG2引脚
-#ifdef DEBUG_PIN_DEBUG2_EN
+#ifdef L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_2_EN
   debug_pins[2].enabled = 1;
-#ifdef DEBUG_PIN_DEBUG2_PIN
-  debug_pins[2].rt_pin = parse_pin_name_from_config(DEBUG_PIN_DEBUG2_PIN);
+#ifdef L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_2_PIN
+  debug_pins[2].rt_pin = parse_pin_name_from_config(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_2_PIN);
 #else
   debug_pins[2].rt_pin = parse_pin_name_from_config("PB1");
 #endif
@@ -113,10 +113,10 @@ static int debug_pin_init(void) {
 #endif
 
   // 初始化DEBUG3引脚
-#ifdef DEBUG_PIN_DEBUG3_EN
+#ifdef L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_3_EN
   debug_pins[3].enabled = 1;
-#ifdef DEBUG_PIN_DEBUG3_PIN
-  debug_pins[3].rt_pin = parse_pin_name_from_config(DEBUG_PIN_DEBUG3_PIN);
+#ifdef L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_3_PIN
+  debug_pins[3].rt_pin = parse_pin_name_from_config(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_3_PIN);
 #else
   debug_pins[3].rt_pin = parse_pin_name_from_config("PA8");
 #endif
