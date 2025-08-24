@@ -164,7 +164,9 @@
 
 /* POSIX (Portable Operating System Interface) layer */
 
+
 /* Interprocess Communication (IPC) */
+
 
 /* Socket is in the 'Network' category */
 
@@ -210,6 +212,7 @@
 /* RT-Thread online packages */
 
 /* IoT - internet of things */
+
 
 /* Wi-Fi */
 
@@ -371,6 +374,7 @@
 
 /* Arduino libraries */
 
+
 /* Projects and Demos */
 
 /* end of Projects and Demos */
@@ -431,12 +435,22 @@
 #define PROJECT_MINIFLY_TASK_SENSOR_IMU_NAME "mpu6500_minifly"
 #define PROJECT_MINIFLY_TASK_SENSOR_ATKP_LOG_EN
 #define PROJECT_MINIFLY_TASK_STABLIZE_EN
+#define PROJECT_MINIFLY_TASK_STABLIZE_ATKP_LOG_EN
 /* end of L0_TASK_CONFIG */
 
 /* L1_MIDDLEWARE_CONFIG */
 
 #define L1_MIDDLEWARE_01_MODULE_01_FLOATCONVER_EN
 #define L1_MIDDLEWARE_01_MODULE_02_MATHS_EN
+#define L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN
+#define DEBUG_PIN_DEBUG0_EN
+#define DEBUG_PIN_DEBUG0_PIN "PC15"
+#define DEBUG_PIN_DEBUG1_EN
+#define DEBUG_PIN_DEBUG1_PIN "PB0"
+#define DEBUG_PIN_DEBUG2_EN
+#define DEBUG_PIN_DEBUG2_PIN "PB1"
+#define DEBUG_PIN_DEBUG3_EN
+#define DEBUG_PIN_DEBUG3_PIN "PA8"
 #define L1_MIDDLEWARE_02_MODE_01_LED_BLINK_EN
 /* end of L1_MIDDLEWARE_CONFIG */
 

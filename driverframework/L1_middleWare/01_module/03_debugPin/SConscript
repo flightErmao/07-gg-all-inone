@@ -1,0 +1,15 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+src  = []
+group = []
+path = [cwd]
+
+# 获取当前目录下的所有 .c 文件
+src  = Glob('./*.c')
+
+# 定义编译组
+group = DefineGroup('03_debugPin', src, depend = ['L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN'], CPPPATH = path)
+
+Return('group') 

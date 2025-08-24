@@ -1,0 +1,71 @@
+menuconfig L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN
+    bool "ENABLE: L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN"
+    default y
+    help
+        Enable debug pin module that provides 4 configurable debug pins for debugging purposes.
+        
+        This module allows configuration of 4 debug pins (DEBUG0, DEBUG1, DEBUG2, DEBUG3) with individual
+        pin selection and provides high/low/toggle control functions.
+        
+    if L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN
+        config DEBUG_PIN_DEBUG0_EN
+            bool "Enable DEBUG0 Debug Pin"
+            default y
+            help
+                Enable or disable DEBUG0 debug pin individually.
+                When enabled, DEBUG0 pin will be configured and available for debugging.
+
+        config DEBUG_PIN_DEBUG0_PIN
+            string "DEBUG0 Debug Pin (e.g. PC15, PA0, PB1)"
+            default "PC15"
+            depends on DEBUG_PIN_DEBUG0_EN
+            help
+                Enter the DEBUG0 debug GPIO pin in format like "PA0", "PB1", "PC15".
+                The tool will parse it and map to the correct pin number at runtime.
+
+        config DEBUG_PIN_DEBUG1_EN
+            bool "Enable DEBUG1 Debug Pin"
+            default y
+            help
+                Enable or disable DEBUG1 debug pin individually.
+                When enabled, DEBUG1 pin will be configured and available for debugging.
+
+        config DEBUG_PIN_DEBUG1_PIN
+            string "DEBUG1 Debug Pin (e.g. PB0, PA1, PC14)"
+            default "PB0"
+            depends on DEBUG_PIN_DEBUG1_EN
+            help
+                Enter the DEBUG1 debug GPIO pin in format like "PA1", "PB0", "PC14".
+                The tool will parse it and map to the correct pin number at runtime.
+
+        config DEBUG_PIN_DEBUG2_EN
+            bool "Enable DEBUG2 Debug Pin"
+            default y
+            help
+                Enable or disable DEBUG2 debug pin individually.
+                When enabled, DEBUG2 pin will be configured and available for debugging.
+
+        config DEBUG_PIN_DEBUG2_PIN
+            string "DEBUG2 Debug Pin (e.g. PB1, PA2, PC13)"
+            default "PB1"
+            depends on DEBUG_PIN_DEBUG2_EN
+            help
+                Enter the DEBUG2 debug GPIO pin in format like "PA2", "PB1", "PC13".
+                The tool will parse it and map to the correct pin number at runtime.
+
+        config DEBUG_PIN_DEBUG3_EN
+            bool "Enable DEBUG3 Debug Pin"
+            default y
+            help
+                Enable or disable DEBUG3 debug pin individually.
+                When enabled, DEBUG3 pin will be configured and available for debugging.
+
+        config DEBUG_PIN_DEBUG3_PIN
+            string "DEBUG3 Debug Pin (e.g. PA8, PB2, PC12)"
+            default "PA8"
+            depends on DEBUG_PIN_DEBUG3_EN
+            help
+                Enter the DEBUG3 debug GPIO pin in format like "PA8", "PB2", "PC12".
+                The tool will parse it and map to the correct pin number at runtime.
+
+    endif 
