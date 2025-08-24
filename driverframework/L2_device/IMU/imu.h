@@ -90,7 +90,7 @@ struct imu_ops {
    * @param data read data buffer. normally it's a pointer to float[9]
    * @param size read data size
    */
-  rt_err_t (*imu_read)(imu_dev_t dev, rt_off_t pos, void* data, rt_size_t size);
+  int8_t (*imu_read)(imu_dev_t dev, rt_off_t pos, void* data, rt_size_t size);
 };
 
 rt_err_t hal_imu_register(imu_dev_t imu, const char* name, rt_uint32_t flag, void* data);

@@ -4,7 +4,7 @@
 #include "taskMiniflySensor.h"
 #include "floatConvert.h"
 
-#ifdef TOOL_TASK_ANOTC_TELEM_EN
+#ifdef TASK_TOOL_01_ANOTC_TELEM_EN
 
 #include "protocolAtkpInterface.h"
 #include "taskAnotcTelem.h"
@@ -25,13 +25,13 @@ void sendSensorImuData(uint16_t count_ms) {
   }
 }
 
-int addPeriodFunListProjectMiniFlySensor(void) {
+int addPeriodFunListSensor(void) {
   anotcTelemAddSensorFunc(sendSensorImuData);
   return 0;
 }
 
 #ifdef PROJECT_MINIFLY_TASK_SENSOR_ATKP_LOG_EN
-INIT_APP_EXPORT(addPeriodFunListProjectMiniFlySensor);
+INIT_APP_EXPORT(addPeriodFunListSensor);
 #endif
 
 #endif

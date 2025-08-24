@@ -10,8 +10,9 @@ menuconfig BSP_USING_MPU6500_MINIFLY
             string "IMU MPU6500 MINIFLY I2C NAME"
             default "hwi2c1"
         config SENSOR_MPU6500_MINIFLY_I2C_ADDR
-            int "mpu6500_MINIFLY_I2C_ADDR"
+            hex "mpu6500_MINIFLY_I2C_ADDR"
             default 0x69
+            range 0x00 0x7F
     endif
     
     
