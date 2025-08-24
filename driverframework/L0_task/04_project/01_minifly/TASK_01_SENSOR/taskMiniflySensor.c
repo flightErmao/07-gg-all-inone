@@ -8,7 +8,7 @@
 #include "uMCN.h"
 
 /*task definition*/
-#define THREAD_PRIORITY 5
+#define THREAD_PRIORITY 7
 #define THREAD_STACK_SIZE 4096
 #define THREAD_TIMESLICE 5
 
