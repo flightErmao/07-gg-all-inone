@@ -75,15 +75,15 @@ static void I2C_GenerateClockPulses(void) {
 
   // 产生9个时钟周期，匹配400kHz I2C速率
   // 400kHz = 2.5μs周期，半周期 = 1.25μs
-  for (int i = 0; i < 8; i++) {
+  for (int i = 0; i < 9; i++) {
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
     // 空转延时约1.25μs（半周期）
-    for (volatile int j = 0; j < 50; j++) {
+    for (volatile int j = 0; j < 100; j++) {
       __NOP();  // GCC内联汇编空转指令
     }
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
     // 空转延时约1.25μs（半周期）
-    for (volatile int j = 0; j < 50; j++) {
+    for (volatile int j = 0; j < 100; j++) {
       __NOP();  // GCC内联汇编空转指令
     }
   }
