@@ -18,14 +18,11 @@ static struct rt_thread task_tid_sensor_minifly;
 static rt_uint8_t task_stack_sensor_minifly[THREAD_STACK_SIZE];
 static rt_device_t dev_sensor_imu = RT_NULL;
 
-// MCN主题声明和定义
 MCN_DECLARE(minifly_sensor_imu);
 MCN_DEFINE(minifly_sensor_imu, sizeof(sensorData_t));
 
-// MCN订阅节点
 static McnNode_t sensor_sub_node = RT_NULL;
 
-// 简单的echo函数，打印所有传感器值
 static int sensor_imu_echo(void *parameter) {
   sensorData_t sensor_data;
 
@@ -62,13 +59,11 @@ static void deviceInit(void) {
 }
 
 static void rtosToolsInit(void) {
-  /* 初始化MCN主题 */
   rt_err_t result = mcn_advertise(MCN_HUB(minifly_sensor_imu), sensor_imu_echo);
   if (result != RT_EOK) {
     rt_kprintf("Failed to advertise minifly_sensor_imu topic: %d\n", result);
   }
 
-  /* 订阅MCN主题 */
   sensor_sub_node = mcn_subscribe(MCN_HUB(minifly_sensor_imu), RT_NULL, RT_NULL);
   if (sensor_sub_node == RT_NULL) {
     rt_kprintf("Failed to subscribe to minifly_sensor_imu topic\n");
@@ -108,13 +103,9 @@ static void sensor_minifly_thread_entry(void *parameter) {
   }
 }
 
-// 包装的sensorsAcquire函数，使用MCN操作
 void sensorsAcquire(sensorData_t *sensors) {
   if (!sensors) return;
-
-  // 检查是否有新的传感器数据
   if (mcn_poll(sensor_sub_node)) {
-    // 复制最新的传感器数据
     mcn_copy(MCN_HUB(minifly_sensor_imu), sensor_sub_node, sensors);
   }
 }

@@ -147,7 +147,6 @@
 #define RT_SERIAL_RB_BUFSZ 64
 #define RT_USING_I2C
 #define RT_USING_PIN
-#define RT_USING_KTIME
 /* end of Device Drivers */
 
 /* C/C++ and POSIX layer */
@@ -165,10 +164,7 @@
 
 /* POSIX (Portable Operating System Interface) layer */
 
-#define RT_USING_POSIX_DELAY
-
 /* Interprocess Communication (IPC) */
-
 
 /* Socket is in the 'Network' category */
 
@@ -214,7 +210,6 @@
 /* RT-Thread online packages */
 
 /* IoT - internet of things */
-
 
 /* Wi-Fi */
 
@@ -376,7 +371,6 @@
 
 /* Arduino libraries */
 
-
 /* Projects and Demos */
 
 /* end of Projects and Demos */
@@ -457,8 +451,8 @@
 /* L3_PERIPHERAL_CONFIG */
 
 #define BOARD_CONFIG
-#define MCU_HSE_25MHZ
-#define HSE_VALUE 25000000
+#define MCU_HSE_8MHZ
+#define HSE_VALUE 8000000
 #define BSP_USING_I2C
 #define BSP_USING_HARD_I2C1
 #define BSP_USING_USBD
