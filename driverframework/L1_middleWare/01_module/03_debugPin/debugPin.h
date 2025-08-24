@@ -8,6 +8,10 @@
 /* 引脚解析函数声明 */
 rt_base_t parse_pin_name_from_config(const char* pin_name);
 
+void debug_pin_set_high(uint8_t pin_index);
+void debug_pin_set_low(uint8_t pin_index);
+void debug_pin_toggle(uint8_t pin_index);
+
 /* 调试引脚宏定义 - 基于Kconfig配置 */
 #ifdef L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_0_EN
 #ifdef L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_0_PIN
