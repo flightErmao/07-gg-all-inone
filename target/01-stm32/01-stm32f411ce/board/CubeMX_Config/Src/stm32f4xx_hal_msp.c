@@ -57,6 +57,46 @@
 
 /* USER CODE BEGIN 0 */
 
+/**
+ * @brief 产生9个I2C时钟周期来释放I2C总线
+ * @param None
+ * @retval None
+ * @note 此函数用于解决I2C从机死锁问题
+ */
+static void I2C_GenerateClockPulses(void) {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+  // 临时配置PB8为推挽输出模式，用于产生时钟信号
+  GPIO_InitStruct.Pin = GPIO_PIN_8;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  // 产生9个时钟周期，匹配400kHz I2C速率
+  // 400kHz = 2.5μs周期，半周期 = 1.25μs
+  for (int i = 0; i < 8; i++) {
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
+    // 空转延时约1.25μs（半周期）
+    for (volatile int j = 0; j < 50; j++) {
+      __NOP();  // GCC内联汇编空转指令
+    }
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
+    // 空转延时约1.25μs（半周期）
+    for (volatile int j = 0; j < 50; j++) {
+      __NOP();  // GCC内联汇编空转指令
+    }
+  }
+
+  // 恢复PB8为I2C复用功能
+  GPIO_InitStruct.Pin = GPIO_PIN_8;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF4_I2C1;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+}
+
 /* USER CODE END 0 */
 /**
   * Initializes the Global MSP.
@@ -133,7 +173,8 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef* hi2c)
   if(hi2c->Instance==I2C1)
   {
   /* USER CODE BEGIN I2C1_MspInit 0 */
-
+  // 产生9个时钟周期来释放I2C总线，防止从机死锁
+  I2C_GenerateClockPulses();
   /* USER CODE END I2C1_MspInit 0 */
 
     __HAL_RCC_GPIOB_CLK_ENABLE();
