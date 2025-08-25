@@ -5,12 +5,12 @@ cwd = GetCurrentDir()
 src  = []
 path = []
 
-if GetDepend(['BSP_USING_I2C']):
-    src += Glob('./*.c')
-    path += [cwd]
+# 包含重命名后的源文件
+src += ['I2cInterface.c']
+path += [cwd]
 
 # 定义编译组
-group = DefineGroup('I2C_INTERFACE', src, depend = [''], CPPPATH = path)
+group = DefineGroup('I2C_INTERFACE', src, depend = ['BSP_USING_I2C'], CPPPATH = path)
 
 env = DefaultEnvironment()
 

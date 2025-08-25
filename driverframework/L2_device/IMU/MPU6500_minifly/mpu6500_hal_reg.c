@@ -3,9 +3,10 @@
 
 #include "mpu6500_regs.h"  // 添加寄存器定义头文件
 #include "mpu6500.hpp"
-#include "i2c_interface.h"
+#include "I2cInterface.h"
 #include "imu.h"       // 添加IMU相关常量定义
 #include <drv_gpio.h>  // GET_PIN 宏与管脚编号
+#include "debugPin.h"
 
 #define IMU_CONFIGURE                                                   \
   {                                                                     \
@@ -36,6 +37,7 @@ static rt_bool_t mpu6500_int_event_inited = RT_FALSE;
 
 static void mpu6500_int_isr(void* parameter) {
   /* 在中断中发送事件，唤醒 read 等待 */
+  DEBUG_PIN_DEBUG2_TOGGLE();
   rt_event_send(&mpu6500_int_event, mpu6500_INT_EVENT_FLAG);
 }
 
@@ -82,13 +84,15 @@ static int8_t mpu6500_read_data(imu_dev_t imu, rt_off_t pos, void* data, rt_size
   if (data == NULL) {
     return -RT_EINVAL;
   }
-  /* 在读取数据前等待中断事件（数据就绪） */
+  DEBUG_PIN_DEBUG0_HIGH();
   if (mpu6500_int_event_inited) {
-    /* 等待中断事件，清除标志后返回 */
     rt_event_recv(&mpu6500_int_event, mpu6500_INT_EVENT_FLAG, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR,
                   RT_WAITING_FOREVER, RT_NULL);
   }
+  DEBUG_PIN_DEBUG0_LOW();
+  DEBUG_PIN_DEBUG1_HIGH();
   int8_t read_size = drv_mpu6500_read(pos, data, size);
+  DEBUG_PIN_DEBUG1_LOW();
   return read_size;
 }
 

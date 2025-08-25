@@ -1,5 +1,5 @@
     menuconfig BSP_USING_I2C
-        bool "Enable I2C2 BUS (hardware)"
+        bool "Enable I2C BUS (hardware)"
         default n        
         select RT_USING_I2C
         if BSP_USING_I2C
@@ -7,6 +7,13 @@
                 bool "Enable HARD I2C1"
                 default y
                 if BSP_USING_HARD_I2C1
+                    config BSP_I2C1_SPEED
+                        int "I2C1 Speed (Hz)"
+                        default 400000
+                        range 100000 1000000
+                        help
+                            I2C1 bus speed in Hz. Default is 400KHz (400000).
+                        
                     config BSP_I2C1_TX_USING_DMA
                         bool "Enable HARD I2C1 TX DMA"
                         default n        
@@ -14,15 +21,23 @@
                         bool "Enable HARD I2C1 RX DMA"
                         default n
                 endif            
+                
             menuconfig BSP_USING_HARD_I2C2
                 bool "Enable HARD I2C2"
                 default n
                 if BSP_USING_HARD_I2C2
+                    config BSP_I2C2_SPEED
+                        int "I2C2 Speed (Hz)"
+                        default 400000
+                        range 100000 1000000
+                        help
+                            I2C2 bus speed in Hz. Default is 400KHz (400000).
+                        
                     config BSP_I2C2_TX_USING_DMA
-                        bool "Enable HARD I2C1 TX DMA"
+                        bool "Enable HARD I2C2 TX DMA"
                         default n        
                     config BSP_I2C2_RX_USING_DMA
-                        bool "Enable HARD I2C1 RX DMA"
+                        bool "Enable HARD I2C2 RX DMA"
                         default n
                 endif
         endif
