@@ -1,0 +1,24 @@
+menu "NVIC Configuration"
+    depends on RT_USING_DEVICE
+
+    config NVIC_CONFIG_EN
+        bool "Enable STM32 NVIC Configuration"
+        default n
+        help
+            Enable NVIC interrupt priority grouping configuration for STM32 MCUs.
+
+    if NVIC_CONFIG_EN
+        config NVIC_STM32_PRIORITY_GROUP
+            int "STM32 Priority Group (0-4)"
+            range 0 4
+            default 4
+            help
+                Set the interrupt priority grouping for STM32 MCUs.
+                0: 0 bits for pre-emption priority, 4 bits for subpriority
+                1: 1 bits for pre-emption priority, 3 bits for subpriority
+                2: 2 bits for pre-emption priority, 2 bits for subpriority
+                3: 3 bits for pre-emption priority, 1 bits for subpriority
+                4: 4 bits for pre-emption priority, 0 bits for subpriority
+    endif
+
+endmenu 

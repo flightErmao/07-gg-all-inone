@@ -8,7 +8,7 @@
 #include "uMCN.h"
 
 /*task definition*/
-#define THREAD_PRIORITY 7
+#define THREAD_PRIORITY 4
 #define THREAD_STACK_SIZE 4096
 #define THREAD_TIMESLICE 5
 
@@ -111,8 +111,8 @@ void sensorsAcquire(sensorData_t *sensors) {
 }
 
 static int taskSensorThreadAutoStart(void) {
-  rt_thread_init(&task_tid_sensor_minifly, "t_sensor6", sensor_minifly_thread_entry, RT_NULL, task_stack_sensor_minifly,
-                 THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
+  rt_thread_init(&task_tid_sensor_minifly, "L0_minifly_sensor", sensor_minifly_thread_entry, RT_NULL,
+                 task_stack_sensor_minifly, THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
   rt_thread_startup(&task_tid_sensor_minifly);
   return 0;
 }

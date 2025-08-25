@@ -10,8 +10,8 @@ menuconfig TASK_DEMO_01_LED_BLINK_EN
     if TASK_DEMO_01_LED_BLINK_EN
         config TASK_DEMO_01_LED_BLINK_PRIORITY
             int "LED Blink Task Priority"
-            default 5
-            range 1 10
+            default 30
+            range 25 31
             help
                 Set the thread priority for LED blink task.
                 Lower values indicate higher priority.

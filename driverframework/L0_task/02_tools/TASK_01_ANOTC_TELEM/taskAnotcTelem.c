@@ -75,7 +75,7 @@ static void taskAnotcMqRecEntry(void *param) {
 static int taskAnotcMqRec(void) {
   task_dev_init(TASK_TOOL_01_ANOTC_TELEM_DEVICE_DEFAULT);
   task_msg_init();
-  rt_thread_init(&taskAnotcMqRecTid, "taskAnotcMqRec", taskAnotcMqRecEntry, RT_NULL, taskAnotcMqRecStack,
+  rt_thread_init(&taskAnotcMqRecTid, "L0_tool_atkp_rec", taskAnotcMqRecEntry, RT_NULL, taskAnotcMqRecStack,
                  THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
   rt_thread_startup(&taskAnotcMqRecTid);
 
@@ -84,7 +84,7 @@ static int taskAnotcMqRec(void) {
 
 /* 启动传感器数据发送任务 */
 static int taskAnotcMqSend(void) {
-  rt_thread_init(&taskAnotcMqSendTid, "taskAnotcMqSend", taskAnotcMqSendEntry, RT_NULL, taskAnotcMqSendStack,
+  rt_thread_init(&taskAnotcMqSendTid, "L0_tool_atkp_send", taskAnotcMqSendEntry, RT_NULL, taskAnotcMqSendStack,
                  SENSOR_TASK_STACK_SIZE, SENSOR_TASK_PRIORITY, SENSOR_TASK_TIMESLICE);
   rt_thread_startup(&taskAnotcMqSendTid);
 

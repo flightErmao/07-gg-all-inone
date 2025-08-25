@@ -5,8 +5,9 @@
 #include "sensfusion6.h"
 #include "taskMiniflySensor.h"
 #include "uMCN.h"
+#include "debugPin.h"
 
-#define THREAD_PRIORITY 6
+#define THREAD_PRIORITY 5
 #define THREAD_STACK_SIZE 4096
 #define THREAD_TIMESLICE 5
 static rt_uint8_t task_stack_stabilizer_minifly[THREAD_STACK_SIZE];
@@ -67,8 +68,10 @@ static void stabilizer_minifly_thread_entry(void* parameter) {
   rt_timer_start(stabilizer_timer);
 
   while (1) {
+    DEBUG_PIN_DEBUG3_HIGH();
     result =
         rt_event_recv(stabilizer_event, 0x01, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &recv_event);
+    DEBUG_PIN_DEBUG3_LOW();
 
     if (result == RT_EOK) {
       if (RATE_DO_EXECUTE(ATTITUDE_ESTIMAT_RATE, tick)) {
@@ -91,7 +94,7 @@ void stabilizerGetState(state_t* state) {
 
 static int taskStabilizerThreadAutoStart(void) {
   taskStabilizerInit();
-  rt_thread_init(&task_tid_stabilizer_minifly, "t_stabilizer", stabilizer_minifly_thread_entry, RT_NULL,
+  rt_thread_init(&task_tid_stabilizer_minifly, "L0_minifly_stabilizer", stabilizer_minifly_thread_entry, RT_NULL,
                  task_stack_stabilizer_minifly, THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
   rt_thread_startup(&task_tid_stabilizer_minifly);
   return RT_EOK;

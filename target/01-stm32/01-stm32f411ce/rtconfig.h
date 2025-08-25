@@ -63,7 +63,7 @@
 
 /* end of rt_strnlen options */
 /* end of klibc options */
-#define RT_NAME_MAX 16
+#define RT_NAME_MAX 24
 #define RT_CPUS_NR 1
 #define RT_ALIGN_SIZE 8
 #define RT_THREAD_PRIORITY_32
@@ -199,6 +199,7 @@
 #define RT_USB_DEVICE_NONE
 #define RT_VCOM_TASK_STK_SIZE 512
 #define RT_CDC_RX_BUFSIZE 128
+#define RT_VCOM_TX_USE_DMA
 #define RT_VCOM_SERNO "32021919830108"
 #define RT_VCOM_SER_LEN 14
 #define RT_VCOM_TX_TIMEOUT 1000
@@ -425,7 +426,7 @@
 /* L0_TASK_CONFIG */
 
 #define TASK_DEMO_01_LED_BLINK_EN
-#define TASK_DEMO_01_LED_BLINK_PRIORITY 5
+#define TASK_DEMO_01_LED_BLINK_PRIORITY 30
 #define TASK_DEMO_01_LED_BLINK_TIMER_INTERVAL 500
 #define TASK_DEMO_01_LED_BLINK_PIN "PC13"
 #define TASK_TOOL_01_ANOTC_TELEM_EN
@@ -466,6 +467,12 @@
 #define BOARD_CONFIG
 #define MCU_HSE_8MHZ
 #define HSE_VALUE 8000000
+
+/* NVIC Configuration */
+
+#define NVIC_CONFIG_EN
+#define NVIC_STM32_PRIORITY_GROUP 0
+/* end of NVIC Configuration */
 #define BSP_USING_I2C
 #define BSP_USING_HARD_I2C1
 #define BSP_I2C1_SPEED 800000

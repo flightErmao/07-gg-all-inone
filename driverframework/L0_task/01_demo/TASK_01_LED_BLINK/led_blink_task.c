@@ -12,7 +12,7 @@
 #include "debugPin.h"
 
 // 任务相关定义
-#define LED_BLINK_TASK_NAME "led_blink_task"
+#define LED_BLINK_TASK_NAME "L0_led_blink"
 
 // LED引脚定义
 // 通过 Kconfig 字符串配置解析 LED 引脚，形如 "PC13"

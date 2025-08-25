@@ -1,5 +1,6 @@
 menu "L3_PERIPHERAL_CONFIG"
     source "$(PROJECT_ROOT)/driverframework/L3_peripheral/BOARD/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L3_peripheral/nvicConfig/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L3_peripheral/SPI_REG/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L3_peripheral/I2C_REG/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L3_peripheral/USB_SHELL/Kconfig"
