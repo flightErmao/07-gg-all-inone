@@ -6,3 +6,7 @@ pip uninstall -y env
 pip install -U .
 cd ..\..\..\..\target\02-weact-f411ce-25m
 menuconfig --config=..\..\..\configs\01-base\01-base_f411ce-8m-minifly --silent && scons
+
+2. 强制添加子模块
+git submodule add -f git@github.com:Tool-01-middleware/vconsole.git target/01-stm32/01-stm32f411ce/packages/vcon
+sole-latest
