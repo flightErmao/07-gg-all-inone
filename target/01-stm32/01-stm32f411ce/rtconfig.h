@@ -63,7 +63,7 @@
 
 /* end of rt_strnlen options */
 /* end of klibc options */
-#define RT_NAME_MAX 8
+#define RT_NAME_MAX 16
 #define RT_CPUS_NR 1
 #define RT_ALIGN_SIZE 8
 #define RT_THREAD_PRIORITY_32
@@ -469,6 +469,8 @@
 #define BSP_USING_I2C
 #define BSP_USING_HARD_I2C1
 #define BSP_I2C1_SPEED 800000
+#define BSP_I2C1_TX_USING_DMA
+#define BSP_I2C1_RX_USING_DMA
 #define BSP_USING_USBD
 #define BSP_USING_GPIO
 #define BSP_USING_UART
