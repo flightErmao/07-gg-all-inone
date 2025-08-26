@@ -52,9 +52,7 @@ static void sensorsCalculateVarianceAndMean(const BiasObj *bias, Axis3f *varianc
 }
 
 /*传感器查找偏置值*/
-static bool sensorsFindBiasValue(BiasObj *bias) {
-  bool foundbias = false;
-
+static void sensorsFindBiasValue(BiasObj *bias) {
   if (bias->isBufferFilled) {
     Axis3f mean;
     Axis3f variance;
@@ -64,12 +62,10 @@ static bool sensorsFindBiasValue(BiasObj *bias) {
       bias->bias.x = mean.x;
       bias->bias.y = mean.y;
       bias->bias.z = mean.z;
-      foundbias = true;
       bias->isBiasValueFound = true;
     } else
       bias->isBufferFilled = false;
   }
-  return foundbias;
 }
 
 bool processGyroBias(int16_t gx, int16_t gy, int16_t gz, Axis3f *gyroBiasOut) {

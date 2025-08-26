@@ -37,7 +37,7 @@ sensorData_t processAccGyroMeasurements(const uint8_t* buffer) {
   static bool gyroBiasFound = false;
 
   int16_t ay = (((int16_t)buffer[0]) << 8) | buffer[1];
-  int16_t ax = ((((int16_t)buffer[2]) << 8) | buffer[3]);
+  int16_t ax = (((int16_t)buffer[2]) << 8) | buffer[3];
   int16_t az = (((int16_t)buffer[4]) << 8) | buffer[5];
   int16_t gy = (((int16_t)buffer[8]) << 8) | buffer[9];
   int16_t gx = (((int16_t)buffer[10]) << 8) | buffer[11];
