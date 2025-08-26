@@ -5,6 +5,7 @@
 #include "sensfusion6.h"
 #include "taskMiniflySensor.h"
 #include "uMCN.h"
+#include "biasGyro.h"
 #ifdef PROJECT_MINIFLY_TASK_DEBUGPIN_EN
 #include "debugPin.h"
 #endif
@@ -26,6 +27,8 @@ MCN_DECLARE(minifly_stabilizer_state);
 MCN_DEFINE(minifly_stabilizer_state, sizeof(state_t));
 static McnNode_t state_sub_node = RT_NULL;
 
+//TO DO : should check if sensors are calibrated
+// static bool sensorsAreCalibrated(void) { return outputGyroBiasFound(); }
 static bool sensorsAreCalibrated(void) { return true; }
 
 static void mcnTopicInit(void) {
@@ -65,7 +68,7 @@ static void stabilizer_minifly_thread_entry(void* parameter) {
   sensorData_t sensorData = {0};
 
   while (!sensorsAreCalibrated()) {
-    rt_thread_mdelay(1000);
+    rt_thread_mdelay(100);
   }
   rt_timer_start(stabilizer_timer);
 

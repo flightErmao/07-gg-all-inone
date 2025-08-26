@@ -81,3 +81,5 @@ bool processGyroBias(int16_t gx, int16_t gy, int16_t gz, Axis3f *gyroBiasOut) {
 
   return gyroBiasRunning.isBiasValueFound;
 }
+
+bool outputGyroBiasFound(void) { return gyroBiasRunning.isBiasValueFound; }

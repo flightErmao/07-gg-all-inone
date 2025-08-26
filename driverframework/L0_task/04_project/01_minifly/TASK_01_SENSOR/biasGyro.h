@@ -5,5 +5,6 @@
 
 void sensorsBiasObjInit(void);
 bool processGyroBias(int16_t gx, int16_t gy, int16_t gz, Axis3f *gyroBiasOut);
+bool outputGyroBiasFound(void);
 
 #endif
