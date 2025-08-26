@@ -10,4 +10,9 @@ menuconfig PROJECT_MINIFLY_TASK_STABLIZE_EN
             default n
             help
                 Enable ATKP logging for the stabilize task.
+        config PROJECT_MINIFLY_TASK_DEBUGPIN_EN
+            bool "ENABLE: PROJECT_MINIFLY_TASK_DEBUGPIN_EN"
+            default n
+            help
+                Enable debug pin for the stabilize task.
     endif
