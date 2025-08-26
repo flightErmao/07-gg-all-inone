@@ -13,7 +13,7 @@
 #define POOL_SIZE_BYTE (sizeof(atkp_t) * MSG_NUM)
 
 /* Event flag for RX notification */
-#define NRF_EVENT_RX (1 << 0)
+// #define NRF_EVENT_RX (1 << 0)
 
 /* Local RX buffer size equals UART ring buffer size */
 #if defined(PROJECT_MINIFLY_TASK_NRF_DEVICE_DEFAULT) && (0)
@@ -27,22 +27,72 @@ static struct rt_thread taskNrfTid;
 static rt_uint8_t msg_pool[POOL_SIZE_BYTE];
 static struct rt_messagequeue device_recv_mq_;
 
-static struct rt_event nrf_event;
-static uint8_t local_rx_buf[LOCAL_RX_BUF_SIZE];
-static volatile rt_size_t local_rx_len = 0;
+// static struct rt_event nrf_event;
+// static uint8_t local_rx_buf[LOCAL_RX_BUF_SIZE];
+// static volatile rt_size_t local_rx_len = 0;
 static rt_device_t nrf_dev = RT_NULL;
+
+/* Minimal ring buffer for ISR->thread data passing (overwrite when full) */
+static uint8_t nrf_rb_pool[LOCAL_RX_BUF_SIZE];
+static volatile rt_size_t nrf_rb_head = 0; /* read index */
+static volatile rt_size_t nrf_rb_tail = 0; /* write index */
+
+static inline void nrf_rb_init(void) {
+  nrf_rb_head = 0;
+  nrf_rb_tail = 0;
+}
+
+static inline void nrf_rb_putchar(uint8_t ch) {
+  rt_size_t next_tail = (nrf_rb_tail + 1) % LOCAL_RX_BUF_SIZE;
+  /* overwrite oldest when full */
+  if (next_tail == nrf_rb_head) {
+    nrf_rb_head = (nrf_rb_head + 1) % LOCAL_RX_BUF_SIZE;
+  }
+  nrf_rb_pool[nrf_rb_tail] = ch;
+  nrf_rb_tail = next_tail;
+}
+
+static inline int nrf_rb_getchar(uint8_t *ch) {
+  if (nrf_rb_head == nrf_rb_tail) {
+    return 0; /* empty */
+  }
+  *ch = nrf_rb_pool[nrf_rb_head];
+  nrf_rb_head = (nrf_rb_head + 1) % LOCAL_RX_BUF_SIZE;
+  return 1;
+}
+
+static struct rt_semaphore nrf_rx_sem;
 
 static rx_state_t rxState;
 static atkp_t rxPacket;
 
-/* UART RX indicate callback: read ring buffer into local buffer and notify */
+/* small ISR temp buffer for chunked draining */
+static uint8_t nrf_isr_tmp[128];
+
+/* UART RX indicate callback: read bytes and push to ring buffer, then notify by semaphore */
 static rt_err_t nrf_rx_indicate(rt_device_t dev, rt_size_t size)
 {
-    RT_UNUSED(dev);
-    /* Notify RX event; real draining occurs in thread context */
-    local_rx_len = size;
-    rt_event_send(&nrf_event, NRF_EVENT_RX);
-    return RT_EOK;
+  /* size is a hint from driver: available bytes this time (DMADONE/IDLE). Drain in chunks. */
+  rt_size_t remain = size;
+  while (1) {
+    rt_size_t to_read =
+        (remain > 0 && remain < (rt_size_t)sizeof(nrf_isr_tmp)) ? remain : (rt_size_t)sizeof(nrf_isr_tmp);
+    rt_size_t len = rt_device_read(dev, 0, nrf_isr_tmp, to_read);
+    if (len <= 0) {
+      break;
+    }
+    for (rt_size_t i = 0; i < len; i++) {
+      nrf_rb_putchar(nrf_isr_tmp[i]);
+    }
+    if (remain > 0) {
+      remain -= len;
+      if (remain == 0) break;
+    }
+    /* If remain == 0 (unknown), keep draining until empty (len==0). */
+  }
+  /* Notify RX by releasing semaphore */
+  rt_sem_release(&nrf_rx_sem);
+  return RT_EOK;
 }
 
 static void task_msg_init(void) {
@@ -70,63 +120,57 @@ void radiolinkTask(void *param) {
 #ifdef PROJECT_MINIFLY_TASK_NRF_DEBUGPIN_EN
         DEBUG_PIN_DEBUG0_TOGGLE();
 #endif
-        rt_uint32_t recved = 0;
-        /* Wait for RX event */
-        if (rt_event_recv(&nrf_event, NRF_EVENT_RX, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR,
-                          RT_WAITING_FOREVER, &recved) == RT_EOK) {
-            /* Drain ring buffer in chunks until empty */
-            while (1) {
-                rt_size_t len = rt_device_read(nrf_dev, 0, local_rx_buf, LOCAL_RX_BUF_SIZE);
-                if (len == 0) break;
-                for (rt_size_t i = 0; i < len; i++) {
-                    uint8_t c = local_rx_buf[i];
-                switch (rxState) {
-                case waitForStartByte1:
-                    rxState = (c == DOWN_BYTE1) ? waitForStartByte2 : waitForStartByte1;
-                    cksum = c;
-                    break;
-                case waitForStartByte2:
-                    rxState = (c == DOWN_BYTE2) ? waitForMsgID : waitForStartByte1;
-                    cksum += c;
-                    break;
-                case waitForMsgID:
-                    rxPacket.msgID = c;
-                    rxState = waitForDataLength;
-                    cksum += c;
-                    break;
-                case waitForDataLength:
-                    if (c <= ATKP_MAX_DATA_SIZE) {
-                        rxPacket.dataLen = c;
-                        dataIndex = 0;
-                        rxState = (c > 0) ? waitForData : waitForChksum1;
-                        cksum += c;
-                    } else {
-                        rxState = waitForStartByte1;
-                    }
-                    break;
-                case waitForData:
-                    rxPacket.data[dataIndex] = c;
-                    dataIndex++;
-                    cksum += c;
-                    if (dataIndex == rxPacket.dataLen) {
-                        rxState = waitForChksum1;
-                    }
-                    break;
-                case waitForChksum1:
-                    if (cksum == c) {
-                        rt_mq_send(&device_recv_mq_, &rxPacket, sizeof(atkp_t));
-                    } else {
-                        rt_kprintf("nrf checksum error\n");
-                    }
-                    rxState = waitForStartByte1;
-                    break;
-                default:
-                    rt_kprintf("nrf state error\n");
-                    rxState = waitForStartByte1;
-                    break;
+        /* Wait for RX semaphore */
+        if (rt_sem_take(&nrf_rx_sem, RT_WAITING_FOREVER) == RT_EOK) {
+          /* Drain ring buffer until empty */
+          uint8_t c;
+          while (nrf_rb_getchar(&c) == 1) {
+            switch (rxState) {
+              case waitForStartByte1:
+                rxState = (c == DOWN_BYTE1) ? waitForStartByte2 : waitForStartByte1;
+                cksum = c;
+                break;
+              case waitForStartByte2:
+                rxState = (c == DOWN_BYTE2) ? waitForMsgID : waitForStartByte1;
+                cksum += c;
+                break;
+              case waitForMsgID:
+                rxPacket.msgID = c;
+                rxState = waitForDataLength;
+                cksum += c;
+                break;
+              case waitForDataLength:
+                if (c <= ATKP_MAX_DATA_SIZE) {
+                  rxPacket.dataLen = c;
+                  dataIndex = 0;
+                  rxState = (c > 0) ? waitForData : waitForChksum1;
+                  cksum += c;
+                } else {
+                  rxState = waitForStartByte1;
                 }
+                break;
+              case waitForData:
+                rxPacket.data[dataIndex] = c;
+                dataIndex++;
+                cksum += c;
+                if (dataIndex == rxPacket.dataLen) {
+                  rxState = waitForChksum1;
                 }
+                break;
+              case waitForChksum1:
+                if (cksum == c) {
+                  rt_mq_send(&device_recv_mq_, &rxPacket, sizeof(atkp_t));
+                } else {
+                  rt_kprintf("nrf checksum error\n");
+                }
+                rxState = waitForStartByte1;
+                break;
+              default:
+                rt_kprintf("nrf state error\n");
+                rxState = waitForStartByte1;
+                break;
             }
+          }
         }
     }
 }
@@ -138,11 +182,12 @@ static int taskNrfInit(void) {
     return -1;
   }
 
-    rt_err_t result = rt_device_open(device, RT_DEVICE_FLAG_RDWR);
-    if (result != RT_EOK) {
-        rt_kprintf("nrf device open failed\n");
-        return -1;
-    }
+  /* Open with DMA RX to avoid RX FIFO overrun at high baud rate */
+  rt_err_t result = rt_device_open(device, RT_DEVICE_FLAG_RDWR | RT_DEVICE_FLAG_DMA_RX);
+  if (result != RT_EOK) {
+    rt_kprintf("nrf device open failed\n");
+    return -1;
+  }
 
     struct serial_configure config = RT_SERIAL_CONFIG_DEFAULT;
     config.baud_rate = PROJECT_MINIFLY_TASK_NRF_BAUD_RATE;
@@ -150,11 +195,9 @@ static int taskNrfInit(void) {
     config.tx_bufsz = BSP_UART2_TX_BUFSIZE;
     rt_device_control(device, RT_DEVICE_CTRL_CONFIG, &config);
 
-    /* Prefer DMA RX if available to avoid overrun under burst traffic */
-    rt_device_control(device, RT_DEVICE_CTRL_CONFIG, (void *)RT_DEVICE_FLAG_DMA_RX);
-
-    /* Init RX event and register UART RX callback */
-    rt_event_init(&nrf_event, "nrf_evt", RT_IPC_FLAG_FIFO);
+    /* Init local ring buffer and RX semaphore, then register UART RX callback */
+    nrf_rb_init();
+    rt_sem_init(&nrf_rx_sem, "nrf_sem", 0, RT_IPC_FLAG_FIFO);
     rt_device_set_rx_indicate(device, nrf_rx_indicate);
     nrf_dev = device;
 
