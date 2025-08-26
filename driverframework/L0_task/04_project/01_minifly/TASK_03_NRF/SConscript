@@ -10,7 +10,7 @@ group = []
 src = Glob("./*.c")
 
 group = DefineGroup(
-    "TASK_TOOL_01_ANOTC_TELEM_EN", src, depend=["TASK_TOOL_01_ANOTC_TELEM_EN"], CPPPATH=path
+    "PROJECT_MINIFLY_TASK_NRF_EN", src, depend=["PROJECT_MINIFLY_TASK_NRF_EN"], CPPPATH=path
 )
 
 Return("group")
