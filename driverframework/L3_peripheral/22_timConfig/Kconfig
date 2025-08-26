@@ -1,0 +1,14 @@
+menuconfig BSP_USING_TIM
+    bool "Enable timer"
+    default n
+    select RT_USING_HWTIMER
+    if BSP_USING_TIM
+        config BSP_USING_TIM10
+            bool "Enable TIM10"
+            default n
+
+        config BSP_USING_TIM11
+            bool "Enable TIM11"
+            default n
+    endif
+

@@ -4,15 +4,21 @@ menuconfig PROJECT_MINIFLY_TASK_NRF_EN
     help
        open nrf task
     if PROJECT_MINIFLY_TASK_NRF_EN
-        config TASK_MINIFLY_TASK_NRF_DEVICE_DEFAULT
+        config PROJECT_MINIFLY_TASK_NRF_DEVICE_DEFAULT
         string "the default of send device"
         default "uart2"
         help
             "the default of send device"
 
-        config TASK_MINIFLY_TASK_NRF_BAUD_RATE
+        config PROJECT_MINIFLY_TASK_NRF_BAUD_RATE
         int "the baud rate of send device"
         default 1000000
         help
             "the baud rate of send device"
+        
+        config PROJECT_MINIFLY_TASK_NRF_DEBUGPIN_EN
+        bool "ENABLE: PROJECT_MINIFLY_TASK_NRF_DEBUGPIN_EN"
+        default n
+        help
+            "enable debug pin"
     endif

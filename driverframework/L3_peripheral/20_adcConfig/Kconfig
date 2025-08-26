@@ -1,0 +1,10 @@
+menuconfig BSP_USING_ADC
+    bool "Enable ADC"
+    default n
+    select RT_USING_ADC
+    if BSP_USING_ADC
+        config BSP_USING_ADC1
+            bool "Enable ADC1"
+            default n
+    endif
+

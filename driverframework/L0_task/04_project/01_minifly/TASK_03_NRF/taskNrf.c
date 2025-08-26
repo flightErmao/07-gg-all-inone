@@ -1,7 +1,10 @@
 #include <rtdevice.h>
 #include <rtthread.h>
 #include "taskNrf.h"
-#include "deviceManager.h"
+// #include "deviceManager.h"
+#ifdef PROJECT_MINIFLY_TASK_NRF_DEBUGPIN_EN
+#include "debugPin.h"
+#endif
 
 #define THREAD_PRIORITY 7
 #define THREAD_STACK_SIZE 2048
@@ -33,11 +36,11 @@ static void task_msg_init(void) {
 }
 
 static int uartslkGetDataWithTimout(uint8_t *c) {
-    rt_device_t device = rt_device_find(TASK_MINIFLY_TASK_NRF_DEVICE_DEFAULT);
-    if (device == RT_NULL) {
-        return 0;
-    }
-    
+  rt_device_t device = rt_device_find(PROJECT_MINIFLY_TASK_NRF_DEVICE_DEFAULT);
+  if (device == RT_NULL) {
+    return 0;
+  }
+
     if (rt_device_read(device, 0, c, 1) == 1) {
         return 1;
     }
@@ -53,64 +56,67 @@ void radiolinkTask(void *param) {
     uint8_t cksum = 0;
 
     while(1) {
-        if (uartslkGetDataWithTimout(&c)) {
-            switch(rxState) {
-                case waitForStartByte1:
-                    rxState = (c == DOWN_BYTE1) ? waitForStartByte2 : waitForStartByte1;
-                    cksum = c;
-                    break;
-                case waitForStartByte2:
-                    rxState = (c == DOWN_BYTE2) ? waitForMsgID : waitForStartByte1;
-                    cksum += c;
-                    break;
-                case waitForMsgID:
-                    rxPacket.msgID = c;
-                    rxState = waitForDataLength;
-                    cksum += c;
-                    break;
-                case waitForDataLength:
-                    if (c <= ATKP_MAX_DATA_SIZE) {
-                        rxPacket.dataLen = c;
-                        dataIndex = 0;
-                        rxState = (c > 0) ? waitForData : waitForChksum1;
-                        cksum += c;
-                    } else {
-                        rxState = waitForStartByte1;
-                    }
-                    break;
-                case waitForData:
-                    rxPacket.data[dataIndex] = c;
-                    dataIndex++;
-                    cksum += c;
-                    if (dataIndex == rxPacket.dataLen) {
-                        rxState = waitForChksum1;
-                    }
-                    break;
-                case waitForChksum1:
-                    if (cksum == c) {
-                        rt_mq_send(&device_recv_mq_, &rxPacket, sizeof(atkp_t));
-                    } else {
-                        rt_kprintf("nrf checksum error\n");
-                    }
-                    rxState = waitForStartByte1;
-                    break;
-                default:
-                    rt_kprintf("nrf state error\n");
-                    rxState = waitForStartByte1;
-                    break;
+#ifdef PROJECT_MINIFLY_TASK_NRF_DEBUGPIN_EN
+      DEBUG_PIN_DEBUG0_TOGGLE();
+#endif
+      if (uartslkGetDataWithTimout(&c)) {
+        switch (rxState) {
+          case waitForStartByte1:
+            rxState = (c == DOWN_BYTE1) ? waitForStartByte2 : waitForStartByte1;
+            cksum = c;
+            break;
+          case waitForStartByte2:
+            rxState = (c == DOWN_BYTE2) ? waitForMsgID : waitForStartByte1;
+            cksum += c;
+            break;
+          case waitForMsgID:
+            rxPacket.msgID = c;
+            rxState = waitForDataLength;
+            cksum += c;
+            break;
+          case waitForDataLength:
+            if (c <= ATKP_MAX_DATA_SIZE) {
+              rxPacket.dataLen = c;
+              dataIndex = 0;
+              rxState = (c > 0) ? waitForData : waitForChksum1;
+              cksum += c;
+            } else {
+              rxState = waitForStartByte1;
             }
-        } else {
+            break;
+          case waitForData:
+            rxPacket.data[dataIndex] = c;
+            dataIndex++;
+            cksum += c;
+            if (dataIndex == rxPacket.dataLen) {
+              rxState = waitForChksum1;
+            }
+            break;
+          case waitForChksum1:
+            if (cksum == c) {
+              rt_mq_send(&device_recv_mq_, &rxPacket, sizeof(atkp_t));
+            } else {
+              rt_kprintf("nrf checksum error\n");
+            }
             rxState = waitForStartByte1;
+            break;
+          default:
+            rt_kprintf("nrf state error\n");
+            rxState = waitForStartByte1;
+            break;
         }
+      } else {
+        rxState = waitForStartByte1;
+      }
     }
 }
 
 static int taskNrfInit(void) {
-    rt_device_t device = rt_device_find(TASK_MINIFLY_TASK_NRF_DEVICE_DEFAULT);
-    if (device == RT_NULL) {
-        rt_kprintf("nrf device not found: %s\n", TASK_MINIFLY_TASK_NRF_DEVICE_DEFAULT);
-        return -1;
-    }
+  rt_device_t device = rt_device_find(PROJECT_MINIFLY_TASK_NRF_DEVICE_DEFAULT);
+  if (device == RT_NULL) {
+    rt_kprintf("nrf device not found: %s\n", PROJECT_MINIFLY_TASK_NRF_DEVICE_DEFAULT);
+    return -1;
+  }
 
     rt_err_t result = rt_device_open(device, RT_DEVICE_FLAG_RDWR);
     if (result != RT_EOK) {
@@ -119,7 +125,7 @@ static int taskNrfInit(void) {
     }
 
     struct serial_configure config = RT_SERIAL_CONFIG_DEFAULT;
-    config.baud_rate = TASK_MINIFLY_TASK_NRF_BAUD_RATE;
+    config.baud_rate = PROJECT_MINIFLY_TASK_NRF_BAUD_RATE;
     rt_device_control(device, RT_DEVICE_CTRL_CONFIG, &config);
 
     task_msg_init();
@@ -128,9 +134,8 @@ static int taskNrfInit(void) {
                    THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
     rt_thread_startup(&taskNrfTid);
 
-    rt_kprintf("nrf task started on %s, baud: %d\n", 
-               TASK_MINIFLY_TASK_NRF_DEVICE_DEFAULT, 
-               TASK_MINIFLY_TASK_NRF_BAUD_RATE);
+    rt_kprintf("nrf task started on %s, baud: %d\n", PROJECT_MINIFLY_TASK_NRF_DEVICE_DEFAULT,
+               PROJECT_MINIFLY_TASK_NRF_BAUD_RATE);
 
     return 0;
 }
