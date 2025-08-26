@@ -1,33 +1,31 @@
 #include "rtdevice.h"
 #include "rtthread.h"
 
-#include "mpu6500_regs.h"  // 添加寄存器定义头文件
+#include "mpu6500_regs.h"
 #include "mpu6500.hpp"
 #include "I2cInterface.h"
-#include "imu.h"       // 添加IMU相关常量定义
-#include <drv_gpio.h>  // GET_PIN 宏与管脚编号
+#include "imu.h"
+#include <drv_gpio.h>
+#ifdef SENSOR_MPU6500_MINIFLY_PIN_DEBUG
 #include "debugPin.h"
+#endif
 
 #define IMU_CONFIGURE                                                   \
   {                                                                     \
-      3200,                 /* gyro ODR at 3.2KHz */                    \
-      IMU_GYRO_MODE_NORMAL, /* NORMAL MODE (approximate ~751Hz DLPF) */ \
-      800,                  /* accel ODR at 800Hz */                    \
-      IMU_ACC_MODE_OSR2,    /* 178 dlpf */                              \
+      3200,                                                             \
+      IMU_GYRO_MODE_NORMAL,                                             \
+      800,                                                              \
+      IMU_ACC_MODE_OSR2,                                               \
       GYRO_SCALE_2000DPS,                                               \
       ACC_SCALE_16G,                                                    \
       IMU_TEMP_SCALE,                                                   \
       IMU_TEMP_OFFSET,                                                  \
   }
 
-/*
- * 中断与事件同步相关定义
- */
 #ifndef mpu6500_INT_EVENT_FLAG
 #define mpu6500_INT_EVENT_FLAG (1u << 0)
 #endif
 
-/* 若未通过外部宏指定引脚，则默认使用 PA4（与参考代码一致） */
 #ifndef SENSOR_mpu6500_MINIFLY_INT_PIN
 #define SENSOR_mpu6500_MINIFLY_INT_PIN GET_PIN(A, 4)
 #endif
@@ -36,8 +34,9 @@ static struct rt_event mpu6500_int_event;
 static rt_bool_t mpu6500_int_event_inited = RT_FALSE;
 
 static void mpu6500_int_isr(void* parameter) {
-  /* 在中断中发送事件，唤醒 read 等待 */
+#ifdef SENSOR_MPU6500_MINIFLY_PIN_DEBUG
   DEBUG_PIN_DEBUG2_TOGGLE();
+#endif
   rt_event_send(&mpu6500_int_event, mpu6500_INT_EVENT_FLAG);
 }
 
@@ -53,11 +52,6 @@ static rt_err_t mpu6500_interrupt_event_init(void) {
 }
 
 static rt_err_t mpu6500_interrupt_gpio_init(void) {
-  /*
-   * 使用 PIN 设备模型配置外部中断：
-   * - 输入下拉
-   * - 上升沿触发
-   */
   rt_pin_mode(SENSOR_mpu6500_MINIFLY_INT_PIN, PIN_MODE_INPUT_PULLDOWN);
   rt_err_t err = rt_pin_attach_irq(SENSOR_mpu6500_MINIFLY_INT_PIN, PIN_IRQ_MODE_RISING, mpu6500_int_isr, RT_NULL);
   if (err != RT_EOK) {
@@ -84,15 +78,23 @@ static int8_t mpu6500_read_data(imu_dev_t imu, rt_off_t pos, void* data, rt_size
   if (data == NULL) {
     return -RT_EINVAL;
   }
+
+#ifdef SENSOR_MPU6500_MINIFLY_PIN_DEBUG
   DEBUG_PIN_DEBUG0_HIGH();
+#endif
   if (mpu6500_int_event_inited) {
     rt_event_recv(&mpu6500_int_event, mpu6500_INT_EVENT_FLAG, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR,
                   RT_WAITING_FOREVER, RT_NULL);
   }
+
+#ifdef SENSOR_MPU6500_MINIFLY_PIN_DEBUG
   DEBUG_PIN_DEBUG0_LOW();
   DEBUG_PIN_DEBUG1_HIGH();
+#endif
   int8_t read_size = drv_mpu6500_read(pos, data, size);
+#ifdef SENSOR_MPU6500_MINIFLY_PIN_DEBUG
   DEBUG_PIN_DEBUG1_LOW();
+#endif
   return read_size;
 }
 
@@ -120,7 +122,6 @@ static rt_err_t mpu6500_init(const char* i2c_device_name, uint8_t i2c_addr) {
     return RT_ERROR;
   }
 
-  /* 初始化事件与中断 GPIO，用于数据就绪同步 */
   result = mpu6500_interrupt_event_init();
   if (result != RT_EOK) {
     return result;
