@@ -3,6 +3,10 @@
 #include <stdbool.h>
 #include "deviceManager.h"
 
+#ifdef PROJECT_MINIFLY_TASK_NRF_EN
+#include "taskNrf.h"
+#endif
+
 /* ATKP 尺寸相关 */
 #define ATKP_MAX_DATA_SIZE 128
 #define ATKP_PROTOCOL_HEAD_SIZE 6
@@ -37,6 +41,10 @@ void anotcDeviceSendDirect(atkp_t* p) {
   sendBuffer[dataSize - 1] = cksum;
   if (dev_anotc_telem_ != RT_NULL) {
     rt_device_write(dev_anotc_telem_, 0, sendBuffer, dataSize);
+  } else {
+#ifdef PROJECT_MINIFLY_TASK_NRF_DEBUGPIN_EN
+    dev_anotc_telem_ = getNrfDevice();
+#endif
   }
 }
 
@@ -44,6 +52,11 @@ rt_err_t task_dev_init(char* device_name) {
   if (dev_anotc_telem_ && (dev_anotc_telem_->open_flag & RT_DEVICE_OFLAG_OPEN)) {
     return RT_EOK;
   }
+
+#ifdef PROJECT_MINIFLY_TASK_NRF_EN
+  dev_anotc_telem_ = getNrfDevice();
+  return RT_EOK;
+#endif
 
   /* 根据当前选择的输出设备名称查找设备 */
   rt_device_t new_dev = rt_device_find(device_name);

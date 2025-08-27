@@ -16,6 +16,15 @@
 #endif
 #define LOCAL_RX_BUF_SIZE BSP_UART2_DMA_PING_BUFSIZE
 
+typedef enum {
+  waitForStartByte1,
+  waitForStartByte2,
+  waitForMsgID,
+  waitForDataLength,
+  waitForData,
+  waitForChksum1
+} rx_state_t;
+
 rt_align(RT_ALIGN_SIZE) static rt_uint8_t taskNrfStack[THREAD_STACK_SIZE];
 static struct rt_thread taskNrfTid;
 
@@ -175,6 +184,8 @@ static int taskNrfInit(void) {
 
   return 0;
 }
+
+rt_device_t getNrfDevice(void) { return nrf_dev; }
 
 #ifdef PROJECT_MINIFLY_TASK_NRF_EN
 INIT_APP_EXPORT(taskNrfInit);

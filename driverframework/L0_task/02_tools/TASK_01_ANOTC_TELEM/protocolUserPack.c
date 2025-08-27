@@ -4,13 +4,13 @@
 #include "deviceManager.h"
 #include "taskAnotcTelem.h"
 
-/* 消息发送方式 */
+/* Message send method */
 typedef enum {
   MSG_ASYNC = 0,
   MSG_SYNC,
 } msg_send_method_e;
 
-/* 通用: 发送 N 个 float 数据，支持同步/异步 */
+/* Generic: send N float data, support sync/async */
 static void anotc_telem_send_floats(uint8_t group, const float *values, uint8_t count, msg_send_method_e method) {
   uint8_t _cnt = 0;
   atkp_t p;
@@ -79,7 +79,7 @@ void sendUserDatafloat6_u32(uint8_t group, float a, float b, float c, float d, f
     p.data[_cnt++] = BYTE0(temp);
   }
 
-  // 添加 u32 数据
+  // add u32 data
   p.data[_cnt++] = BYTE3(u32);
   p.data[_cnt++] = BYTE2(u32);
   p.data[_cnt++] = BYTE1(u32);
@@ -105,7 +105,7 @@ void sendUserDatafloat12_u32(uint8_t group, float a, float b, float c, float d, 
     p.data[_cnt++] = BYTE0(temp);
   }
 
-  // 添加 u32 数据
+  // add u32 data
   p.data[_cnt++] = BYTE3(u32);
   p.data[_cnt++] = BYTE2(u32);
   p.data[_cnt++] = BYTE1(u32);
