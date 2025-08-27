@@ -5,5 +5,6 @@
 #include "protocolAtkpInterface.h"
 
 rt_device_t getNrfDevice(void);
+struct rt_messagequeue* getNrfRecvMq(void);
 
 #endif

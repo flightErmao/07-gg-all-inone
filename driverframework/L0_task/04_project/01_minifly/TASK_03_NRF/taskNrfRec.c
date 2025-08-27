@@ -70,7 +70,7 @@ static void task_msg_init(void) {
   }
 }
 
-void radiolinkTask(void *param) {
+void radiolinkTask(void* param) {
   rxState = waitForStartByte1;
   uint8_t dataIndex = 0;
   uint8_t cksum = 0;
@@ -142,7 +142,7 @@ void radiolinkTask(void *param) {
   }
 }
 
-static int taskNrfInit(void) {
+static int taskNrfRecInit(void) {
   rt_device_t device = rt_device_find(PROJECT_MINIFLY_TASK_NRF_DEVICE_DEFAULT);
   if (device == RT_NULL) {
     rt_kprintf("nrf device not found: %s\n", PROJECT_MINIFLY_TASK_NRF_DEVICE_DEFAULT);
@@ -177,8 +177,8 @@ static int taskNrfInit(void) {
 
   task_msg_init();
 
-  rt_thread_init(&taskNrfTid, "task_nrf", radiolinkTask, RT_NULL, taskNrfStack, THREAD_STACK_SIZE, THREAD_PRIORITY,
-                 THREAD_TIMESLICE);
+  rt_thread_init(&taskNrfTid, "L0_minifly_nrfRec", radiolinkTask, RT_NULL, taskNrfStack, THREAD_STACK_SIZE,
+                 THREAD_PRIORITY, THREAD_TIMESLICE);
   rt_thread_startup(&taskNrfTid);
 
   rt_kprintf("nrf task started on %s, baud: %d\n", PROJECT_MINIFLY_TASK_NRF_DEVICE_DEFAULT,
@@ -188,7 +188,8 @@ static int taskNrfInit(void) {
 }
 
 rt_device_t getNrfDevice(void) { return nrf_dev; }
+struct rt_messagequeue* getNrfRecvMq(void) { return &device_recv_mq_; }
 
 #ifdef PROJECT_MINIFLY_TASK_NRF_EN
-INIT_APP_EXPORT(taskNrfInit);
+INIT_APP_EXPORT(taskNrfRecInit);
 #endif
