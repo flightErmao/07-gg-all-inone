@@ -38,7 +38,7 @@ void anotcDeviceSendDirect(atkp_t* p) {
   if (dev_anotc_telem_ != RT_NULL) {
     rt_device_write(dev_anotc_telem_, 0, sendBuffer, dataSize);
   } else {
-#ifdef PROJECT_MINIFLY_TASK_NRF_DEBUGPIN_EN
+#ifdef PROJECT_MINIFLY_TASK_NRF_EN
     dev_anotc_telem_ = getNrfDevice();
 #endif
   }
