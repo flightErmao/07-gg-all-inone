@@ -4,7 +4,7 @@
 #include "deviceManager.h"
 
 #ifdef PROJECT_MINIFLY_TASK_NRF_EN
-#include "taskNrf.h"
+#include "taskNrfRec.h"
 #endif
 
 #define ATKP_MAX_DATA_SIZE 128

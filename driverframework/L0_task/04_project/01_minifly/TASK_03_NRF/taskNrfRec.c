@@ -1,6 +1,6 @@
 #include <rtdevice.h>
 #include <rtthread.h>
-#include "taskNrf.h"
+#include "taskNrfRec.h"
 #ifdef PROJECT_MINIFLY_TASK_NRF_DEBUGPIN_EN
 #include "debugPin.h"
 #endif
@@ -12,9 +12,11 @@
 #define MSG_NUM 10
 #define POOL_SIZE_BYTE (sizeof(atkp_t) * MSG_NUM)
 
-#if defined(PROJECT_MINIFLY_TASK_NRF_DEVICE_DEFAULT) && (0)
-#endif
 #define LOCAL_RX_BUF_SIZE BSP_UART2_DMA_PING_BUFSIZE
+
+#define DOWN_BYTE1 0xAA
+#define DOWN_BYTE2 0xAF
+#define ATKP_MAX_DATA_SIZE 128
 
 typedef enum {
   waitForStartByte1,
