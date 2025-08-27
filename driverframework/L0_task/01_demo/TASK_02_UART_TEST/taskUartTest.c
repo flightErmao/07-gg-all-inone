@@ -190,13 +190,13 @@ static int taskUartTestInit(void)
     /* Set receive callback function */
     rt_device_set_rx_indicate(uart_test_dev, uart_test_input);
 
-    /* 关闭 UART RX DMA 的半满/全满中断，避免使用 HAL_UART_RxCpltCallback 和 HAL_UART_RxHalfCpltCallback */
-    ret = rt_device_control(uart_test_dev, RT_DEVICE_CTRL_UART_DMA_RX_DISABLE_HALF_FULL_INT, RT_NULL);
-    if (ret != RT_EOK)
-    {
-        rt_kprintf("Failed to disable UART RX DMA half/full interrupts!\n");
-        return ret;
-    }
+    // /* 关闭 UART RX DMA 的半满/全满中断，避免使用 HAL_UART_RxCpltCallback 和 HAL_UART_RxHalfCpltCallback */
+    // ret = rt_device_control(uart_test_dev, RT_DEVICE_CTRL_UART_DMA_RX_DISABLE_HALF_FULL_INT, RT_NULL);
+    // if (ret != RT_EOK)
+    // {
+    //     rt_kprintf("Failed to disable UART RX DMA half/full interrupts!\n");
+    //     return ret;
+    // }
 
     /* 验证 DMA 中断状态 */
     rt_kprintf("DMA RX interrupt status: %s\n", 
