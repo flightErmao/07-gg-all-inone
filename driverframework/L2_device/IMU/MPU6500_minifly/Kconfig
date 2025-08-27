@@ -13,7 +13,7 @@ menuconfig BSP_USING_MPU6500_MINIFLY
             hex "mpu6500_MINIFLY_I2C_ADDR"
             default 0x69
             range 0x00 0x7F
-        config SENSOR_MPU6500_MINIFLY_PIN_DEBUG
+        config SENSOR_MPU6500_MINIFLY_DEBUGPIN_EN
             bool "ENABLE: DEBUG PIN"
             default n
             help

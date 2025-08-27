@@ -165,9 +165,7 @@
 
 /* POSIX (Portable Operating System Interface) layer */
 
-
 /* Interprocess Communication (IPC) */
-
 
 /* Socket is in the 'Network' category */
 
@@ -214,7 +212,6 @@
 /* RT-Thread online packages */
 
 /* IoT - internet of things */
-
 
 /* Wi-Fi */
 
@@ -376,7 +373,6 @@
 
 /* Arduino libraries */
 
-
 /* Projects and Demos */
 
 /* end of Projects and Demos */
@@ -440,7 +436,6 @@
 #define PROJECT_MINIFLY_TASK_NRF_EN
 #define PROJECT_MINIFLY_TASK_NRF_DEVICE_DEFAULT "uart2"
 #define PROJECT_MINIFLY_TASK_NRF_BAUD_RATE 1000000
-#define PROJECT_MINIFLY_TASK_NRF_DEBUGPIN_EN
 /* end of L0_TASK_CONFIG */
 
 /* L1_MIDDLEWARE_CONFIG */
@@ -465,6 +460,7 @@
 #define SENSOR_NAME_MPU6500_MINIFLY "mpu6500_minifly"
 #define SENSOR_I2C_NAME_MPU6500_MINIFLY "hwi2c1"
 #define SENSOR_MPU6500_MINIFLY_I2C_ADDR 0x69
+#define SENSOR_MPU6500_MINIFLY_DEBUGPIN_EN
 /* end of L2_DEVICE_CONFIG */
 
 /* L3_PERIPHERAL_CONFIG */

@@ -6,20 +6,14 @@
 #include "I2cInterface.h"
 #include "imu.h"
 #include <drv_gpio.h>
-#ifdef SENSOR_MPU6500_MINIFLY_PIN_DEBUG
+#ifdef SENSOR_MPU6500_MINIFLY_DEBUGPIN_EN
 #include "debugPin.h"
 #endif
 
-#define IMU_CONFIGURE                                                   \
-  {                                                                     \
-      3200,                                                             \
-      IMU_GYRO_MODE_NORMAL,                                             \
-      800,                                                              \
-      IMU_ACC_MODE_OSR2,                                               \
-      GYRO_SCALE_2000DPS,                                               \
-      ACC_SCALE_16G,                                                    \
-      IMU_TEMP_SCALE,                                                   \
-      IMU_TEMP_OFFSET,                                                  \
+#define IMU_CONFIGURE                                                                                  \
+  {                                                                                                    \
+      3200,           IMU_GYRO_MODE_NORMAL, 800, IMU_ACC_MODE_OSR2, GYRO_SCALE_2000DPS, ACC_SCALE_16G, \
+      IMU_TEMP_SCALE, IMU_TEMP_OFFSET,                                                                 \
   }
 
 #ifndef mpu6500_INT_EVENT_FLAG
@@ -34,7 +28,7 @@ static struct rt_event mpu6500_int_event;
 static rt_bool_t mpu6500_int_event_inited = RT_FALSE;
 
 static void mpu6500_int_isr(void* parameter) {
-#ifdef SENSOR_MPU6500_MINIFLY_PIN_DEBUG
+#ifdef SENSOR_MPU6500_MINIFLY_DEBUGPIN_EN
   DEBUG_PIN_DEBUG2_TOGGLE();
 #endif
   rt_event_send(&mpu6500_int_event, mpu6500_INT_EVENT_FLAG);
@@ -79,7 +73,7 @@ static int8_t mpu6500_read_data(imu_dev_t imu, rt_off_t pos, void* data, rt_size
     return -RT_EINVAL;
   }
 
-#ifdef SENSOR_MPU6500_MINIFLY_PIN_DEBUG
+#ifdef SENSOR_MPU6500_MINIFLY_DEBUGPIN_EN
   DEBUG_PIN_DEBUG0_HIGH();
 #endif
   if (mpu6500_int_event_inited) {
@@ -87,12 +81,12 @@ static int8_t mpu6500_read_data(imu_dev_t imu, rt_off_t pos, void* data, rt_size
                   RT_WAITING_FOREVER, RT_NULL);
   }
 
-#ifdef SENSOR_MPU6500_MINIFLY_PIN_DEBUG
+#ifdef SENSOR_MPU6500_MINIFLY_DEBUGPIN_EN
   DEBUG_PIN_DEBUG0_LOW();
   DEBUG_PIN_DEBUG1_HIGH();
 #endif
   int8_t read_size = drv_mpu6500_read(pos, data, size);
-#ifdef SENSOR_MPU6500_MINIFLY_PIN_DEBUG
+#ifdef SENSOR_MPU6500_MINIFLY_DEBUGPIN_EN
   DEBUG_PIN_DEBUG1_LOW();
 #endif
   return read_size;
