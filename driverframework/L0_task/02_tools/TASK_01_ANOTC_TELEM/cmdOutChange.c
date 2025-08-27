@@ -2,7 +2,7 @@
 #include <string.h>
 #include "deviceManager.h"
 
-/* 切换输出设备: 目标可为 "uart1" / "uart2" / "usb"(映射到"vcom") */
+/* Switch telemetry output device: target in {"uart1", "uart2", "usb"(alias "vcom")} */
 int anotc_telem_switch_output(const char *target) {
   if (target == RT_NULL) {
     return -RT_EINVAL;
@@ -20,14 +20,12 @@ int anotc_telem_switch_output(const char *target) {
     return -RT_ERROR;
   }
 
-  /* 若当前设备已打开，则先关闭 */
   if (dev_anotc_telem_) {
     rt_device_close(dev_anotc_telem_);
     dev_anotc_telem_ = RT_NULL;
   }
 
-  /* 更新名称并重新初始化设备 */
-
+  /* Re-init device with new name */
   if (task_dev_init(next_name) != RT_EOK) {
     rt_kprintf("切换到 %s 失败\n", next_name);
     return -RT_ERROR;
@@ -38,7 +36,7 @@ int anotc_telem_switch_output(const char *target) {
   return RT_EOK;
 }
 
-/* 命令: anotc out <uart1|uart2|usb> */
+/* Shell command: anotc out <uart1|uart2|usb> */
 int cmd_anotc(int argc, char **argv) {
   if (argc < 2) {
     rt_kprintf("anotc 命令用法:\n");

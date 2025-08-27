@@ -11,11 +11,10 @@
 #define PERIOD_50ms 50
 #define PERIOD_100ms 100
 
-/* ATKP 数据结构 */
 typedef struct {
   uint8_t msgID;
   uint8_t dataLen;
-  uint8_t data[128];  // ATKP_MAX_DATA_SIZE
+  uint8_t data[128];
 } atkp_t;
 
 void sendUserDatafloat3(uint8_t group, float a, float b, float c);

@@ -4,17 +4,7 @@
 #include "protocolAtkpInterface.h"
 #include "taskAnotcTelem.h"
 
-/***************************发送至匿名上位机指令******************************/
-// void packCheck(uint8_t head, uint8_t check_sum) {
-//   atkp_t p;
-
-//   p.msgID = UP_CHECK;
-//   p.dataLen = 2;
-//   p.data[0] = head;
-//   p.data[1] = check_sum;
-//   anotcMqStash(&p);
-// }
-
+/* Pack and enqueue system status */
 void packStatus(float roll, float pitch, float yaw, int32_t alt, uint8_t fly_model, uint8_t armed) {
   uint8_t _cnt = 0;
   atkp_t p;
@@ -45,6 +35,7 @@ void packStatus(float roll, float pitch, float yaw, int32_t alt, uint8_t fly_mod
   anotcMqStash(&p);
 }
 
+/* Pack and enqueue IMU/mag data */
 void packSensor(int16_t a_x, int16_t a_y, int16_t a_z, int16_t g_x, int16_t g_y, int16_t g_z, int16_t m_x, int16_t m_y,
                 int16_t m_z) {
   uint8_t _cnt = 0;
@@ -89,6 +80,8 @@ void packSensor(int16_t a_x, int16_t a_y, int16_t a_z, int16_t g_x, int16_t g_y,
   p.dataLen = _cnt;
   anotcMqStash(&p);
 }
+
+/* Pack and enqueue RC channels */
 void packRcData(uint16_t thrust, uint16_t yaw, uint16_t roll, uint16_t pitch, uint16_t aux1, uint16_t aux2,
                 uint16_t aux3, uint16_t aux4, uint16_t aux5, uint16_t aux6) {
   uint8_t _cnt = 0;
@@ -120,6 +113,7 @@ void packRcData(uint16_t thrust, uint16_t yaw, uint16_t roll, uint16_t pitch, ui
   anotcMqStash(&p);
 }
 
+/* Pack and enqueue power */
 void packPower(uint16_t voltage, uint16_t current) {
   uint8_t _cnt = 0;
   atkp_t p;
@@ -135,6 +129,7 @@ void packPower(uint16_t voltage, uint16_t current) {
   anotcMqStash(&p);
 }
 
+/* Pack and enqueue motor PWM */
 void packMotorPWM(uint16_t m_1, uint16_t m_2, uint16_t m_3, uint16_t m_4, uint16_t m_5, uint16_t m_6, uint16_t m_7,
                   uint16_t m_8) {
   uint8_t _cnt = 0;
@@ -163,6 +158,7 @@ void packMotorPWM(uint16_t m_1, uint16_t m_2, uint16_t m_3, uint16_t m_4, uint16
   anotcMqStash(&p);
 }
 
+/* Pack and enqueue barometer/alt data */
 void packSensor2(int32_t bar_alt, uint16_t csb_alt) {
   uint8_t _cnt = 0;
   atkp_t p;
@@ -181,6 +177,7 @@ void packSensor2(int32_t bar_alt, uint16_t csb_alt) {
   anotcMqStash(&p);
 }
 
+/* Pack and enqueue PID params */
 void packPid(uint8_t group, float p1_p, float p1_i, float p1_d, float p2_p, float p2_i, float p2_d, float p3_p,
              float p3_i, float p3_d) {
   uint8_t _cnt = 0;

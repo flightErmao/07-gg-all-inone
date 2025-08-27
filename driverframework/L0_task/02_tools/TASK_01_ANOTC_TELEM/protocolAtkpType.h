@@ -1,12 +1,10 @@
 #include <stdint.h>
 
-/* 通用字节访问宏 */
 #define BYTE0(dwTemp) (*((uint8_t *)(&dwTemp)))
 #define BYTE1(dwTemp) (*((uint8_t *)(&dwTemp) + 1))
 #define BYTE2(dwTemp) (*((uint8_t *)(&dwTemp) + 2))
 #define BYTE3(dwTemp) (*((uint8_t *)(&dwTemp) + 3))
 
-/*上行指令ID*/
 typedef enum {
   UP_VERSION = 0x00,
   UP_STATUS = 0x01,
@@ -42,9 +40,6 @@ typedef enum {
   UP_USER_DATA9 = 0xF9,
   UP_USER_DATA10 = 0xFA,
 
-  // 新增：光流质量数据
   UP_OPTICAL_FLOW_QUALITY = 0xFB,
-
-  // 新增：光流质量对比数据
   UP_OPTICAL_FLOW_COMPARISON = 0xFC,
 } upmsgID_e;
