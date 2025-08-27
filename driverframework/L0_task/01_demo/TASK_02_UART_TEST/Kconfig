@@ -1,0 +1,24 @@
+menuconfig TASK_DEMO_02_UART_TEST_EN
+    bool "ENABLE: TASK_DEMO_02_UART_TEST_EN"
+    default n
+    help
+       open uart test task
+    if TASK_DEMO_02_UART_TEST_EN
+        config TASK_DEMO_02_UART_TEST_DEVICE_DEFAULT
+        string "the default of uart device"
+        default "uart1"
+        help
+            "the default of uart device"
+
+        config TASK_DEMO_02_UART_TEST_BAUD_RATE
+        int "the baud rate of uart device"
+        default 1000000
+        help
+            "the baud rate of uart device"
+        
+        config TASK_DEMO_02_UART_TEST_DEBUGPIN_EN
+        bool "ENABLE: TASK_DEMO_02_UART_TEST_DEBUGPIN_EN"
+        default n
+        help
+            "enable debug pin"
+    endif 
