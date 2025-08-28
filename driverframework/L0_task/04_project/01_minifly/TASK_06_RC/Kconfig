@@ -20,4 +20,10 @@ if PROJECT_MINIFLY_TASK06_RC_EN
         help
             Timeout value in milliseconds for RC failsafe protection.
             If RC data is older than this value, the system will disarm and zero all axes.
+            
+    config PROJECT_MINIFLY_TASK06_RC_ATKP_LOG_EN
+        bool "ENABLE: PROJECT_MINIFLY_TASK06_RC_ATKP_LOG_EN"
+        default n
+        help
+            Enable ATKP logging for the RC task.
 endif 
