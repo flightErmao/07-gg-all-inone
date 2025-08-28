@@ -1,0 +1,5 @@
+menuconfig L1_MIDDLEWARE_01_MODULE_04_PID_MINIFLY_EN
+    bool "ENABLE: L1_MIDDLEWARE_01_MODULE_04_PID_MINIFLY_EN"    
+    default n
+    help
+        Enable pid minifly module that provides various pid minifly functions.

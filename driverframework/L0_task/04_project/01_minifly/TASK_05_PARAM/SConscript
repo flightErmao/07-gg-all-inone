@@ -1,0 +1,16 @@
+from building import *
+import os
+
+# 获取当前目录
+cwd = GetCurrentDir()
+path = [cwd]
+src = []
+group = []
+
+src = Glob("./*.c")
+
+group = DefineGroup(
+    "PROJECT_MINIFLY_TASK_PARAM_EN", src, depend=["PROJECT_MINIFLY_TASK_PARAM_EN"], CPPPATH=path
+)
+
+Return("group")

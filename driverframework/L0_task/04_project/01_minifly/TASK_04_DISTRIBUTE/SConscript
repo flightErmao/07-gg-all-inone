@@ -1,0 +1,16 @@
+from building import *
+import os
+
+# 获取当前目录
+cwd = GetCurrentDir()
+path = [cwd, os.path.join(cwd, "../../../02_tools/TASK_01_ANOTC_TELEM")]
+src = []
+group = []
+
+src = Glob("./*.c")
+
+group = DefineGroup(
+    "PROJECT_MINIFLY_TASK04_DISTRIBUTE_EN", src, depend=["PROJECT_MINIFLY_TASK04_DISTRIBUTE_EN"], CPPPATH=path
+)
+
+Return("group")

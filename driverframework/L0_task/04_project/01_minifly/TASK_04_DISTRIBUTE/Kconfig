@@ -1,0 +1,49 @@
+menuconfig PROJECT_MINIFLY_TASK04_DISTRIBUTE_EN
+    bool "ENABLE: PROJECT_MINIFLY_TASK04_DISTRIBUTE_EN"
+    default n
+    help
+       open distribute task
+    if PROJECT_MINIFLY_TASK04_DISTRIBUTE_EN
+
+        config PROJECT_MINIFLY_TASK04_DISTRIBUTE_DEBUGPIN_EN
+        bool "ENABLE: PROJECT_MINIFLY_TASK04_DISTRIBUTE_DEBUGPIN_EN"
+        default n
+        help
+            "enable debug pin"
+
+        config PROJECT_MINIFLY_TASK04_DISTRIBUTE_COMMAND_EN
+        bool "ENABLE: PROJECT_MINIFLY_TASK04_DISTRIBUTE_COMMAND_EN"
+        default n
+        help
+            "enable command parsing"
+
+        config PROJECT_MINIFLY_TASK04_DISTRIBUTE_ACK_EN
+        bool "ENABLE: PROJECT_MINIFLY_TASK04_DISTRIBUTE_ACK_EN"
+        default n
+        help
+            "enable ack parsing"
+
+        config PROJECT_MINIFLY_TASK04_DISTRIBUTE_RCDATA_EN
+        bool "ENABLE: PROJECT_MINIFLY_TASK04_DISTRIBUTE_RCDATA_EN"
+        default n
+        help
+            "enable rc data parsing"
+
+        config PROJECT_MINIFLY_TASK04_DISTRIBUTE_POWER_EN
+        bool "ENABLE: PROJECT_MINIFLY_TASK04_DISTRIBUTE_POWER_EN"
+        default n
+        help
+            "enable power management parsing"
+
+        config PROJECT_MINIFLY_TASK04_DISTRIBUTE_REMOTE_EN
+        bool "ENABLE: PROJECT_MINIFLY_TASK04_DISTRIBUTE_REMOTE_EN"
+        default n
+        help
+            "enable remote control parsing"
+
+        config PROJECT_MINIFLY_TASK04_DISTRIBUTE_PID_EN
+        bool "ENABLE: PROJECT_MINIFLY_TASK04_DISTRIBUTE_PID_EN"
+        default n
+        help
+            "enable PID parameter parsing"
+    endif

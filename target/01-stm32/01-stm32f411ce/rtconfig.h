@@ -165,7 +165,9 @@
 
 /* POSIX (Portable Operating System Interface) layer */
 
+
 /* Interprocess Communication (IPC) */
+
 
 /* Socket is in the 'Network' category */
 
@@ -212,6 +214,7 @@
 /* RT-Thread online packages */
 
 /* IoT - internet of things */
+
 
 /* Wi-Fi */
 
@@ -373,6 +376,7 @@
 
 /* Arduino libraries */
 
+
 /* Projects and Demos */
 
 /* end of Projects and Demos */
@@ -436,6 +440,7 @@
 #define PROJECT_MINIFLY_TASK_NRF_EN
 #define PROJECT_MINIFLY_TASK_NRF_DEVICE_DEFAULT "uart2"
 #define PROJECT_MINIFLY_TASK_NRF_BAUD_RATE 1000000
+#define PROJECT_MINIFLY_TASK04_DISTRIBUTE_EN
 /* end of L0_TASK_CONFIG */
 
 /* L1_MIDDLEWARE_CONFIG */
@@ -451,6 +456,7 @@
 #define L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_2_PIN "PB1"
 #define L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_3_EN
 #define L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_3_PIN "PA8"
+#define L1_MIDDLEWARE_01_MODULE_04_PID_MINIFLY_EN
 #define L1_MIDDLEWARE_02_MODE_01_LED_BLINK_EN
 /* end of L1_MIDDLEWARE_CONFIG */
 
