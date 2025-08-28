@@ -1,8 +1,8 @@
 menuconfig BOARD_CONFIG
-    bool "Enable board configuration"
+    bool "01 HSE configuration"
     default n
     help
-        Enable board configuration.
+        Enable HSE configuration.
 
 if BOARD_CONFIG
     choice MCU_HSE_FREQ
@@ -29,5 +29,4 @@ if BOARD_CONFIG
         default 24000000 if MCU_HSE_24MHZ
         help
             Numeric value in Hz for the selected HSE frequency.
-endif 
-
+endif
