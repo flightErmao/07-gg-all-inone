@@ -1,0 +1,12 @@
+menuconfig L2_DEVICE_03_MOTOR_01_PWM_EN
+    bool "ENABLE: MOTOR 01 PWM"
+    default n
+    if L2_DEVICE_03_MOTOR_01_PWM_EN
+        config L2_DEVICE_03_MOTOR_01_DEBUGPIN_EN
+            bool "ENABLE: DEBUG PIN"
+            default n
+            help
+                ENABLE: DEBUG PIN                
+    endif
+    
+    

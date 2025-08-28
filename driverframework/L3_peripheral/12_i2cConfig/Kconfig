@@ -1,5 +1,5 @@
     menuconfig BSP_USING_I2C
-        bool "Enable I2C BUS (hardware)"
+        bool "Enable 12 I2C CONFIG"
         default n        
         select RT_USING_I2C
         if BSP_USING_I2C

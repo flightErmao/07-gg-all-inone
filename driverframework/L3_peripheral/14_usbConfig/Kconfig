@@ -1,4 +1,4 @@
 menuconfig BSP_USING_USBD
-        bool "Enable USB Device"
+        bool "Enable 14 USB CONFIG"
         select RT_USING_USB_DEVICE
         default n

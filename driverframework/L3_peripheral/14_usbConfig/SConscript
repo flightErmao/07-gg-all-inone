@@ -8,7 +8,6 @@ path = []
 src += Glob("./*.c")
 path += [cwd]
 
-# 定义编译组
 group = DefineGroup(
     "VCONSOLE_SWITCH", src, depend=["PKG_USING_VCONSOLE", "RT_USING_USB"], CPPPATH=path
 )

@@ -1,5 +1,5 @@
 menuconfig BSP_USING_ADC
-    bool "Enable ADC"
+    bool "Enable 20 ADC CONFIG"
     default n
     select RT_USING_ADC
     if BSP_USING_ADC

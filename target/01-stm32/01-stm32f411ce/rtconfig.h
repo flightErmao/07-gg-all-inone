@@ -147,6 +147,7 @@
 #define RT_SERIAL_BUF_STRATEGY_OVERWRITE
 #define RT_SERIAL_USING_DMA
 #define RT_USING_I2C
+#define RT_USING_PWM
 #define RT_USING_PIN
 /* end of Device Drivers */
 
@@ -365,6 +366,9 @@
 
 /* samples: kernel and components samples */
 
+#define PKG_USING_PERIPHERAL_SAMPLES
+#define PKG_USING_PERIPHERAL_SAMPLES_LATEST_VERSION
+#define PERIPHERAL_SAMPLES_USING_PWM
 /* end of samples: kernel and components samples */
 
 /* entertainment: terminal games and other interesting software packages */
@@ -471,6 +475,7 @@
 #define SENSOR_I2C_NAME_MPU6500_MINIFLY "hwi2c1"
 #define SENSOR_MPU6500_MINIFLY_I2C_ADDR 0x69
 #define SENSOR_MPU6500_MINIFLY_DEBUGPIN_EN
+#define L2_DEVICE_03_MOTOR_01_PWM_EN
 /* end of L2_DEVICE_CONFIG */
 
 /* L3_PERIPHERAL_CONFIG */

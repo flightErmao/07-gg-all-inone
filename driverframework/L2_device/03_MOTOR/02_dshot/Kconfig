@@ -1,0 +1,12 @@
+menuconfig L2_DEVICE_03_MOTOR_02_DSHOT_EN
+    bool "ENABLE: MOTOR 02 DSHOT"
+    default n
+    if L2_DEVICE_03_MOTOR_02_DSHOT_EN
+        config L2_DEVICE_03_MOTOR_02_DSHOT_DEBUGPIN_EN
+            bool "ENABLE: DEBUG PIN"
+            default n
+            help
+                ENABLE: DEBUG PIN                
+    endif
+    
+    

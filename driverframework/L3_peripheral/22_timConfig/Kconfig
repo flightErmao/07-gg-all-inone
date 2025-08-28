@@ -1,5 +1,5 @@
 menuconfig BSP_USING_TIM
-    bool "Enable timer"
+    bool "Enable 22 TIM CONFIG"
     default n
     select RT_USING_HWTIMER
     if BSP_USING_TIM

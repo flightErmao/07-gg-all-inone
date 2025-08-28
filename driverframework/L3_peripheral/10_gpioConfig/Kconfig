@@ -1,5 +1,5 @@
 config BSP_USING_GPIO
-    bool "Enable GPIO"
+    bool "Enable: 10 GPIO CONFIG"
     select RT_USING_PIN
     default y
 

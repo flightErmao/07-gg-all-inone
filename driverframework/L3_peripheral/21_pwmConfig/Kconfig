@@ -1,5 +1,5 @@
 menuconfig BSP_USING_PWM
-    bool "Enable PWM"
+    bool "Enable 21 PWM CONFIG"
     default n
     select RT_USING_PWM
     if BSP_USING_PWM

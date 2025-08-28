@@ -1,3 +1,3 @@
 menuconfig BSP_USING_ICM42688
-    bool "ENANLE: IMU_ICM42688"
+    bool "ENANLE: IMU 01 ICM42688"
     default n

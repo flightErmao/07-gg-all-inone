@@ -1,5 +1,5 @@
 menuconfig BSP_USING_UART
-        bool "Enable UART"
+        bool "Enable: 11 UART CONFIG"
         default y
         select RT_USING_SERIAL
         if BSP_USING_UART

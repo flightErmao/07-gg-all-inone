@@ -28,20 +28,20 @@ bool powerControlTest(void) {
   return pass;
 }
 
-u16 limitThrust(int value) {
+uint16_t limitThrust(int value) {
   if (value > UINT16_MAX) {
     value = UINT16_MAX;
   } else if (value < 0) {
     value = 0;
   }
 
-  return (u16)value;
+  return (uint16_t)value;
 }
 
 void powerControl(control_t* control) /*功率输出控制*/
 {
-  s16 r = control->roll / 2.0f;
-  s16 p = control->pitch / 2.0f;
+  int32_t r = control->roll / 2.0f;
+  int32_t p = control->pitch / 2.0f;
 
   motorPWM.m1 = limitThrust(control->thrust - r - p + control->yaw);
   motorPWM.m2 = limitThrust(control->thrust - r + p - control->yaw);
@@ -59,7 +59,7 @@ void powerControl(control_t* control) /*功率输出控制*/
 
 void getMotorPWM(motorPWM_t* get) { *get = motorPWM; }
 
-void setMotorPWM(bool enable, u32 m1_set, u32 m2_set, u32 m3_set, u32 m4_set) {
+void setMotorPWM(bool enable, uint32_t m1_set, uint32_t m2_set, uint32_t m3_set, uint32_t m4_set) {
   motorSetEnable = enable;
   motorPWMSet.m1 = m1_set;
   motorPWMSet.m2 = m2_set;

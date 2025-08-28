@@ -1,0 +1,26 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+src  = []
+group = []
+path = [cwd]
+
+# 获取当前目录下的所有 .c 文件
+src  = Glob('./*.c')
+
+# 定义编译组
+group = DefineGroup('03_MOTOR', src, depend = [''], CPPPATH = path)
+
+env = DefaultEnvironment()
+
+list = os.listdir(cwd)
+for item in list:
+    item_path = os.path.join(cwd, item)
+    if os.path.isdir(item_path) and os.path.isfile(os.path.join(item_path, 'SConscript')):
+        # 为所有子目录自动使用variant_dir创建构建目录
+        sub_group = SConscript(os.path.join(cwd, item, 'SConscript'), 
+                              variant_dir=item, duplicate=0)
+        group = group + sub_group
+
+Return('group')

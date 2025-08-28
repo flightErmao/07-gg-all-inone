@@ -1,2 +1,0 @@
-source "$(PROJECT_ROOT)/driverframework/L2_device/IMU/ICM42688_130/Kconfig"
-source "$(PROJECT_ROOT)/driverframework/L2_device/IMU/MPU6500_minifly/Kconfig"

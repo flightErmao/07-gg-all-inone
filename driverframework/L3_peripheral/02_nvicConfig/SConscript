@@ -10,14 +10,8 @@ path = []
 src += Glob("./*.c")
 path += [cwd]
 
-# 添加 STM32 板级配置路径
-# 计算相对于当前文件的路径
-# board_config_path = os.path.join(cwd, "../../../target/01-stm32/01-stm32f411ce/board/CubeMX_Config/Inc")
-# if os.path.exists(board_config_path):
-#     path += [board_config_path]
-
 # 定义编译组
-group = DefineGroup("NVIC_CONFIG", src, depend=["NVIC_CONFIG_EN"], CPPPATH=path)
+group = DefineGroup("L3_PERIPHERAL_02_NVIC_CONFIG_EN", src, depend=["L3_PERIPHERAL_02_NVIC_CONFIG_EN"], CPPPATH=path)
 
 env = DefaultEnvironment()
 

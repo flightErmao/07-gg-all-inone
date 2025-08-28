@@ -12,14 +12,13 @@
 #include <rtdevice.h>
 #include <board.h>
 
-#ifdef NVIC_CONFIG_EN
+#ifdef L3_PERIPHERAL_02_NVIC_CONFIG_EN
 
 static int stm32_nvic_priority_group_config(void) {
   uint32_t priority_group = NVIC_PRIORITYGROUP_4; /* Default to group 4 */
 
   /* Get configured priority group from Kconfig */
-#ifdef NVIC_STM32_PRIORITY_GROUP
-  switch (NVIC_STM32_PRIORITY_GROUP) {
+  switch (L3_PERIPHERAL_02_NVIC_STM32_PRIORITY_GROUP) {
     case 0:
       priority_group = NVIC_PRIORITYGROUP_0;
       break;
@@ -37,16 +36,15 @@ static int stm32_nvic_priority_group_config(void) {
       priority_group = NVIC_PRIORITYGROUP_4;
       break;
   }
-#endif
 
   /* Set the NVIC Priority Group */
   HAL_NVIC_SetPriorityGrouping(priority_group);
 
-  rt_kprintf("[NVIC] STM32 Priority Group set to %d\n", NVIC_STM32_PRIORITY_GROUP);
+  rt_kprintf("[NVIC] STM32 Priority Group set to %d\n", L3_PERIPHERAL_02_NVIC_STM32_PRIORITY_GROUP);
   return 0;
 }
 
 /* Initialize STM32 NVIC configuration using INIT_BOARD_EXPORT */
 INIT_BOARD_EXPORT(stm32_nvic_priority_group_config);
 
-#endif /* NVIC_CONFIG_EN */
+#endif /* L3_PERIPHERAL_02_NVIC_CONFIG_EN */

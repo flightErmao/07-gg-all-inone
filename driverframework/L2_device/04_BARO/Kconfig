@@ -1,0 +1,3 @@
+source "$(PROJECT_ROOT)/driverframework/L2_device/04_BARO/01_SPL16_001/Kconfig"
+source "$(PROJECT_ROOT)/driverframework/L2_device/04_BARO/02_SPA06_003/Kconfig"
+source "$(PROJECT_ROOT)/driverframework/L2_device/04_BARO/03_DPS3XX/Kconfig"

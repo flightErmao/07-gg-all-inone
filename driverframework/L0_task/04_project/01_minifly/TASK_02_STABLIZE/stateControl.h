@@ -1,6 +1,6 @@
 #ifndef __STATE_CONTROL_H
 #define __STATE_CONTROL_H
-#include "stabilizer_types.h"
+#include "stabilizerTypes.h"
 
 /********************************************************************************
  * 本程序只供学习使用，未经作者许可，不得用于其它任何用途
@@ -19,7 +19,7 @@
 
 void stateControlInit(void);
 bool stateControlTest(void);
-void stateControl(control_t *control, sensorData_t *sensors, state_t *state, setpoint_t *setpoint, const u32 tick);
+void stateControl(control_t *control, sensorData_t *sensors, state_t *state, setpoint_t *setpoint, const uint32_t tick);
 void getAttitudeDesired(attitude_t *get);
 
 #endif /*__STATE_CONTROL_H */

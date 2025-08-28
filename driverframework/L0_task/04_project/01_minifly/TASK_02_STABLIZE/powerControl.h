@@ -1,6 +1,6 @@
 #ifndef __POWER_CONTROL_H
 #define __POWER_CONTROL_H
-#include "stabilizer_types.h"
+#include "stabilizerTypes.h"
 
 /********************************************************************************
  * 本程序只供学习使用，未经作者许可，不得用于其它任何用途
@@ -16,10 +16,10 @@
  ********************************************************************************/
 
 typedef struct {
-  u32 m1;
-  u32 m2;
-  u32 m3;
-  u32 m4;
+  uint32_t m1;
+  uint32_t m2;
+  uint32_t m3;
+  uint32_t m4;
 
 } motorPWM_t;
 
@@ -28,5 +28,5 @@ bool powerControlTest(void);
 void powerControl(control_t* control);
 
 void getMotorPWM(motorPWM_t* get);
-void setMotorPWM(bool enable, u32 m1_set, u32 m2_set, u32 m3_set, u32 m4_set);
+void setMotorPWM(bool enable, uint32_t m1_set, uint32_t m2_set, uint32_t m3_set, uint32_t m4_set);
 #endif

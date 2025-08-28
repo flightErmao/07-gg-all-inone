@@ -1,10 +1,10 @@
-menuconfig BOARD_CONFIG
-    bool "01 HSE configuration"
+menuconfig L3_PERIPHERAL_01_HSE_CONFIG_EN
+    bool "ENABLE: 01 HSE CONFIG"
     default n
     help
         Enable HSE configuration.
 
-if BOARD_CONFIG
+if L3_PERIPHERAL_01_HSE_CONFIG_EN
     choice MCU_HSE_FREQ
         prompt "MCU HSE frequency"
         default MCU_HSE_8MHZ

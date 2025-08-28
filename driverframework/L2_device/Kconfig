@@ -1,4 +1,7 @@
 menu "L2_DEVICE_CONFIG"
-    source "$(PROJECT_ROOT)/driverframework/L2_device/IMU/Kconfig"
-    source "$(PROJECT_ROOT)/driverframework/L2_device/BARO/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L2_device/01_IMU/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L2_device/02_RC/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L2_device/03_MOTOR/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L2_device/04_BARO/Kconfig"
+    
 endmenu

@@ -1,0 +1,13 @@
+from building import *
+
+cwd = GetCurrentDir()
+
+path = []
+src = []
+
+src = Glob("./*.c")
+path = [cwd]
+
+group = DefineGroup("L2_DEVICE_03_MOTOR_02_DSHOT_EN", src, depend=["L2_DEVICE_03_MOTOR_02_DSHOT_EN"], CPPPATH=path)
+
+Return("group")

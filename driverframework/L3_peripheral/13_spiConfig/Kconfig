@@ -1,5 +1,5 @@
 menuconfig BSP_USING_SPI
-    bool "Enable SPI BUS"
+    bool "Enable 13 SPI CONFIG"
     default n
     select RT_USING_SPI
     if BSP_USING_SPI

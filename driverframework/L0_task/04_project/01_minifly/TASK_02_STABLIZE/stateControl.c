@@ -2,9 +2,6 @@
 #include "state_control.h"
 #include "stabilizer.h"
 #include "attitude_pid.h"
-#include "position_pid.h"
-#include "config_param.h"
-#include "state_quality_assessment.h"
 
 /********************************************************************************
  * 本程序只供学习使用，未经作者许可，不得用于其它任何用途

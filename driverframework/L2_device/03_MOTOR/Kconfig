@@ -1,0 +1,2 @@
+source "$(PROJECT_ROOT)/driverframework/L2_device/03_MOTOR/01_pwm/Kconfig"
+source "$(PROJECT_ROOT)/driverframework/L2_device/03_MOTOR/02_dshot/Kconfig"
