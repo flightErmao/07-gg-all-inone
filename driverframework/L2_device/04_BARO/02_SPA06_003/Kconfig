@@ -1,4 +1,4 @@
-menuconfig DEVICE_SPA06_003
+config DEVICE_SPA06_003
     bool "ENANLE: BARO 02 SPA06_003"
     default n
     if DEVICE_SPA06_003

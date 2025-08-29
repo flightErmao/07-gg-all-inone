@@ -19,9 +19,7 @@ static float actualThrust;
 static attitude_t attitudeDesired;
 static attitude_t rateDesired;
 
-void stateControlInit(void) {
-  attitudeControlInit(RATE_PID_DT, ANGEL_PID_DT);        /*初始化姿态PID*/
-}
+void stateControlInit(void) { attitudeControlInit(RATE_PID_DT, ANGEL_PID_DT); /*初始化姿态PID*/ }
 
 bool stateControlTest(void) {
   bool pass = true;
@@ -29,30 +27,26 @@ bool stateControlTest(void) {
   return pass;
 }
 
-void stateControl(control_t *control, sensorData_t *sensors, state_t *state, setpoint_t *setpoint, const uint32_t tick) {
+void stateControl(control_t *control, sensorData_t *sensors, state_t *state, setpoint_t *setpoint,
+                  const uint32_t tick) {
   static uint16_t cnt = 0;
 
-  if (state->isRCLocked) {
+  if (!state->armed) {
     control->roll = 0;
     control->pitch = 0;
     control->yaw = 0;
     control->thrust = 0;
 
     attitudeResetAllPID();                     /*复位姿态PID*/
-    positionResetAllPID();                     /*复位位置PID*/
     attitudeDesired.yaw = state->attitude.yaw; /*复位计算的期望yaw值*/
-
-    // 重置质量评估系统
-    resetStateQualityAssessment();
 
     if (cnt++ > 1500) {
       cnt = 0;
-      configParamGiveSemaphore();
+      // configParamGiveSemaphore();
     }
-    return; /*遥控锁定状态不执行控制*/
+    return;
   }
 
-  // 角度环（外环）
   if (RATE_DO_EXECUTE(ANGEL_PID_RATE, tick)) {
     if (setpoint->mode.z == modeDisable) {
       actualThrust = setpoint->thrust;
@@ -68,52 +62,30 @@ void stateControl(control_t *control, sensorData_t *sensors, state_t *state, set
       if (attitudeDesired.yaw < -180.0f) attitudeDesired.yaw += 360.0f;
     }
 
-    attitudeDesired.roll += configParam.trimR;  // 叠加微调值
-    attitudeDesired.pitch += configParam.trimP;
+    // attitudeDesired.roll += configParam.trimR;  // 叠加微调值
+    // attitudeDesired.pitch += configParam.trimP;
 
     attitudeAnglePID(&state->attitude, &attitudeDesired, &rateDesired);
   }
 
-  // 角速度环（内环）
   if (RATE_DO_EXECUTE(RATE_PID_RATE, tick)) {
-    if (setpoint->mode.roll == modeVelocity) {
-      rateDesired.roll = setpoint->attitudeRate.roll;
-      attitudeControllerResetRollAttitudePID();
-    }
-    if (setpoint->mode.pitch == modeVelocity) {
-      rateDesired.pitch = setpoint->attitudeRate.pitch;
-      attitudeControllerResetPitchAttitudePID();
-    }
-    extern uint8_t fstate;
-    if (control->flipDir != CENTER && fstate == 4) /*空翻过程只使用内环PID*/
-    {
-      rateDesired.pitch = setpoint->attitude.pitch;
-      rateDesired.roll = setpoint->attitude.roll;
-    }
-
-    attitudeRatePID(&sensors->gyro, &rateDesired, control);
+    attitudeRatePID(&sensors->gyro_filter, &rateDesired, control);
   }
 
   control->thrust = actualThrust;
-
-  // 更新状态质量评估 (每帧更新)
-  updateStateQualityAssessment(state, setpoint, 0.004f);  // 4ms周期
 
   if (control->thrust < 5.f) {
     control->roll = 0;
     control->pitch = 0;
     control->yaw = 0;
 
-    attitudeResetAllPID();                     /*复位姿态PID*/
-    positionResetAllPID();                     /*复位位置PID*/
-    attitudeDesired.yaw = state->attitude.yaw; /*复位计算的期望yaw值*/
+    attitudeResetAllPID(); /*复位姿态PID*/
 
-    // 重置质量评估系统
-    resetStateQualityAssessment();
+    attitudeDesired.yaw = state->attitude.yaw; /*复位计算的期望yaw值*/
 
     if (cnt++ > 1500) {
       cnt = 0;
-      configParamGiveSemaphore();
+      // configParamGiveSemaphore();
     }
   } else {
     cnt = 0;

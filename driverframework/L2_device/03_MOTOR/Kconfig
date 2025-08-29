@@ -1,3 +1,10 @@
-source "$(PROJECT_ROOT)/driverframework/L2_device/03_MOTOR/01_pwm/Kconfig"
-source "$(PROJECT_ROOT)/driverframework/L2_device/03_MOTOR/02_dshot/Kconfig"
+menu "03 MOTOR CONFIG"
+            menu "01 PWM CONFIG"
+                source "$(PROJECT_ROOT)/driverframework/L2_device/03_MOTOR/01_pwm/Kconfig"
+            endmenu
+            
+            menu "02 DSHOT CONFIG"
+                source "$(PROJECT_ROOT)/driverframework/L2_device/03_MOTOR/02_dshot/Kconfig"
+            endmenu
+endmenu
 

@@ -1,34 +1,13 @@
-choice
-    prompt "04 Barometer Type"
-    default BARO_NONE
-    help
-        Select the barometer type to use
-        
-config BARO_NONE
-    bool "No Barometer"
-    
-config BARO_SPL16
-    bool "SPL16 Series"
-    
-config BARO_SPA06
-    bool "SPA06 Series"
-    
-config BARO_DPS3XX
-    bool "DPS3XX Series"
-    
-endchoice
-
-# SPL16 Series Configuration
-if BARO_SPL16
-    source "$(PROJECT_ROOT)/driverframework/L2_device/04_BARO/01_SPL16_001/Kconfig"
-endif
-
-# SPA06 Series Configuration
-if BARO_SPA06
-    source "$(PROJECT_ROOT)/driverframework/L2_device/04_BARO/02_SPA06_003/Kconfig"
-endif
-
-# DPS3XX Series Configuration
-if BARO_DPS3XX
-    source "$(PROJECT_ROOT)/driverframework/L2_device/04_BARO/03_DPS3XX/Kconfig"
-endif
+menu "04 BARO CONFIG"
+            menu "01 SPL16 CONFIG"
+                source "$(PROJECT_ROOT)/driverframework/L2_device/04_BARO/01_SPL16_001/Kconfig"
+            endmenu
+            
+            menu "02 SPA06 CONFIG"
+                source "$(PROJECT_ROOT)/driverframework/L2_device/04_BARO/02_SPA06_003/Kconfig"
+            endmenu
+            
+            menu "03 DPS3XX CONFIG"
+                source "$(PROJECT_ROOT)/driverframework/L2_device/04_BARO/03_DPS3XX/Kconfig"
+            endmenu
+endmenu

@@ -1,4 +1,4 @@
-menuconfig BSP_USING_DPS368
+config BSP_USING_DPS368
     bool "ENANLE: BARO 03 DPS368"
     default n
     if BSP_USING_DPS368

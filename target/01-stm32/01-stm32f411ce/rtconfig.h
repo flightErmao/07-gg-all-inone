@@ -491,8 +491,33 @@
 /* RC related configuration options */
 
 /* end of 02 RC Configuration */
+
+/* 03 MOTOR CONFIG */
+
+/* 01 PWM CONFIG */
+
 #define L2_DEVICE_03_MOTOR_01_PWM_EN
-#define BARO_NONE
+/* end of 01 PWM CONFIG */
+
+/* 02 DSHOT CONFIG */
+
+/* end of 02 DSHOT CONFIG */
+/* end of 03 MOTOR CONFIG */
+
+/* 04 BARO CONFIG */
+
+/* 01 SPL16 CONFIG */
+
+/* end of 01 SPL16 CONFIG */
+
+/* 02 SPA06 CONFIG */
+
+/* end of 02 SPA06 CONFIG */
+
+/* 03 DPS3XX CONFIG */
+
+/* end of 03 DPS3XX CONFIG */
+/* end of 04 BARO CONFIG */
 /* end of L2_DEVICE_CONFIG */
 
 /* L3_PERIPHERAL_CONFIG */

@@ -1,4 +1,4 @@
-menuconfig BSP_USING_SPL16_001
+config BSP_USING_SPL16_001
     bool "ENANLE: BARO 01 SPL16_001"
     default n
     select RT_USING_I2C
