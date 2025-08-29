@@ -1,20 +1,6 @@
 menu "L2_DEVICE_CONFIG"
-    comment "=== Sensor Device Configuration ==="
-    
-    menu "IMU Type"
-        source "$(PROJECT_ROOT)/driverframework/L2_device/01_IMU/Kconfig"
-    endmenu
-    
-    menu "RC Configuration"
-        source "$(PROJECT_ROOT)/driverframework/L2_device/02_RC/Kconfig"
-    endmenu
-    
-    menu "Motor Driver Type"
-        source "$(PROJECT_ROOT)/driverframework/L2_device/03_MOTOR/Kconfig"
-    endmenu
-    
-    menu "Barometer Type"
-        source "$(PROJECT_ROOT)/driverframework/L2_device/04_BARO/Kconfig"
-    endmenu
-    
+    source "$(PROJECT_ROOT)/driverframework/L2_device/01_IMU/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L2_device/02_RC/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L2_device/03_MOTOR/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L2_device/04_BARO/Kconfig"
 endmenu

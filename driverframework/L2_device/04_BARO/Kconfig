@@ -1,5 +1,5 @@
 choice
-    prompt "Barometer Type"
+    prompt "04 Barometer Type"
     default BARO_NONE
     help
         Select the barometer type to use

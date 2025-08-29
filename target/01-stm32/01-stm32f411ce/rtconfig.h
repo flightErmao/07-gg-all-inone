@@ -470,12 +470,29 @@
 
 /* L2_DEVICE_CONFIG */
 
+/* 01 IMU CONFIG */
+
+/* 01 ICM42688_130 CONFIG */
+
+/* end of 01 ICM42688_130 CONFIG */
+
+/* 02 MPU6500_minifly CONFIG */
+
 #define BSP_USING_MPU6500_MINIFLY
 #define SENSOR_NAME_MPU6500_MINIFLY "mpu6500_minifly"
 #define SENSOR_I2C_NAME_MPU6500_MINIFLY "hwi2c1"
 #define SENSOR_MPU6500_MINIFLY_I2C_ADDR 0x69
 #define SENSOR_MPU6500_MINIFLY_DEBUGPIN_EN
+/* end of 02 MPU6500_minifly CONFIG */
+/* end of 01 IMU CONFIG */
+
+/* 02 RC Configuration */
+
+/* RC related configuration options */
+
+/* end of 02 RC Configuration */
 #define L2_DEVICE_03_MOTOR_01_PWM_EN
+#define BARO_NONE
 /* end of L2_DEVICE_CONFIG */
 
 /* L3_PERIPHERAL_CONFIG */

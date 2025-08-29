@@ -1,4 +1,4 @@
-menu "RC Configuration"
+menu "02 RC Configuration"
     comment "RC related configuration options"
     
     # Add common RC configuration options here
