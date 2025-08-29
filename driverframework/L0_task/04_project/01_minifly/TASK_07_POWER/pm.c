@@ -1,4 +1,4 @@
-#include "sys.h"
+// #include "sys.h"
 #include <string.h>
 #include <stdbool.h>
 #include "config.h"
@@ -12,10 +12,6 @@
 #include "stabilizer.h"
 #include "sensfusion6.h"
 
-/*FreeRTOS相关头文件*/
-#include "FreeRTOS.h"
-#include "task.h"
-#include "semphr.h"
 
 /********************************************************************************
  * 本程序只供学习使用，未经作者许可，不得用于其它任何用途
@@ -36,11 +32,11 @@
 
 typedef __packed struct _PmSyslinkInfo {
   __packed union {
-    u8 flags;
+    uint8_t flags;
     __packed struct {
-      u8 pgood : 1;
-      u8 chg : 1;
-      u8 unused : 6;
+      uint8_t pgood : 1;
+      uint8_t chg : 1;
+      uint8_t unused : 6;
     };
   };
   float vBat;
@@ -55,7 +51,7 @@ static bool isInit;
 static bool isLowpower;
 static PMStates pmState;
 static PmSyslinkInfo pmSyslinkInfo;
-static u32 batteryLowTimeStamp;
+static uint32_t batteryLowTimeStamp;
 
 static void pmSetBatteryVoltage(float voltage);
 
@@ -94,7 +90,7 @@ PMStates pmUpdateState() /* 更新电源状态 */
   PMStates state;
   bool isCharging = pmSyslinkInfo.chg;
   bool isPgood = pmSyslinkInfo.pgood;
-  u32 batteryLowTime;
+  uint32_t batteryLowTime;
 
   batteryLowTime = getSysTickCnt() - batteryLowTimeStamp;
 
@@ -114,7 +110,7 @@ PMStates pmUpdateState() /* 更新电源状态 */
 void pmTask(void *param) /* 电源管理任务 */
 {
   PMStates pmStateOld = battery;
-  u32 tickCount;
+  uint32_t tickCount;
 
   tickCount = getSysTickCnt();
   batteryLowTimeStamp = tickCount;

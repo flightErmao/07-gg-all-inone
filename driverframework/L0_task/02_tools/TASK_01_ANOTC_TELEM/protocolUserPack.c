@@ -64,7 +64,7 @@ void sendUserDatafloat6(uint8_t group, float a, float b, float c, float d, float
   anotc_telem_send_floats(group, values, 6, MSG_ASYNC);
 }
 
-void sendUserDatafloat6_u32(uint8_t group, float a, float b, float c, float d, float e, float f, uint32_t u32) {
+void sendUserDatafloat6_u32(uint8_t group, float a, float b, float c, float d, float e, float f, uint32_t uint32_t) {
   uint8_t _cnt = 0;
   atkp_t p;
 
@@ -79,18 +79,18 @@ void sendUserDatafloat6_u32(uint8_t group, float a, float b, float c, float d, f
     p.data[_cnt++] = BYTE0(temp);
   }
 
-  // add u32 data
-  p.data[_cnt++] = BYTE3(u32);
-  p.data[_cnt++] = BYTE2(u32);
-  p.data[_cnt++] = BYTE1(u32);
-  p.data[_cnt++] = BYTE0(u32);
+  // add uint32_t data
+  p.data[_cnt++] = BYTE3(uint32_t);
+  p.data[_cnt++] = BYTE2(uint32_t);
+  p.data[_cnt++] = BYTE1(uint32_t);
+  p.data[_cnt++] = BYTE0(uint32_t);
 
   p.dataLen = _cnt;
   anotcMqStash(&p);
 }
 
 void sendUserDatafloat12_u32(uint8_t group, float a, float b, float c, float d, float e, float f, float g, float h,
-                             float i, float j, float k, float l, uint32_t u32) {
+                             float i, float j, float k, float l, uint32_t uint32_t) {
   uint8_t _cnt = 0;
   atkp_t p;
 
@@ -105,11 +105,11 @@ void sendUserDatafloat12_u32(uint8_t group, float a, float b, float c, float d, 
     p.data[_cnt++] = BYTE0(temp);
   }
 
-  // add u32 data
-  p.data[_cnt++] = BYTE3(u32);
-  p.data[_cnt++] = BYTE2(u32);
-  p.data[_cnt++] = BYTE1(u32);
-  p.data[_cnt++] = BYTE0(u32);
+  // add uint32_t data
+  p.data[_cnt++] = BYTE3(uint32_t);
+  p.data[_cnt++] = BYTE2(uint32_t);
+  p.data[_cnt++] = BYTE1(uint32_t);
+  p.data[_cnt++] = BYTE0(uint32_t);
 
   p.dataLen = _cnt;
   anotcMqStash(&p);

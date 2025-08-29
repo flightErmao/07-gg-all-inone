@@ -1,7 +1,6 @@
 #include <math.h>
-#include "state_control.h"
-#include "stabilizer.h"
-#include "attitude_pid.h"
+#include "stateControl.h"
+#include "attitudePid.h"
 
 /********************************************************************************
  * 本程序只供学习使用，未经作者许可，不得用于其它任何用途
@@ -22,8 +21,6 @@ static attitude_t rateDesired;
 
 void stateControlInit(void) {
   attitudeControlInit(RATE_PID_DT, ANGEL_PID_DT);        /*初始化姿态PID*/
-  positionControlInit(VELOCITY_PID_DT, POSITION_PID_DT); /*初始化位置PID*/
-  stateQualityAssessmentInit();                          /*初始化状态质量评估系统*/
 }
 
 bool stateControlTest(void) {
@@ -32,8 +29,8 @@ bool stateControlTest(void) {
   return pass;
 }
 
-void stateControl(control_t *control, sensorData_t *sensors, state_t *state, setpoint_t *setpoint, const u32 tick) {
-  static u16 cnt = 0;
+void stateControl(control_t *control, sensorData_t *sensors, state_t *state, setpoint_t *setpoint, const uint32_t tick) {
+  static uint16_t cnt = 0;
 
   if (state->isRCLocked) {
     control->roll = 0;
@@ -53,12 +50,6 @@ void stateControl(control_t *control, sensorData_t *sensors, state_t *state, set
       configParamGiveSemaphore();
     }
     return; /*遥控锁定状态不执行控制*/
-  }
-
-  if (RATE_DO_EXECUTE(POSITION_PID_RATE, tick)) {
-    if (setpoint->mode.x != modeDisable || setpoint->mode.y != modeDisable || setpoint->mode.z != modeDisable) {
-      positionController(&actualThrust, &attitudeDesired, setpoint, state, POSITION_PID_DT);
-    }
   }
 
   // 角度环（外环）
@@ -93,7 +84,7 @@ void stateControl(control_t *control, sensorData_t *sensors, state_t *state, set
       rateDesired.pitch = setpoint->attitudeRate.pitch;
       attitudeControllerResetPitchAttitudePID();
     }
-    extern u8 fstate;
+    extern uint8_t fstate;
     if (control->flipDir != CENTER && fstate == 4) /*空翻过程只使用内环PID*/
     {
       rateDesired.pitch = setpoint->attitude.pitch;

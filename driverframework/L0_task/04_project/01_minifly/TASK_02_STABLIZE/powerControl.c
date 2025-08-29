@@ -1,5 +1,5 @@
-#include "power_control.h"
-#include "motors.h"
+#include "powerControl.h"
+#include "motorsPwm.h"
 
 /********************************************************************************
  * 本程序只供学习使用，未经作者许可，不得用于其它任何用途

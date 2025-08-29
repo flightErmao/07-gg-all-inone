@@ -1,2 +1,26 @@
-source "$(PROJECT_ROOT)/driverframework/L2_device/03_MOTOR/01_pwm/Kconfig"
-source "$(PROJECT_ROOT)/driverframework/L2_device/03_MOTOR/02_dshot/Kconfig"
+choice
+    prompt "Motor Driver Type"
+    default MOTOR_NONE
+    help
+        Select the motor driver type to use
+        
+config MOTOR_NONE
+    bool "No Motor Driver"
+    
+config MOTOR_PWM
+    bool "PWM Driver"
+    
+config MOTOR_DSHOT
+    bool "DSHOT Driver"
+    
+endchoice
+
+# PWM Driver Configuration
+if MOTOR_PWM
+    source "$(PROJECT_ROOT)/driverframework/L2_device/03_MOTOR/01_pwm/Kconfig"
+endif
+
+# DSHOT Driver Configuration
+if MOTOR_DSHOT
+    source "$(PROJECT_ROOT)/driverframework/L2_device/03_MOTOR/02_dshot/Kconfig"
+endif

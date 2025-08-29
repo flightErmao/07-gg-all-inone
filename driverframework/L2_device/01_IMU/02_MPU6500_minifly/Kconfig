@@ -1,7 +1,10 @@
-menuconfig BSP_USING_MPU6500_MINIFLY
-    bool "ENANLE: IMU 02 MPU6500_MINIFLY"
+config BSP_USING_MPU6500_MINIFLY
+    bool "Enable MPU6500 MINIFLY IMU Sensor"
     default n
     select BSP_USING_I2C
+    help
+        Enable MPU6500 MINIFLY IMU sensor support
+        
     if BSP_USING_MPU6500_MINIFLY
         config SENSOR_NAME_MPU6500_MINIFLY
             string "IMU MPU6500 MINIFLY NAME"

@@ -1,2 +1,26 @@
-source "$(PROJECT_ROOT)/driverframework/L2_device/01_IMU/01_ICM42688_130/Kconfig"
-source "$(PROJECT_ROOT)/driverframework/L2_device/01_IMU/02_MPU6500_minifly/Kconfig"
+choice
+    prompt "IMU Sensor Type"
+    default IMU_NONE
+    help
+        Select the IMU sensor type to use
+        
+config IMU_NONE
+    bool "No IMU"
+    
+config IMU_ICM42688
+    bool "ICM42688 Series"
+    
+config IMU_MPU6500
+    bool "MPU6500 Series"
+    
+endchoice
+
+# ICM42688 Series Configuration
+if IMU_ICM42688
+    source "$(PROJECT_ROOT)/driverframework/L2_device/01_IMU/01_ICM42688_130/Kconfig"
+endif
+
+# MPU6500 Series Configuration
+if IMU_MPU6500
+    source "$(PROJECT_ROOT)/driverframework/L2_device/01_IMU/02_MPU6500_minifly/Kconfig"
+endif

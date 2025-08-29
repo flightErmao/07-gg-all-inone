@@ -1,8 +1,8 @@
 #ifndef __CONFIG_PARAM_H
 #define __CONFIG_PARAM_H
-#include "sys.h"
+// #include "sys.h"
 #include <stdbool.h>
-#include "pid_minifly.h"
+// #include "pid_minifly.h"
 
 /********************************************************************************
  * 本程序只供学习使用，未经作者许可，不得用于其它任何用途

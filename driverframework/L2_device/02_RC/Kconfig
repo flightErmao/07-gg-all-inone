@@ -1,0 +1,7 @@
+menu "RC Configuration"
+    comment "RC related configuration options"
+    
+    # Add common RC configuration options here
+    # Currently empty, ready for future expansion
+    
+endmenu

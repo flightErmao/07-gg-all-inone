@@ -17,5 +17,3 @@ menuconfig L3_PERIPHERAL_02_NVIC_CONFIG_EN
                 3: 3 bits for pre-emption priority, 1 bits for subpriority
                 4: 4 bits for pre-emption priority, 0 bits for subpriority
     endif
-
-endmenu 

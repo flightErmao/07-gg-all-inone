@@ -1,5 +1,5 @@
-#include "motors.h"
-#include "pm.h"
+#include "motorsPwm.h"
+// #include "powerControl.h"
 #include <rtthread.h>
 #include <rtdevice.h>
 
@@ -17,8 +17,8 @@
  ********************************************************************************/
 
 static bool isInit = false;
-u32 motor_ratios[] = {0, 0, 0, 0};
-static const u32 MOTORS[] = {MOTOR_M1, MOTOR_M2, MOTOR_M3, MOTOR_M4};
+uint32_t motor_ratios[] = {0, 0, 0, 0};
+static const uint32_t MOTORS[] = {MOTOR_M1, MOTOR_M2, MOTOR_M3, MOTOR_M4};
 
 /* PWM 设备与通道映射：
  * 原裸机映射：
@@ -60,7 +60,7 @@ static void motorsComputePwmPeriod(void) {
   }
 }
 
-static rt_uint32_t ratioToPulseNs(u16 ratio16) {
+static rt_uint32_t ratioToPulseNs(uint16_t ratio16) {
   /* 16位占空比映射到脉宽时间 */
   return (rt_uint32_t)((((uint64_t)ratio16) * pwm_period_ns) / UINT16_MAX);
 }
@@ -116,9 +116,9 @@ bool motorsTest(void) {
 extern bool isExitFlip;
 
 /*设置电机PWM占空比*/
-void motorsSetRatio(u32 id, u16 ithrust) {
+void motorsSetRatio(uint32_t id, uint16_t ithrust) {
   if (isInit) {
-    u16 ratio = ithrust;
+    uint16_t ratio = ithrust;
 
 #ifdef ENABLE_THRUST_BAT_COMPENSATED
     if (isExitFlip == true) /*500Hz*/

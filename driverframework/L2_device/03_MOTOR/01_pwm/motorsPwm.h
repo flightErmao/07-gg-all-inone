@@ -1,9 +1,9 @@
 #ifndef __MOTORS_H
 #define __MOTORS_H
-#include "sys.h"
+// #include "sys.h"
 #include <stdint.h>
 #include <stdbool.h>
-#include "config.h"
+// #include "config.h"
 
 /********************************************************************************
  * 本程序只供学习使用，未经作者许可，不得用于其它任何用途
@@ -32,12 +32,12 @@
 #define MOTOR_M3 2
 #define MOTOR_M4 3
 
-#define MOTORS_TEST_RATIO (u16)(0.2 * (1 << 16))  // 20%
+#define MOTORS_TEST_RATIO (uint16_t)(0.2 * (1 << 16))  // 20%
 #define MOTORS_TEST_ON_TIME_MS 50
 #define MOTORS_TEST_DELAY_TIME_MS 150
 
 void motorsInit(void);                    /*电机初始化*/
 bool motorsTest(void);                    /*电机测试*/
-void motorsSetRatio(u32 id, u16 ithrust); /*设置电机占空比*/
+void motorsSetRatio(uint32_t id, uint16_t ithrust); /*设置电机占空比*/
 
 #endif /* __MOTORS_H */

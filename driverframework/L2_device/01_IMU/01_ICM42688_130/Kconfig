@@ -1,3 +1,10 @@
-menuconfig BSP_USING_ICM42688
-    bool "ENANLE: IMU 01 ICM42688"
+config BSP_USING_ICM42688
+    bool "Enable ICM42688 IMU Sensor"
     default n
+    help
+        Enable ICM42688 IMU sensor support
+        
+    if BSP_USING_ICM42688
+        # Add specific configuration options for ICM42688 here
+        # Such as I2C address, debug pins, etc.
+    endif

@@ -4,29 +4,29 @@ menuconfig L3_PERIPHERAL_01_HSE_CONFIG_EN
     help
         Enable HSE configuration.
 
-if L3_PERIPHERAL_01_HSE_CONFIG_EN
-    choice MCU_HSE_FREQ
-        prompt "MCU HSE frequency"
-        default MCU_HSE_8MHZ
-        help
-            Select the external high-speed oscillator (HSE) frequency.
+    if L3_PERIPHERAL_01_HSE_CONFIG_EN
+        choice MCU_HSE_FREQ
+            prompt "MCU HSE frequency"
+            default MCU_HSE_8MHZ
+            help
+                Select the external high-speed oscillator (HSE) frequency.
 
-        config MCU_HSE_25MHZ
-            bool "25 MHz"
+            config MCU_HSE_25MHZ
+                bool "25 MHz(F411)"
 
-        config MCU_HSE_8MHZ
-            bool "8 MHz"
+            config MCU_HSE_8MHZ
+                bool "8 MHz"
 
-        config MCU_HSE_24MHZ
-            bool "24 MHz"
+            config MCU_HSE_24MHZ
+                bool "24 MHz(F429)"
 
-    endchoice
+        endchoice
 
-    config HSE_VALUE
-        int
-        default 25000000 if MCU_HSE_25MHZ
-        default 8000000 if MCU_HSE_8MHZ
-        default 24000000 if MCU_HSE_24MHZ
-        help
-            Numeric value in Hz for the selected HSE frequency.
-endif
+        config HSE_VALUE
+            int
+            default 25000000 if MCU_HSE_25MHZ
+            default 8000000 if MCU_HSE_8MHZ
+            default 24000000 if MCU_HSE_24MHZ
+            help
+                Numeric value in Hz for the selected HSE frequency.
+    endif
