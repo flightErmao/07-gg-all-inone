@@ -8,10 +8,10 @@
 #include "taskAnotcTelem.h"
 
 void sendRcData(uint16_t count_ms) {
-  if (!(count_ms % PERIOD_10ms)) {
+  if (!(count_ms % PERIOD_20ms)) {
     Pilot_Cmd_Bus rc_data = {0};
     rcPilotCmdAcquire(&rc_data);
-    sendUserDatafloat6_u32(3, rc_data.stick_yaw, rc_data.stick_throttle, rc_data.stick_roll, rc_data.stick_pitch,
+    sendUserDatafloat6_u32(1, rc_data.stick_yaw, rc_data.stick_throttle, rc_data.stick_roll, rc_data.stick_pitch,
                            (float)rc_data.ram_status, (float)rc_data.ctrl_mode, rc_data.timestamp);
   }
 }

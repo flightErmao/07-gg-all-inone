@@ -73,7 +73,7 @@ static void taskNrfAnlEntry(void *parameter) {
   while (1) {
     atkp_t pkt;
     rt_memset(&pkt, 0, sizeof(pkt));
-    if (rt_mq_recv(recv_mq, &pkt, sizeof(pkt), RT_WAITING_FOREVER) == RT_EOK) {
+    if (rt_mq_recv(recv_mq, &pkt, sizeof(pkt), RT_WAITING_FOREVER) > 0) {
       atkpReceiveAnl(&pkt);
     }
   }

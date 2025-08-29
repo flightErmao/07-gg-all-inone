@@ -32,6 +32,8 @@ static int stm32_nvic_priority_group_config(void) {
       priority_group = NVIC_PRIORITYGROUP_3;
       break;
     case 4:
+      priority_group = NVIC_PRIORITYGROUP_4;
+      break;
     default:
       priority_group = NVIC_PRIORITYGROUP_4;
       break;

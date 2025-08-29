@@ -5,7 +5,7 @@
 #include "anlRemote.h"
 
 /*task definition*/
-#define THREAD_PRIORITY 5
+#define THREAD_PRIORITY 6
 #define THREAD_STACK_SIZE 2048
 #define THREAD_TIMESLICE 5
 
@@ -170,7 +170,7 @@ void rcPilotCmdAcquire(Pilot_Cmd_Bus *rc_data) {
 }
 
 static int taskRcThreadAutoStart(void) {
-  rt_thread_init(&task_tid_rc_minifly, "L0_minifly_06_rc", rc_minifly_thread_entry, RT_NULL, task_stack_rc_minifly,
+  rt_thread_init(&task_tid_rc_minifly, "L0_minifly_rc", rc_minifly_thread_entry, RT_NULL, task_stack_rc_minifly,
                  THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
   rt_thread_startup(&task_tid_rc_minifly);
   return 0;
