@@ -143,10 +143,10 @@ static void rc_minifly_thread_entry(void *parameter) {
 #endif
       } else {
         // Normal case, update RC data
-        rc_data.stick_yaw = rcRawData.roll;
+        rc_data.stick_yaw = rcRawData.yaw;
         rc_data.stick_throttle = rcRawData.thrust * 655.35f;
-        rc_data.stick_roll = rcRawData.pitch;
-        rc_data.stick_pitch = rcRawData.yaw;
+        rc_data.stick_roll = rcRawData.roll;
+        rc_data.stick_pitch = rcRawData.pitch;
         rc_data.ram_status = rcRawData.arm_status ? ARM_STATUS_ARM : ARM_STATUS_DISARM;
       }
 

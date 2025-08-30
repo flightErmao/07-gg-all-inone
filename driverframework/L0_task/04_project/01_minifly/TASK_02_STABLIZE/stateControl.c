@@ -48,20 +48,24 @@ static bool resetControl(const state_t *state, const setpoint_t *setpoint, contr
   return false;
 }
 
+static void generateAttituedeDesierd(const setpoint_t *setpoint) {
+  if (setpoint->mode.z == modeDisable) {
+    actualThrust_ = setpoint->thrust;
+  }
+  if (setpoint->mode.x == modeDisable || setpoint->mode.y == modeDisable) {
+    attitudeDesired_.roll = setpoint->attitude.roll;
+    attitudeDesired_.pitch = setpoint->attitude.pitch;
+  }
+}
+
 void stateControl(const state_t *state, const setpoint_t *setpoint, control_t *control, const uint32_t tick) {
+  generateAttituedeDesierd(setpoint);
+
   if (resetControl(state, setpoint, control)) {
     return;
   }
 
   if (RATE_DO_EXECUTE(ANGEL_PID_RATE, tick)) {
-    if (setpoint->mode.z == modeDisable) {
-      actualThrust_ = setpoint->thrust;
-    }
-    if (setpoint->mode.x == modeDisable || setpoint->mode.y == modeDisable) {
-      attitudeDesired_.roll = setpoint->attitude.roll;
-      attitudeDesired_.pitch = setpoint->attitude.pitch;
-    }
-
     attitudeAnglePID(&state->attitude, &attitudeDesired_, &rateDesired_);
   }
 
@@ -76,7 +80,7 @@ void stateControl(const state_t *state, const setpoint_t *setpoint, control_t *c
 }
 
 void getAttitudeDesired(attitude_t *get) {
-  get->pitch = -attitudeDesired_.pitch;
+  get->pitch = attitudeDesired_.pitch;
   get->roll = attitudeDesired_.roll;
-  get->yaw = -attitudeDesired_.yaw;
+  get->yaw = attitudeDesired_.yaw;
 }
