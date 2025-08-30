@@ -60,9 +60,9 @@ static void generateAttituedeDesierd(const setpoint_t *setpoint) {
 }
 
 static void updateYawAngle(const setpoint_t *setpoint) {
-  attitudeDesired.yaw += setpoint->attitude.yaw / ANGEL_PID_RATE;
-  if (attitudeDesired.yaw > 180.0f) attitudeDesired.yaw -= 360.0f;
-  if (attitudeDesired.yaw < -180.0f) attitudeDesired.yaw += 360.0f;
+  attitudeDesired_.yaw += setpoint->attitude.yaw / ANGEL_PID_RATE;
+  if (attitudeDesired_.yaw > 180.0f) attitudeDesired_.yaw -= 360.0f;
+  if (attitudeDesired_.yaw < -180.0f) attitudeDesired_.yaw += 360.0f;
 }
 
 void stateControl(const state_t *state, const setpoint_t *setpoint, control_t *control, const uint32_t tick) {
