@@ -109,6 +109,10 @@ void imuUpdate(Axis3f acc, Axis3f gyro, state_t* state, float dt) /*数据融合
   float accBuf[3] = {0.f};
   Axis3f tempacc = acc;
 
+  state->gyro_filter.x = gyro.x;
+  state->gyro_filter.y = gyro.y;
+  state->gyro_filter.z = gyro.z;
+
   gyro.x = gyro.x * DEG2RAD; /* 度转弧度 */
   gyro.y = gyro.y * DEG2RAD;
   gyro.z = gyro.z * DEG2RAD;

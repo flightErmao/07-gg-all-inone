@@ -18,8 +18,7 @@
 // #define ENABLE_PID_TUNING	/* 使能PID调节 yaw值不更新 */
 
 void stateControlInit(void);
-bool stateControlTest(void);
-void stateControl(control_t *control, sensorData_t *sensors, state_t *state, setpoint_t *setpoint, const uint32_t tick);
+void stateControl(const state_t *state, const setpoint_t *setpoint, control_t *control, const uint32_t tick);
 void getAttitudeDesired(attitude_t *get);
 
 #endif /*__STATE_CONTROL_H */

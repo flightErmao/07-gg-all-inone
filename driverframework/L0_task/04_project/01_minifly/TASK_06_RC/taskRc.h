@@ -21,9 +21,9 @@ typedef struct {
   float stick_pitch;
   ARM_STATUS_e ram_status;
   CTRL_MODE_e ctrl_mode;
-} Pilot_Cmd_Bus;
+} pilot_cmd_bus_t;
 
 /* RC数据获取接口 */
-void rcPilotCmdAcquire(Pilot_Cmd_Bus *rc_data);
+void rcPilotCmdAcquire(pilot_cmd_bus_t *rc_data);
 
 #endif

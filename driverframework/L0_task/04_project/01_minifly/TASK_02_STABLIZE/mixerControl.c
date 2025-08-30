@@ -1,4 +1,4 @@
-#include "powerControl.h"
+#include "mixerControl.h"
 #include "motorsPwm.h"
 
 /********************************************************************************
@@ -38,7 +38,7 @@ uint16_t limitThrust(int value) {
   return (uint16_t)value;
 }
 
-void powerControl(control_t* control) /*功率输出控制*/
+void mixerControl(control_t* control) /*功率输出控制*/
 {
   int32_t r = control->roll / 2.0f;
   int32_t p = control->pitch / 2.0f;

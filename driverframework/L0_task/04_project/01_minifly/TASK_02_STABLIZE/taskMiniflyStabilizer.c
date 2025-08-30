@@ -6,6 +6,9 @@
 #include "taskMiniflySensor.h"
 #include "uMCN.h"
 #include "biasGyro.h"
+#include "commandMinifly.h"
+#include "stateControl.h"
+#include "mixerControl.h"
 #ifdef PROJECT_MINIFLY_TASK_DEBUGPIN_EN
 #include "debugPin.h"
 #endif
@@ -21,14 +24,16 @@ static rt_timer_t stabilizer_timer = RT_NULL;
 static rt_event_t stabilizer_event = RT_NULL;
 static struct rt_thread task_tid_stabilizer_minifly;
 
-static state_t state_minifly_;
+static state_t state_;
+static setpoint_t setpoint_;
+static control_t contorl_;
 
 MCN_DECLARE(minifly_stabilizer_state);
 MCN_DEFINE(minifly_stabilizer_state, sizeof(state_t));
 static McnNode_t state_sub_node = RT_NULL;
 
-//TO DO : should check if sensors are calibrated
-// static bool sensorsAreCalibrated(void) { return outputGyroBiasFound(); }
+// TO DO : should check if sensors are calibrated
+//  static bool sensorsAreCalibrated(void) { return outputGyroBiasFound(); }
 static bool sensorsAreCalibrated(void) { return true; }
 
 static void mcnTopicInit(void) {
@@ -81,11 +86,24 @@ static void stabilizer_minifly_thread_entry(void* parameter) {
       DEBUG_PIN_DEBUG3_HIGH();
 #endif
       sensorsAcquire(&sensorData);
-      imuUpdate(sensorData.acc_filter, sensorData.gyro_filter, &state_minifly_, ATTITUDE_ESTIMAT_DT);
-      mcn_publish(MCN_HUB(minifly_stabilizer_state), &state_minifly_);
+      imuUpdate(sensorData.acc_filter, sensorData.gyro_filter, &state_, ATTITUDE_ESTIMAT_DT);
+      mcn_publish(MCN_HUB(minifly_stabilizer_state), &state_);
 #ifdef PROJECT_MINIFLY_TASK_DEBUGPIN_EN
       DEBUG_PIN_DEBUG3_LOW();
 #endif
+    }
+
+    // if (RATE_DO_EXECUTE(RATE_100_HZ, tick) && getIsCalibrated() == true)
+    if (RATE_DO_EXECUTE(RATE_100_HZ, tick)) {
+      pilot_cmd_bus_t rc_data = {0};
+      rcPilotCmdAcquire(&rc_data);
+      commanderGetSetpoint(&rc_data, &setpoint_);
+    }
+
+    stateControl(&state_, &setpoint_, &contorl_, tick);
+
+    if (RATE_DO_EXECUTE(RATE_500_HZ, tick)) {
+      mixerControl(&contorl_);
     }
 
     tick++;

@@ -158,6 +158,7 @@ typedef struct flowMeasurement_s {
 } flowMeasurement_t;
 
 typedef struct {
+  Axis3f gyro_filter;
   attitude_t attitude;
   quaternion_t attitudeQuaternion;
   point_t position;
@@ -190,6 +191,7 @@ typedef struct {
   velocity_t velocity;      // m/s
   stabilizer_mode_t mode;
   float thrust;
+  bool armed;  // 解锁标志
 } setpoint_t;
 
 // 恢复GCC诊断设置

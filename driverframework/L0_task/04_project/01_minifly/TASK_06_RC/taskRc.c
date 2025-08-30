@@ -26,14 +26,14 @@ static rt_event_t rc_event = RT_NULL;
 #define RC_EVENT_TIMER (1 << 0)
 
 MCN_DECLARE(minifly_rc_pilot_cmd);
-MCN_DEFINE(minifly_rc_pilot_cmd, sizeof(Pilot_Cmd_Bus));
+MCN_DEFINE(minifly_rc_pilot_cmd, sizeof(pilot_cmd_bus_t));
 
 static McnNode_t rc_sub_node = RT_NULL;
 
 static void rc_timer_callback(void *parameter) { rt_event_send(rc_event, RC_EVENT_TIMER); }
 
 static int rc_pilot_cmd_echo(void *parameter) {
-  Pilot_Cmd_Bus rc_data;
+  pilot_cmd_bus_t rc_data;
 
   if (mcn_copy_from_hub((McnHub *)parameter, &rc_data) != RT_EOK) {
     return -1;
@@ -102,7 +102,7 @@ static bool rc_failsafe_check(uint32_t current_timestamp, uint32_t rc_timestamp)
  * @brief Apply failsafe measures
  * @param rc_data RC data pointer
  */
-static void rc_apply_failsafe(Pilot_Cmd_Bus *rc_data) {
+static void rc_apply_failsafe(pilot_cmd_bus_t *rc_data) {
   if (!rc_data) return;
 
   // Reset all axis data to zero
@@ -122,7 +122,7 @@ static void rc_minifly_thread_entry(void *parameter) {
   mcnTopicInit();
   rcTimerInit();
 
-  Pilot_Cmd_Bus rc_data = {0};
+  pilot_cmd_bus_t rc_data = {0};
   rt_uint32_t recv_event = 0;
 
   rc_data.stick_yaw = 0.0f;
@@ -162,11 +162,11 @@ static void rc_minifly_thread_entry(void *parameter) {
   }
 }
 
-void rcPilotCmdAcquire(Pilot_Cmd_Bus *rc_data) {
+void rcPilotCmdAcquire(pilot_cmd_bus_t *rc_data) {
   if (!rc_data) return;
-  if (mcn_poll(rc_sub_node)) {
-    mcn_copy(MCN_HUB(minifly_rc_pilot_cmd), rc_sub_node, rc_data);
-  }
+  // if (mcn_poll(rc_sub_node)) {
+  mcn_copy(MCN_HUB(minifly_rc_pilot_cmd), rc_sub_node, rc_data);
+  // }
 }
 
 static int taskRcThreadAutoStart(void) {

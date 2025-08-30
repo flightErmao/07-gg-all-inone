@@ -31,6 +31,11 @@ int main(void) {
   rt_kprintf("预期系统时钟: 100 MHz\n");
   rt_kprintf("==============================\n");
 
+  // 在进入while循环前注销当前线程
+  // #ifdef BSP_USING_TASK_1_LED_BLINK
+  rt_thread_delete(rt_thread_self());
+  // #endif
+
   while (1) {
 #ifndef BSP_USING_TASK_1_LED_BLINK
     rt_pin_write(LED0_PIN, PIN_HIGH);

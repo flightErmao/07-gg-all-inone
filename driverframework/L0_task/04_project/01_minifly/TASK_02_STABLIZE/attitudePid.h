@@ -28,8 +28,8 @@ extern PidObject pidRateYaw;
 void attitudeControlInit(float rateDt, float angleDt);
 bool attitudeControlTest(void);
 
-void attitudeRatePID(Axis3f *actualRate, attitude_t *desiredRate, control_t *output);
-void attitudeAnglePID(attitude_t *actualAngle, attitude_t *desiredAngle, attitude_t *outDesiredRate);
+void attitudeRatePID(const Axis3f *actualRate, const attitude_t *desiredRate, control_t *output);
+void attitudeAnglePID(const attitude_t *actualAngle, const attitude_t *desiredAngle, attitude_t *outDesiredRate);
 void attitudeControllerResetRollAttitudePID(void);
 void attitudeControllerResetPitchAttitudePID(void);
 void attitudeResetAllPID(void);
