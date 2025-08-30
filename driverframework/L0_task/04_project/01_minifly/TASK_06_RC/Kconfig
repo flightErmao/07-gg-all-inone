@@ -15,7 +15,7 @@ if PROJECT_MINIFLY_TASK06_RC_EN
             
     config PROJECT_MINIFLY_TASK06_RC_FAILSAFE_TIMEOUT_MS
         int "RC failsafe timeout in milliseconds"
-        default 2000
+        default 1000
         range 1000 10000
         help
             Timeout value in milliseconds for RC failsafe protection.

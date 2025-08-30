@@ -22,7 +22,6 @@ typedef struct {
   uint32_t m4;
 } motorPWM_t;
 
-void powerControlInit(void);
 bool powerControlTest(void);
 void mixerControl(control_t* control);
 

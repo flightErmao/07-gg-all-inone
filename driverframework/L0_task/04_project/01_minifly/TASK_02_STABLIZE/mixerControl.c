@@ -18,16 +18,6 @@ static bool motorSetEnable = false;
 static motorPWM_t motorPWM;
 static motorPWM_t motorPWMSet = {0, 0, 0, 0};
 
-void powerControlInit(void) { motorsInit(); }
-
-bool powerControlTest(void) {
-  bool pass = true;
-
-  pass &= motorsTest();
-
-  return pass;
-}
-
 uint16_t limitThrust(int value) {
   if (value > UINT16_MAX) {
     value = UINT16_MAX;

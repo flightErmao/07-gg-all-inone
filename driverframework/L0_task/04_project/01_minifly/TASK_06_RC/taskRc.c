@@ -11,13 +11,6 @@
 
 #define TIMER_PERIOD 20
 
-// Failsafe timeout configuration
-#ifdef PROJECT_MINIFLY_TASK06_RC_FAILSAFE_TIMEOUT_MS
-#define RC_FAILSAFE_TIMEOUT_MS PROJECT_MINIFLY_TASK06_RC_FAILSAFE_TIMEOUT_MS
-#else
-#define RC_FAILSAFE_TIMEOUT_MS 2000  // Default 2 seconds
-#endif
-
 static struct rt_thread task_tid_rc_minifly;
 static rt_uint8_t task_stack_rc_minifly[THREAD_STACK_SIZE];
 
@@ -91,7 +84,7 @@ static bool rc_failsafe_check(uint32_t current_timestamp, uint32_t rc_timestamp)
   uint32_t time_diff = current_timestamp - rc_timestamp;
 
   // Check if time difference exceeds failsafe timeout
-  if (time_diff > rt_tick_from_millisecond(RC_FAILSAFE_TIMEOUT_MS)) {
+  if (time_diff > rt_tick_from_millisecond(PROJECT_MINIFLY_TASK06_RC_FAILSAFE_TIMEOUT_MS)) {
     return true;  // Trigger failsafe
   }
 
@@ -164,9 +157,11 @@ static void rc_minifly_thread_entry(void *parameter) {
 
 void rcPilotCmdAcquire(pilot_cmd_bus_t *rc_data) {
   if (!rc_data) return;
+#ifdef PROJECT_MINIFLY_TASK06_RC_EN
   // if (mcn_poll(rc_sub_node)) {
   mcn_copy(MCN_HUB(minifly_rc_pilot_cmd), rc_sub_node, rc_data);
   // }
+#endif
 }
 
 static int taskRcThreadAutoStart(void) {

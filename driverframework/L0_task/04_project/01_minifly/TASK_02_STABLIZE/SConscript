@@ -7,6 +7,8 @@ path = [cwd]
 src = []
 group = []
 
+path = [cwd, os.path.join(cwd, "../../../04_project/01_minifly/TASK_06_RC")]
+
 # 获取当前目录下的所有源文件
 src = Glob("./*.c")
 

@@ -59,13 +59,16 @@ rt_err_t task_dev_init(char* device_name) {
     return RT_ERROR;
   }
 
-  if (rt_device_open(new_dev, RT_DEVICE_FLAG_INT_TX) != RT_EOK) {
+  if (rt_device_open(new_dev, RT_DEVICE_FLAG_TX_BLOCKING) != RT_EOK) {
     return RT_ERROR;
   }
 
   if (!strncmp(device_name, "uart", 4)) {
     struct serial_configure config = RT_SERIAL_CONFIG_DEFAULT;
     config.baud_rate = TASK_TOOL_01_ANOTC_TELEM_BAUD_RATE;
+    config.rx_bufsz = 512;
+    config.tx_bufsz = 512;
+    config.dma_ping_bufsz = 128;
     if (rt_device_control(new_dev, RT_DEVICE_CTRL_CONFIG, &config) != RT_EOK) {
       rt_device_close(new_dev);
       return RT_ERROR;

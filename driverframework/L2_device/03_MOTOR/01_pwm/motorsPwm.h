@@ -36,7 +36,6 @@
 #define MOTORS_TEST_ON_TIME_MS 1000
 #define MOTORS_TEST_DELAY_TIME_MS 1000
 
-int motorsInit(void);
 void motorOrder(void);
 void motorsSetRatio(uint32_t id, uint16_t ithrust);
 

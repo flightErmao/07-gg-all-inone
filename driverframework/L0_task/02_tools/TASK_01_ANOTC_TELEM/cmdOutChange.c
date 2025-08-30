@@ -3,7 +3,7 @@
 #include "deviceManager.h"
 
 /* Switch telemetry output device: target in {"uart1", "uart2", "usb"(alias "vcom")} */
-int anotc_telem_switch_output(const char *target) {
+static int anotc_telem_switch_output(const char *target) {
   if (target == RT_NULL) {
     return -RT_EINVAL;
   }
@@ -37,7 +37,7 @@ int anotc_telem_switch_output(const char *target) {
 }
 
 /* Shell command: anotc out <uart1|uart2|usb> */
-int cmd_anotc(int argc, char **argv) {
+static int cmdAtkpChange(int argc, char **argv) {
   if (argc < 2) {
     rt_kprintf("anotc 命令用法:\n");
     rt_kprintf("  anotc out <uart1|uart2|usb>  - 切换输出设备 (默认uart1)\n");
@@ -57,4 +57,4 @@ int cmd_anotc(int argc, char **argv) {
   return -1;
 }
 
-MSH_CMD_EXPORT_ALIAS(cmd_anotc, anotc, anotc telem output switch command);
+MSH_CMD_EXPORT_ALIAS(cmdAtkpChange, cmdAtkpChange, anotc telem output switch command);
