@@ -1,6 +1,12 @@
+#include "rtthread.h"
+#include <rtdevice.h>
 #include <math.h>
 #include "stateControl.h"
 #include "attitudePid.h"
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
+#include "debugPin.h"
+#endif
+#include "taskParam.h"
 
 /********************************************************************************
  * 本程序只供学习使用，未经作者许可，不得用于其它任何用途
@@ -32,7 +38,7 @@ static bool resetControl(const state_t *state, const setpoint_t *setpoint, contr
     attitudeDesired_.yaw = state->attitude.yaw; /*复位计算的期望yaw值*/
     if (cnt++ > 1500) {
       cnt = 0;
-      // configParamGiveSemaphore();
+      configParamGiveSemaphore();
     }
     return true;
   } else {
@@ -60,6 +66,9 @@ void stateControl(const state_t *state, const setpoint_t *setpoint, control_t *c
   }
 
   if (RATE_DO_EXECUTE(RATE_PID_RATE, tick)) {
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
+    DEBUG_PIN_DEBUG0_TOGGLE();
+#endif
     attitudeRatePID(&state->gyro_filter, &rateDesired_, control);
   }
 

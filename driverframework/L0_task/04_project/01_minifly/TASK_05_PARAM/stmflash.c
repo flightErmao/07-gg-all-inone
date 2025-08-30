@@ -1,3 +1,5 @@
+#ifdef PROJECT_MINIFLY_TASK05_PARAM_AUTO_SAVE_EN
+
 #include "stmflash.h"
 
 /********************************************************************************
@@ -103,3 +105,5 @@ void STMFLASH_Read(uint32_t ReadAddr, uint32_t *pBuffer, uint32_t NumToRead) {
     ReadAddr += 4;                             // 偏移4个字节.
   }
 }
+
+#endif

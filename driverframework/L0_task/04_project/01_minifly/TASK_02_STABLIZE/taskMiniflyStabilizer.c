@@ -9,7 +9,7 @@
 #include "commandMinifly.h"
 #include "stateControl.h"
 #include "mixerControl.h"
-#ifdef PROJECT_MINIFLY_TASK_DEBUGPIN_EN
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
 #include "debugPin.h"
 #endif
 
@@ -82,13 +82,13 @@ static void stabilizer_minifly_thread_entry(void* parameter) {
                   RT_NULL);
 
     if (RATE_DO_EXECUTE(ATTITUDE_ESTIMAT_RATE, tick)) {
-#ifdef PROJECT_MINIFLY_TASK_DEBUGPIN_EN
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
       DEBUG_PIN_DEBUG3_HIGH();
 #endif
       sensorsAcquire(&sensorData);
       imuUpdate(sensorData.acc_filter, sensorData.gyro_filter, &state_, ATTITUDE_ESTIMAT_DT);
       mcn_publish(MCN_HUB(minifly_stabilizer_state), &state_);
-#ifdef PROJECT_MINIFLY_TASK_DEBUGPIN_EN
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
       DEBUG_PIN_DEBUG3_LOW();
 #endif
     }

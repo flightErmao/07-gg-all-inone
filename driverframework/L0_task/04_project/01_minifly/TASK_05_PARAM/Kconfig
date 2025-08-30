@@ -12,7 +12,7 @@ menuconfig PROJECT_MINIFLY_TASK05_PARAM_EN
         
         config PROJECT_MINIFLY_TASK05_PARAM_AUTO_SAVE_EN
         bool "ENABLE: PROJECT_MINIFLY_TASK05_PARAM_AUTO_SAVE_EN"
-        default y
+        default n
         help
             "enable auto save param to flash"
     endif

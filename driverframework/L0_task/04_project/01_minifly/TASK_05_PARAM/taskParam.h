@@ -1,9 +1,9 @@
 #ifndef __CONFIG_PARAM_H
 #define __CONFIG_PARAM_H
-// #include "sys.h"
-#include <stdbool.h>
-// #include "pid_minifly.h"
 
+#include <stdbool.h>
+#include "pidMinifly.h"
+#include "stdint.h"
 /********************************************************************************
  * 本程序只供学习使用，未经作者许可，不得用于其它任何用途
  * ALIENTEK MiniFly
@@ -18,19 +18,13 @@
  ********************************************************************************/
 
 typedef struct {
-  int16_t accZero[3];
-  int16_t accGain[3];
-} accBias_t;
-
-typedef struct {
-  int16_t magZero[3];
-} magBias_t;
-
-typedef struct {
-  int16_t rollDeciDegrees;
-  int16_t pitchDeciDegrees;
-  int16_t yawDeciDegrees;
-} boardAlignment_t;
+  pidInit_t vx; /*X轴速度PID*/
+  pidInit_t vy; /*Y轴速度PID*/
+  pidInit_t vz; /*Z轴速度PID*/
+  pidInit_t x;  /*X轴位置PID*/
+  pidInit_t y;  /*Y轴位置PID*/
+  pidInit_t z;  /*Z轴位置PID*/
+} pidParamPos_t;
 
 typedef struct {
   uint8_t version;      /*软件版本号*/
@@ -43,18 +37,8 @@ typedef struct {
   uint8_t cksum;        /*校验*/
 } configParam_t;
 
-extern configParam_t configParam;
-
-void configParamInit(void);        /*参数配置初始化*/
-void configParamTask(void* param); /*参数配置任务*/
-bool configParamTest(void);
-
+void getConfigParam(configParam_t *configParam_temp);
 void configParamGiveSemaphore(void);
 void resetConfigParamPID(void);
-void saveConfigAndNotify(void);
-
-// RT-Thread相关函数声明
-rt_err_t configParamTaskInit(void);
-struct rt_messagequeue* getConfigParamMq(void);
 
 #endif /*__CONFIG_PARAM_H */

@@ -1,9 +1,11 @@
 #ifndef __ATTITUDE_PID_H
 #define __ATTITUDE_PID_H
+
 #include <stdbool.h>
-#include "pid_minifly.h"
+#include "pidMinifly.h"
 #include "sensorsTypes.h"
 #include "stabilizerTypes.h"
+
 /********************************************************************************
  * 本程序只供学习使用，未经作者许可，不得用于其它任何用途
  * ALIENTEK MiniFly
