@@ -25,8 +25,8 @@ static rt_event_t stabilizer_event = RT_NULL;
 static struct rt_thread task_tid_stabilizer_minifly;
 
 static state_t state_;
-// static setpoint_t setpoint_;
-// static control_t contorl_;
+static setpoint_t setpoint_;
+static control_t contorl_;
 
 MCN_DECLARE(minifly_stabilizer_state);
 MCN_DEFINE(minifly_stabilizer_state, sizeof(state_t));
@@ -94,13 +94,13 @@ static void stabilizer_minifly_thread_entry(void* parameter) {
     }
 
     // if (RATE_DO_EXECUTE(RATE_100_HZ, tick) && getIsCalibrated() == true)
-    // if (RATE_DO_EXECUTE(RATE_100_HZ, tick)) {
-    //   pilot_cmd_bus_t rc_data = {0};
-    //   rcPilotCmdAcquire(&rc_data);
-    //   commanderGetSetpoint(&rc_data, &setpoint_);
-    // }
+    if (RATE_DO_EXECUTE(RATE_100_HZ, tick)) {
+      pilot_cmd_bus_t rc_data = {0};
+      rcPilotCmdAcquire(&rc_data);
+      commanderGetSetpoint(&rc_data, &setpoint_);
+    }
 
-    // stateControl(&state_, &setpoint_, &contorl_, tick);
+    stateControl(&state_, &setpoint_, &contorl_, tick);
 
     // if (RATE_DO_EXECUTE(RATE_500_HZ, tick)) {
     //   mixerControl(&contorl_);

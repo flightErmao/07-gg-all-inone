@@ -158,9 +158,9 @@ static void rc_minifly_thread_entry(void *parameter) {
 void rcPilotCmdAcquire(pilot_cmd_bus_t *rc_data) {
   if (!rc_data) return;
 #ifdef PROJECT_MINIFLY_TASK06_RC_EN
-  // if (mcn_poll(rc_sub_node)) {
-  mcn_copy(MCN_HUB(minifly_rc_pilot_cmd), rc_sub_node, rc_data);
-  // }
+  if (rc_sub_node != NULL) {
+    mcn_copy(MCN_HUB(minifly_rc_pilot_cmd), rc_sub_node, rc_data);
+  }
 #endif
 }
 

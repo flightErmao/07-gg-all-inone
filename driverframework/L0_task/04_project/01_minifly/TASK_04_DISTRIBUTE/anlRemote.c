@@ -30,7 +30,7 @@ void anlRemote(atkp_t *anlPacket) {
     rcRawData_.pitch = remoterSendData.pitch;
     rcRawData_.yaw = remoterSendData.yaw;
     rcRawData_.thrust = remoterSendData.thrust;
-    rcRawData_.arm_status = remoterSendData.RCLock;
+    rcRawData_.arm_status = !remoterSendData.RCLock;
     rcRawData_.ctrl_mode = remoterSendData.ctrlMode;
   }
 }
