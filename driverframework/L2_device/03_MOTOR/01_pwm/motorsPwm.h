@@ -36,8 +36,8 @@
 #define MOTORS_TEST_ON_TIME_MS 50
 #define MOTORS_TEST_DELAY_TIME_MS 150
 
-void motorsInit(void);                              /*电机初始化*/
-bool motorsTest(void);                              /*电机测试*/
+int motorsInit(void); /*电机初始化*/
+// bool motorsTest(void);                              /*电机测试*/
 void motorsSetRatio(uint32_t id, uint16_t ithrust); /*设置电机占空比*/
 
 #endif /* __MOTORS_H */

@@ -19,6 +19,19 @@ menuconfig BSP_USING_PWM
                 bool "Enable PWM1 channel3"
                 default n
         endif
+    menuconfig BSP_USING_PWM2
+        bool "Enable timer2 output PWM"
+        default n
+        if BSP_USING_PWM2
+            config BSP_USING_PWM2_CH1
+                bool "Enable PWM2 channel1"
+                default n
+
+            config BSP_USING_PWM2_CH3
+                bool "Enable PWM2 channel3"
+                default n
+
+        endif
 
     menuconfig BSP_USING_PWM4
         bool "Enable timer4 output PWM"
@@ -32,13 +45,6 @@ menuconfig BSP_USING_PWM
                 bool "Enable PWM4 channel2"
                 default n
 
-            config BSP_USING_PWM4_CH3
-                bool "Enable PWM4 channel3"
-                default n
-
-            config BSP_USING_PWM4_CH4
-                bool "Enable PWM4 channel4"
-                default n
         endif
     endif
 

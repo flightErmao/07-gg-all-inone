@@ -6,7 +6,15 @@ config L2_DEVICE_03_MOTOR_01_PWM_EN
             bool "ENABLE: DEBUG PIN"
             default n
             help
-                ENABLE: DEBUG PIN                
+                ENABLE: DEBUG PIN
+                
+        config L2_DEVICE_03_MOTOR_01_MSH_CMD_EN
+            bool "ENABLE: MSH COMMANDS"
+            default n
+            help
+                ENABLE: Export motor test commands to MSH shell
+                This will add motor_test and motor_safe_test commands
+                for debugging and testing motor functionality
     endif
     
     

@@ -20,7 +20,6 @@ typedef struct {
   uint32_t m2;
   uint32_t m3;
   uint32_t m4;
-
 } motorPWM_t;
 
 void powerControlInit(void);

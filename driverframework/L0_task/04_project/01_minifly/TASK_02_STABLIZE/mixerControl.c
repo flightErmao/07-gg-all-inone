@@ -38,7 +38,7 @@ uint16_t limitThrust(int value) {
   return (uint16_t)value;
 }
 
-void mixerControl(control_t* control) /*功率输出控制*/
+void mixerControl(control_t *control) /*功率输出控制*/
 {
   int32_t r = control->roll / 2.0f;
   int32_t p = control->pitch / 2.0f;
@@ -57,7 +57,7 @@ void mixerControl(control_t* control) /*功率输出控制*/
   motorsSetRatio(MOTOR_M4, motorPWM.m4);
 }
 
-void getMotorPWM(motorPWM_t* get) { *get = motorPWM; }
+void getMotorPWM(motorPWM_t *get) { *get = motorPWM; }
 
 void setMotorPWM(bool enable, uint32_t m1_set, uint32_t m2_set, uint32_t m3_set, uint32_t m4_set) {
   motorSetEnable = enable;
