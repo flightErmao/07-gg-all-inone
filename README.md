@@ -1,20 +1,137 @@
-1. 下拉代码
+# GG-All-In-One 嵌入式飞控项目
 
-git clone https://github.com/Hardware-01-ST-F411CE-Weact-25M/07-gg-all-inone.git
+## 项目简介
 
-2. 忽略ConEmu.xml的修改
+**GG-All-In-One** 是一个创新的嵌入式飞控项目，采用"菜谱式"配置理念，让复杂的飞控系统配置变得像烹饪一样简单。本项目集成了完整的开发环境、驱动框架和构建工具，为开发者提供了一站式的飞控开发解决方案。
 
-cd tools/env_win
+## 🎯 核心理念
 
-git update-index --assume-unchanged tools/ConEmu/ConEmu.xml
+> **"像菜谱一样简单的飞控配置"** - 无需复杂的底层配置，只需选择合适的"菜谱"（配置文件），即可快速构建出完整的飞控固件。
 
-git update-index --assume-unchanged .vscode/settings.json
+## 🏗️ 项目架构
 
-git update-index --assume-unchanged .vscode/launch.json
+### 四层驱动架构 (DriverFramework)
 
+项目采用分层设计理念，将飞控系统分为四个清晰的层次：
 
-3. 下载大文件
-   git lfs install
-   git lfs pull
-4. `git update-index --no-assume-unchanged .vscode/launch.json`
-   恢复上传
+- **L0_task (应用层)**: 飞控任务调度、控制算法、用户应用
+- **L1_middleWare (中间层)**: 通信协议、数据管理、系统服务
+- **L2_device (设备层)**: 传感器驱动、执行器控制、设备抽象
+- **L3_peripheral (外设层)**: 硬件寄存器操作、底层驱动、外设管理
+
+这种分层设计确保了代码的可维护性和可扩展性，每一层都有明确的职责边界。
+
+## 📁 项目结构详解
+
+### `.vscode/` - 开发环境配置
+- **代码格式化设置**: 统一的代码风格和格式化规则
+- **目标烧录配置**: 支持多种MCU的烧录和调试配置
+- **开发体验优化**: 智能提示、错误检查、调试支持
+
+### `configs/` - 目标配置文件
+- **01-base/**: 基础配置文件，包含各种MCU的基础配置
+- **03-project/**: 项目特定配置，如不同飞控型号的专用配置
+
+**使用示例**:
+```bash
+# 编译STM32F411构建的minifly固件
+menuconfig --config=..\..\..\configs\01-base\01-base_f411ce-8m-minifly --silent && scons
+```
+
+### `document/` - 技术文档库
+- **原理图**: 各目标板子的硬件设计图纸
+- **数据手册**: MCU、传感器、外设的详细技术规格
+- **帮助文档**: 开发指南、API文档、故障排除手册
+- **设计规范**: 硬件设计标准和最佳实践
+
+### `driverFramework/` - 核心驱动框架
+- **L0_task/**: 飞控任务管理、控制算法实现
+- **L1_middleWare/**: 通信协议栈、数据管理系统
+- **L2_device/**: 传感器驱动、执行器控制接口
+- **L3_peripheral/**: 硬件抽象层、寄存器操作封装
+
+**框架优势**:
+- 模块化设计，易于扩展和维护
+- 清晰的层次结构，降低开发复杂度
+- 支持多种硬件平台，代码复用性高
+
+### `kernel/` - 操作系统内核
+- **RT-Thread**: 作为子模块集成，支持任意版本切换
+- **多RTOS支持**: 预留接口支持FreeRTOS等其他实时操作系统
+- **版本管理**: 灵活的内核版本选择和升级
+
+### `python/` - 工具脚本
+- **数据处理脚本**: 传感器数据分析和处理
+- **开发工具**: 自动化构建、测试和部署脚本
+- **数据分析**: 飞行数据可视化、性能分析工具
+
+### `target/` - 硬件平台支持
+- **01-stm32/**: STM32系列MCU的BSP支持
+- **多平台支持**: 计划支持AT32、RISC-V等架构
+- **BSP标准化**: 统一的硬件抽象接口
+
+### `tools/` - 构建工具链
+- **env工具**: RT-Thread官方构建环境，作为子模块集成
+- **工具链管理**: 支持GCC 12.3等多种编译器版本
+- **一键构建**: 无需额外软件安装，克隆即用
+
+**工具优势**:
+- 子模块管理，自动同步最新版本
+- 支持工具链切换，满足不同编译需求
+- 简化的构建流程，降低开发门槛
+
+## 🚀 快速开始
+
+### 环境准备
+```bash
+# 1. 克隆项目
+git clone <repository-url>
+cd gg-all-in-one
+
+# 2. 同步子模块
+git submodule update --init --recursive
+
+# 3. 选择配置文件并构建
+menuconfig --config=configs/01-base/your-target-config --silent
+scons
+```
+
+### 构建示例
+```bash
+# 构建STM32F411 minifly固件
+menuconfig --config=..\..\..\configs\01-base\01-base_f411ce-8m-minifly --silent && scons
+
+# 构建其他目标
+menuconfig --config=configs/01-base/your-config --silent && scons
+```
+
+## 🔧 技术特性
+
+- **模块化设计**: 清晰的层次架构，易于理解和维护
+- **跨平台支持**: 支持多种MCU架构和RTOS系统
+- **配置驱动**: 通过配置文件快速切换目标平台
+- **工具集成**: 完整的开发工具链，开箱即用
+- **版本管理**: 灵活的子模块管理，支持版本切换
+
+## 📚 开发指南
+
+详细的开发文档请参考 `document/` 文件夹中的相关文档。
+
+## 🤝 贡献指南
+
+欢迎提交Issue和Pull Request来改进项目。请确保：
+- 遵循项目的代码规范
+- 添加必要的测试用例
+- 更新相关文档
+
+## 📄 许可证
+
+[请在此处添加许可证信息]
+
+## 📞 联系方式
+
+[请在此处添加联系方式信息]
+
+---
+
+**GG-All-In-One** - 让飞控开发变得简单而高效！

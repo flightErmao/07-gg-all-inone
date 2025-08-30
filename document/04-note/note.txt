@@ -10,3 +10,25 @@ menuconfig --config=..\..\..\configs\01-base\01-base_f411ce-8m-minifly --silent 
 2. 强制添加子模块
 git submodule add -f git@github.com:Tool-01-middleware/vconsole.git target/01-stm32/01-stm32f411ce/packages/vcon
 sole-latest
+
+
+3.1. 下拉代码
+
+git clone https://github.com/Hardware-01-ST-F411CE-Weact-25M/07-gg-all-inone.git
+
+3.2 忽略ConEmu.xml的修改
+
+cd tools/env_win
+
+git update-index --assume-unchanged tools/ConEmu/ConEmu.xml
+
+git update-index --assume-unchanged .vscode/settings.json
+
+git update-index --assume-unchanged .vscode/launch.json
+
+3.3 下载大文件
+   git lfs install
+   git lfs pull
+
+3.4 恢复上传
+git update-index --no-assume-unchanged .vscode/launch.json
