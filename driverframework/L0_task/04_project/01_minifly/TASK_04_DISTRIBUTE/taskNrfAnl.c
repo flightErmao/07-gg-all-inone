@@ -3,7 +3,7 @@
 #include "taskNrfRec.h"
 #include "taskNrfAnl.h"
 
-#define THREAD_PRIORITY 7
+#define THREAD_PRIORITY 8
 #define THREAD_STACK_SIZE 2048
 #define THREAD_TIMESLICE 5
 

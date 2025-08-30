@@ -35,7 +35,7 @@ static uint8_t configParamCksum(configParam_t *data) {
   return cksum;
 }
 
-void configParamInit(void) {
+static void configParamInit(void) {
   if (isInit) return;
 
 #ifdef PROJECT_MINIFLY_TASK05_PARAM_AUTO_SAVE_EN
@@ -97,6 +97,21 @@ void configParamTask(void *param) {
   }
 }
 
+static int configParamTaskInit(void) {
+  configParamInit();
+
+  rt_thread_init(&configParamTid, "L0_minifly_configParam", configParamTask, RT_NULL, configParamStack,
+                 THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
+  rt_thread_startup(&configParamTid);
+
+  rt_kprintf("Config param task started\r\n");
+  return 0;
+}
+
+#ifdef PROJECT_MINIFLY_TASK05_PARAM_EN
+INIT_APP_EXPORT(configParamTaskInit);
+#endif
+
 void configParamGiveSemaphore(void) {
   if (configParam_sem != RT_NULL) {
     rt_sem_release(configParam_sem);
@@ -109,37 +124,11 @@ void resetConfigParamPID(void) {
   configParam.pidPos = configParamDefault.pidPos;
 }
 
-void saveConfigAndNotify(void) {
-  uint8_t cksum = configParamCksum(&configParam);
-  if (configParam.cksum != cksum) {
-    configParam.cksum = cksum;
-#ifdef PROJECT_MINIFLY_TASK05_PARAM_AUTO_SAVE_EN
-    STMFLASH_Write(CONFIG_PARAM_ADDR, (uint32_t *)&configParam, lenth);
-#endif
-  }
-}
-
-rt_err_t configParamTaskInit(void) {
-  configParamInit();
-
-  rt_thread_init(&configParamTid, "L0_minifly_configParam", configParamTask, RT_NULL, configParamStack,
-                 THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
-  rt_thread_startup(&configParamTid);
-
-  rt_kprintf("Config param task started\r\n");
-  return RT_EOK;
-}
-
 void getConfigParam(configParam_t *configParam_temp) {
+  while (!isConfigParamOK) {
+    rt_thread_mdelay(500);
+  }
   if (configParam_temp != NULL) {
     *configParam_temp = configParam;
   }
 }
-
-#ifdef PROJECT_MINIFLY_TASK05_PARAM_EN
-int configParamTaskInitWrapper(void) {
-  configParamTaskInit();
-  return 0;
-}
-INIT_APP_EXPORT(configParamTaskInitWrapper);
-#endif

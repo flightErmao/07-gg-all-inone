@@ -33,8 +33,8 @@ MCN_DEFINE(minifly_stabilizer_state, sizeof(state_t));
 static McnNode_t state_sub_node = RT_NULL;
 
 // TO DO : should check if sensors are calibrated
-//  static bool sensorsAreCalibrated(void) { return outputGyroBiasFound(); }
-static bool sensorsAreCalibrated(void) { return true; }
+static bool sensorsAreCalibrated(void) { return outputGyroBiasFound(); }
+// static bool sensorsAreCalibrated(void) { return true; }
 
 static void mcnTopicInit(void) {
   rt_err_t result = mcn_advertise(MCN_HUB(minifly_stabilizer_state), RT_NULL);
@@ -50,27 +50,37 @@ static void mcnTopicInit(void) {
 
 static void stabilizer_timer_callback(void* parameter) { rt_event_send(stabilizer_event, STABILIZER_EVENT_FLAG); }
 
-void taskStabilizerInit(void) {
-  mcnTopicInit();
+static int eventInit() {
   stabilizer_event = rt_event_create("stabilizer_event", RT_IPC_FLAG_FIFO);
   if (stabilizer_event == RT_NULL) {
     rt_kprintf("Failed to create stabilizer event\n");
-    return;
+    return -1;
   }
+  return 0;
+}
 
+static int timerInit() {
   stabilizer_timer =
       rt_timer_create("stabilizer_timer", stabilizer_timer_callback, RT_NULL, MAIN_LOOP_DT, RT_TIMER_FLAG_PERIODIC);
-
   if (stabilizer_timer == RT_NULL) {
     rt_kprintf("Failed to create stabilizer timer\n");
     rt_event_delete(stabilizer_event);
-    return;
+    return -1;
   }
+  return 0;
+}
+
+void taskStabilizerInit(void) {
+  mcnTopicInit();
+  eventInit();
+  timerInit();
+  stateControlInit();
 }
 
 static void stabilizer_minifly_thread_entry(void* parameter) {
   uint32_t tick = 0;
   sensorData_t sensorData = {0};
+  taskStabilizerInit();
 
   while (!sensorsAreCalibrated()) {
     rt_thread_mdelay(100);
@@ -102,9 +112,9 @@ static void stabilizer_minifly_thread_entry(void* parameter) {
 
     stateControl(&state_, &setpoint_, &contorl_, tick);
 
-    // if (RATE_DO_EXECUTE(RATE_500_HZ, tick)) {
-    //   mixerControl(&contorl_);
-    // }
+    if (RATE_DO_EXECUTE(RATE_500_HZ, tick)) {
+      mixerControl(&contorl_);
+    }
 
     tick++;
   }
@@ -112,13 +122,14 @@ static void stabilizer_minifly_thread_entry(void* parameter) {
 
 void stabilizerGetState(state_t* state) {
   if (!state) return;
-  if (mcn_poll(state_sub_node)) {
-    mcn_copy(MCN_HUB(minifly_stabilizer_state), state_sub_node, state);
+  if (state_sub_node != NULL) {
+    if (mcn_poll(state_sub_node)) {
+      mcn_copy(MCN_HUB(minifly_stabilizer_state), state_sub_node, state);
+    }
   }
 }
 
 static int taskStabilizerThreadAutoStart(void) {
-  taskStabilizerInit();
   rt_thread_init(&task_tid_stabilizer_minifly, "L0_minifly_stabilizer", stabilizer_minifly_thread_entry, RT_NULL,
                  task_stack_stabilizer_minifly, THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
   rt_thread_startup(&task_tid_stabilizer_minifly);
