@@ -1,0 +1,18 @@
+# -*- coding: utf-8 -*-
+
+from building import *
+import os
+
+cwd = GetCurrentDir()
+src = []
+path = []
+
+src += Glob("./*.c")
+path += [cwd]
+
+# 定义编译组
+group = DefineGroup("L3_PERIPHERAL_03_DFU_CONFIG_EN", src, depend=["L3_PERIPHERAL_03_DFU_CONFIG_EN"], CPPPATH=path)
+
+env = DefaultEnvironment()
+
+Return("group") 

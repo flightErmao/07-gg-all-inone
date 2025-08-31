@@ -1,7 +1,8 @@
 menu "L3_PERIPHERAL_CONFIG"
     source "$(PROJECT_ROOT)/driverframework/L3_peripheral/01_hseConfig/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L3_peripheral/02_nvicConfig/Kconfig"
-
+    source "$(PROJECT_ROOT)/driverframework/L3_peripheral/03_dfuConfig/Kconfig"
+    
     source "$(PROJECT_ROOT)/driverframework/L3_peripheral/10_gpioConfig/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L3_peripheral/11_uartConfig/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L3_peripheral/12_i2cConfig/Kconfig"

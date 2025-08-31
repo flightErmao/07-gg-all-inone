@@ -1,0 +1,5 @@
+menuconfig L3_PERIPHERAL_03_DFU_CONFIG_EN
+    bool "ENABLE: 03 DFU CONFIG"
+    default n
+    help
+        Enable DFU configuration for STM32 MCUs.
