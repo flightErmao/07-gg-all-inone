@@ -16,10 +16,8 @@
 #include <rtdevice.h>
 #endif /* RT_USING_NANO */
 
-/* defined the LED0 pin: PC4 */
-/* LEDs: PC4, PA8, PC5, PA10 */
-#define LED0_PIN GET_PIN(A, 0)
-// #define LED0_PIN GET_PIN(A, 15)
+// atkp led0 pin
+#define LED0_PIN GET_PIN(A, 14)
 
 int main(void)
 {
