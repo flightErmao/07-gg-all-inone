@@ -1,7 +1,7 @@
 #ifndef RT_CONFIG_H__
 #define RT_CONFIG_H__
 
-#define SOC_STM32F405RG
+#define SOC_STM32F411RE
 
 /* RT-Thread Kernel */
 
@@ -143,9 +143,9 @@
 #define RT_USING_DEVICE_IPC
 #define RT_UNAMED_PIPE_NUMBER 64
 #define RT_USING_SERIAL
-#define RT_USING_SERIAL_V1
+#define RT_USING_SERIAL_V2
+#define RT_SERIAL_BUF_STRATEGY_OVERWRITE
 #define RT_SERIAL_USING_DMA
-#define RT_SERIAL_RB_BUFSZ 64
 #define RT_USING_PIN
 /* end of Device Drivers */
 
@@ -188,6 +188,20 @@
 
 /* Using USB legacy version */
 
+#define RT_USING_USB
+#define RT_USING_USB_DEVICE
+#define RT_USBD_THREAD_STACK_SZ 4096
+#define USB_VENDOR_ID 0x0FFE
+#define USB_PRODUCT_ID 0x0001
+#define RT_USB_DEVICE_COMPOSITE
+#define RT_USB_DEVICE_CDC
+#define RT_USB_DEVICE_NONE
+#define RT_VCOM_TASK_STK_SIZE 512
+#define RT_CDC_RX_BUFSIZE 128
+#define RT_VCOM_TX_USE_DMA
+#define RT_VCOM_SERNO "32021919830108"
+#define RT_VCOM_SER_LEN 14
+#define RT_VCOM_TX_TIMEOUT 1000
 /* end of Using USB legacy version */
 /* end of RT-Thread Components */
 
@@ -256,6 +270,8 @@
 
 /* tools packages */
 
+#define PKG_USING_VCONSOLE
+#define PKG_USING_VCONSOLE_LATEST_VERSION
 /* end of tools packages */
 
 /* system packages */
@@ -318,10 +334,6 @@
 /* NUVOTON Drivers */
 
 /* end of NUVOTON Drivers */
-
-/* GD32 Drivers */
-
-/* end of GD32 Drivers */
 /* end of HAL & SDK Drivers */
 
 /* sensors drivers */
@@ -404,20 +416,80 @@
 #define SOC_FAMILY_STM32
 #define SOC_SERIES_STM32F4
 
-/* Hardware Drivers Config */
+/* DriverFramework Config */
 
-/* Onboard Peripheral Drivers */
+/* L0_TASK_CONFIG */
 
-/* On-chip Peripheral Drivers */
+/* end of L0_TASK_CONFIG */
+
+/* L1_MIDDLEWARE_CONFIG */
+
+#define L1_MIDDLEWARE_01_MODULE_01_FLOATCONVER_EN
+#define L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN
+#define L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_0_EN
+#define L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_0_PIN "PC15"
+#define L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_1_EN
+#define L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_1_PIN "PB0"
+#define L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_2_EN
+#define L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_2_PIN "PB1"
+#define L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_3_EN
+#define L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_3_PIN "PA8"
+/* end of L1_MIDDLEWARE_CONFIG */
+
+/* L2_DEVICE_CONFIG */
+
+/* 01 IMU CONFIG */
+
+/* 01 ICM42688_130 CONFIG */
+
+/* end of 01 ICM42688_130 CONFIG */
+
+/* 02 MPU6500_minifly CONFIG */
+
+/* end of 02 MPU6500_minifly CONFIG */
+/* end of 01 IMU CONFIG */
+
+/* 02 RC CONFIG */
+
+/* 03 MOTOR CONFIG */
+
+/* 01 PWM CONFIG */
+
+/* end of 01 PWM CONFIG */
+
+/* 02 DSHOT CONFIG */
+
+/* end of 02 DSHOT CONFIG */
+/* end of 03 MOTOR CONFIG */
+
+/* 04 BARO CONFIG */
+
+/* 01 SPL16 CONFIG */
+
+/* end of 01 SPL16 CONFIG */
+
+/* 02 SPA06 CONFIG */
+
+/* end of 02 SPA06 CONFIG */
+
+/* 03 DPS3XX CONFIG */
+
+/* end of 03 DPS3XX CONFIG */
+/* end of 04 BARO CONFIG */
+/* end of L2_DEVICE_CONFIG */
+
+/* L3_PERIPHERAL_CONFIG */
 
 #define BSP_USING_GPIO
 #define BSP_USING_UART
-#define BSP_STM32_UART_V1_TX_TIMEOUT 2000
-#define BSP_USING_UART2
-/* end of On-chip Peripheral Drivers */
-
-/* Board extended module Drivers */
-
-/* end of Hardware Drivers Config */
+#define BSP_USING_UART1
+#define BSP_UART1_RX_USING_DMA
+#define BSP_UART1_TX_USING_DMA
+#define BSP_UART1_RX_BUFSIZE 256
+#define BSP_UART1_TX_BUFSIZE 0
+#define BSP_UART1_DMA_PING_BUFSIZE 64
+#define BSP_USING_USBD
+/* end of L3_PERIPHERAL_CONFIG */
+/* end of DriverFramework Config */
 
 #endif

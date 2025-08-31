@@ -6,3 +6,5 @@
 **/*.old
 python/01_sensor_minifly/imuraw.txt
 python/01_sensor_minifly/imuraw.csv
+
+target/01-stm32/stm32f405-smdz-breadfruit/board/CubeMX_Config/EWARM/*
