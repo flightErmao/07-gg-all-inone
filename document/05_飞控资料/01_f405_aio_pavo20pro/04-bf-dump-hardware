@@ -1,0 +1,313 @@
+dump hardware
+
+# version
+# Betaflight / STM32F405 (S405) 4.5.0 Dec  2 2024 / 07:10:30 (c155f5830) MSP API: 1.46
+# config rev: cb1d3ac
+
+# start the command batch
+batch start
+
+board_name BETAFPVF405
+manufacturer_id BEFH
+
+# resources
+resource BEEPER 1 B04
+resource MOTOR 1 B00
+resource MOTOR 2 B01
+resource MOTOR 3 A03
+resource MOTOR 4 A02
+resource MOTOR 5 C08
+resource MOTOR 6 A08
+resource MOTOR 7 NONE
+resource MOTOR 8 NONE
+resource SERVO 1 NONE
+resource SERVO 2 NONE
+resource SERVO 3 NONE
+resource SERVO 4 NONE
+resource SERVO 5 NONE
+resource SERVO 6 NONE
+resource SERVO 7 NONE
+resource SERVO 8 NONE
+resource PPM 1 B08
+resource PWM 1 NONE
+resource PWM 2 NONE
+resource PWM 3 NONE
+resource PWM 4 NONE
+resource PWM 5 NONE
+resource PWM 6 NONE
+resource PWM 7 NONE
+resource PWM 8 NONE
+resource SONAR_TRIGGER 1 NONE
+resource SONAR_ECHO 1 NONE
+resource LED_STRIP 1 B06
+resource SERIAL_TX 1 A09
+resource SERIAL_TX 2 NONE
+resource SERIAL_TX 3 B10
+resource SERIAL_TX 4 A00
+resource SERIAL_TX 5 NONE
+resource SERIAL_TX 6 NONE
+resource SERIAL_TX 7 NONE
+resource SERIAL_TX 8 NONE
+resource SERIAL_TX 9 NONE
+resource SERIAL_TX 10 NONE
+resource SERIAL_RX 1 A10
+resource SERIAL_RX 2 NONE
+resource SERIAL_RX 3 B11
+resource SERIAL_RX 4 A01
+resource SERIAL_RX 5 D02
+resource SERIAL_RX 6 C07
+resource SERIAL_RX 7 NONE
+resource SERIAL_RX 8 NONE
+resource SERIAL_RX 9 NONE
+resource SERIAL_RX 10 NONE
+resource INVERTER 1 NONE
+resource INVERTER 2 NONE
+resource INVERTER 3 C09
+resource INVERTER 4 NONE
+resource INVERTER 5 NONE
+resource INVERTER 6 C08
+resource INVERTER 7 NONE
+resource INVERTER 8 NONE
+resource INVERTER 9 NONE
+resource INVERTER 10 NONE
+resource INVERTER 11 NONE
+resource SOFTSERIAL_TX 1 NONE
+resource SOFTSERIAL_TX 2 NONE
+resource SOFTSERIAL_RX 1 NONE
+resource SOFTSERIAL_RX 2 NONE
+resource I2C_SCL 1 NONE
+resource I2C_SCL 2 NONE
+resource I2C_SCL 3 NONE
+resource I2C_SDA 1 NONE
+resource I2C_SDA 2 NONE
+resource I2C_SDA 3 NONE
+resource LED 1 B05
+resource LED 2 NONE
+resource LED 3 NONE
+resource RX_BIND 1 NONE
+resource RX_BIND_PLUG 1 NONE
+resource TRANSPONDER 1 NONE
+resource SPI_SCK 1 A05
+resource SPI_SCK 2 B13
+resource SPI_SCK 3 C10
+resource SPI_SDI 1 A06
+resource SPI_SDI 2 B14
+resource SPI_SDI 3 C11
+resource SPI_SDO 1 A07
+resource SPI_SDO 2 B15
+resource SPI_SDO 3 C12
+resource ESCSERIAL 1 B08
+resource ADC_BATT 1 C02
+resource ADC_RSSI 1 C00
+resource ADC_CURR 1 C01
+resource ADC_EXT 1 NONE
+resource BARO_CS 1 B03
+resource BARO_EOC 1 NONE
+resource BARO_XCLR 1 NONE
+resource PINIO 1 C06
+resource PINIO 2 NONE
+resource PINIO 3 NONE
+resource PINIO 4 NONE
+resource USB_MSC_PIN 1 NONE
+resource FLASH_CS 1 B12
+resource OSD_CS 1 A15
+resource GYRO_EXTI 1 C04
+resource GYRO_EXTI 2 NONE
+resource GYRO_CS 1 A04
+resource GYRO_CS 2 NONE
+resource USB_DETECT 1 C05
+resource VTX_POWER 1 NONE
+resource VTX_CS 1 NONE
+resource VTX_DATA 1 NONE
+resource VTX_CLK 1 NONE
+resource PULLUP 1 NONE
+resource PULLUP 2 NONE
+resource PULLUP 3 NONE
+resource PULLUP 4 NONE
+resource PULLDOWN 1 NONE
+resource PULLDOWN 2 NONE
+resource PULLDOWN 3 NONE
+resource PULLDOWN 4 NONE
+
+# timer
+timer B08 AF3
+# pin B08: TIM10 CH1 (AF3)
+timer C08 AF3
+# pin C08: TIM8 CH3 (AF3)
+timer B00 AF2
+# pin B00: TIM3 CH3 (AF2)
+timer B01 AF2
+# pin B01: TIM3 CH4 (AF2)
+timer A03 AF1
+# pin A03: TIM2 CH4 (AF1)
+timer A02 AF1
+# pin A02: TIM2 CH3 (AF1)
+timer B06 AF2
+# pin B06: TIM4 CH1 (AF2)
+timer A08 AF1
+# pin A08: TIM1 CH1 (AF1)
+timer A09 AF1
+# pin A09: TIM1 CH2 (AF1)
+timer A10 AF1
+# pin A10: TIM1 CH3 (AF1)
+
+# dma
+dma SPI_SDO 1 NONE
+dma SPI_SDO 2 NONE
+dma SPI_SDO 3 NONE
+dma SPI_SDI 1 NONE
+dma SPI_SDI 2 NONE
+dma SPI_SDI 3 NONE
+dma SPI_TX 1 NONE
+dma SPI_TX 2 NONE
+dma SPI_TX 3 NONE
+dma SPI_RX 1 NONE
+dma SPI_RX 2 NONE
+dma SPI_RX 3 NONE
+dma ADC 1 NONE
+dma ADC 2 1
+# ADC 2: DMA2 Stream 3 Channel 1
+dma ADC 3 NONE
+dma UART_TX 1 NONE
+dma UART_TX 2 NONE
+dma UART_TX 3 NONE
+dma UART_TX 4 NONE
+dma UART_TX 5 NONE
+dma UART_TX 6 NONE
+dma UART_TX 7 NONE
+dma UART_TX 8 NONE
+dma UART_TX 9 NONE
+dma UART_TX 10 NONE
+dma UART_TX 11 NONE
+dma UART_RX 1 NONE
+dma UART_RX 2 NONE
+dma UART_RX 3 NONE
+dma UART_RX 4 NONE
+dma UART_RX 5 NONE
+dma UART_RX 6 NONE
+dma UART_RX 7 NONE
+dma UART_RX 8 NONE
+dma UART_RX 9 NONE
+dma UART_RX 10 NONE
+dma UART_RX 11 NONE
+dma pin B08 NONE
+dma pin C08 NONE
+dma pin B00 0
+# pin B00: DMA1 Stream 7 Channel 5
+dma pin B01 0
+# pin B01: DMA1 Stream 2 Channel 5
+dma pin A03 1
+# pin A03: DMA1 Stream 6 Channel 3
+dma pin A02 0
+# pin A02: DMA1 Stream 1 Channel 3
+dma pin B06 0
+# pin B06: DMA1 Stream 0 Channel 2
+dma pin A08 NONE
+dma pin A09 0
+# pin A09: DMA2 Stream 6 Channel 0
+dma pin A10 0
+# pin A10: DMA2 Stream 6 Channel 0
+
+# feature
+feature -RX_PPM
+feature -INFLIGHT_ACC_CAL
+feature -RX_SERIAL
+feature -MOTOR_STOP
+feature -SERVO_TILT
+feature -SOFTSERIAL
+feature -GPS
+feature -RANGEFINDER
+feature -TELEMETRY
+feature -3D
+feature -RX_PARALLEL_PWM
+feature -RX_MSP
+feature -RSSI_ADC
+feature -LED_STRIP
+feature -DISPLAY
+feature -OSD
+feature -CHANNEL_FORWARDING
+feature -TRANSPONDER
+feature -AIRMODE
+feature -RX_SPI
+feature -ESC_SENSOR
+feature -ANTI_GRAVITY
+feature RX_SERIAL
+feature LED_STRIP
+feature OSD
+feature AIRMODE
+feature ANTI_GRAVITY
+
+# serial
+serial 20 1 115200 57600 0 115200
+serial 0 0 115200 57600 0 115200
+serial 2 0 115200 57600 0 115200
+serial 3 131073 115200 57600 0 115200
+serial 4 64 115200 57600 0 115200
+serial 5 0 115200 57600 0 115200
+
+# master
+set gyro_to_use = FIRST
+set baro_bustype = SPI
+set baro_spi_device = 3
+set baro_i2c_device = 0
+set baro_i2c_address = 0
+set msp_override_failsafe = OFF
+set adc_device = 2
+set blackbox_device = SPIFLASH
+set motor_kv = 1960
+set dshot_burst = AUTO
+set dshot_bitbang = AUTO
+set dshot_bitbang_timer = AUTO
+set current_meter = ADC
+set battery_meter = ADC
+set vbat_scale = 110
+set ibata_scale = 510
+set beeper_inversion = ON
+set beeper_od = OFF
+set beeper_frequency = 0
+set system_hse_mhz = 8
+set vtx_spi_bus = 0
+set max7456_clock = NOMINAL
+set max7456_spi_bus = 3
+set max7456_preinit_opu = OFF
+set led_inversion = 0
+set dashboard_i2c_bus = 0
+set dashboard_i2c_addr = 60
+set pinio_config = 1,1,1,1
+set pinio_box = 40,255,255,255
+set usb_msc_pin_pullup = ON
+set flash_spi_bus = 2
+set gyro_1_bustype = SPI
+set gyro_1_spibus = 1
+set gyro_1_i2cBus = 0
+set gyro_1_i2c_address = 0
+set gyro_1_sensor_align = CW270
+set gyro_1_align_roll = 0
+set gyro_1_align_pitch = 0
+set gyro_1_align_yaw = 2700
+set gyro_2_bustype = NONE
+set gyro_2_spibus = 0
+set gyro_2_i2cBus = 0
+set gyro_2_i2c_address = 0
+set gyro_2_sensor_align = DEFAULT
+set gyro_2_align_roll = 0
+set gyro_2_align_pitch = 0
+set gyro_2_align_yaw = 0
+set i2c1_pullup = OFF
+set i2c1_clockspeed_khz = 800
+set i2c2_pullup = OFF
+set i2c2_clockspeed_khz = 800
+set i2c3_pullup = OFF
+set i2c3_clockspeed_khz = 800
+set mco2_on_pc9 = OFF
+set scheduler_relax_rx = 25
+set scheduler_relax_osd = 25
+set box_user_1_name = -
+set box_user_2_name = -
+set box_user_3_name = -
+set box_user_4_name = -
+
+# end the command batch
+batch end
+
+# 

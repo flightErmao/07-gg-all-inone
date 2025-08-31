@@ -1,0 +1,18 @@
+status
+MCU F40X Clock=168MHz (PLLP-HSE), Vref=3.29V, Core temp=56degC
+Stack size: 2048, Stack address: 0x1000fff0
+Configuration: CONFIGURED, size: 4134, max available: 16384
+Devices detected: SPI:2, I2C:0
+Gyros detected: gyro 1 locked
+GYRO=ICM42688P, ACC=ICM42688P, BARO=DPS310
+OSD: MSP (53 x 20)
+BUILD KEY: 11d5294045a17eb6ac118f7143f52a8b (4.5.0)
+System Uptime: 78 seconds, Current Time: 2025-08-30T23:53:00.971+00:00
+CPU:48%, cycle time: 123, GYRO rate: 8130, RX rate: 15, System rate: 9
+Voltage: 3 * 0.01V (0S battery - INIT)
+I2C Errors: 0
+FLASH: JEDEC ID=0x00ef4018 16M
+GPS: NOT ENABLED
+Arming disable flags: RXLOSS CLI MSP
+
+# 

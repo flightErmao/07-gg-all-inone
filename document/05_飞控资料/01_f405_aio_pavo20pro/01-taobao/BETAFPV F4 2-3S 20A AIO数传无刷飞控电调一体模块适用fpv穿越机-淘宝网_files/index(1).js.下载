@@ -1,0 +1,46 @@
+var DETAIL_VERSION = window.__DETAIL_VERSION || "2024";
+var IS_PRE = window.NEW_DETAIL_ENV === "pre";
+var RESOURCE_INFO = {
+    2024: {
+        pre: "0.0.16",
+        prod: "0.0.78",
+    },
+    2025: {
+        pre: "0.0.1",
+        prod: "0.0.17",
+    },
+};
+var VERSION = RESOURCE_INFO[DETAIL_VERSION][IS_PRE ? "pre" : "prod"];
+var ASSET_VERSION = VERSION;
+var ASSET_PATH = "//".concat(IS_PRE ? "dev." : "", "g.alicdn.com/tbpc/pc-detail-").concat(DETAIL_VERSION, "/").concat(VERSION, "/");
+
+function loadCssFile(url, id) {
+    var ele = null;
+    (ele = document.getElementById(id));
+    if (!ele) {
+        ele = document.createElement("link");
+        (ele.id = id);
+        ele.rel = "stylesheet";
+        document.head.appendChild(ele);
+    }
+    ele.href = url;
+}
+function loadJsFile(url, id) {
+    var ele = null;
+    (ele = document.getElementById(id));
+    if (!ele) {
+        ele = document.createElement("script");
+        (ele.id = id);
+        ele.charset = "utf-8";
+        ele.crossorigin = "anonymous";
+        document.body.appendChild(ele);
+    }
+    ele.src = url;
+}
+
+window.__DETAIL_VERSION = DETAIL_VERSION;
+window.__ASSET_VERSION = ASSET_VERSION;
+window.__ASSET_PATH__ = ASSET_PATH;
+window.__FRONTDEND_VERSION = "cover_".concat(DETAIL_VERSION, "_").concat(ASSET_VERSION);
+loadCssFile(window.__ASSET_PATH__ + "css/main.css", "mainCss");
+loadJsFile(window.__ASSET_PATH__ + "js/main.js", "mainJs");

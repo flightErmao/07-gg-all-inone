@@ -1,0 +1,165 @@
+diff all
+
+# version
+# Betaflight / STM32F405 (S405) 4.5.0 Dec  2 2024 / 07:10:30 (c155f5830) MSP API: 1.46
+# config rev: cb1d3ac
+
+# start the command batch
+batch start
+
+# reset configuration to default settings
+defaults nosave
+
+board_name BETAFPVF405
+manufacturer_id BEFH
+mcu_id 003e00273434471936303236
+signature 
+
+# name: Pavo20 Pro
+
+# resources
+resource SERIAL_TX 6 NONE
+resource PINIO 1 C06
+
+# feature
+feature LED_STRIP
+feature OSD
+
+# serial
+serial 3 131073 115200 57600 0 115200
+serial 4 64 115200 57600 0 115200
+
+# beacon
+beacon RX_LOST
+beacon RX_SET
+
+# led
+led 0 0,0::C:10
+led 1 1,0::C:10
+
+# aux
+aux 0 0 2 1700 2100 0 0
+aux 1 1 0 900 1300 0 0
+aux 2 2 0 1300 1700 0 0
+aux 3 13 3 1700 2100 0 0
+aux 4 35 3 1700 2100 0 0
+aux 5 40 4 1700 2100 0 0
+
+# master
+set gyro_lpf1_static_hz = 0
+set gyro_lpf2_static_hz = 550
+set dyn_notch_count = 1
+set dyn_notch_q = 400
+set dyn_notch_min_hz = 250
+set dyn_notch_max_hz = 500
+set gyro_lpf1_dyn_min_hz = 0
+set acc_calibration = -2,-16,-27,1
+set baro_hardware = AUTO
+set max_check = 2000
+set serialrx_provider = SBUS
+set dshot_idle_value = 1000
+set dshot_bidir = ON
+set motor_pwm_protocol = DSHOT300
+set motor_poles = 12
+set motor_output_reordering = 2,3,0,1,4,5,6,7
+set align_board_roll = 180
+set vbat_max_cell_voltage = 440
+set vbat_min_cell_voltage = 340
+set ibata_scale = 510
+set ibata_offset = -300
+set small_angle = 180
+set pid_process_denom = 2
+set simplified_gyro_filter_multiplier = 110
+set osd_rssi_dbm_alarm = -100
+set osd_vbat_pos = 3118
+set osd_rssi_pos = 192
+set osd_link_quality_pos = 448
+set osd_rssi_dbm_pos = 416
+set osd_rsnr_pos = 160
+set osd_tim_2_pos = 3182
+set osd_flymode_pos = 2625
+set osd_g_force_pos = 2593
+set osd_throttle_pos = 2599
+set osd_crosshairs_pos = 313
+set osd_current_pos = 2111
+set osd_mah_drawn_pos = 3151
+set osd_craft_name_pos = 2081
+set osd_altitude_pos = 2103
+set osd_warnings_pos = 14933
+set osd_avg_cell_voltage_pos = 3111
+set osd_esc_tmp_pos = 129
+set osd_flip_arrow_pos = 2561
+set osd_core_temp_pos = 3144
+set debug_mode = GYRO_SCALED
+set pinio_box = 40,255,255,255
+set craft_name = Pavo20 Pro
+
+profile 0
+
+# profile 0
+set dterm_lpf1_dyn_min_hz = 86
+set dterm_lpf1_dyn_max_hz = 172
+set dterm_lpf1_static_hz = 86
+set dterm_lpf2_static_hz = 172
+set anti_gravity_gain = 40
+set p_pitch = 68
+set i_pitch = 139
+set d_pitch = 60
+set f_pitch = 0
+set p_roll = 54
+set i_roll = 111
+set d_roll = 44
+set f_roll = 0
+set p_yaw = 54
+set i_yaw = 111
+set f_yaw = 0
+set d_min_roll = 44
+set d_min_pitch = 60
+set feedforward_averaging = 2_POINT
+set feedforward_smooth_factor = 50
+set simplified_master_multiplier = 115
+set simplified_i_gain = 115
+set simplified_d_gain = 130
+set simplified_pi_gain = 105
+set simplified_dmax_gain = 0
+set simplified_feedforward_gain = 0
+set simplified_pitch_d_gain = 120
+set simplified_pitch_pi_gain = 120
+set simplified_dterm_filter_multiplier = 115
+set tpa_rate = 60
+set tpa_breakpoint = 1250
+
+profile 1
+
+profile 2
+
+profile 3
+
+# restore original profile selection
+profile 0
+
+rateprofile 0
+
+# rateprofile 0
+set thr_mid = 65
+set thr_expo = 20
+set rates_type = BETAFLIGHT
+set roll_rc_rate = 100
+set pitch_rc_rate = 100
+set yaw_rc_rate = 100
+set roll_srate = 70
+set pitch_srate = 70
+set yaw_srate = 70
+
+rateprofile 1
+
+rateprofile 2
+
+rateprofile 3
+
+# restore original rateprofile selection
+rateprofile 0
+
+# save configuration
+save
+# 
