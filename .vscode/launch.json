@@ -24,7 +24,7 @@
             ]
         },
         {
-            "name": "01-STM32F427VI",
+            "name": "02-STM32F427VI",
             "type": "cortex-debug",
             "request": "launch",
             "cwd": "${workspaceRoot}",
@@ -32,6 +32,25 @@
             "serverpath": "${env:JLINK_SERVER}",
             "servertype": "jlink",
             "device": "STM32F427VI",
+            "interface": "swd",
+            "armToolchainPath": "${workspaceRoot}/tools/toolchain/arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi/bin",
+            "serialNumber": "", //If you have more than one J-Link probe, add the serial number here.
+            // "svdFile": "target/amov/icf5/GD32F4xx.svd",
+            //"runToMain": true,
+            "showDevDebugOutput": "raw",
+            "openOCDLaunchCommands": [
+                "adapter_khz 4000"
+            ]
+        },
+        {
+            "name": "03-STM32F405RG",
+            "type": "cortex-debug",
+            "request": "launch",
+            "cwd": "${workspaceRoot}",
+            "executable": "target/01-stm32/stm32f405-smdz-breadfruit/rt-thread.elf",
+            "serverpath": "${env:JLINK_SERVER}",
+            "servertype": "jlink",
+            "device": "STM32F405RG",
             "interface": "swd",
             "armToolchainPath": "${workspaceRoot}/tools/toolchain/arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi/bin",
             "serialNumber": "", //If you have more than one J-Link probe, add the serial number here.
