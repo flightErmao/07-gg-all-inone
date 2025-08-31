@@ -17,7 +17,9 @@
 #endif /* RT_USING_NANO */
 
 // atkp led0 pin
-#define LED0_PIN GET_PIN(A, 14)
+// #define LED0_PIN GET_PIN(A, 14)
+// provo20 led0 pin
+#define LED0_PIN GET_PIN(B, 5)
 
 int main(void)
 {
