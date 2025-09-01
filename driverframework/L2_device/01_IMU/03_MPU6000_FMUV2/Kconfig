@@ -1,0 +1,23 @@
+config BSP_USING_MPU6000
+    bool "Enable MPU6000 IMU Sensor"
+    default n
+    select BSP_USING_SPI
+    help
+        Enable MPU6000 IMU sensor support
+        
+    if BSP_USING_MPU6000
+        config SENSOR_NAME_MPU6000
+            string "IMU MPU6000 NAME FOR TASK FIND"
+            default "mpu6000"
+        config SENSOR_SPI_NAME_MPU6000
+            string "IMU MPU6000 SPI NAME"
+            default "spi1"
+        config SENSOR_MPU6000_SPI_CS_PIN
+            string "IMU MPU6000 SPI CS PIN"
+            default "GET_PIN(A, 4)"
+        config SENSOR_MPU6000_DEBUGPIN_EN
+            bool "ENABLE: DEBUG PIN"
+            default n
+            help
+                ENABLE: DEBUG PIN
+    endif

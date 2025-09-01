@@ -6,4 +6,8 @@ menu "01 IMU CONFIG"
             menu "02 MPU6500_minifly CONFIG"
                 source "$(PROJECT_ROOT)/driverframework/L2_device/01_IMU/02_MPU6500_minifly/Kconfig"
             endmenu
+
+            menu "03 MPU6000_FMUV2 CONFIG"
+                source "$(PROJECT_ROOT)/driverframework/L2_device/01_IMU/03_MPU6000_FMUV2/Kconfig"
+            endmenu
 endmenu   

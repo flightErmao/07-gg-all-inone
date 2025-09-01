@@ -145,6 +145,7 @@
 #define RT_USING_SERIAL
 #define RT_USING_SERIAL_V1
 #define RT_SERIAL_RB_BUFSZ 64
+#define RT_USING_SPI
 #define RT_USING_PIN
 /* end of Device Drivers */
 
@@ -435,6 +436,14 @@
 /* 02 MPU6500_minifly CONFIG */
 
 /* end of 02 MPU6500_minifly CONFIG */
+
+/* 03 MPU6000_FMUV2 CONFIG */
+
+#define BSP_USING_MPU6000
+#define SENSOR_NAME_MPU6000 "mpu6000"
+#define SENSOR_SPI_NAME_MPU6000 "spi1"
+#define SENSOR_MPU6000_SPI_CS_PIN "GET_PIN(A, 4)"
+/* end of 03 MPU6000_FMUV2 CONFIG */
 /* end of 01 IMU CONFIG */
 
 /* 02 RC CONFIG */
@@ -475,6 +484,7 @@
 #define BSP_USING_UART
 #define BSP_STM32_UART_V1_TX_TIMEOUT 2000
 #define BSP_USING_UART1
+#define BSP_USING_SPI
 #define BSP_USING_USBD
 /* end of L3_PERIPHERAL_CONFIG */
 /* end of DriverFramework Config */

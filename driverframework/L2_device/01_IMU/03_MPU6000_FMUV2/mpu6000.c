@@ -13,15 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *****************************************************************************/
-#include <firmament.h>
+#include "rtdevice.h"
+#include "rtthread.h"
 
-#include "driver/imu/mpu6000.h"
-#include "hal/accel/accel.h"
-#include "hal/gyro/gyro.h"
-#include "hal/spi/spi.h"
+#include "mpu6000.h"
 #include "module/math/conversion.h"
 
 #define DRV_DBG(...) console_printf(__VA_ARGS__)
+
+// 字节序转换函数
+static int16_t int16_t_from_bytes(uint8_t* bytes) {
+    return (int16_t)((bytes[0] << 8) | bytes[1]);
+}
 
 #define DIR_READ  0x80
 #define DIR_WRITE 0x00
@@ -363,13 +366,13 @@ static rt_err_t _init(void)
 
     while (--tries != 0) {
         _write_reg(MPUREG_PWR_MGMT_1, BIT_H_RESET);
-        systime_udelay(10000);
+        rt_thread_mdelay(10);
 
         // Wake up device and select GyroZ clock. Note that the
         // MPU6000 starts up in sleep mode, and it can take some time
         // for it to come out of sleep
         _write_checked_reg(MPUREG_PWR_MGMT_1, MPU_CLK_SEL_PLLGYROZ);
-        systime_udelay(1000);
+        rt_thread_mdelay(1);
 
         // Disable I2C bus (recommended on datasheet)
         _write_checked_reg(MPUREG_USER_CTRL, BIT_I2C_IF_DIS);
@@ -380,7 +383,7 @@ static rt_err_t _init(void)
             break;
         }
 
-        systime_udelay(2000);
+        rt_thread_mdelay(2);
     }
 
     r_res = _read_reg(MPUREG_PWR_MGMT_1, &reg_val);
@@ -389,7 +392,7 @@ static rt_err_t _init(void)
         return RT_ERROR;
     }
 
-    systime_udelay(1000);
+    rt_thread_mdelay(1);
 
     // SAMPLE RATE
     if (_set_sample_rate(MPU6000_ACCEL_DEFAULT_RATE) != RT_EOK) {
@@ -397,7 +400,7 @@ static rt_err_t _init(void)
         return RT_ERROR;
     }
 
-    systime_udelay(1000);
+    rt_thread_mdelay(1);
 
     // FS & DLPF   FS=2000 deg/s, DLPF = 20Hz (low pass filter)
     // was 90 Hz, but this ruins quality and does not improve the
@@ -407,21 +410,21 @@ static rt_err_t _init(void)
         return RT_ERROR;
     }
 
-    systime_udelay(1000);
+    rt_thread_mdelay(1);
 
     _set_gyro_range(2000);
 
-    systime_udelay(1000);
+    rt_thread_mdelay(1);
 
     _set_accel_range(8);
 
-    systime_udelay(1000);
+    rt_thread_mdelay(1);
 
     // INT CFG => Interrupt on Data Ready
     _write_checked_reg(MPUREG_INT_ENABLE, BIT_RAW_RDY_EN); // INT: Raw data ready
-    systime_udelay(1000);
+    rt_thread_mdelay(1);
     _write_checked_reg(MPUREG_INT_PIN_CFG, BIT_INT_ANYRD_2CLEAR); // INT: Clear on any read
-    systime_udelay(1000);
+    rt_thread_mdelay(1);
 
     // if (is_icm_device()) {
     // 	_write_checked_reg(MPUREG_ICM_UNDOC1, MPUREG_ICM_UNDOC1_VALUE);
@@ -490,136 +493,170 @@ static rt_err_t mpu6000_acc_read_m_s2(float acc[3])
     return res;
 }
 
-static rt_err_t gyro_config(gyro_dev_t gyro, const struct gyro_configure* cfg)
-{
-    rt_err_t ret = RT_EOK;
+// 全局变量用于C接口
+static void (*delay_ms_func_)(unsigned int) = NULL;
+static int8_t (*spi_write_func_)(uint8_t, uint8_t, uint8_t*, uint8_t) = NULL;
+static int8_t (*spi_read_func_)(uint8_t, uint8_t, uint8_t*, uint8_t) = NULL;
+static bool is_initialized_ = false;
 
-    if (cfg == RT_NULL) {
-        return RT_EINVAL;
+// 内部延时函数
+static void delay_ms_wrapper(unsigned int ms) {
+    if (delay_ms_func_ != NULL) {
+        delay_ms_func_(ms);
+    } else {
+        rt_thread_mdelay(ms);
     }
-
-    ret |= _set_gyro_range(cfg->gyro_range_dps);
-
-    ret |= _set_sample_rate(cfg->sample_rate_hz);
-
-    ret |= _set_dlpf_filter(cfg->dlpf_freq_hz);
-
-    gyro->config = *cfg;
-
-    return ret;
 }
 
-static rt_err_t gyro_control(gyro_dev_t gyro, int cmd, void* arg)
-{
-    return RT_EOK;
+// 内部SPI写函数
+static int8_t spi_write_wrapper(uint8_t devAddress, uint8_t memAddress, uint8_t* data, uint8_t len) {
+    if (spi_write_func_ != NULL) {
+        return spi_write_func_(devAddress, memAddress, data, len);
+    }
+    return MPU_ERROR;
 }
 
-static rt_size_t gyro_read(gyro_dev_t gyro, rt_off_t pos, void* data, rt_size_t size)
-{
-    if (data == RT_NULL) {
-        return 0;
+// 内部SPI读函数
+static int8_t spi_read_wrapper(uint8_t devAddress, uint8_t memAddress, uint8_t* data, uint8_t len) {
+    if (spi_read_func_ != NULL) {
+        return spi_read_func_(devAddress, memAddress, data, len);
     }
-
-    if (mpu6000_gyr_read_rad(((float*)data)) != RT_EOK) {
-        return 0;
-    }
-
-    return size;
+    return MPU_ERROR;
 }
 
-const static struct gyro_ops _gyro_ops = {
-    gyro_config,
-    gyro_control,
-    gyro_read,
-};
-
-static rt_err_t accel_config(accel_dev_t accel, const struct accel_configure* cfg)
-{
-    rt_err_t ret = RT_EOK;
-
-    if (cfg == RT_NULL) {
-        return RT_EINVAL;
+// C接口实现
+extern "C" int drv_mpu6000_init(void) {
+    if (is_initialized_) {
+        return MPU_EOK;
     }
-
-    ret |= _set_accel_range(cfg->acc_range_g);
-
-    ret |= _set_sample_rate(cfg->sample_rate_hz);
-
-    ret |= _set_dlpf_filter(cfg->dlpf_freq_hz);
-
-    accel->config = *cfg;
-
-    return ret;
+    
+    rt_err_t res = _init();
+    if (res == RT_EOK) {
+        is_initialized_ = true;
+        return MPU_EOK;
+    }
+    return MPU_ERROR;
 }
 
-static rt_err_t accel_control(accel_dev_t accel, int cmd, void* arg)
-{
-    return RT_EOK;
+extern "C" int drv_mpu6000_set_delay(void (*delay_ms)(unsigned int)) {
+    delay_ms_func_ = delay_ms;
+    return MPU_EOK;
 }
 
-static rt_size_t accel_read(accel_dev_t accel, rt_off_t pos, void* data, rt_size_t size)
-{
-    if (data == RT_NULL) {
-        return 0;
-    }
-
-    if (mpu6000_acc_read_m_s2(((float*)data)) != RT_EOK) {
-        return 0;
-    }
-
-    return size;
+extern "C" int drv_mpu6000_set_spi_funcs(int8_t (*write_func)(uint8_t, uint8_t, uint8_t*, uint8_t),
+                                         int8_t (*read_func)(uint8_t, uint8_t, uint8_t*, uint8_t)) {
+    spi_write_func_ = write_func;
+    spi_read_func_ = read_func;
+    return MPU_EOK;
 }
 
-const static struct accel_ops _accel_ops = {
-    accel_config,
-    accel_control,
-    accel_read,
-};
-
-rt_err_t mpu6000_drv_init(const char* spi_device_name, const char* gyro_device_name, const char* accel_device_name)
-{
-    rt_err_t ret = RT_EOK;
-    static struct accel_device accel_dev = {
-        .ops = &_accel_ops,
-        .config = ACCEL_CONFIG_DEFAULT,
-        .bus_type = GYRO_SPI_BUS_TYPE
-    };
-    static struct gyro_device gyro_dev = {
-        .ops = &_gyro_ops,
-        .config = GYRO_CONFIG_DEFAULT,
-        .bus_type = GYRO_SPI_BUS_TYPE
-    };
-
-    spi_device = rt_device_find(spi_device_name);
-
-    if (spi_device == RT_NULL) {
-        console_printf("spi device %s not found!\r\n", spi_device_name);
-        return RT_EEMPTY;
+extern "C" int drv_mpu6000_read(int pos, void* data, int size) {
+    if (!is_initialized_ || data == NULL) {
+        return MPU_ERROR;
     }
-
-    /* config spi */
-    {
-        struct rt_spi_configuration cfg;
-        cfg.data_width = 8;
-        cfg.mode = RT_SPI_MODE_3 | RT_SPI_MSB; /* SPI Compatible Modes 3 */
-        cfg.max_hz = 3000000;
-
-        struct rt_spi_device* spi_device_t = (struct rt_spi_device*)spi_device;
-
-        spi_device_t->config.data_width = cfg.data_width;
-        spi_device_t->config.mode = cfg.mode & RT_SPI_MODE_MASK;
-        spi_device_t->config.max_hz = cfg.max_hz;
-        ret |= rt_spi_configure(spi_device_t, &cfg);
+    
+    // 根据pos读取不同类型的数据
+    switch (pos) {
+        case 0: // IMU_POS_GYRO - 陀螺仪数据
+            if (size >= 12) { // 3个float，每个4字节
+                float gyro_data[3];
+                rt_err_t res = mpu6000_gyr_read_rad(gyro_data);
+                if (res == RT_EOK) {
+                    memcpy(data, gyro_data, 12);
+                    return 12;
+                }
+            }
+            break;
+            
+        case 1: // IMU_POS_ACC_GYRO - 加速度计和陀螺仪数据
+            if (size >= 24) { // 6个float，每个4字节
+                float acc_data[3], gyro_data[3];
+                rt_err_t res1 = mpu6000_acc_read_m_s2(acc_data);
+                rt_err_t res2 = mpu6000_gyr_read_rad(gyro_data);
+                if (res1 == RT_EOK && res2 == RT_EOK) {
+                    memcpy(data, acc_data, 12);
+                    memcpy((uint8_t*)data + 12, gyro_data, 12);
+                    return 24;
+                }
+            }
+            break;
+            
+        case 2: // IMU_POS_TEMP - 温度数据
+            if (size >= 4) { // 1个float，4字节
+                // 读取温度寄存器
+                uint8_t temp_raw[2];
+                rt_err_t res = read_multi_reg(MPUREG_TEMP_OUT_H, temp_raw, 2);
+                if (res == RT_EOK) {
+                    int16_t temp_raw_val = int16_t_from_bytes(temp_raw);
+                    float temp = (float)temp_raw_val / 340.0f + 36.53f; // MPU6000温度转换公式
+                    memcpy(data, &temp, 4);
+                    return 4;
+                }
+            }
+            break;
     }
-
-    /* driver internal init */
-    ret |= _init();
-
-    /* register gyro hal device */
-    ret |= hal_gyro_register(&gyro_dev, gyro_device_name, RT_DEVICE_FLAG_RDWR, RT_NULL);
-
-    /* register accel hal device */
-    ret |= hal_accel_register(&accel_dev, accel_device_name, RT_DEVICE_FLAG_RDWR, RT_NULL);
-
-    return ret;
+    
+    return MPU_ERROR;
 }
+
+extern "C" int drv_mpu6000_get_accel(int16_t* ax, int16_t* ay, int16_t* az) {
+    if (!is_initialized_ || ax == NULL || ay == NULL || az == NULL) {
+        return MPU_ERROR;
+    }
+    
+    int16_t acc_raw[3];
+    rt_err_t res = mpu6000_acc_read_raw(acc_raw);
+    if (res == RT_EOK) {
+        *ax = acc_raw[0];
+        *ay = acc_raw[1];
+        *az = acc_raw[2];
+        return MPU_EOK;
+    }
+    return MPU_ERROR;
+}
+
+extern "C" int drv_mpu6000_get_gyro(int16_t* gx, int16_t* gy, int16_t* gz) {
+    if (!is_initialized_ || gx == NULL || gy == NULL || gz == NULL) {
+        return MPU_ERROR;
+    }
+    
+    int16_t gyro_raw[3];
+    rt_err_t res = mpu6000_gyr_read_raw(gyro_raw);
+    if (res == RT_EOK) {
+        *gx = gyro_raw[0];
+        *gy = gyro_raw[1];
+        *gz = gyro_raw[2];
+        return MPU_EOK;
+    }
+    return MPU_ERROR;
+}
+
+extern "C" int drv_mpu6000_get_temp(float* temp) {
+    if (!is_initialized_ || temp == NULL) {
+        return MPU_ERROR;
+    }
+    
+    uint8_t temp_raw[2];
+    rt_err_t res = read_multi_reg(MPUREG_TEMP_OUT_H, temp_raw, 2);
+    if (res == RT_EOK) {
+        int16_t temp_raw_val = int16_t_from_bytes(temp_raw);
+        *temp = (float)temp_raw_val / 340.0f + 36.53f; // MPU6000温度转换公式
+        return MPU_EOK;
+    }
+    return MPU_ERROR;
+}
+
+extern "C" int drv_mpu6000_self_test(void) {
+    if (!is_initialized_) {
+        return MPU_ERROR;
+    }
+    
+    // 简单的自检：读取设备ID
+    uint8_t whoami;
+    rt_err_t res = _read_reg(MPUREG_WHOAMI, &whoami);
+    if (res == RT_EOK && whoami == MPU_WHOAMI_6000) {
+        return MPU_EOK;
+    }
+    return MPU_ERROR;
+}
+
