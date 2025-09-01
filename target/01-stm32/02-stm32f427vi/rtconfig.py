@@ -1,9 +1,25 @@
 import os
 
+# 编译配置选项
+# 设置为 True 时，将重要的基础警告视为错误；设置为 False 时，警告不会阻止编译
+# 
+# 警告控制说明：
+# C 编译器特有：
+# -Werror=implicit-function-declaration: 隐式函数声明警告转为错误（防止调用未声明的函数）
+# 
+# C/C++ 通用：
+# -Werror=return-type: 函数返回值类型警告转为错误（防止函数返回值不匹配）
+# -Werror=uninitialized: 未初始化变量警告转为错误（防止使用未初始化的变量）
+# -Werror=unused-variable: 未使用变量警告转为错误（防止定义未使用的变量）
+# -Werror=unused-function: 未使用函数警告转为错误（防止定义未使用的函数）
+# -Wall: 启用大部分常用警告（但不包括过于严格的警告）
+TREAT_WARNINGS_AS_ERRORS = True
+
 # toolchains options
 ARCH='arm'
 CPU='cortex-m4'
 CROSS_TOOL='gcc'
+PLATFORM='gcc'
 
 # bsp lib config
 BSP_LIBRARY_TYPE = None
@@ -14,167 +30,58 @@ if os.getenv('RTT_ROOT'):
     RTT_ROOT = os.getenv('RTT_ROOT')
 
 # cross_tool provides the cross compiler
-# EXEC_PATH is the compiler execute path, for example, CodeSourcery, Keil MDK, IAR
-if  CROSS_TOOL == 'gcc':
-    PLATFORM    = 'gcc'
-    EXEC_PATH   = r'C:\Users\XXYYZZ'
-elif CROSS_TOOL == 'keil':
-    PLATFORM    = 'armcc'
-    EXEC_PATH   = r'C:/Keil_v5'
-elif CROSS_TOOL == 'iar':
-    PLATFORM    = 'iccarm'
-    EXEC_PATH   = r'C:/Program Files (x86)/IAR Systems/Embedded Workbench 8.3'
+# EXEC_PATH is the compiler execute path
+if CROSS_TOOL == 'gcc':
+    EXEC_PATH = r'C:\Users\XXYYZZ'
+else:
+    EXEC_PATH = r'C:\Users\XXYYZZ'
 
 if os.getenv('RTT_EXEC_PATH'):
     EXEC_PATH = os.getenv('RTT_EXEC_PATH')
 
 BUILD = 'debug'
 
-if PLATFORM == 'gcc':
-    # toolchains
-    PREFIX = 'arm-none-eabi-'
-    CC = PREFIX + 'gcc'
-    AS = PREFIX + 'gcc'
-    AR = PREFIX + 'ar'
-    CXX = PREFIX + 'g++'
-    LINK = PREFIX + 'gcc'
-    TARGET_EXT = 'elf'
-    SIZE = PREFIX + 'size'
-    OBJDUMP = PREFIX + 'objdump'
-    OBJCPY = PREFIX + 'objcopy'
+# GCC toolchain configuration
+PREFIX = 'arm-none-eabi-'
+CC = PREFIX + 'gcc'
+AS = PREFIX + 'gcc'
+AR = PREFIX + 'ar'
+CXX = PREFIX + 'g++'
+LINK = PREFIX + 'gcc'
+TARGET_EXT = 'elf'
+SIZE = PREFIX + 'size'
+OBJDUMP = PREFIX + 'objdump'
+OBJCPY = PREFIX + 'objcopy'
 
-    DEVICE = ' -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard -ffunction-sections -fdata-sections'
-    CFLAGS = DEVICE + ' -Dgcc'
-    AFLAGS = ' -c' + DEVICE + ' -x assembler-with-cpp -Wa,-mimplicit-it=thumb '
-    LFLAGS = DEVICE + ' -Wl,--gc-sections,-Map=rt-thread.map,-cref,-u,Reset_Handler -T board/linker_scripts/link.lds'
+DEVICE = ' -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard -ffunction-sections -fdata-sections'
+CFLAGS = DEVICE + ' -Dgcc'
+AFLAGS = ' -c' + DEVICE + ' -x assembler-with-cpp -Wa,-mimplicit-it=thumb '
+LFLAGS = DEVICE + ' -Wl,--gc-sections,-Map=rtthread.map,-cref,-u,Reset_Handler -T board/linker_scripts/link.lds'
 
-    CPATH = ''
-    LPATH = ''
+CPATH = ''
+LPATH = ''
 
-    if BUILD == 'debug':
-        CFLAGS += ' -O0 -gdwarf-2 -g'
-        AFLAGS += ' -gdwarf-2'
-    else:
-        CFLAGS += ' -O2'
+if BUILD == 'debug':
+    CFLAGS += ' -O0 -gdwarf-2 -g'
+    AFLAGS += ' -gdwarf-2'
+else:
+    CFLAGS += ' -O2'
 
-    CXXFLAGS = CFLAGS 
+# 定义 CXXFLAGS
+CXXFLAGS = CFLAGS
 
-    POST_ACTION = OBJCPY + ' -O binary $TARGET rtthread.bin\n' + SIZE + ' $TARGET \n'
+# 警告控制选项
+if TREAT_WARNINGS_AS_ERRORS:
+    # C 编译器：基础警告视为错误
+    CFLAGS += ' -Werror=implicit-function-declaration -Werror=return-type -Werror=uninitialized -Werror=unused-variable -Werror=unused-function -Wall'
+    # C++ 编译器：C++ 特有的警告控制（不支持隐式函数声明警告）
+    CXXFLAGS += ' -Werror=return-type -Werror=uninitialized -Werror=unused-variable -Werror=unused-function -Wall'
+else:
+    # 普通模式：显示警告但不阻止编译
+    CFLAGS += ' -Wall'
+    CXXFLAGS += ' -Wall' 
 
-elif PLATFORM == 'armcc':
-    # toolchains
-    CC = 'armcc'
-    CXX = 'armcc'
-    AS = 'armasm'
-    AR = 'armar'
-    LINK = 'armlink'
-    TARGET_EXT = 'axf'
-
-    DEVICE = ' --cpu Cortex-M4.fp '
-    CFLAGS = '-c ' + DEVICE + ' --apcs=interwork --c99'
-    AFLAGS = DEVICE + ' --apcs=interwork '
-    LFLAGS = DEVICE + ' --scatter "board\linker_scripts\link.sct" --info sizes --info totals --info unused --info veneers --list rt-thread.map --strict'
-    CFLAGS += ' -I' + EXEC_PATH + '/ARM/ARMCC/include'
-    LFLAGS += ' --libpath=' + EXEC_PATH + '/ARM/ARMCC/lib'
-
-    CFLAGS += ' -D__MICROLIB '
-    AFLAGS += ' --pd "__MICROLIB SETA 1" '
-    LFLAGS += ' --library_type=microlib '
-    EXEC_PATH += '/ARM/ARMCC/bin/'
-
-    if BUILD == 'debug':
-        CFLAGS += ' -g -O0'
-        AFLAGS += ' -g'
-    else:
-        CFLAGS += ' -O2'
-
-    CXXFLAGS = CFLAGS 
-    CFLAGS += ' -std=c99'
-
-    POST_ACTION = 'fromelf --bin $TARGET --output rtthread.bin \nfromelf -z $TARGET'
-
-elif PLATFORM == 'armclang':
-    # toolchains
-    CC = 'armclang'
-    CXX = 'armclang'
-    AS = 'armasm'
-    AR = 'armar'
-    LINK = 'armlink'
-    TARGET_EXT = 'axf'
-
-    DEVICE = ' --cpu Cortex-M4.fp '
-    CFLAGS = ' --target=arm-arm-none-eabi -mcpu=cortex-m4 '
-    CFLAGS += ' -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 '
-    CFLAGS += ' -mfloat-abi=hard -c -fno-rtti -funsigned-char -fshort-enums -fshort-wchar '
-    CFLAGS += ' -gdwarf-3 -ffunction-sections '
-    AFLAGS = DEVICE + ' --apcs=interwork '
-    LFLAGS = DEVICE + ' --info sizes --info totals --info unused --info veneers '
-    LFLAGS += ' --list rt-thread.map '
-    LFLAGS += r' --strict --scatter "board\linker_scripts\link.sct" '
-    CFLAGS += ' -I' + EXEC_PATH + '/ARM/ARMCLANG/include'
-    LFLAGS += ' --libpath=' + EXEC_PATH + '/ARM/ARMCLANG/lib'
-
-    EXEC_PATH += '/ARM/ARMCLANG/bin/'
-
-    if BUILD == 'debug':
-        CFLAGS += ' -g -O1' # armclang recommend
-        AFLAGS += ' -g'
-    else:
-        CFLAGS += ' -O2'
-        
-    CXXFLAGS = CFLAGS
-    CFLAGS += ' -std=c99'
-
-    POST_ACTION = 'fromelf --bin $TARGET --output rtthread.bin \nfromelf -z $TARGET'
-
-elif PLATFORM == 'iccarm':
-    # toolchains
-    CC = 'iccarm'
-    CXX = 'iccarm'
-    AS = 'iasmarm'
-    AR = 'iarchive'
-    LINK = 'ilinkarm'
-    TARGET_EXT = 'out'
-
-    DEVICE = '-Dewarm'
-
-    CFLAGS = DEVICE
-    CFLAGS += ' --diag_suppress Pa050'
-    CFLAGS += ' --no_cse'
-    CFLAGS += ' --no_unroll'
-    CFLAGS += ' --no_inline'
-    CFLAGS += ' --no_code_motion'
-    CFLAGS += ' --no_tbaa'
-    CFLAGS += ' --no_clustering'
-    CFLAGS += ' --no_scheduling'
-    CFLAGS += ' --endian=little'
-    CFLAGS += ' --cpu=Cortex-M4'
-    CFLAGS += ' -e'
-    CFLAGS += ' --fpu=VFPv4_sp'
-    CFLAGS += ' --dlib_config "' + EXEC_PATH + '/arm/INC/c/DLib_Config_Normal.h"'
-    CFLAGS += ' --silent'
-
-    AFLAGS = DEVICE
-    AFLAGS += ' -s+'
-    AFLAGS += ' -w+'
-    AFLAGS += ' -r'
-    AFLAGS += ' --cpu Cortex-M4'
-    AFLAGS += ' --fpu VFPv4_sp'
-    AFLAGS += ' -S'
-
-    if BUILD == 'debug':
-        CFLAGS += ' --debug'
-        CFLAGS += ' -On'
-    else:
-        CFLAGS += ' -Oh'
-
-    LFLAGS = ' --config "board/linker_scripts/link.icf"'
-    LFLAGS += ' --entry __iar_program_start'
-
-    CXXFLAGS = CFLAGS
-    
-    EXEC_PATH = EXEC_PATH + '/arm/bin/'
-    POST_ACTION = 'ielftool --bin $TARGET rtthread.bin'
+POST_ACTION = OBJCPY + ' -O binary $TARGET rtthread.bin\n' + SIZE + ' $TARGET \n'
 
 def dist_handle(BSP_ROOT, dist_dir):
     import sys
