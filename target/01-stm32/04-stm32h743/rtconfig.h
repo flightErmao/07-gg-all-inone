@@ -189,6 +189,19 @@
 
 /* Using USB legacy version */
 
+#define RT_USING_USB
+#define RT_USING_USB_DEVICE
+#define RT_USBD_THREAD_STACK_SZ 4096
+#define USB_VENDOR_ID 0x0FFE
+#define USB_PRODUCT_ID 0x0001
+#define RT_USB_DEVICE_COMPOSITE
+#define RT_USB_DEVICE_CDC
+#define RT_USB_DEVICE_NONE
+#define RT_VCOM_TASK_STK_SIZE 512
+#define RT_CDC_RX_BUFSIZE 128
+#define RT_VCOM_SERNO "32021919830108"
+#define RT_VCOM_SER_LEN 14
+#define RT_VCOM_TX_TIMEOUT 1000
 /* end of Using USB legacy version */
 /* end of RT-Thread Components */
 
@@ -257,6 +270,8 @@
 
 /* tools packages */
 
+#define PKG_USING_VCONSOLE
+#define PKG_USING_VCONSOLE_LATEST_VERSION
 /* end of tools packages */
 
 /* system packages */
@@ -461,12 +476,13 @@
 /* L3_PERIPHERAL_CONFIG */
 
 #define L3_PERIPHERAL_01_HSE_CONFIG_EN
-#define MCU_HSE_8MHZ
-#define HSE_VALUE 8000000
+#define MCU_HSE_25MHZ
+#define HSE_VALUE 25000000
 #define BSP_USING_GPIO
 #define BSP_USING_UART
 #define BSP_STM32_UART_V1_TX_TIMEOUT 6000
 #define BSP_USING_UART1
+#define BSP_USING_USBD
 /* end of L3_PERIPHERAL_CONFIG */
 /* end of DriverFramework Config */
 
