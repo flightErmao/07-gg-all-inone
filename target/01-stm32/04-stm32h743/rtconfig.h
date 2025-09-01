@@ -319,10 +319,6 @@
 /* NUVOTON Drivers */
 
 /* end of NUVOTON Drivers */
-
-/* GD32 Drivers */
-
-/* end of GD32 Drivers */
 /* end of HAL & SDK Drivers */
 
 /* sensors drivers */
@@ -405,20 +401,73 @@
 #define SOC_FAMILY_STM32
 #define SOC_SERIES_STM32H7
 
-/* Hardware Drivers Config */
+/* DriverFramework Config */
 
-/* Onboard Peripheral Drivers */
+/* L0_TASK_CONFIG */
 
-/* On-chip Peripheral Drivers */
+/* end of L0_TASK_CONFIG */
 
+/* L1_MIDDLEWARE_CONFIG */
+
+#define L1_MIDDLEWARE_01_MODULE_01_FLOATCONVER_EN
+/* end of L1_MIDDLEWARE_CONFIG */
+
+/* L2_DEVICE_CONFIG */
+
+/* 01 IMU CONFIG */
+
+/* 01 ICM42688_130 CONFIG */
+
+/* end of 01 ICM42688_130 CONFIG */
+
+/* 02 MPU6500_minifly CONFIG */
+
+/* end of 02 MPU6500_minifly CONFIG */
+
+/* 03 MPU6000_FMUV2 CONFIG */
+
+/* end of 03 MPU6000_FMUV2 CONFIG */
+/* end of 01 IMU CONFIG */
+
+/* 02 RC CONFIG */
+
+/* 03 MOTOR CONFIG */
+
+/* 01 PWM CONFIG */
+
+/* end of 01 PWM CONFIG */
+
+/* 02 DSHOT CONFIG */
+
+/* end of 02 DSHOT CONFIG */
+/* end of 03 MOTOR CONFIG */
+
+/* 04 BARO CONFIG */
+
+/* 01 SPL16 CONFIG */
+
+/* end of 01 SPL16 CONFIG */
+
+/* 02 SPA06 CONFIG */
+
+/* end of 02 SPA06 CONFIG */
+
+/* 03 DPS3XX CONFIG */
+
+/* end of 03 DPS3XX CONFIG */
+/* end of 04 BARO CONFIG */
+/* end of L2_DEVICE_CONFIG */
+
+/* L3_PERIPHERAL_CONFIG */
+
+#define L3_PERIPHERAL_01_HSE_CONFIG_EN
+#define MCU_HSE_8MHZ
+#define HSE_VALUE 8000000
 #define BSP_USING_GPIO
 #define BSP_USING_UART
 #define BSP_STM32_UART_V1_TX_TIMEOUT 6000
 #define BSP_USING_UART1
-/* end of On-chip Peripheral Drivers */
-
-/* Board extended module Drivers */
-
-/* end of Hardware Drivers Config */
+/* end of L3_PERIPHERAL_CONFIG */
+/* end of DriverFramework Config */
 
 #endif
