@@ -1,0 +1,14 @@
+status
+MCU H743 (Rev.V) Clock=480MHz, Vref=3.32V, Core temp=50degC
+Stack size: 2048, Stack address: 0x2001fff8
+Configuration: CONFIGURED, size: 3913, max available: 131072
+Devices detected: SPI:1, I2C:2
+Gyros detected: gyro 1 locked
+GYRO=BMI270, ACC=BMI270, BARO=DPS310, MAG=IST8310
+OSD: MSP (53 x 20)
+BUILD KEY: f3b82c03b127906a4381b25e77fca750 (4.5.2)
+System Uptime: 157 seconds, Current Time: 2025-09-01T13:00:45.081+00:00
+CPU:1%, cycle time: 0, GYRO rate: 0, RX rate: 0, System rate: 9
+Voltage: 0 * 0.01V (0S battery - NOT PRESENT)
+I2C Errors: 0
+SD card: Manufacturer 0xfe, 7800832kB, 06/2007, v2.0, 'SZYL
