@@ -1,6 +1,6 @@
 menuconfig L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN
     bool "ENABLE: L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN"
-    default y
+    default n
     help
         Enable debug pin module that provides 4 configurable debug pins for debugging purposes.
         
