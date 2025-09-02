@@ -360,6 +360,9 @@
 
 /* samples: kernel and components samples */
 
+#define PKG_USING_PERIPHERAL_SAMPLES
+#define PKG_USING_PERIPHERAL_SAMPLES_LATEST_VERSION
+#define PERIPHERAL_SAMPLES_USING_SPI
 /* end of samples: kernel and components samples */
 
 /* entertainment: terminal games and other interesting software packages */

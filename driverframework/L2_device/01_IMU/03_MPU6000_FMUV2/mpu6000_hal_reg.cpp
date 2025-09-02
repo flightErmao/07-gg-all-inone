@@ -1,25 +1,17 @@
 #include "rtdevice.h"
 #include "rtthread.h"
 #include "imu.h"
-#include "mpu6000.h"
+#include "mpu6000.hpp"
 #include <string.h>
+
+#include "spi_interface.hpp"
 
 #ifdef SENSOR_MPU6000_DEBUGPIN_EN
 #include "debugPin.h"
 #endif
 
-#define IMU_CONFIGURE                                                                                  \
-  {                                                                                                    \
-      3200,           IMU_GYRO_MODE_NORMAL, 800, IMU_ACC_MODE_OSR2, GYRO_SCALE_2000DPS, ACC_SCALE_16G, \
-      IMU_TEMP_SCALE, IMU_TEMP_OFFSET,                                                                 \
-  }
-
 #ifndef MPU6000_INT_EVENT_FLAG
 #define MPU6000_INT_EVENT_FLAG (1u << 0)
-#endif
-
-#ifndef SENSOR_MPU6000_INT_PIN
-#define SENSOR_MPU6000_INT_PIN SENSOR_MPU6000_INT_PIN
 #endif
 
 static struct rt_event mpu6000_int_event;
@@ -56,32 +48,44 @@ static rt_err_t mpu6000_interrupt_gpio_init(void) {
   return RT_EOK;
 }
 
+static SpiInterface g_spi;  // 全局静态 SPI 对象
 static rt_device_t spi_device;
 
 static int8_t spiBusRead_wrap(uint8_t devAddress, uint8_t memAddress, uint8_t* data, uint8_t len) {
-  // SPI读取实现
-  rt_uint8_t cmd = 0x80 | memAddress; // 读命令，最高位为1
-  rt_spi_send_then_recv((struct rt_spi_device*)spi_device, &cmd, 1, data, len);
+  (void)devAddress;
+  if ((size_t)(len + 1) > SPI_INTERFACE_USERBUF_MAX) {
+    return -1;
+  }
+  uint8_t tx_buf[SPI_INTERFACE_USERBUF_MAX];
+  uint8_t rx_buf[SPI_INTERFACE_USERBUF_MAX];
+  tx_buf[0] = (rt_uint8_t)(0x80 | memAddress);
+  memset(&tx_buf[1], 0xFF, len);
+  int ret = g_spi.transfer(tx_buf, rx_buf, (size_t)len + 1);
+  if (ret != (int)((size_t)len + 1)) {
+    return -1;
+  }
+  memcpy(data, &rx_buf[1], len);
   return 0;
 }
 
 static int8_t spiBusWrite_wrap(uint8_t devAddress, uint8_t memAddress, uint8_t* data, uint8_t len) {
-  // SPI写入实现
-  rt_uint8_t send_buffer[256]; // 假设最大256字节
-  send_buffer[0] = memAddress; // 写命令，最高位为0
-  if (len > 0) {
-    memcpy(&send_buffer[1], data, len);
+  (void)devAddress;
+  uint8_t tmp[SPI_INTERFACE_USERBUF_MAX];
+  if ((size_t)(len + 1) > sizeof(tmp)) {
+    return -1;
   }
-  rt_device_write(spi_device, 0, send_buffer, len + 1);
-  return 0;
+  tmp[0] = memAddress;  // 写命令，高位为0
+  if (len > 0) {
+    memcpy(&tmp[1], data, len);
+  }
+  int ret = g_spi.write(tmp, (size_t)len + 1);
+  return (ret == (int)((size_t)len + 1)) ? 0 : -1;
 }
 
-static void delay_ms_wrap(unsigned int ms) { 
-  rt_thread_mdelay(ms); 
-}
+static void delay_ms_wrap(unsigned int ms) { rt_thread_mdelay(ms); }
 
 static int8_t mpu6000_read_data(imu_dev_t imu, rt_off_t pos, void* data, rt_size_t size) {
-  if (data == NULL) {
+  if (data == RT_NULL) {
     return -RT_EINVAL;
   }
 
@@ -92,7 +96,6 @@ static int8_t mpu6000_read_data(imu_dev_t imu, rt_off_t pos, void* data, rt_size
     rt_event_recv(&mpu6000_int_event, MPU6000_INT_EVENT_FLAG, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR,
                   RT_WAITING_FOREVER, RT_NULL);
   }
-
 #ifdef SENSOR_MPU6000_DEBUGPIN_EN
   DEBUG_PIN_DEBUG0_LOW();
   DEBUG_PIN_DEBUG1_HIGH();
@@ -105,7 +108,7 @@ static int8_t mpu6000_read_data(imu_dev_t imu, rt_off_t pos, void* data, rt_size
 }
 
 const static struct imu_ops mpu6000_dev = {
-    .imu_config = NULL,
+    .imu_config = RT_NULL,
     .imu_read = mpu6000_read_data,
 };
 
@@ -115,62 +118,52 @@ static struct imu_device imu_dev = {
 };
 
 static rt_err_t mpu6000_init(const char* spi_device_name) {
-  spi_device = rt_device_find(spi_device_name);
-  if (spi_device == RT_NULL) {
-    console_printf("spi device %s not found!\r\n", spi_device_name);
-    return RT_EEMPTY;
+  (void)spi_device_name;  // 不再使用此参数，转由 Kconfig 提供完整参数
+
+  // 初始化 SPI 接口（总线名、从设备名、CS 引脚名）
+  if (!g_spi.init(SENSOR_SPI_NAME_MPU6000, SENSOR_SPI_SLAVE_NAME_MPU6000, SENSOR_MPU6000_SPI_CS_PIN_NAME)) {
+    console_printf("init spi failed: bus=%s slave=%s cs=%s\r\n", SENSOR_SPI_NAME_MPU6000, SENSOR_SPI_SLAVE_NAME_MPU6000,
+                   SENSOR_MPU6000_SPI_CS_PIN_NAME);
+    return RT_ERROR;
   }
 
-  /* config spi */
-  {
-    struct rt_spi_configuration cfg;
-    cfg.data_width = 8;
-    cfg.mode = RT_SPI_MODE_3 | RT_SPI_MSB; /* SPI Compatible Modes 3 */
-    cfg.max_hz = 3000000;
-
-    struct rt_spi_device* spi_device_t = (struct rt_spi_device*)spi_device;
-
-    spi_device_t->config.data_width = cfg.data_width;
-    spi_device_t->config.mode = cfg.mode & RT_SPI_MODE_MASK;
-    spi_device_t->config.max_hz = cfg.max_hz;
-    rt_spi_configure(spi_device_t, &cfg);
+  // 配置 SPI 时钟与模式，并打开设备
+  if (!g_spi.configure(RT_SPI_MODE_3 | RT_SPI_MSB, SENSOR_MPU6000_SPI_MAX_HZ)) {
+    return RT_ERROR;
+  }
+  if (g_spi.open(RT_DEVICE_OFLAG_RDWR) != RT_EOK) {
+    return RT_ERROR;
   }
 
-  /* 打开SPI设备 */
-  rt_device_open(spi_device, RT_DEVICE_OFLAG_RDWR);
-
-  /* 设置驱动函数 */
+  // 设置 MPU 驱动侧的 SPI 访问函数与延迟
   drv_mpu6000_set_spi_funcs(spiBusWrite_wrap, spiBusRead_wrap);
   drv_mpu6000_set_delay(delay_ms_wrap);
 
-  /* 初始化MPU6000 */
+  // 初始化底层传感器
   int ret = drv_mpu6000_init();
   if (ret != 0) {
     return RT_ERROR;
   }
 
-  /* 初始化中断事件 */
+  // 初始化中断事件与GPIO
   rt_err_t result = mpu6000_interrupt_event_init();
   if (result != RT_EOK) {
     return result;
   }
-  
-  /* 初始化中断GPIO */
   result = mpu6000_interrupt_gpio_init();
   if (result != RT_EOK) {
     return result;
   }
 
-  /* 注册IMU设备 */
+  // 注册IMU设备
   hal_imu_register(&imu_dev, SENSOR_NAME_MPU6000, RT_DEVICE_FLAG_RDWR, RT_NULL);
 
   return RT_EOK;
 }
 
-static int mpu6000_init_auto(void) {
-  return mpu6000_init(SENSOR_SPI_NAME_MPU6000);
-}
-
+extern "C" {
+static int mpu6000_init_auto(void) { return mpu6000_init(SENSOR_SPI_NAME_MPU6000); }
 #ifdef BSP_USING_MPU6000
 INIT_COMPONENT_EXPORT(mpu6000_init_auto);
 #endif
+}

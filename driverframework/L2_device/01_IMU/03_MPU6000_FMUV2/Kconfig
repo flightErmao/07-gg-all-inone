@@ -10,11 +10,18 @@ config BSP_USING_MPU6000
             string "IMU MPU6000 NAME FOR TASK FIND"
             default "mpu6000"
         config SENSOR_SPI_NAME_MPU6000
-            string "IMU MPU6000 SPI NAME"
+            string "IMU MPU6000 SPI BUS NAME"
             default "spi1"
-        config SENSOR_MPU6000_SPI_CS_PIN
-            string "IMU MPU6000 SPI CS PIN"
-            default "GET_PIN(A, 4)"
+        config SENSOR_SPI_SLAVE_NAME_MPU6000
+            string "IMU MPU6000 SPI SLAVE NAME"
+            default "spi10"
+        config SENSOR_MPU6000_SPI_CS_PIN_NAME
+            string "IMU MPU6000 SPI CS PIN NAME (e.g. PA4)"
+            default "PA4"
+        config SENSOR_MPU6000_SPI_MAX_HZ
+            int "IMU MPU6000 SPI MAX CLOCK (Hz)"
+            default 3000000
+            range 100000 20000000
         config SENSOR_MPU6000_DEBUGPIN_EN
             bool "ENABLE: DEBUG PIN"
             default n

@@ -7,6 +7,7 @@ path = []
 
 if GetDepend(['BSP_USING_SPI']):
     src += Glob('./*.c')
+    src += Glob('./*.cpp')
     path += [cwd]
 
 # 定义编译组

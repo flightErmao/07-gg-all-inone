@@ -3,6 +3,10 @@ menuconfig BSP_USING_SPI
     default n
     select RT_USING_SPI
     if BSP_USING_SPI
+        config SPI_INTERFACE_USERBUF_MAX
+            int "SPI interface user buffer max length"
+            default 64
+            range 8 4096
         menuconfig BSP_USING_SPI1
             bool "Enable SPI1 BUS"
             default n
@@ -22,7 +26,7 @@ menuconfig BSP_USING_SPI
                         string "SPI10 SLAVE BUS NAME"
                         default "spi10"
                     endif
-            endif
+            endif            
         menuconfig BSP_USING_SPI2
             bool "Enable SPI2 BUS"
             default n
