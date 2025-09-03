@@ -172,6 +172,7 @@
 
 /* end of Interprocess Communication (IPC) */
 /* end of POSIX (Portable Operating System Interface) layer */
+#define RT_USING_CPLUSPLUS
 /* end of C/C++ and POSIX layer */
 
 /* Network */
@@ -445,7 +446,9 @@
 #define BSP_USING_MPU6000
 #define SENSOR_NAME_MPU6000 "mpu6000"
 #define SENSOR_SPI_NAME_MPU6000 "spi1"
-#define SENSOR_MPU6000_SPI_CS_PIN "GET_PIN(A, 4)"
+#define SENSOR_SPI_SLAVE_NAME_MPU6000 "spi10"
+#define SENSOR_MPU6000_SPI_CS_PIN_NAME "PC2"
+#define SENSOR_MPU6000_SPI_MAX_HZ 3000000
 /* end of 03 MPU6000_FMUV2 CONFIG */
 /* end of 01 IMU CONFIG */
 
@@ -488,6 +491,9 @@
 #define BSP_STM32_UART_V1_TX_TIMEOUT 2000
 #define BSP_USING_UART1
 #define BSP_USING_SPI
+#define BSP_USING_SPI1
+#define BSP_SPI1_TX_USING_DMA
+#define BSP_SPI1_RX_USING_DMA
 #define BSP_USING_USBD
 /* end of L3_PERIPHERAL_CONFIG */
 /* end of DriverFramework Config */

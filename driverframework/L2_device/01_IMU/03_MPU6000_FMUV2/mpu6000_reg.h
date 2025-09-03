@@ -106,4 +106,9 @@
 
 #define MPU6000_ONE_G 9.80665f
 
+#define MPU_EOK 0
+#define MPU_ERROR -1
+
+#define M_PI_F 3.1415926f
+
 #endif  // MPU6000_REG_H_

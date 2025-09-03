@@ -3,10 +3,6 @@ menuconfig BSP_USING_SPI
     default n
     select RT_USING_SPI
     if BSP_USING_SPI
-        config SPI_INTERFACE_USERBUF_MAX
-            int "SPI interface user buffer max length"
-            default 64
-            range 8 4096
         menuconfig BSP_USING_SPI1
             bool "Enable SPI1 BUS"
             default n
@@ -18,14 +14,6 @@ menuconfig BSP_USING_SPI
                 config BSP_SPI1_RX_USING_DMA
                     bool "Enable SPI1 RX DMA"
                     default n
-                menuconfig BSP_USING_SPI10
-                    bool "Enable SPI10 SLAVE BUS"
-                    default n
-                    if BSP_USING_SPI10
-                        config SPI_SLAVE_NAME_SPI10
-                        string "SPI10 SLAVE BUS NAME"
-                        default "spi10"
-                    endif
             endif            
         menuconfig BSP_USING_SPI2
             bool "Enable SPI2 BUS"
@@ -38,14 +26,6 @@ menuconfig BSP_USING_SPI
                 config BSP_SPI2_RX_USING_DMA
                     bool "Enable SPI2 RX DMA"
                     default n                
-                menuconfig BSP_USING_SPI20
-                    bool "Enable SPI20 SLAVE BUS"
-                    default n
-                    if BSP_USING_SPI20
-                        config SPI_SLAVE_NAME_SPI20
-                        string "SPI20 SLAVE BUS NAME"
-                        default "spi20"
-                    endif
             endif
     endif
 
