@@ -15,7 +15,8 @@ class Mpu6000 {
   Mpu6000();
   ~Mpu6000();
 
-  int set_io_functions(WriteRegFn write_fn, ReadMultiRegFn read_fn, DelayMsFn delay_fn);
+  int set_io_functions(int (*write_fn)(uint8_t, uint8_t), int (*read_fn)(uint8_t, uint8_t*, uint8_t),
+                       void (*delay_ms)(unsigned int));
   int init();
   int read_gyro_rad(float gyr[3]);
   int read_accel_m_s2(float acc[3]);
@@ -48,7 +49,8 @@ class Mpu6000 {
 
 extern "C" {
 int drv_mpu6000_set_delay(void (*delay_ms)(unsigned int));
-int drv_mpu6000_set_rw(int (*write_fn)(uint8_t, uint8_t), int (*read_fn)(uint8_t, uint8_t*, uint8_t));
+int drv_mpu6000_set_fn(int (*write_fn)(uint8_t, uint8_t), int (*read_fn)(uint8_t, uint8_t*, uint8_t),
+                       void (*delay_ms)(unsigned int));
 int drv_mpu6000_init(void);
 int drv_mpu6000_read(int pos, void* data, int size);
 }

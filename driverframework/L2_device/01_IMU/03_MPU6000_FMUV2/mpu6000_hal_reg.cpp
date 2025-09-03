@@ -43,12 +43,11 @@ static rt_err_t mpu6000_init(const char *spi_bus_name, const char *spi_slave_nam
     return RT_ERROR;
   }
 
-  if (!g_spi_.configure(RT_SPI_MODE_3 | RT_SPI_MSB, spi_max_hz)) {
+  if (!g_spi_.configure((RT_SPI_MODE_3 | RT_SPI_MSB) & RT_SPI_MODE_MASK, spi_max_hz)) {
     return RT_ERROR;
   }
 
-  drv_mpu6000_set_rw(write_reg_wrap, read_multi_wrap);
-  drv_mpu6000_set_delay(delay_ms_wrap);
+  drv_mpu6000_set_fn(write_reg_wrap, read_multi_wrap, delay_ms_wrap);
 
   int ret = drv_mpu6000_init();
   if (ret != 0) {

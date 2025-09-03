@@ -285,13 +285,10 @@ int Mpu6000::read_burst_imu(uint8_t out14[14]) {
 
 extern "C" {
 
-int drv_mpu6000_set_delay(void (*delay_ms)(unsigned int)) {
-  return Mpu6000::instance().set_io_functions(nullptr, nullptr, delay_ms) == MPU_EOK ? MPU_EOK : MPU_ERROR;
-}
-
-int drv_mpu6000_set_rw(int (*write_fn)(uint8_t, uint8_t), int (*read_fn)(uint8_t, uint8_t*, uint8_t)) {
+int drv_mpu6000_set_fn(int (*write_fn)(uint8_t, uint8_t), int (*read_fn)(uint8_t, uint8_t*, uint8_t),
+                       void (*delay_ms)(unsigned int)) {
   Mpu6000& d = Mpu6000::instance();
-  return d.set_io_functions(write_fn, read_fn, d.get_delay_ms()) == MPU_EOK ? MPU_EOK : MPU_ERROR;
+  return d.set_io_functions(write_fn, read_fn, delay_ms) == MPU_EOK ? MPU_EOK : MPU_ERROR;
 }
 
 int drv_mpu6000_init(void) { return Mpu6000::instance().init(); }

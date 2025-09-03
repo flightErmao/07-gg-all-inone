@@ -74,9 +74,6 @@ bool SpiInterface::configure(rt_uint16_t mode, rt_uint32_t max_hz) {
   cfg.data_width = 8;
   cfg.mode = mode;
   cfg.max_hz = max_hz;
-  spi_device_->config.data_width = cfg.data_width;
-  spi_device_->config.mode = cfg.mode & RT_SPI_MODE_MASK;
-  spi_device_->config.max_hz = cfg.max_hz;
   return (rt_spi_configure(spi_device_, &cfg) == RT_EOK);
 }
 
