@@ -1,0 +1,17 @@
+from building import *
+import os
+
+# Get current directory
+cwd = GetCurrentDir()
+path = [cwd]
+src = []
+group = []
+
+src = Glob("./*.c")
+src += Glob("./*.cpp")
+
+group = DefineGroup(
+    "TASK_DEMO_03_SPI_TEST_EN", src, depend=["TASK_DEMO_03_SPI_TEST_EN"], CPPPATH=path
+)
+
+Return("group")

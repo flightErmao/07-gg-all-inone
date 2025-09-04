@@ -1,6 +1,7 @@
 menu "L0_TASK_CONFIG"
     source "$(PROJECT_ROOT)/driverframework/L0_task/01_demo/TASK_01_LED_BLINK/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L0_task/01_demo/TASK_02_UART_TEST/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L0_task/01_demo/TASK_03_SPI_TEST/Kconfig"
     
     source "$(PROJECT_ROOT)/driverframework/L0_task/02_tools/TASK_01_ANOTC_TELEM/Kconfig"
 

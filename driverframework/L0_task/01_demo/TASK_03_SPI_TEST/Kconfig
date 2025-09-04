@@ -1,0 +1,39 @@
+menuconfig TASK_DEMO_03_SPI_TEST_EN
+    bool "ENABLE: TASK_DEMO_03_SPI_TEST_EN"
+    default n
+    select BSP_USING_SPI
+    help
+        Enable SPI test task for IMU42688 sensor
+        
+    if TASK_DEMO_03_SPI_TEST_EN
+        config TASK_DEMO_03_SPI_TEST_SPI_BUS_NAME
+            string "SPI BUS NAME for IMU42688"
+            default "spi1"
+            help
+                SPI bus name for IMU42688 sensor
+                
+        config TASK_DEMO_03_SPI_TEST_SPI_SLAVE_NAME
+            string "SPI SLAVE NAME for IMU42688"
+            default "spi10"
+            help
+                SPI slave name for IMU42688 sensor
+                
+        config TASK_DEMO_03_SPI_TEST_SPI_CS_PIN_NAME
+            string "SPI CS PIN NAME for IMU42688 (e.g. PA4)"
+            default "PA4"
+            help
+                SPI CS pin name for IMU42688 sensor
+                
+        config TASK_DEMO_03_SPI_TEST_SPI_MAX_HZ
+            int "SPI MAX CLOCK (Hz) for IMU42688"
+            default 10000000
+            range 100000 20000000
+            help
+                Maximum SPI clock frequency for IMU42688 sensor
+                
+        config TASK_DEMO_03_SPI_TEST_DEBUGPIN_EN
+            bool "ENABLE: DEBUG PIN"
+            default n
+            help
+                Enable debug pin for SPI test
+    endif
