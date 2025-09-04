@@ -1,7 +1,6 @@
 menuconfig PROJECT_MINIFLY_TASK_SENSOR_EN
     bool "ENABLE: PROJECT_MINIFLY_TASK_SENSOR_EN"
     default n
-    select BSP_USING_MPU6500_MINIFLY
     help
         Enable sensor test task that periodically calls sensor test interface.
     if PROJECT_MINIFLY_TASK_SENSOR_EN
@@ -15,5 +14,11 @@ menuconfig PROJECT_MINIFLY_TASK_SENSOR_EN
             default n
             help
                 Enable ATKP logging for the sensor task.
+        
+        config PROJECT_MINIFLY_TASK_SENSOR_TIMER_TRIGGER_EN
+            bool "ENABLE: PROJECT_MINIFLY_TASK_SENSOR_TIMER_TRIGGER_EN"
+            default n
+            help
+                Enable timer-triggered sampling for the sensor task. When enabled, a software timer periodically releases an event, and the task blocks waiting for this event before reading IMU data.
 
     endif

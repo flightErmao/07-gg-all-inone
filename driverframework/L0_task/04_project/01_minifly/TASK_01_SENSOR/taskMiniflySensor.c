@@ -23,6 +23,16 @@ MCN_DEFINE(minifly_sensor_imu, sizeof(sensorData_t));
 
 static McnNode_t sensor_sub_node = RT_NULL;
 
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_TIMER_TRIGGER_EN
+#define SENSOR_EVENT_FLAG_TRIGGER (1u << 0)
+static struct rt_event sensor_event;
+static rt_timer_t sensor_timer = RT_NULL;
+static void sensor_timer_cb(void *parameter) {
+  RT_UNUSED(parameter);
+  rt_event_send(&sensor_event, SENSOR_EVENT_FLAG_TRIGGER);
+}
+#endif
+
 static int sensor_imu_echo(void *parameter) {
   sensorData_t sensor_data;
 
@@ -68,6 +78,21 @@ static void rtosToolsInit(void) {
   if (sensor_sub_node == RT_NULL) {
     rt_kprintf("Failed to subscribe to minifly_sensor_imu topic\n");
   }
+
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_TIMER_TRIGGER_EN
+  rt_event_init(&sensor_event, "sns_evt", RT_IPC_FLAG_PRIO);
+  if (sensor_timer == RT_NULL) {
+    /* Default 10ms period; adjust if needed */
+    rt_tick_t period_ticks = rt_tick_from_millisecond(1);
+    sensor_timer = rt_timer_create("sns_tmr", sensor_timer_cb, RT_NULL, period_ticks,
+                                   RT_TIMER_FLAG_PERIODIC | RT_TIMER_FLAG_SOFT_TIMER);
+    if (sensor_timer) {
+      rt_timer_start(sensor_timer);
+    } else {
+      rt_kprintf("Failed to create sensor timer\n");
+    }
+  }
+#endif
 }
 
 static void sensor_minifly_thread_entry(void *parameter) {
@@ -80,6 +105,13 @@ static void sensor_minifly_thread_entry(void *parameter) {
   sensorData_t sensors_data = {0};
 
   while (1) {
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_TIMER_TRIGGER_EN
+    {
+      rt_uint32_t received = 0;
+      rt_event_recv(&sensor_event, SENSOR_EVENT_FLAG_TRIGGER, RT_EVENT_FLAG_AND | RT_EVENT_FLAG_CLEAR,
+                    RT_WAITING_FOREVER, &received);
+    }
+#endif
     if (dev_sensor_imu) {
       int rb = rt_device_read(dev_sensor_imu, 0, sensor_buffer, SENSORS_MPU6500_BUFF_LEN);
       if (rb == SENSORS_MPU6500_BUFF_LEN) {

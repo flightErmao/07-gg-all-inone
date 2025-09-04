@@ -145,6 +145,8 @@
 #define RT_USING_SERIAL
 #define RT_USING_SERIAL_V1
 #define RT_SERIAL_RB_BUFSZ 64
+#define RT_USING_I2C
+#define RT_USING_I2C_BITOPS
 #define RT_USING_SPI
 #define RT_USING_PIN
 /* end of Device Drivers */
@@ -270,6 +272,8 @@
 
 /* tools packages */
 
+#define PKG_USING_UMCN
+#define PKG_USING_UMCN_LATEST_VERSION
 #define PKG_USING_VCONSOLE
 #define PKG_USING_VCONSOLE_LATEST_VERSION
 /* end of tools packages */
@@ -363,7 +367,6 @@
 
 #define PKG_USING_PERIPHERAL_SAMPLES
 #define PKG_USING_PERIPHERAL_SAMPLES_LATEST_VERSION
-#define PERIPHERAL_SAMPLES_USING_SPI
 /* end of samples: kernel and components samples */
 
 /* entertainment: terminal games and other interesting software packages */
@@ -423,10 +426,14 @@
 
 /* L0_TASK_CONFIG */
 
+#define PROJECT_MINIFLY_TASK_SENSOR_EN
+#define PROJECT_MINIFLY_TASK_SENSOR_IMU_NAME "mpu6000"
+#define PROJECT_MINIFLY_TASK_SENSOR_TIMER_TRIGGER_EN
 /* end of L0_TASK_CONFIG */
 
 /* L1_MIDDLEWARE_CONFIG */
 
+#define L1_MIDDLEWARE_01_MODULE_01_FLOATCONVER_EN
 /* end of L1_MIDDLEWARE_CONFIG */
 
 /* L2_DEVICE_CONFIG */
@@ -448,7 +455,7 @@
 #define SENSOR_SPI_NAME_MPU6000 "spi1"
 #define SENSOR_SPI_SLAVE_NAME_MPU6000 "spi10"
 #define SENSOR_MPU6000_SPI_CS_PIN_NAME "PC2"
-#define SENSOR_MPU6000_SPI_MAX_HZ 3000000
+#define SENSOR_MPU6000_SPI_MAX_HZ 10000000
 /* end of 03 MPU6000_FMUV2 CONFIG */
 /* end of 01 IMU CONFIG */
 

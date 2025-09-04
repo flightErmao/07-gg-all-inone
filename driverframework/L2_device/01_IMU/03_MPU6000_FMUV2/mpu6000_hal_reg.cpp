@@ -65,6 +65,6 @@ static int mpu6000_init_auto(void) {
                       SENSOR_MPU6000_SPI_MAX_HZ, SENSOR_NAME_MPU6000);
 }
 #ifdef BSP_USING_MPU6000
-INIT_COMPONENT_EXPORT(mpu6000_init_auto);
+INIT_ENV_EXPORT(mpu6000_init_auto);
 #endif
 }
