@@ -63,7 +63,7 @@
 
 /* end of rt_strnlen options */
 /* end of klibc options */
-#define RT_NAME_MAX 8
+#define RT_NAME_MAX 24
 #define RT_CPUS_NR 1
 #define RT_ALIGN_SIZE 8
 #define RT_THREAD_PRIORITY_32
@@ -448,7 +448,7 @@
 #define SENSOR_SPI_NAME_MPU6000 "spi1"
 #define SENSOR_SPI_SLAVE_NAME_MPU6000 "spi10"
 #define SENSOR_MPU6000_SPI_CS_PIN_NAME "PC2"
-#define SENSOR_MPU6000_SPI_MAX_HZ 10000000
+#define SENSOR_MPU6000_SPI_MAX_HZ 3000000
 /* end of 03 MPU6000_FMUV2 CONFIG */
 /* end of 01 IMU CONFIG */
 

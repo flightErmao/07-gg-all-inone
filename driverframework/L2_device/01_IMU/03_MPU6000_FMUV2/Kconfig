@@ -16,8 +16,8 @@ config BSP_USING_MPU6000
             string "IMU MPU6000 SPI SLAVE NAME"
             default "spi10"
         config SENSOR_MPU6000_SPI_CS_PIN_NAME
-            string "IMU MPU6000 SPI CS PIN NAME (e.g. PA4)"
-            default "PA4"
+            string "IMU MPU6000 SPI CS PIN NAME (e.g. PC2)"
+            default "PC2"
         config SENSOR_MPU6000_SPI_MAX_HZ
             int "IMU MPU6000 SPI MAX CLOCK (Hz)"
             default 3000000

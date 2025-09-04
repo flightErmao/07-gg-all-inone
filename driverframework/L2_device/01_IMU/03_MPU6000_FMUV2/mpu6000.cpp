@@ -163,15 +163,13 @@ int Mpu6000::init() {
   uint8_t reg_val = 0;
 
   while (--tries != 0) {
-    if (write_checked(MPUREG_PWR_MGMT_1, BIT_H_RESET) != MPU_EOK) {
-      return MPU_ERROR;
-    }
+    write_reg_(MPUREG_PWR_MGMT_1, BIT_H_RESET);
     delay_ms_(10);
 
     if (write_checked(MPUREG_PWR_MGMT_1, MPU_CLK_SEL_PLLGYROZ) != MPU_EOK) {
       return MPU_ERROR;
     }
-    delay_ms_(1);
+    delay_ms_(10);
 
     if (write_checked(MPUREG_USER_CTRL, BIT_I2C_IF_DIS) != MPU_EOK) {
       return MPU_ERROR;
@@ -274,8 +272,15 @@ int Mpu6000::read_temperature(float* temp_c) {
 
 int Mpu6000::probe() {
   uint8_t who = 0;
-  if (read_reg(MPUREG_WHOAMI, &who) != MPU_EOK) return MPU_ERROR;
-  return (who == MPU_WHOAMI_6000 || who == ICM_WHOAMI_20608) ? MPU_EOK : MPU_ERROR;
+  uint8_t retry = 3;
+  for (uint8_t i = 0; i < retry; i++) {
+    if (read_reg(MPUREG_WHOAMI, &who) != MPU_EOK) return MPU_ERROR;
+    if (who == MPU_WHOAMI_6000 || who == ICM_WHOAMI_20608) {
+      return MPU_EOK;
+    }
+    delay_ms_(100);
+  }
+  return MPU_ERROR;
 }
 
 int Mpu6000::read_burst_imu(uint8_t out14[14]) {
