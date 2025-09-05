@@ -36,6 +36,14 @@ static struct imu_device imu_dev = {
     .ops = &mpu6000_dev, .config = {0},  // 初始化为空配置
 };
 
+static void setImuParam(void){
+  // fill imu config from Kconfig macros
+  imu_dev.config.gyro_scale_factor = (float)SENSOR_MPU6000_GYRO_RANGE_DPS / (1 << 15);
+  imu_dev.config.acc_scale_factor = (float)SENSOR_MPU6000_ACC_RANGE_G / (1 << 15);
+  imu_dev.config.temp_scale = IMU_TEMP_SCALE;
+  imu_dev.config.temp_offset = IMU_TEMP_OFFSET;
+}
+
 static rt_err_t mpu6000_init(const char *spi_bus_name, const char *spi_slave_name, const char *cs_pin_name,
                              int spi_max_hz, const char *imu_name) {
   if (!g_spi_.init(spi_bus_name, spi_slave_name, cs_pin_name)) {
@@ -53,6 +61,7 @@ static rt_err_t mpu6000_init(const char *spi_bus_name, const char *spi_slave_nam
   if (ret != 0) {
     return RT_ERROR;
   }
+  setImuParam();
 
   hal_imu_register(&imu_dev, imu_name, RT_DEVICE_FLAG_RDWR, RT_NULL);
 

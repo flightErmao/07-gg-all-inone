@@ -1,5 +1,5 @@
 #include "mpu6000.hpp"
-
+#include "rtconfig.h"
 #include <string.h>
 
 static inline int16_t be16_to_s16(uint8_t hi, uint8_t lo) { return (int16_t)((int16_t)((uint16_t)hi << 8) | lo); }
@@ -204,9 +204,9 @@ int Mpu6000::init() {
 
   delay_ms_(1);
 
-  (void)set_gyro_range(2000);
+  (void)set_gyro_range(SENSOR_MPU6000_GYRO_RANGE_DPS);
   delay_ms_(1);
-  (void)set_accel_range(8);
+  (void)set_accel_range(SENSOR_MPU6000_ACC_RANGE_G);
   delay_ms_(1);
 
   if (write_checked(MPUREG_INT_ENABLE, BIT_RAW_RDY_EN) != MPU_EOK) {

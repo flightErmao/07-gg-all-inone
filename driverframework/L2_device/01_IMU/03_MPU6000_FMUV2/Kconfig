@@ -9,6 +9,18 @@ config BSP_USING_MPU6000
         config SENSOR_NAME_MPU6000
             string "IMU MPU6000 NAME FOR TASK FIND"
             default "mpu6000"
+        config SENSOR_MPU6000_ACC_RANGE_G
+            int "IMU MPU6000 ACC FULL-SCALE (g)"
+            default 8
+            range 2 16
+            help
+                Accelerometer full-scale range in g. Typical values: 2/4/8/16.
+        config SENSOR_MPU6000_GYRO_RANGE_DPS
+            int "IMU MPU6000 GYRO FULL-SCALE (dps)"
+            default 2000
+            range 250 2000
+            help
+                Gyroscope full-scale range in dps. Typical values: 250/500/1000/2000.
         config SENSOR_SPI_NAME_MPU6000
             string "IMU MPU6000 SPI BUS NAME"
             default "spi1"

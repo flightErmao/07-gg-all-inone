@@ -3,11 +3,8 @@
 #include "sensorsProcess.h"
 #include <math.h>
 
-#define MPU6500_DEG_PER_LSB_2000 (float)((2 * 2000.0) / 65536.0)
-#define SENSORS_DEG_PER_LSB_CFG MPU6500_DEG_PER_LSB_2000
-
-#define MPU6500_G_PER_LSB_16 (float)((2 * 16) / 65536.0)
-#define SENSORS_G_PER_LSB_CFG MPU6500_G_PER_LSB_16
+static float g_gyro_deg_per_lsb = (float)((2 * 2000.0) / 65536.0);
+static float g_acc_g_per_lsb = (float)((2 * 16) / 65536.0);
 
 #define SENSORS_ACC_SCALE_SAMPLES 200
 
@@ -20,8 +17,7 @@ static bool processAccScale(int16_t ax, int16_t ay, int16_t az) {
   static uint32_t accScaleSumCount = 0;
 
   if (!accBiasFound) {
-    accScaleSum += sqrtf(powf(ax * SENSORS_G_PER_LSB_CFG, 2) + powf(ay * SENSORS_G_PER_LSB_CFG, 2) +
-                         powf(az * SENSORS_G_PER_LSB_CFG, 2));
+    accScaleSum += sqrtf(powf(ax * g_acc_g_per_lsb, 2) + powf(ay * g_acc_g_per_lsb, 2) + powf(az * g_acc_g_per_lsb, 2));
     accScaleSumCount++;
 
     if (accScaleSumCount == SENSORS_ACC_SCALE_SAMPLES) {
@@ -56,15 +52,24 @@ sensorData_t processAccGyroMeasurements(const uint8_t* buffer) {
     processAccScale(ax, ay, az);
   }
 
-  sensors.gyro_filter.x = -(gx - gyroBias.x) * SENSORS_DEG_PER_LSB_CFG;
-  sensors.gyro_filter.y = (gy - gyroBias.y) * SENSORS_DEG_PER_LSB_CFG;
-  sensors.gyro_filter.z = (gz - gyroBias.z) * SENSORS_DEG_PER_LSB_CFG;
+  sensors.gyro_filter.x = -(gx - gyroBias.x) * g_gyro_deg_per_lsb;
+  sensors.gyro_filter.y = (gy - gyroBias.y) * g_gyro_deg_per_lsb;
+  sensors.gyro_filter.z = (gz - gyroBias.z) * g_gyro_deg_per_lsb;
   applyAxis3fLpfGyro(&sensors.gyro_filter);
 
-  sensors.acc_filter.x = -(ax)*SENSORS_G_PER_LSB_CFG / accScale;
-  sensors.acc_filter.y = (ay)*SENSORS_G_PER_LSB_CFG / accScale;
-  sensors.acc_filter.z = (az)*SENSORS_G_PER_LSB_CFG / accScale;
+  sensors.acc_filter.x = -(ax)*g_acc_g_per_lsb / accScale;
+  sensors.acc_filter.y = (ay)*g_acc_g_per_lsb / accScale;
+  sensors.acc_filter.z = (az)*g_acc_g_per_lsb / accScale;
   applyAxis3fLpfAcc(&sensors.acc_filter);
 
   return sensors;
+}
+
+void sensorsProcess_set_lsb(float acc_g_per_lsb, float gyro_deg_per_lsb) {
+  if (acc_g_per_lsb > 0.0f) {
+    g_acc_g_per_lsb = acc_g_per_lsb;
+  }
+  if (gyro_deg_per_lsb > 0.0f) {
+    g_gyro_deg_per_lsb = gyro_deg_per_lsb;
+  }
 }

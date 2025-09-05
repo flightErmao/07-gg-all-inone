@@ -65,6 +65,13 @@ static void deviceInit(void) {
   if (dev_temp) {
     rt_device_open(dev_temp, RT_DEVICE_OFLAG_RDWR);
     dev_sensor_imu = dev_temp;
+    static imu_dev_t imu_ptr = RT_NULL;
+    imu_ptr = (imu_dev_t)dev_temp;
+    if (imu_ptr && imu_ptr->ops) {
+      float acc_g_per_lsb = imu_ptr->config.acc_scale_factor;   // g/lsb
+      float gyro_deg_per_lsb = imu_ptr->config.gyro_scale_factor; // dps/lsb      
+      sensorsProcess_set_lsb(acc_g_per_lsb, gyro_deg_per_lsb);
+    }
   }
 }
 
