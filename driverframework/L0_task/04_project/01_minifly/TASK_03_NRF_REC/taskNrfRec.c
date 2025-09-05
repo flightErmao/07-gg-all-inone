@@ -5,6 +5,7 @@
 #include "debugPin.h"
 #endif
 #include "rtconfig.h"
+#include "uartConfig.h"
 
 #define THREAD_PRIORITY 7
 #define THREAD_STACK_SIZE 2048
@@ -155,11 +156,12 @@ static int taskNrfRecInit(void) {
     return -1;
   }
 
-  struct serial_configure config = RT_SERIAL_CONFIG_DEFAULT;
-  config.baud_rate = PROJECT_MINIFLY_TASK_NRF_BAUD_RATE;
-  config.rx_bufsz = BSP_UART2_RX_BUFSIZE;
-  config.tx_bufsz = BSP_UART2_TX_BUFSIZE;
-  config.dma_ping_bufsz = BSP_UART2_DMA_PING_BUFSIZE;
+  struct serial_configure config;
+  rt_err_t config_ret = uart_config_by_device_name(PROJECT_MINIFLY_TASK_NRF_DEVICE_DEFAULT, PROJECT_MINIFLY_TASK_NRF_BAUD_RATE, &config);
+  if (config_ret != RT_EOK) {
+    rt_kprintf("Configure NRF UART parameters failed!\n");
+    return -1;
+  }
   rt_device_control(device, RT_DEVICE_CTRL_CONFIG, &config);
 
   rt_err_t mq_ret =

@@ -5,12 +5,11 @@
 #include "debugPin.h"
 #endif
 #include "rtconfig.h"
+#include "uartConfig.h"
 
 #define THREAD_PRIORITY 7
 #define THREAD_STACK_SIZE 2048
 #define THREAD_TIMESLICE 5
-
-#define LOCAL_RX_BUF_SIZE BSP_UART1_DMA_PING_BUFSIZE
 
 struct uart_rx_msg {
   rt_device_t dev;
@@ -20,6 +19,7 @@ struct uart_rx_msg {
 static rt_device_t uart_test_dev = RT_NULL;
 static struct rt_messagequeue rx_mq;
 static char msg_pool[256];
+static struct serial_configure config;
 
 /* UART RX indicate callback: post message to queue */
 static rt_err_t uart_test_input(rt_device_t dev, rt_size_t size) {
@@ -31,7 +31,9 @@ static rt_err_t uart_test_input(rt_device_t dev, rt_size_t size) {
   if (result == -RT_EFULL) {
     rt_kprintf("UART test message queue full!\n");
   }
+#ifdef TASK_DEMO_02_UART_TEST_DEBUGPIN_EN
   DEBUG_PIN_DEBUG1_HIGH();
+#endif
   return result;
 }
 
@@ -39,16 +41,20 @@ void uartTestTask(void *param) {
   struct uart_rx_msg msg;
   rt_err_t result;
   rt_uint32_t rx_length;
-  static char rx_buffer[LOCAL_RX_BUF_SIZE + 1];
+
+  char* rx_buffer = rt_malloc(config.rx_bufsz + 1);
 
   while (1) {
     rt_memset(&msg, 0, sizeof(msg));
+    rt_memset(rx_buffer, 0, config.rx_bufsz + 1);
     result = rt_mq_recv(&rx_mq, &msg, sizeof(msg), RT_WAITING_FOREVER);
+#ifdef TASK_DEMO_02_UART_TEST_DEBUGPIN_EN
     DEBUG_PIN_DEBUG1_LOW();
+#endif
     if (result > 0) {
       rx_length = rt_device_read(msg.dev, 0, rx_buffer, msg.size);
       if (rx_length > 0) {
-        rx_buffer[rx_length] = '\0';
+        // rx_buffer[rx_length] = '\0';
         rt_device_write(uart_test_dev, 0, rx_buffer, rx_length);
         rt_kprintf("UART RX: %d bytes received\n", rx_length);
       }
@@ -80,11 +86,11 @@ static int taskUartTestInit(void) {
     return ret;
   }
 
-  struct serial_configure config = RT_SERIAL_CONFIG_DEFAULT;
-  config.baud_rate = TASK_DEMO_02_UART_TEST_BAUD_RATE;
-  config.rx_bufsz = BSP_UART1_RX_BUFSIZE;
-  config.tx_bufsz = BSP_UART1_TX_BUFSIZE;
-  config.dma_ping_bufsz = BSP_UART1_DMA_PING_BUFSIZE;
+  ret = uart_config_by_device_name(uart_name, TASK_DEMO_02_UART_TEST_BAUD_RATE, &config);
+  if (ret != RT_EOK) {
+    rt_kprintf("Get UART buffer size failed!\n");
+    return ret;
+  }
   ret = rt_device_control(uart_test_dev, RT_DEVICE_CTRL_CONFIG, &config);
   if (ret != RT_EOK) {
     rt_kprintf("Configure UART parameters failed!\n");

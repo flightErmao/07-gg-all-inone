@@ -1,0 +1,17 @@
+Import('rtconfig')
+
+from building import *
+
+cwd = GetCurrentDir()
+src = []
+
+# 添加源文件
+src += Glob('*.c')
+
+# 添加头文件路径
+CPPPATH = [cwd]
+
+# 创建静态库
+group = DefineGroup('BSP_USING_UART', src, depend = ['BSP_USING_UART'], CPPPATH = CPPPATH)
+
+Return('group')

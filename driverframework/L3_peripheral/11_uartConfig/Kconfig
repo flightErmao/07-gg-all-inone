@@ -33,7 +33,7 @@ menuconfig BSP_USING_UART
                         int "Set UART1 TX buffer size"
                         range 0 65535
                         depends on RT_USING_SERIAL_V2
-                        default 0
+                        default 64
 
                     config BSP_UART1_DMA_PING_BUFSIZE
                         int "Set UART1 RX DMA ping-pong buffer size"
@@ -67,7 +67,7 @@ menuconfig BSP_USING_UART
                         int "Set UART2 TX buffer size"
                         range 0 65535
                         depends on RT_USING_SERIAL_V2
-                        default 0
+                        default 64
 
                     config BSP_UART2_DMA_PING_BUFSIZE
                         int "Set UART2 RX DMA ping-pong buffer size"

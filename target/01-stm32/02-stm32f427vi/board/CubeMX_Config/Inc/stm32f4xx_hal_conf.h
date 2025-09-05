@@ -1,31 +1,31 @@
 /**
- ******************************************************************************
- * @file    stm32f4xx_hal_conf_template.h
- * @author  MCD Application Team
- * @brief   HAL configuration template file.
- *          This file should be copied to the application folder and renamed
- *          to stm32f4xx_hal_conf.h.
- ******************************************************************************
- * @attention
- *
- * <h2><center>&copy; Copyright (c) 2017 STMicroelectronics.
- * All rights reserved.</center></h2>
- *
- * This software component is licensed by ST under BSD 3-Clause license,
- * the "License"; You may not use this file except in compliance with the
- * License. You may obtain a copy of the License at:
- *                        opensource.org/licenses/BSD-3-Clause
- *
- ******************************************************************************
- */
-#include "rtconfig.h"
+  ******************************************************************************
+  * @file    stm32f4xx_hal_conf_template.h
+  * @author  MCD Application Team
+  * @brief   HAL configuration template file.
+  *          This file should be copied to the application folder and renamed
+  *          to stm32f4xx_hal_conf.h.
+  ******************************************************************************
+  * @attention
+  *
+  * <h2><center>&copy; Copyright (c) 2017 STMicroelectronics.
+  * All rights reserved.</center></h2>
+  *
+  * This software component is licensed by ST under BSD 3-Clause license,
+  * the "License"; You may not use this file except in compliance with the
+  * License. You may obtain a copy of the License at:
+  *                        opensource.org/licenses/BSD-3-Clause
+  *
+  ******************************************************************************
+  */
+ #include "rtconfig.h"
 
 /* Define to prevent recursive inclusion -------------------------------------*/
 #ifndef __STM32F4xx_HAL_CONF_H
 #define __STM32F4xx_HAL_CONF_H
 
 #ifdef __cplusplus
-extern "C" {
+ extern "C" {
 #endif
 
 /* Exported types ------------------------------------------------------------*/
@@ -33,13 +33,13 @@ extern "C" {
 
 /* ########################## Module Selection ############################## */
 /**
- * @brief This is the list of modules to be used in the HAL driver
- */
+  * @brief This is the list of modules to be used in the HAL driver
+  */
 #define HAL_MODULE_ENABLED
 
-#define HAL_ADC_MODULE_ENABLED
+  #define HAL_ADC_MODULE_ENABLED
 /* #define HAL_CRYP_MODULE_ENABLED   */
-#define HAL_CAN_MODULE_ENABLED
+/* #define HAL_CAN_MODULE_ENABLED   */
 /* #define HAL_CRC_MODULE_ENABLED   */
 /* #define HAL_CRYP_MODULE_ENABLED   */
 /* #define HAL_DAC_MODULE_ENABLED   */
@@ -59,7 +59,7 @@ extern "C" {
 /* #define HAL_RNG_MODULE_ENABLED   */
 /* #define HAL_RTC_MODULE_ENABLED   */
 /* #define HAL_SAI_MODULE_ENABLED   */
-#define HAL_SD_MODULE_ENABLED
+/* #define HAL_SD_MODULE_ENABLED   */
 /* #define HAL_MMC_MODULE_ENABLED   */
 #define HAL_SPI_MODULE_ENABLED
 #define HAL_TIM_MODULE_ENABLED
@@ -89,12 +89,12 @@ extern "C" {
 
 /* ########################## HSE/HSI Values adaptation ##################### */
 /**
- * @brief Adjust the value of External High Speed oscillator (HSE) used in your application.
- *        This value is used by the RCC HAL module to compute the system frequency
- *        (when HSE is used as system clock source, directly or through the PLL).
- */
-#if !defined(HSE_VALUE)
-#define HSE_VALUE ((uint32_t)24000000U) /*!< Value of the External oscillator in Hz */
+  * @brief Adjust the value of External High Speed oscillator (HSE) used in your application.
+  *        This value is used by the RCC HAL module to compute the system frequency
+  *        (when HSE is used as system clock source, directly or through the PLL).
+  */
+#if !defined  (HSE_VALUE)
+  #define HSE_VALUE    ((uint32_t)24000000U) /*!< Value of the External oscillator in Hz */
 #endif /* HSE_VALUE */
 
 #if !defined  (HSE_STARTUP_TIMEOUT)

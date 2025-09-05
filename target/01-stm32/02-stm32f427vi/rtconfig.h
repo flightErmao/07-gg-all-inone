@@ -143,12 +143,14 @@
 #define RT_USING_DEVICE_IPC
 #define RT_UNAMED_PIPE_NUMBER 64
 #define RT_USING_SERIAL
-#define RT_USING_SERIAL_V1
-#define RT_SERIAL_RB_BUFSZ 64
+#define RT_USING_SERIAL_V2
+#define RT_SERIAL_BUF_STRATEGY_OVERWRITE
+#define RT_SERIAL_USING_DMA
 #define RT_USING_I2C
 #define RT_USING_I2C_BITOPS
 #define RT_USING_SPI
 #define RT_USING_PIN
+#define RT_USING_KTIME
 /* end of Device Drivers */
 
 /* C/C++ and POSIX layer */
@@ -166,6 +168,7 @@
 
 /* POSIX (Portable Operating System Interface) layer */
 
+#define RT_USING_POSIX_DELAY
 
 /* Interprocess Communication (IPC) */
 
@@ -372,6 +375,8 @@
 /* entertainment: terminal games and other interesting software packages */
 
 /* end of entertainment: terminal games and other interesting software packages */
+#define PKG_USING_OPTPARSE
+#define PKG_USING_OPTPARSE_LATEST_VERSION
 /* end of miscellaneous packages */
 
 /* Arduino libraries */
@@ -426,8 +431,12 @@
 
 /* L0_TASK_CONFIG */
 
+#define TASK_TOOL_01_ANOTC_TELEM_EN
+#define TASK_TOOL_01_ANOTC_TELEM_DEVICE_DEFAULT "uart2"
+#define TASK_TOOL_01_ANOTC_TELEM_BAUD_RATE 500000
 #define PROJECT_MINIFLY_TASK_SENSOR_EN
 #define PROJECT_MINIFLY_TASK_SENSOR_IMU_NAME "mpu6000"
+#define PROJECT_MINIFLY_TASK_SENSOR_ATKP_LOG_EN
 #define PROJECT_MINIFLY_TASK_SENSOR_TIMER_TRIGGER_EN
 /* end of L0_TASK_CONFIG */
 
@@ -497,8 +506,15 @@
 #define HSE_VALUE 24000000
 #define BSP_USING_GPIO
 #define BSP_USING_UART
-#define BSP_STM32_UART_V1_TX_TIMEOUT 2000
 #define BSP_USING_UART1
+#define BSP_UART1_RX_BUFSIZE 256
+#define BSP_UART1_TX_BUFSIZE 0
+#define BSP_USING_UART2
+#define BSP_UART2_RX_USING_DMA
+#define BSP_UART2_TX_USING_DMA
+#define BSP_UART2_RX_BUFSIZE 256
+#define BSP_UART2_TX_BUFSIZE 64
+#define BSP_UART2_DMA_PING_BUFSIZE 64
 #define BSP_USING_SPI
 #define BSP_USING_SPI1
 #define BSP_USING_USBD
