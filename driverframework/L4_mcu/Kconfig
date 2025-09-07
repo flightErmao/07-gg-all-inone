@@ -1,0 +1,43 @@
+menuconfig L4_MCU_CONFIG_EN
+    bool "L4_MCU_TYPE_CONFIG"
+    default y
+    help
+        Enable MCU configuration.
+
+    if L4_MCU_CONFIG_EN
+        choice TARGET_BOARD_TYPE
+            prompt "Target Board Type"
+            default TARGET_BOARD_FMUV2
+            help
+                Select the target board type.
+
+            config TARGET_BOARD_FMUV2
+                bool "FMUv2"
+                help
+                    FMUv2 target board for flight management unit applications
+
+            config TARGET_BOARD_MINIFLY
+                bool "MiniFly"
+                help
+                    MiniFly target board for small flight control applications
+
+        endchoice
+
+        choice MCU_TYPE
+            prompt "MCU Type"
+            default MCU_TYPE_STM32F427xx
+            help
+                Select the STM32F4 series MCU type.
+
+            config MCU_TYPE_STM32F427xx
+                bool "STM32F427xx"
+                help
+                    STM32F427xx MCU with 2MB Flash, 256KB RAM
+
+            config MCU_TYPE_STM32F411CE
+                bool "STM32F411CE"
+                help
+                    STM32F411CE MCU with 512KB Flash, 128KB RAM
+
+        endchoice
+    endif

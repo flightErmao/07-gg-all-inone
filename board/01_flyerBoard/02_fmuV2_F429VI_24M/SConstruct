@@ -2,20 +2,17 @@
 # RT-Thread STM32F427VI BSP Build Configuration
 # =============================================================================
 
+# =============================================================================
+# 1. 导入模块和基础设置
+# =============================================================================
 import os
 import sys
 import rtconfig
 
-# =============================================================================
-# 1. RT-Thread 内核路径设置
-# =============================================================================
-if os.getenv('RTT_ROOT'):
-    RTT_ROOT = os.getenv('RTT_ROOT')
-else:
-    RTT_ROOT = os.path.normpath(os.getcwd() + '/../../../kernel/rtthread')
-
-# 添加 RT-Thread 工具路径和当前目录到Python路径
+# 添加RT-Thread工具路径和当前目录到Python路径
+RTT_ROOT = os.path.normpath(os.getcwd() + '/../../../kernel/rtthread')
 sys.path = sys.path + [os.path.join(RTT_ROOT, 'tools'), os.getcwd()]
+
 try:
     from building import *
 except:
@@ -24,63 +21,135 @@ except:
     exit(-1)
 
 # =============================================================================
-# 2. 依赖包检查
+# 2. 路径计算和设置
 # =============================================================================
-def bsp_pkg_check():
-    import subprocess
+# 当前BSP目录
+BSP_DIR = os.path.abspath('./')
 
-    check_paths = [
-        os.path.join("packages", "CMSIS-Core-latest"),
-        os.path.join("packages", "stm32f4_cmsis_driver-latest"),
-        os.path.join("packages", "stm32f4_hal_driver-latest")
-    ]
+# 项目根目录（相对于当前BSP目录）
+PROJECT_ROOT = os.path.normpath(os.path.join(BSP_DIR, '../../../'))
 
-    need_update = not all(os.path.exists(p) for p in check_paths)
+# RT-Thread内核路径
+RTT_DIR = os.path.join(PROJECT_ROOT, 'kernel/rtthread')
 
-    if need_update:
-        print("\n===============================================================================")
-        print("Dependency packages missing, please running 'pkgs --update'...")
-        print("If no packages are fetched, run 'pkgs --upgrade' first, then 'pkgs --update'...")
-        print("===============================================================================")
-        exit(1)
+# 驱动框架路径
+driverframework_path = os.path.join(PROJECT_ROOT, 'driverframework')
 
-RegisterPreBuildingAction(bsp_pkg_check)
+# Libraries路径
+libraries_path_prefix = os.path.join(PROJECT_ROOT, 'kernel', 'rtthread', 'bsp', 'stm32', 'libraries')
 
 # =============================================================================
-# 3. 构建目标设置
+# 3. 依赖包检查
 # =============================================================================
-TARGET = 'rt-thread.' + rtconfig.TARGET_EXT
+# def bsp_pkg_check():
+#     """检查必要的依赖包是否存在"""
+#     check_paths = [
+#         os.path.join("packages", "CMSIS-Core-latest"),
+#         os.path.join("packages", "stm32f4_cmsis_driver-latest"),
+#         os.path.join("packages", "stm32f4_hal_driver-latest")
+#     ]
+
+#     need_update = not all(os.path.exists(p) for p in check_paths)
+
+#     if need_update:
+#         print("\n===============================================================================")
+#         print("Dependency packages missing, please running 'pkgs --update'...")
+#         print("If no packages are fetched, run 'pkgs --upgrade' first, then 'pkgs --update'...")
+#         print("===============================================================================")
+#         exit(1)
+
+# RegisterPreBuildingAction(bsp_pkg_check)
 
 # =============================================================================
-# 4. 编译环境配置
+# 4. 构建目标设置（将在MCU类型配置后重新定义）
 # =============================================================================
+# TARGET将在MCU类型配置后动态生成
+
+# =============================================================================
+# 5. 编译环境配置
+# =============================================================================
+# 创建默认环境
 DefaultEnvironment(tools=[])
-env = Environment(tools = ['mingw'],
-    AS = rtconfig.AS, ASFLAGS = rtconfig.AFLAGS,
-    CC = rtconfig.CC, CFLAGS = rtconfig.CFLAGS,
-    AR = rtconfig.AR, ARFLAGS = '-rc',
-    CXX = rtconfig.CXX, CXXFLAGS = rtconfig.CXXFLAGS,
-    LINK = rtconfig.LINK, LINKFLAGS = rtconfig.LFLAGS)
+
+# 创建编译环境
+env = Environment(tools=['mingw'],
+    AS=rtconfig.AS, ASFLAGS=rtconfig.AFLAGS,
+    CC=rtconfig.CC, CFLAGS=rtconfig.CFLAGS,
+    AR=rtconfig.AR, ARFLAGS='-rc',
+    CXX=rtconfig.CXX, CXXFLAGS=rtconfig.CXXFLAGS,
+    LINK=rtconfig.LINK, LINKFLAGS=rtconfig.LFLAGS)
+
+# 设置环境变量
 env.PrependENVPath('PATH', rtconfig.EXEC_PATH)
 
-# ICCARM 平台特殊配置
-if rtconfig.PLATFORM in ['iccarm']:
-    env.Replace(CCCOM = ['$CC $CFLAGS $CPPFLAGS $_CPPDEFFLAGS $_CPPINCFLAGS -o $TARGET $SOURCES'])
-    env.Replace(ARFLAGS = [''])
-    env.Replace(LINKCOM = env["LINKCOM"] + ' --map rt-thread.map')
+# =============================================================================
+# 6. MCU类型配置和目标命名
+# =============================================================================
+def get_mcu_type():
+    """从rtconfig.h中读取MCU_TYPE_XXX 或 旧格式 MCU_TYPE "XXX""" 
+    try:
+        import re
+        if os.path.exists('rtconfig.h'):
+            with open('rtconfig.h', 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+                # 优先匹配新格式：#define MCU_TYPE_XXX
+                match_flag = re.search(r'#define\s+MCU_TYPE_([A-Za-z0-9_]+)\b', content)
+                if match_flag:
+                    mcu_token = match_flag.group(1)
+                    print(f"Found MCU_TYPE flag: MCU_TYPE_{mcu_token}")
+                    return mcu_token
+                # 回退：匹配旧格式：#define MCU_TYPE "STM32F427xI"
+                match_str = re.search(r'#define\s+MCU_TYPE\s+"([^"]+)"', content)
+                if match_str:
+                    print(f"Found legacy MCU_TYPE: {match_str.group(1)}")
+                    return match_str.group(1)
+        print("No MCU_TYPE found in rtconfig.h, fallback to STM32F427xI")
+        return 'STM32F427xI'
+    except Exception as e:
+        print(f"Parse MCU_TYPE failed: {e}")
+        return 'STM32F427xI'
+
+def get_target_name():
+    """从 rtconfig.h 中读取 TARGET_BOARD_XXX，提取 XXX 并转换为 fmuV2 这类名字"""
+    try:
+        import re
+        if os.path.exists('rtconfig.h'):
+            with open('rtconfig.h', 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+                m = re.search(r'#define\s+TARGET_BOARD_([A-Za-z0-9_]+)\b', content)
+                if m:
+                    token = m.group(1)  # 例如 FMUV2
+                    # 规则：保留末尾的 'V' + 数字为大写，其余字母小写
+                    tail = ''
+                    head = token
+                    v_tail = re.search(r'(.*?)(V\d+)$', token)
+                    if v_tail:
+                        head = v_tail.group(1)
+                        tail = v_tail.group(2)
+                    name = head.lower() + tail
+                    print(f"Found TARGET name: {name}")
+                    return name
+        # 回退：使用 mcu 类型的小写
+        fallback = get_mcu_type().lower().replace('x', '')
+        print(f"No TARGET_BOARD found, fallback target name: {fallback}")
+        return fallback
+    except Exception as e:
+        print(f"Parse TARGET name failed: {e}")
+        fallback = get_mcu_type().lower().replace('x', '')
+        return fallback
+
+# 动态获取MCU类型并添加到编译定义（用于编译宏）
+mcu_type = get_mcu_type()
+env.Append(CPPDEFINES=[mcu_type])
+print(f"Selected MCU Type: {mcu_type}")
+
+# 解析目标名（优先 TARGET_BOARD_XXX），用作构建目录与产物名
+target_name = get_target_name()
+TARGET = target_name + '.' + rtconfig.TARGET_EXT
+print(f"Target file: {TARGET}")
 
 # =============================================================================
-# 5. 路径变量定义和计算
-# =============================================================================
-
-BSP_DIR = os.path.abspath('./')                                     # 当前 BSP 目录
-PROJECT_ROOT = os.path.normpath(os.path.join(BSP_DIR, '../../../')) # 项目根目录（相对于当前 BSP 目录）
-RTT_DIR = os.path.join(PROJECT_ROOT, 'kernel/rtthread')             # RT-Thread 内核路径
-driverframework_path = os.path.join(PROJECT_ROOT, 'driverframework')  # 驱动框架路径
-libraries_path_prefix = os.path.join(PROJECT_ROOT, 'kernel', 'rtthread', 'bsp', 'stm32', 'libraries') ## 计算 libraries 路径（改为使用内核路径中的 libraries）
-
-# =============================================================================
-# 6. 导出必要的变量到构建环境
+# 7. 环境变量导出
 # =============================================================================
 Export('BSP_DIR')
 Export('RTT_ROOT')
@@ -91,17 +160,63 @@ Export('env')
 Export('rtconfig')
 
 # =============================================================================
-# 7. 构建过程
+# 8. 构建对象收集
 # =============================================================================
 # 准备构建环境
 objs = PrepareBuilding(env, RTT_ROOT, has_libcpu=False)
 
 # 设置库类型
 rtconfig.BSP_LIBRARY_TYPE = None
+# 将build目录设置到项目根目录，以 target_name 作为子目录
+env['BUILD_DIR'] = os.path.join(PROJECT_ROOT, 'build', target_name)
+print(f"Build directory: {env['BUILD_DIR']}")
 
-# 包含 HAL 驱动程序
+# 包含HAL驱动程序
 objs.extend(SConscript(os.path.join(libraries_path_prefix, 'HAL_Drivers', 'SConscript'),
-                      variant_dir='build/libraries/HAL_Drivers', duplicate=0))
+                      variant_dir=os.path.join(env['BUILD_DIR'], 'libraries/HAL_Drivers'), duplicate=0))
 
-# 执行构建
+# 子目录遍历功能已移至build/SConscript文件中处理
+
+# 包含驱动框架
+# objs = objs + SConscript(os.path.join(driverframework_path, 'SConscript'), 
+#                          variant_dir=os.path.join(env['BUILD_DIR'], 'driverframework'), duplicate=0)
+
+# =============================================================================
+# 9. 后处理：生成bin文件并复制到项目根目录
+# =============================================================================
+def post_build_action(target, source, env):
+    """构建后处理：生成bin文件并复制到项目根目录"""
+    import shutil
+    
+    # 获取目标文件路径
+    target_path = str(target[0])
+    target_dir = os.path.dirname(target_path)
+    target_name = os.path.splitext(os.path.basename(target_path))[0]
+    
+    # 生成bin文件
+    bin_file = os.path.join(target_dir, target_name + '.bin')
+    objcopy_cmd = f"{rtconfig.OBJCPY} -O binary {target_path} {bin_file}"
+    print(f"Generating bin file: {objcopy_cmd}")
+    os.system(objcopy_cmd)
+    
+    # 复制elf和bin文件到项目根目录
+    project_elf = os.path.join(PROJECT_ROOT, target_name + '.elf')
+    project_bin = os.path.join(PROJECT_ROOT, target_name + '.bin')
+    
+    print(f"Copying {target_path} to {project_elf}")
+    shutil.copy2(target_path, project_elf)
+    
+    print(f"Copying {bin_file} to {project_bin}")
+    shutil.copy2(bin_file, project_bin)
+    
+    print(f"Build completed! Final files:")
+    print(f"  ELF: {project_elf}")
+    print(f"  BIN: {project_bin}")
+
+# 注册后处理动作
+env.AddPostAction(TARGET, post_build_action)
+
+# =============================================================================
+# 10. 执行构建
+# =============================================================================
 DoBuilding(TARGET, objs)

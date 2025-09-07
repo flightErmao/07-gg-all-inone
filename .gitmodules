@@ -4,9 +4,18 @@
 [submodule "tools/env_win"]
 	path = tools/env_win
 	url = https://github.com/Tool-01-middleware/env-windows.git
-[submodule "target/01-stm32/01-stm32f411ce/packages/vconsole-latest"]
-	path = target/01-stm32/01-stm32f411ce/packages/vconsole-latest
+[submodule "driverframework/L1_middleWare/03_package/vconsole-latest"]
+	path = driverframework/L1_middleWare/03_package/vconsole-latest
 	url = git@github.com:Tool-01-middleware/vconsole.git
-[submodule "target/01-stm32/01-stm32f411ce/packages/uMCN-latest"]
-	path = target/01-stm32/01-stm32f411ce/packages/uMCN-latest
+[submodule "driverframework/L1_middleWare/03_package/uMCN-latest"]
+	path = driverframework/L1_middleWare/03_package/uMCN-latest
 	url = git@github.com:Tool-01-middleware/uMCN.git
+[submodule "driverframework/L1_middleWare/03_package/CMSIS-Core-latest"]
+	path = driverframework/L1_middleWare/03_package/CMSIS-Core-latest
+	url = git@github.com:Tool-01-middleware/CMSIS-Core.git
+[submodule "driverframework/L1_middleWare/03_package/stm32f4_hal_driver-latest"]
+	path = driverframework/L1_middleWare/03_package/stm32f4_hal_driver-latest
+	url = git@github.com:Tool-01-middleware/stm32f4_hal_driver.git
+[submodule "driverframework/L1_middleWare/03_package/stm32f4_cmsis_driver-latest"]
+	path = driverframework/L1_middleWare/03_package/stm32f4_cmsis_driver-latest
+	url = git@github.com:Tool-01-middleware/stm32f4_cmsis_driver.git

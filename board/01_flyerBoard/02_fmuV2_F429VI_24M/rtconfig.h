@@ -516,6 +516,9 @@
 #define BSP_USING_SPI1
 #define BSP_USING_USBD
 /* end of L3_PERIPHERAL_CONFIG */
+#define L4_MCU_CONFIG_EN
+#define TARGET_BOARD_FMUV2
+#define MCU_TYPE_STM32F427xx
 /* end of DriverFramework Config */
 
 #endif
