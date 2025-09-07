@@ -1,0 +1,16 @@
+from building import *  # 确保这个导入是正确的，并且提供了必要的函数和变量（如果有的话）
+import os
+ 
+cwd     = GetCurrentDir()
+
+group = []  # 初始化 group 变量为空列表
+ 
+list = os.listdir(cwd)
+for item in list:
+    item_path = os.path.join(cwd, item)
+    if os.path.isdir(item_path) and os.path.isfile(os.path.join(item_path, 'SConscript')):
+        # 为所有子目录自动使用variant_dir创建构建目录
+        group = group + SConscript(os.path.join(cwd, item, 'SConscript'), 
+                                  variant_dir=item, duplicate=0)
+ 
+Return('group')

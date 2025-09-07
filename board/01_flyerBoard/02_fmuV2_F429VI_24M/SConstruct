@@ -19,7 +19,7 @@ except:
     print('Cannot found RT-Thread root directory, please check RTT_ROOT')
     print(RTT_ROOT)
     exit(-1)
-
+    
 # =============================================================================
 # 2. 路径计算和设置
 # =============================================================================
@@ -85,29 +85,29 @@ env.PrependENVPath('PATH', rtconfig.EXEC_PATH)
 # =============================================================================
 # 6. MCU类型配置和目标命名
 # =============================================================================
-def get_mcu_type():
-    """从rtconfig.h中读取MCU_TYPE_XXX 或 旧格式 MCU_TYPE "XXX""" 
-    try:
-        import re
-        if os.path.exists('rtconfig.h'):
-            with open('rtconfig.h', 'r', encoding='utf-8', errors='ignore') as f:
-                content = f.read()
-                # 优先匹配新格式：#define MCU_TYPE_XXX
-                match_flag = re.search(r'#define\s+MCU_TYPE_([A-Za-z0-9_]+)\b', content)
-                if match_flag:
-                    mcu_token = match_flag.group(1)
-                    print(f"Found MCU_TYPE flag: MCU_TYPE_{mcu_token}")
-                    return mcu_token
-                # 回退：匹配旧格式：#define MCU_TYPE "STM32F427xI"
-                match_str = re.search(r'#define\s+MCU_TYPE\s+"([^"]+)"', content)
-                if match_str:
-                    print(f"Found legacy MCU_TYPE: {match_str.group(1)}")
-                    return match_str.group(1)
-        print("No MCU_TYPE found in rtconfig.h, fallback to STM32F427xI")
-        return 'STM32F427xI'
-    except Exception as e:
-        print(f"Parse MCU_TYPE failed: {e}")
-        return 'STM32F427xI'
+# def get_mcu_type():
+#     """从rtconfig.h中读取MCU_TYPE_XXX 或 旧格式 MCU_TYPE "XXX""" 
+#     try:
+#         import re
+#         if os.path.exists('rtconfig.h'):
+#             with open('rtconfig.h', 'r', encoding='utf-8', errors='ignore') as f:
+#                 content = f.read()
+#                 # 优先匹配新格式：#define MCU_TYPE_XXX
+#                 match_flag = re.search(r'#define\s+MCU_TYPE_([A-Za-z0-9_]+)\b', content)
+#                 if match_flag:
+#                     mcu_token = match_flag.group(1)
+#                     print(f"Found MCU_TYPE flag: MCU_TYPE_{mcu_token}")
+#                     return mcu_token
+#                 # 回退：匹配旧格式：#define MCU_TYPE "STM32F427xI"
+#                 match_str = re.search(r'#define\s+MCU_TYPE\s+"([^"]+)"', content)
+#                 if match_str:
+#                     print(f"Found legacy MCU_TYPE: {match_str.group(1)}")
+#                     return match_str.group(1)
+#         print("No MCU_TYPE found in rtconfig.h, fallback to STM32F427xI")
+#         return 'STM32F427xI'
+#     except Exception as e:
+#         print(f"Parse MCU_TYPE failed: {e}")
+#         return 'STM32F427xI'
 
 def get_target_name():
     """从 rtconfig.h 中读取 TARGET_BOARD_XXX，提取 XXX 并转换为 fmuV2 这类名字"""
@@ -139,9 +139,9 @@ def get_target_name():
         return fallback
 
 # 动态获取MCU类型并添加到编译定义（用于编译宏）
-mcu_type = get_mcu_type()
-env.Append(CPPDEFINES=[mcu_type])
-print(f"Selected MCU Type: {mcu_type}")
+# mcu_type = get_mcu_type()
+# env.Append(CPPDEFINES=[mcu_type])
+# print(f"Selected MCU Type: {mcu_type}")
 
 # 解析目标名（优先 TARGET_BOARD_XXX），用作构建目录与产物名
 target_name = get_target_name()
@@ -178,8 +178,8 @@ objs.extend(SConscript(os.path.join(libraries_path_prefix, 'HAL_Drivers', 'SCons
 # 子目录遍历功能已移至build/SConscript文件中处理
 
 # 包含驱动框架
-# objs = objs + SConscript(os.path.join(driverframework_path, 'SConscript'), 
-#                          variant_dir=os.path.join(env['BUILD_DIR'], 'driverframework'), duplicate=0)
+objs = objs + SConscript(os.path.join(driverframework_path, 'SConscript'), 
+                         variant_dir=os.path.join(env['BUILD_DIR'], 'driverframework'), duplicate=0)
 
 # =============================================================================
 # 9. 后处理：生成bin文件并复制到项目根目录

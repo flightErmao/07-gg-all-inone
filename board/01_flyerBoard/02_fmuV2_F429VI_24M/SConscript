@@ -1,28 +1,19 @@
 from building import *
 import os
-Import('driverframework_path')
 Import('env')
 
 # 获取当前目录
 cwd = GetCurrentDir()
 list = os.listdir(cwd)
 
-# 初始化源文件列表
-src = []
-
 # 初始化对象列表
 objs = []
 
-
-# 为驱动框架添加variant_dir参数，使用相对路径
-objs = objs + SConscript(os.path.join(driverframework_path, 'SConscript'), 
-                         variant_dir='driverframework', duplicate=0)
-
-
-for d in list:
-    path = os.path.join(cwd, d)
-    if os.path.isfile(os.path.join(path, 'SConscript')):
-        objs = objs + SConscript(os.path.join(d, 'SConscript'))
-
+# 遍历当前目录的子目录，若存在子目录 SConscript，则使用全局 BUILD_DIR 作为变体输出目录
+# for d in list:
+#     path = os.path.join(cwd, d)
+#     if os.path.isfile(os.path.join(path, 'SConscript')):
+#         vdir = os.path.join(env['BUILD_DIR'], d)
+#         objs = objs + SConscript(os.path.join(d, 'SConscript'), variant_dir=vdir, duplicate=0)
 
 Return('objs')

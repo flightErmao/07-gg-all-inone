@@ -1,0 +1,34 @@
+from building import *
+import os
+Import('env')
+
+group = []
+cwd = GetCurrentDir()
+
+path = [os.path.join(cwd, 'inc')]
+src  = Glob('src/*.c')
+src  += Glob('src/*.s')
+
+# 追加本地链接脚本（仅在 FMUV2 目标下）
+if GetDepend('TARGET_BOARD_FMUV2'):
+    # 确保 LINKFLAGS 为扁平化的 token 列表，避免整体被当作一个“文件名”传给链接器
+    _linkflags = env.get('LINKFLAGS', [])
+    if isinstance(_linkflags, str):
+        _linkflags = Split(_linkflags)
+    elif isinstance(_linkflags, (list, tuple)) and len(_linkflags) == 1 and isinstance(_linkflags[0], str):
+        _linkflags = Split(_linkflags[0])
+        
+    env.Replace(LINKFLAGS=_linkflags)
+   
+    _lds_path = os.path.join(cwd, 'link.lds')
+    env.AppendUnique(LINKFLAGS=['-T', _lds_path])
+    env.Append(CPPDEFINES = ['STM32F427xx'])
+
+group = DefineGroup(
+        "l4_mcu_app",
+        src,
+        depend=["TARGET_BOARD_FMUV2"],
+        CPPPATH=path,
+    )
+
+Return("group")

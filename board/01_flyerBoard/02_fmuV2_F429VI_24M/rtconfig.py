@@ -56,7 +56,7 @@ OBJCPY = PREFIX + 'objcopy'
 DEVICE = ' -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard -ffunction-sections -fdata-sections'
 CFLAGS = DEVICE + ' -Dgcc'
 AFLAGS = ' -c' + DEVICE + ' -x assembler-with-cpp -Wa,-mimplicit-it=thumb '
-LFLAGS = DEVICE + ' -Wl,--gc-sections,-Map=rtthread.map,-cref,-u,Reset_Handler -T board/linker_scripts/link.lds'
+LFLAGS = DEVICE + ' -Wl,--gc-sections,-Map=rtthread.map,-cref,-u,Reset_Handler'
 
 CPATH = ''
 LPATH = ''
@@ -83,9 +83,3 @@ else:
 
 POST_ACTION = OBJCPY + ' -O binary $TARGET rtthread.bin\n' + SIZE + ' $TARGET \n'
 
-def dist_handle(BSP_ROOT, dist_dir):
-    import sys
-    cwd_path = os.getcwd()
-    sys.path.append(os.path.join(os.path.dirname(BSP_ROOT), 'tools'))
-    from sdk_dist import dist_do_building
-    dist_do_building(BSP_ROOT, dist_dir)
