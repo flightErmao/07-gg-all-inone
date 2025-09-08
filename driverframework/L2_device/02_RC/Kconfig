@@ -1,4 +1,9 @@
 menu "02 RC CONFIG"    
-    # Add common RC configuration options here
-    # Currently empty, ready for future expansion
+    menu "01 SBUS CONFIG"
+        source "$(PROJECT_ROOT)/driverframework/L2_device/02_RC/01_SBUS/Kconfig"
+    endmenu
+        
+    menu "02 CRSF CONFIG"
+        source "$(PROJECT_ROOT)/driverframework/L2_device/02_RC/02_CRSF/Kconfig"
+    endmenu
 endmenu

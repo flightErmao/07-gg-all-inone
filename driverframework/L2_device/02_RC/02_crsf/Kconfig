@@ -1,0 +1,28 @@
+config RC_USING_CRSF
+    bool "Enable CRSF receiver"
+    default n
+    help
+        Enable Team BlackSheep CRSF receiver (420000 8N1).
+
+    if RC_USING_CRSF
+
+        config RC_CRSF_UART_NAME
+            string "CRSF UART device name"
+            default "uart2"
+            help
+                The UART device name used for CRSF (e.g. uart1/uart2).
+
+        config RC_CRSF_BAUDRATE
+            int "CRSF baud rate"
+            default 420000
+            help
+                CRSF uses 420000 baud, 8N1.
+
+        config RC_CRSF_DEBUGPIN_EN
+            bool "ENABLE: RC_CRSF_DEBUGPIN_EN"
+            default n
+            help
+                Enable debug pin toggling inside CRSF RX path.
+
+    endif
+

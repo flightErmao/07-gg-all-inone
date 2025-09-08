@@ -1,0 +1,40 @@
+config RC_USING_SBUS
+    bool "Enable SBUS receiver"
+    default n
+    help
+        Enable Futaba SBUS receiver support (100000 8E2, inverted).
+
+    if RC_USING_SBUS
+
+        config RC_SBUS_UART_NAME
+            string "SBUS UART device name"
+            default "uart2"
+            help
+                The UART device name used for SBUS (e.g. uart1/uart2).
+
+        config RC_SBUS_BAUDRATE
+            int "SBUS baud rate"
+            default 100000
+            help
+                SBUS uses 100000 baud, 8E2.
+
+        config RC_SBUS_INVERTED
+            bool "SBUS signal inverted"
+            default y
+            help
+                SBUS line is inverted by default. Keep enabled unless hardware fixes inversion.
+
+        config RC_SBUS_FAST_FRAME
+            bool "Enable fast SBUS frame (approx. 7ms)"
+            default n
+            help
+                Some receivers output fast frames (~7ms). Normal is ~14ms.
+
+        config RC_SBUS_DEBUGPIN_EN
+            bool "ENABLE: RC_SBUS_DEBUGPIN_EN"
+            default n
+            help
+                Enable debug pin toggling inside SBUS RX/TX paths.
+
+    endif
+
