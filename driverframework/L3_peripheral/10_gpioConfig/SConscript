@@ -1,0 +1,17 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+src  = []
+path = []
+
+if GetDepend(['BSP_USING_GPIO']):
+    src += Glob('./*.c')
+    path += [cwd]
+
+# 定义编译组
+group = DefineGroup('GPIO_CONFIG', src, depend = [''], CPPPATH = path)
+
+env = DefaultEnvironment()
+
+Return('group')

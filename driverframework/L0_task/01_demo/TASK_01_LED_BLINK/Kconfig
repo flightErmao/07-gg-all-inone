@@ -30,5 +30,10 @@ menuconfig TASK_DEMO_01_LED_BLINK_EN
             help
                 Enter the LED0 GPIO pin in format like "PA0", "PB1", "PC13".
                 The tool will parse it and map to the correct pin number at runtime.
-
+        
+        config TASK_DEMO_01_LED_BLINK_DEBUGPIN_EN
+            bool "Enable Debug Pin"
+            default n
+            help
+                Enable debug pin to indicate the state of the LED blink task.
     endif 

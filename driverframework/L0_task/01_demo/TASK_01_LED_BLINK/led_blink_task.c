@@ -8,8 +8,11 @@
 
 // 包含LED闪烁接口头文件
 #include "led_blink_interface.h"
-// 包含调试引脚接口头文件
+#include "pinInterface.h"
+
+#ifdef TASK_DEMO_01_LED_BLINK_DEBUGPIN_EN
 #include "debugPin.h"
+#endif
 
 // 任务相关定义
 #define LED_BLINK_TASK_NAME "L0_led_blink"

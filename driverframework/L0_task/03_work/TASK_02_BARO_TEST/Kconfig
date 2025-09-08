@@ -12,6 +12,12 @@ menuconfig WORK_TASK_BARO_REPORT_EN
             help
                 Enable sending barometer data to ANOTC telemetry system
 
+        config TASK_BARO_ATKP_LOG_EN
+            bool "Enable ATKP logging for barometer data"
+            default n
+            help
+                Enable ATKP logging for barometer data transmission
+
         config TASK_CONFIG_BARO_PRINTF
             bool "Enable barometer data printf"
             default n            
