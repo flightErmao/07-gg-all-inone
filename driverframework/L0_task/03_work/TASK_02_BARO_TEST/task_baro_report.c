@@ -1,6 +1,4 @@
-#include "task_baro_report.h"
 #include "barometer.h"
-// #include "../TASK_03_ANOTC_TELEM/task_anotc_telem.h"
 #include "string.h"
 #define DBG_TAG "task_baro"
 #define DBG_LVL DBG_LOG
@@ -121,10 +119,11 @@ static void baro_thread_entry(void *parameter) {
   }
 }
 
-static void task_thread_init(void) {
+static int task_thread_init(void) {
   rt_thread_init(&task_tid_baro, "task_Baro", baro_thread_entry, RT_NULL, task_stack_baro, THREAD_STACK_SIZE,
                  THREAD_PRIORITY, THREAD_TIMESLICE);
   rt_thread_startup(&task_tid_baro);
+  return 0;
 }
 
 #ifdef WORK_TASK_BARO_REPORT_EN

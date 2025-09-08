@@ -1,5 +1,3 @@
-#include <rtthread.h>
-#include "task_baro_report.h"
 #include "barometer.h"
 
 #ifdef TASK_TOOL_01_ANOTC_TELEM_EN

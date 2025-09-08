@@ -149,6 +149,7 @@
 #define RT_USING_I2C
 #define RT_USING_PWM
 #define RT_USING_PIN
+#define RT_USING_KTIME
 /* end of Device Drivers */
 
 /* C/C++ and POSIX layer */
@@ -166,6 +167,7 @@
 
 /* POSIX (Portable Operating System Interface) layer */
 
+#define RT_USING_POSIX_DELAY
 
 /* Interprocess Communication (IPC) */
 
@@ -275,6 +277,7 @@
 
 #define PKG_USING_UMCN
 #define PKG_USING_UMCN_LATEST_VERSION
+#define UMCN_USING_CMD
 #define PKG_USING_VCONSOLE
 #define PKG_USING_VCONSOLE_LATEST_VERSION
 /* end of tools packages */
@@ -448,6 +451,7 @@
 /* L1_MIDDLEWARE_CONFIG */
 
 #define L1_MIDDLEWARE_02_MODE_01_LED_BLINK_EN
+#define L1_MIDDLEWARE_PACKAGE_01_UMCN_USING_UMCN
 /* end of L1_MIDDLEWARE_CONFIG */
 
 /* L2_DEVICE_CONFIG */
