@@ -277,6 +277,7 @@
 
 #define PKG_USING_UMCN
 #define PKG_USING_UMCN_LATEST_VERSION
+#define UMCN_USING_CMD
 #define PKG_USING_VCONSOLE
 #define PKG_USING_VCONSOLE_LATEST_VERSION
 /* end of tools packages */
