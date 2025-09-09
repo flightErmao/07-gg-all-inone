@@ -30,6 +30,72 @@ rt_err_t uart_get_buffer_size(const char* device_name, rt_uint32_t* rx_bufsz, rt
     rt_kprintf("Error: UART2 not enabled in BSP configuration\n");
     return -RT_ERROR;
 #endif
+  } else if (strcmp(device_name, "uart3") == 0) {
+#ifdef BSP_USING_UART3
+    *rx_bufsz = BSP_UART3_RX_BUFSIZE;
+    *tx_bufsz = BSP_UART3_TX_BUFSIZE;
+#if defined(BSP_UART3_RX_USING_DMA) && defined(BSP_UART3_TX_USING_DMA)
+    *dma_ping_bufsz = BSP_UART3_DMA_PING_BUFSIZE;
+#endif
+#else
+    rt_kprintf("Error: UART3 not enabled in BSP configuration\n");
+    return -RT_ERROR;
+#endif
+  } else if (strcmp(device_name, "uart4") == 0) {
+#ifdef BSP_USING_UART4
+    *rx_bufsz = BSP_UART4_RX_BUFSIZE;
+    *tx_bufsz = BSP_UART4_TX_BUFSIZE;
+#if defined(BSP_UART4_RX_USING_DMA) && defined(BSP_UART4_TX_USING_DMA)
+    *dma_ping_bufsz = BSP_UART4_DMA_PING_BUFSIZE;
+#endif
+#else
+    rt_kprintf("Error: UART4 not enabled in BSP configuration\n");
+    return -RT_ERROR;
+#endif
+  } else if (strcmp(device_name, "uart5") == 0) {
+#ifdef BSP_USING_UART5
+    *rx_bufsz = BSP_UART5_RX_BUFSIZE;
+    *tx_bufsz = BSP_UART5_TX_BUFSIZE;
+#if defined(BSP_UART5_RX_USING_DMA) && defined(BSP_UART5_TX_USING_DMA)
+    *dma_ping_bufsz = BSP_UART5_DMA_PING_BUFSIZE;
+#endif
+#else
+    rt_kprintf("Error: UART5 not enabled in BSP configuration\n");
+    return -RT_ERROR;
+#endif
+  } else if (strcmp(device_name, "uart6") == 0) {
+#ifdef BSP_USING_UART6
+    *rx_bufsz = BSP_UART6_RX_BUFSIZE;
+    *tx_bufsz = BSP_UART6_TX_BUFSIZE;
+#if defined(BSP_UART6_RX_USING_DMA) && defined(BSP_UART6_TX_USING_DMA)
+    *dma_ping_bufsz = BSP_UART6_DMA_PING_BUFSIZE;
+#endif
+#else
+    rt_kprintf("Error: UART6 not enabled in BSP configuration\n");
+    return -RT_ERROR;
+#endif
+  } else if (strcmp(device_name, "uart7") == 0) {
+#ifdef BSP_USING_UART7
+    *rx_bufsz = BSP_UART7_RX_BUFSIZE;
+    *tx_bufsz = BSP_UART7_TX_BUFSIZE;
+#if defined(BSP_UART7_RX_USING_DMA) && defined(BSP_UART7_TX_USING_DMA)
+    *dma_ping_bufsz = BSP_UART7_DMA_PING_BUFSIZE;
+#endif
+#else
+    rt_kprintf("Error: UART7 not enabled in BSP configuration\n");
+    return -RT_ERROR;
+#endif
+  } else if (strcmp(device_name, "uart8") == 0) {
+#ifdef BSP_USING_UART8
+    *rx_bufsz = BSP_UART8_RX_BUFSIZE;
+    *tx_bufsz = BSP_UART8_TX_BUFSIZE;
+#if defined(BSP_UART8_RX_USING_DMA) && defined(BSP_UART8_TX_USING_DMA)
+    *dma_ping_bufsz = BSP_UART8_DMA_PING_BUFSIZE;
+#endif
+#else
+    rt_kprintf("Error: UART8 not enabled in BSP configuration\n");
+    return -RT_ERROR;
+#endif
   } else {
     // 默认值
     *rx_bufsz = 64;

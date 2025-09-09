@@ -24,9 +24,9 @@ static rt_err_t hal_rc_init(struct rt_device* dev) {
 
   rc = (rc_dev_t)dev;
 
-  /* apply init function */
-  if (rc->ops->rc_init) {
-    ret = rc->ops->rc_init(rc);
+  /* apply configuration */
+  if (rc->ops->rc_config) {
+    ret = rc->ops->rc_config(rc, &rc->config);
   }
 
   return ret;
@@ -36,9 +36,8 @@ static rt_ssize_t hal_rc_read(struct rt_device* dev, rt_off_t pos, void* buffer,
   rc_dev_t rc;
   uint16_t read_mask = (uint16_t)pos;
   uint16_t channel_mask;
-  int16_t* rc_channel = (int16_t*)buffer;
-  rt_ssize_t rb = 0;
-  uint8_t n = 0;
+  uint16_t* rc_channel = (uint16_t*)buffer;
+  rt_size_t rb = 0;
 
   RT_ASSERT(dev != RT_NULL);
 
@@ -52,18 +51,14 @@ static rt_ssize_t hal_rc_read(struct rt_device* dev, rt_off_t pos, void* buffer,
     rb = rc->ops->rc_read(rc, read_mask, buffer);
   }
 
-  for (int i = 0; i < rc->config.channel_num; i++) {
+  /* saturate read values */
+  for (int i = 0; i < rc->config.channel_num && i < rb / 2; i++) {
     if (read_mask & (1 << i)) {
-      /* saturate read value */
       if (rc_channel[i] > rc->config.rc_max_value) {
         rc_channel[i] = rc->config.rc_max_value;
       }
       if (rc_channel[i] < rc->config.rc_min_value) {
         rc_channel[i] = rc->config.rc_min_value;
-      }
-      /* check if we have saturated all value */
-      if (++n >= rb / 2) {
-        break;
       }
     }
   }
@@ -97,36 +92,7 @@ static rt_err_t hal_rc_control(struct rt_device* dev, int cmd, void* args) {
       break;
 
     case RC_CMD_CHECK_UPDATE:
-      if (rc->config.protocol == RC_PROTOCOL_AUTO) {
-        /* if auto protocol, we will check the valid protocol (sbus/ppm) then switch to it.
-           it's only allowed to switch once while powered-on */
-        uint8_t updated = 0;
-
-        /* Check sbus availability */
-        if (updated == 0) {
-          rc->config.protocol = RC_PROTOCOL_SBUS;
-          rc->ops->rc_control(rc, RC_CMD_CHECK_UPDATE, &updated);
-        }
-
-        /* Check ppm availability */
-        if (updated == 0) {
-          rc->config.protocol = RC_PROTOCOL_PPM;
-          rc->ops->rc_control(rc, RC_CMD_CHECK_UPDATE, &updated);
-        }
-
-        if (updated == 0) {
-          /* not protocol availbale, change to auto and try next time */
-          rc->config.protocol = RC_PROTOCOL_AUTO;
-        }
-
-        *(uint8_t*)args = updated;
-      } else if (rc->config.protocol == RC_PROTOCOL_SBUS || rc->config.protocol == RC_PROTOCOL_PPM) {
-        return rc->ops->rc_control(rc, cmd, args);
-      } else {
-        *(uint8_t*)args = 0;
-        return RT_EINVAL;
-      }
-      break;
+      return rc->ops->rc_control(rc, cmd, args);
 
     default:
       return rc->ops->rc_control(rc, cmd, args);

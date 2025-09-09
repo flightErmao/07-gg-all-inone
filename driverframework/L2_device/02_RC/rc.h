@@ -23,12 +23,12 @@
 extern "C" {
 #endif
 
-#define MAX_SBUS_RC_CHANNEL_NUM 16
-#define MAX_PPM_RC_CHANNEL_NUM 8
+#define MAX_RC_CHANNEL_NUM 16
 
-#define RC_PROTOCOL_AUTO 0
+#define RC_PROTOCOL_CRSF 0
 #define RC_PROTOCOL_SBUS 1
-#define RC_PROTOCOL_PPM 2
+
+#define RC_PROTOCOL_MAX 2
 
 #define RC_MASK_1 0x0001
 #define RC_MASK_2 0x0002
@@ -74,11 +74,6 @@ struct rc_device {
 typedef struct rc_device* rc_dev_t;
 
 struct rc_ops {
-  /**
-   * @brief rc init function (optional)
-   * @param dev rc device
-   */
-  rt_err_t (*rc_init)(rc_dev_t dev);
   /**
    * @brief rc configuration function (optional)
    * @param dev rc device

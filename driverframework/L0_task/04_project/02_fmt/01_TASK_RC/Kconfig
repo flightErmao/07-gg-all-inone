@@ -1,0 +1,21 @@
+menuconfig PROJECT_FMT_TASK01_RC_EN
+    bool "ENABLE: PROJECT_FMT_TASK01_RC_EN"
+    default n
+    # select RC_USING_SBUS
+    help
+        Enable RC test task that reads RC receiver data and outputs channel values.
+
+    if PROJECT_FMT_TASK01_RC_EN
+        config PROJECT_FMT_TASK01_RC_DEVICE_DEFAULT
+            string "RC device name"
+            default "rc_sbus"
+            help
+                The RC device name to use (e.g. rc_sbus, rc_crsf).
+
+        config PROJECT_FMT_TASK01_RC_ATKP_LOG_EN
+            bool "ENABLE: PROJECT_FMT_TASK01_RC_ATKP_LOG_EN"
+            default n
+            help
+                Enable ATKP log for RC data.
+
+    endif

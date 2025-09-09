@@ -1,0 +1,15 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+path = [cwd]
+src = []
+group = []
+
+src = Glob("./*.c")
+
+group = DefineGroup(
+    "PROJECT_FMT_TASK01_RC_EN", src, depend=["PROJECT_FMT_TASK01_RC_EN"], CPPPATH=path
+)
+
+Return("group")

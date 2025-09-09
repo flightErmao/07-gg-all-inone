@@ -22,6 +22,7 @@ void sendUserDatafloat6(uint8_t group, float a, float b, float c, float d, float
 void sendUserDatafloat6_u32(uint8_t group, float a, float b, float c, float d, float e, float f, uint32_t uint32_t);
 void sendUserDatafloat12_u32(uint8_t group, float a, float b, float c, float d, float e, float f, float g, float h,
                              float i, float j, float k, float l, uint32_t uint32_t);
+void sendUserDatauint16_8(uint8_t group, uint16_t a, uint16_t b, uint16_t c, uint16_t d, uint16_t e, uint16_t f, uint16_t g, uint16_t h);
 
 void packStatus(float roll, float pitch, float yaw, int32_t alt, uint8_t fly_model, uint8_t armed);
 void packSensor(int16_t a_x, int16_t a_y, int16_t a_z, int16_t g_x, int16_t g_y, int16_t g_z, int16_t m_x, int16_t m_y,

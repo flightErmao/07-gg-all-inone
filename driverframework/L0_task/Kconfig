@@ -14,4 +14,6 @@ menu "L0_TASK_CONFIG"
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/01_minifly/TASK_04_DISTRIBUTE/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/01_minifly/TASK_05_PARAM/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/01_minifly/TASK_06_RC/Kconfig"
+
+    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/02_fmt/01_TASK_RC/Kconfig"
 endmenu

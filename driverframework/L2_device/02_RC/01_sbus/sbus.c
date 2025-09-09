@@ -190,5 +190,5 @@ static rt_uint16_t sbus_rc_read(rc_dev_t rc, rt_uint16_t chan_mask, rt_uint16_t*
 }
 
 #ifdef RC_USING_SBUS
-INIT_APP_EXPORT(sbus_thread_auto_start);
+INIT_COMPONENT_EXPORT(sbus_thread_auto_start);
 #endif

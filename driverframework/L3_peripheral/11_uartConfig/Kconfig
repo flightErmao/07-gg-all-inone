@@ -108,6 +108,176 @@ menuconfig BSP_USING_UART
                             range 32 65535
                             depends on RT_USING_SERIAL_V2 && BSP_UART3_RX_USING_DMA
                             default 64                        
+                    endif
+
+                menuconfig BSP_USING_UART4
+                    bool "Enable UART4"
+                    default n
+
+                    if BSP_USING_UART4
+                        config BSP_UART4_RX_USING_DMA
+                            bool "Enable UART4 RX DMA"
+                            depends on BSP_USING_UART4 && RT_SERIAL_USING_DMA
+                            default n
+
+                        config BSP_UART4_TX_USING_DMA
+                            bool "Enable UART4 TX DMA"
+                            depends on BSP_USING_UART4 && RT_SERIAL_USING_DMA
+                            default n
+
+                        config BSP_UART4_RX_BUFSIZE
+                            int "Set UART4 RX buffer size"
+                            range 64 65535
+                            depends on RT_USING_SERIAL_V2
+                            default 256
+
+                        config BSP_UART4_TX_BUFSIZE
+                            int "Set UART4 TX buffer size"
+                            range 0 65535
+                            depends on RT_USING_SERIAL_V2
+                            default 64
+
+                        config BSP_UART4_DMA_PING_BUFSIZE
+                            int "Set UART4 RX DMA ping-pong buffer size"
+                            range 32 65535
+                            depends on RT_USING_SERIAL_V2 && BSP_UART4_RX_USING_DMA
+                            default 64                        
+                    endif
+
+                menuconfig BSP_USING_UART5
+                    bool "Enable UART5"
+                    default n
+
+                    if BSP_USING_UART5
+                        config BSP_UART5_RX_USING_DMA
+                            bool "Enable UART5 RX DMA"
+                            depends on BSP_USING_UART5 && RT_SERIAL_USING_DMA
+                            default n
+
+                        config BSP_UART5_TX_USING_DMA
+                            bool "Enable UART5 TX DMA"
+                            depends on BSP_USING_UART5 && RT_SERIAL_USING_DMA
+                            default n
+
+                        config BSP_UART5_RX_BUFSIZE
+                            int "Set UART5 RX buffer size"
+                            range 64 65535
+                            depends on RT_USING_SERIAL_V2
+                            default 256
+
+                        config BSP_UART5_TX_BUFSIZE
+                            int "Set UART5 TX buffer size"
+                            range 0 65535
+                            depends on RT_USING_SERIAL_V2
+                            default 64
+
+                        config BSP_UART5_DMA_PING_BUFSIZE
+                            int "Set UART5 RX DMA ping-pong buffer size"
+                            range 32 65535
+                            depends on RT_USING_SERIAL_V2 && BSP_UART5_RX_USING_DMA
+                            default 64                        
+                    endif
+
+                menuconfig BSP_USING_UART6
+                    bool "Enable UART6"
+                    default n
+
+                    if BSP_USING_UART6
+                        config BSP_UART6_RX_USING_DMA
+                            bool "Enable UART6 RX DMA"
+                            depends on BSP_USING_UART6 && RT_SERIAL_USING_DMA
+                            default n
+
+                        config BSP_UART6_TX_USING_DMA
+                            bool "Enable UART6 TX DMA"
+                            depends on BSP_USING_UART6 && RT_SERIAL_USING_DMA
+                            default n
+
+                        config BSP_UART6_RX_BUFSIZE
+                            int "Set UART6 RX buffer size"
+                            range 64 65535
+                            depends on RT_USING_SERIAL_V2
+                            default 256
+
+                        config BSP_UART6_TX_BUFSIZE
+                            int "Set UART6 TX buffer size"
+                            range 0 65535
+                            depends on RT_USING_SERIAL_V2
+                            default 64
+
+                        config BSP_UART6_DMA_PING_BUFSIZE
+                            int "Set UART6 RX DMA ping-pong buffer size"
+                            range 32 65535
+                            depends on RT_USING_SERIAL_V2 && BSP_UART6_RX_USING_DMA
+                            default 64                        
+                    endif
+
+                menuconfig BSP_USING_UART7
+                    bool "Enable UART7"
+                    default n
+
+                    if BSP_USING_UART7
+                        config BSP_UART7_RX_USING_DMA
+                            bool "Enable UART7 RX DMA"
+                            depends on BSP_USING_UART7 && RT_SERIAL_USING_DMA
+                            default n
+
+                        config BSP_UART7_TX_USING_DMA
+                            bool "Enable UART7 TX DMA"
+                            depends on BSP_USING_UART7 && RT_SERIAL_USING_DMA
+                            default n
+
+                        config BSP_UART7_RX_BUFSIZE
+                            int "Set UART7 RX buffer size"
+                            range 64 65535
+                            depends on RT_USING_SERIAL_V2
+                            default 256
+
+                        config BSP_UART7_TX_BUFSIZE
+                            int "Set UART7 TX buffer size"
+                            range 0 65535
+                            depends on RT_USING_SERIAL_V2
+                            default 64
+
+                        config BSP_UART7_DMA_PING_BUFSIZE
+                            int "Set UART7 RX DMA ping-pong buffer size"
+                            range 32 65535
+                            depends on RT_USING_SERIAL_V2 && BSP_UART7_RX_USING_DMA
+                            default 64                        
+                    endif
+
+                menuconfig BSP_USING_UART8
+                    bool "Enable UART8"
+                    default n
+
+                    if BSP_USING_UART8
+                        config BSP_UART8_RX_USING_DMA
+                            bool "Enable UART8 RX DMA"
+                            depends on BSP_USING_UART8 && RT_SERIAL_USING_DMA
+                            default n
+
+                        config BSP_UART8_TX_USING_DMA
+                            bool "Enable UART8 TX DMA"
+                            depends on BSP_USING_UART8 && RT_SERIAL_USING_DMA
+                            default n
+
+                        config BSP_UART8_RX_BUFSIZE
+                            int "Set UART8 RX buffer size"
+                            range 64 65535
+                            depends on RT_USING_SERIAL_V2
+                            default 256
+
+                        config BSP_UART8_TX_BUFSIZE
+                            int "Set UART8 TX buffer size"
+                            range 0 65535
+                            depends on RT_USING_SERIAL_V2
+                            default 64
+
+                        config BSP_UART8_DMA_PING_BUFSIZE
+                            int "Set UART8 RX DMA ping-pong buffer size"
+                            range 32 65535
+                            depends on RT_USING_SERIAL_V2 && BSP_UART8_RX_USING_DMA
+                            default 64                        
                     endif                
         endif
 
