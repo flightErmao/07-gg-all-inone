@@ -5,10 +5,8 @@ path = []
 src = []
 
 src = Glob("./*.c")
-src += Glob("./*.cpp")
 path = [cwd]
 
-# 定义编译组
 group = DefineGroup("RC_USING_SBUS", src, depend=["RC_USING_SBUS"], CPPPATH=path)
 
 Return("group")
