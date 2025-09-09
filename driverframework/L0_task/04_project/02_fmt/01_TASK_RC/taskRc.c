@@ -23,7 +23,7 @@ void rcTestTask(void* param) {
       } else {
         rt_kprintf("Read RC data failed!\n");
         rt_thread_mdelay(1000);
-      } 
+      }
     } else {
       rt_kprintf("RC device not found!\n");
       rt_thread_mdelay(1000);
@@ -50,7 +50,7 @@ static int taskRcTestInit(void) {
   }
 
   rt_thread_t thread =
-      rt_thread_create("rc_test", rcTestTask, RT_NULL, THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
+      rt_thread_create("L0_fmt_rc", rcTestTask, RT_NULL, THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
   if (thread != RT_NULL) {
     rt_thread_startup(thread);
     rt_kprintf("RC test task started on %s\n", rc_name);
