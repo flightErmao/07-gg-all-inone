@@ -9,6 +9,7 @@
 #include "commandMinifly.h"
 #include "stateControl.h"
 #include "mixerControl.h"
+#include "floatConvert.h"
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
 #include "debugPin.h"
 #endif
@@ -36,8 +37,33 @@ static McnNode_t state_sub_node = RT_NULL;
 static bool sensorsAreCalibrated(void) { return outputGyroBiasFound(); }
 // static bool sensorsAreCalibrated(void) { return true; }
 
+static int sensor_state_echo(void* parameter) {
+  state_t state;
+  if (mcn_copy_from_hub((McnHub*)parameter, &state) != RT_EOK) {
+    return -1;
+  }
+
+  char roll[16], pitch[16], yaw[16];
+  // char gx[16], gy[16], gz[16];
+
+  float_to_string(state.attitude.roll, roll, sizeof(roll));
+  float_to_string(state.attitude.pitch, pitch, sizeof(pitch));
+  float_to_string(state.attitude.yaw, yaw, sizeof(yaw));
+  // float_to_string(state.gyro_filter.x, gx, sizeof(gx));
+  // float_to_string(state.gyro_filter.y, gy, sizeof(gy));
+  // float_to_string(state.gyro_filter.z, gz, sizeof(gz));
+
+  // rt_kprintf("att(r,p,y): %s, %s, %s, gyro(x,y,z): %s, %s, %s, mode: %d, armed: %d, ts: %lu\n", roll, pitch, yaw, gx,
+  //            gy, gz, (int)state.fly_mode, (int)state.armed, state.attitude.timestamp);
+
+  rt_kprintf("att(r,p,y): %s, %s, %s, mode: %d, armed: %d, ts: %lu\n", roll, pitch, yaw, (int)state.fly_mode,
+             (int)state.armed, state.attitude.timestamp);
+
+  return 0;
+}
+
 static void mcnTopicInit(void) {
-  rt_err_t result = mcn_advertise(MCN_HUB(minifly_stabilizer_state), RT_NULL);
+  rt_err_t result = mcn_advertise(MCN_HUB(minifly_stabilizer_state), sensor_state_echo);
   if (result != RT_EOK) {
     rt_kprintf("Failed to advertise minifly_stabilizer_state topic: %d\n", result);
   }
@@ -97,6 +123,7 @@ static void stabilizer_minifly_thread_entry(void* parameter) {
 #endif
       sensorsAcquire(&sensorData);
       imuUpdate(sensorData.acc_filter, sensorData.gyro_filter, &state_, ATTITUDE_ESTIMAT_DT);
+      state_.attitude.timestamp = rt_tick_get();
       mcn_publish(MCN_HUB(minifly_stabilizer_state), &state_);
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
       DEBUG_PIN_DEBUG3_LOW();
@@ -106,14 +133,18 @@ static void stabilizer_minifly_thread_entry(void* parameter) {
     // if (RATE_DO_EXECUTE(RATE_100_HZ, tick) && getIsCalibrated() == true)
     if (RATE_DO_EXECUTE(RATE_100_HZ, tick)) {
       pilot_cmd_bus_t rc_data = {0};
+#ifdef PROJECT_MINIFLY_TASK06_RC_EN
       rcPilotCmdAcquire(&rc_data);
+#endif
       commanderGetSetpoint(&rc_data, &setpoint_);
     }
 
     stateControl(&state_, &setpoint_, &contorl_, tick);
 
     if (RATE_DO_EXECUTE(RATE_500_HZ, tick)) {
+#ifdef L2_DEVICE_03_MOTOR_01_PWM_EN
       mixerControl(&contorl_);
+#endif
     }
 
     tick++;

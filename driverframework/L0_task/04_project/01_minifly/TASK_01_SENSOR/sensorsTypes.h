@@ -46,8 +46,8 @@ typedef union {
 } Axis3f;
 
 typedef struct {
-  Axis3f acc_raw;
-  Axis3f gyro_raw;
+  Axis3i16 acc_raw;
+  Axis3i16 gyro_raw;
   Axis3f acc_filter;
   Axis3f gyro_filter;
   uint32_t timestamp;  // 添加时间戳成员变量

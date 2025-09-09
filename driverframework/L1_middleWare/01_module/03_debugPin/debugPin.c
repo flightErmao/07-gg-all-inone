@@ -4,6 +4,9 @@
 #include <rtconfig.h>
 #include <ctype.h>
 #include <drv_gpio.h>
+#include "pinInterface.h"
+
+#define DEBUG_PIN_COUNT 4
 
 /* 调试引脚配置结构体 */
 typedef struct {
@@ -13,53 +16,6 @@ typedef struct {
 
 /* 调试引脚配置数组 */
 static debug_pin_config_t debug_pins[4] = {0};
-
-#define DEBUG_PIN_COUNT 4
-
-/**
- * @brief 解析调试引脚配置字符串
- * @param pin_name 引脚名称字符串，形如 "PC15", "PB0"
- * @return rt_base_t 引脚句柄
- */
-rt_base_t parse_pin_name_from_config(const char* pin_name) {
-  if (pin_name == RT_NULL) {
-    return (rt_base_t)(2 * 16 + 15);  // 默认PC15
-  }
-
-  const char* s = pin_name;
-  // 允许可选的前缀 'P'
-  if (s[0] == 'P' || s[0] == 'p') {
-    s++;
-  }
-  // 读取端口字母
-  if (s[0] == '\0' || !isalpha((unsigned char)s[0])) {
-    return (rt_base_t)(2 * 16 + 15);
-  }
-  char port_char = (char)toupper((unsigned char)s[0]);
-  s++;
-
-  // 读取数字部分
-  int pin_num = 0;
-  int has_digit = 0;
-  while (*s) {
-    if (!isdigit((unsigned char)*s)) break;
-    has_digit = 1;
-    pin_num = pin_num * 10 + (*s - '0');
-    s++;
-  }
-  if (!has_digit) {
-    return (rt_base_t)(2 * 16 + 15);
-  }
-
-  // 映射端口字母到索引（A->0, B->1, C->2, ...）
-  if (port_char < 'A' || port_char > 'Z') {
-    return (rt_base_t)(2 * 16 + 15);
-  }
-  int port_index = port_char - 'A';
-
-  // STM32 驱动版编码：port*16 + pin
-  return (rt_base_t)(port_index * 16 + pin_num);
-}
 
 /**
  * @brief 初始化调试引脚

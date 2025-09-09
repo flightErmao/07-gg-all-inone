@@ -68,8 +68,8 @@ static void sensorsFindBiasValue(BiasObj *bias) {
   }
 }
 
-bool processGyroBias(int16_t gx, int16_t gy, int16_t gz, Axis3f *gyroBiasOut) {
-  sensorsAddBiasValue(&gyroBiasRunning, gx, gy, gz);
+bool getGyroBias(Axis3i16 gyroRaw, Axis3f *gyroBiasOut) {
+  sensorsAddBiasValue(&gyroBiasRunning, gyroRaw.x, gyroRaw.y, gyroRaw.z);
 
   if (!gyroBiasRunning.isBiasValueFound) {
     sensorsFindBiasValue(&gyroBiasRunning);

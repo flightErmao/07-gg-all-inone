@@ -2,8 +2,11 @@ menuconfig PROJECT_MINIFLY_TASK_STABLIZE_EN
     bool "ENABLE: PROJECT_MINIFLY_TASK_STABLIZE_EN"
     default n
     select PROJECT_MINIFLY_TASK_SENSOR_EN
-    select PROJECT_MINIFLY_TASK06_RC_EN
+    # select PROJECT_MINIFLY_TASK06_RC_EN
+    
     select PROJECT_MINIFLY_TASK05_PARAM_EN
+    select L1_MIDDLEWARE_01_MODULE_02_MATHS_EN
+    select L1_MIDDLEWARE_01_MODULE_04_PID_MINIFLY_EN
     help
         Enable stabilize task that periodically calls stabilize interface.
     if PROJECT_MINIFLY_TASK_STABLIZE_EN

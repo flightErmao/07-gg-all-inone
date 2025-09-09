@@ -68,8 +68,8 @@ static void deviceInit(void) {
     static imu_dev_t imu_ptr = RT_NULL;
     imu_ptr = (imu_dev_t)dev_temp;
     if (imu_ptr && imu_ptr->ops) {
-      float acc_g_per_lsb = imu_ptr->config.acc_scale_factor;   // g/lsb
-      float gyro_deg_per_lsb = imu_ptr->config.gyro_scale_factor; // dps/lsb      
+      float acc_g_per_lsb = imu_ptr->config.acc_scale_factor;      // g/lsb
+      float gyro_deg_per_lsb = imu_ptr->config.gyro_scale_factor;  // dps/lsb
       sensorsProcess_set_lsb(acc_g_per_lsb, gyro_deg_per_lsb);
     }
   }
@@ -107,6 +107,7 @@ static void sensor_minifly_thread_entry(void *parameter) {
   rtosToolsInit();
   filterInitLpf2AccGyro();
   sensorsBiasObjInit();
+  initImuRotationDir();
 
   uint8_t sensor_buffer[SENSORS_MPU6500_BUFF_LEN] = {0};
   sensorData_t sensors_data = {0};

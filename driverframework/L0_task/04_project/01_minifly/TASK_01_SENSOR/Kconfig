@@ -21,4 +21,10 @@ menuconfig PROJECT_MINIFLY_TASK_SENSOR_EN
             help
                 Enable timer-triggered sampling for the sensor task. When enabled, a software timer periodically releases an event, and the task blocks waiting for this event before reading IMU data.
 
+        config PROJECT_MINIFLY_TASK_SENSOR_ROTATION
+            string "Rotation enum name (e.g. ROTATION_NEGATE_X)"
+            default "ROTATION_NEGATE_X"
+            help
+                Rotation to apply to IMU data after scale and bias removal.
+
     endif
