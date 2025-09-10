@@ -44,7 +44,7 @@ static struct rc_device sbus_rc_dev = {
 static rt_err_t sbus_uart_rx_ind(rt_device_t dev, rt_size_t size) {
   rt_event_send(g_sbus_decoder_.sbus_data_received_event, EVENT_SBUS_DATA_RECEIVED);
 #ifdef RC_SBUS_DEBUGPIN_EN
-  DEBUG_PIN_DEBUG1_HIGH();
+  DEBUG_PIN_DEBUG0_HIGH();
 #endif
   return RT_EOK;
 }
@@ -97,6 +97,12 @@ static rt_err_t sbus_init_uart(const char* uart_name) {
     rt_kprintf("[SBUS] config uart failed\n");
     return ret;
   }
+  /* disable UART RX DMA half/full transfer interrupts to reduce ISR load */
+  ret = rt_device_control(sbus_uart_, RT_DEVICE_CTRL_UART_DMA_RX_DISABLE_HALF_FULL_INT, RT_NULL);
+  if (ret != RT_EOK) {
+    rt_kprintf("[SBUS] disable uart dma rx half/full int failed\n");
+    return ret;
+  }
   rt_device_set_rx_indicate(sbus_uart_, sbus_uart_rx_ind);
   return RT_EOK;
 }
@@ -128,7 +134,7 @@ static void sbus_thread_entry(void* param) {
     if (rt_event_recv(g_sbus_decoder_.sbus_data_received_event, EVENT_SBUS_DATA_RECEIVED,
                       RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &recved) == RT_EOK) {
 #ifdef RC_SBUS_DEBUGPIN_EN
-      DEBUG_PIN_DEBUG1_LOW();
+      DEBUG_PIN_DEBUG0_LOW();
 #endif
       while (1) {
         rt_size_t rx_len = rt_device_read(sbus_uart_, 0, read_buf, sizeof(read_buf));
@@ -171,7 +177,9 @@ static rt_uint16_t sbus_rc_read(rc_dev_t rc, rt_uint16_t chan_mask, rt_uint16_t*
     }
     return written;
   }
-
+#ifdef RC_SBUS_DEBUGPIN_EN
+  DEBUG_PIN_DEBUG1_TOGGLE();
+#endif
   uint16_t temp_channels[MAX_SBUS_CHANNEL];
 
   sbus_lock(&g_sbus_decoder_);

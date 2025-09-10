@@ -133,7 +133,7 @@ static void stabilizer_minifly_thread_entry(void* parameter) {
     // if (RATE_DO_EXECUTE(RATE_100_HZ, tick) && getIsCalibrated() == true)
     if (RATE_DO_EXECUTE(RATE_100_HZ, tick)) {
       pilot_cmd_bus_t rc_data = {0};
-#ifdef PROJECT_MINIFLY_TASK06_RC_EN
+#if defined(PROJECT_MINIFLY_TASK06_RC_EN) || defined(PROJECT_FMT_TASK01_RC_EN)
       rcPilotCmdAcquire(&rc_data);
 #endif
       commanderGetSetpoint(&rc_data, &setpoint_);

@@ -23,6 +23,13 @@ void sendRcData(uint16_t count_ms) {
                           rc_channels[7]);  // CH8
     }
   }
+
+  if (!(count_ms % PERIOD_20ms)) {
+    pilot_cmd_bus_t rc_data = {0};
+    rcPilotCmdAcquire(&rc_data);
+    sendUserDatafloat6_u32(1, rc_data.stick_yaw, rc_data.stick_throttle, rc_data.stick_roll, rc_data.stick_pitch,
+                           (float)rc_data.ram_status, (float)rc_data.ctrl_mode, rc_data.timestamp);
+  }
 }
 
 int addPeriodFunRc(void) {
