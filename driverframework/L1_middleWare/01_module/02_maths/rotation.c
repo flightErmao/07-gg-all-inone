@@ -102,6 +102,18 @@ void rotation(enum Rotation rotation, float* x, float* y, float* z) {
       *z = -*z;
       return;
     }
+    case ROTATION_ROLL_180_YAW_180: {
+      *x = -*x;
+      *y = -*y;
+      *z = -*z;
+      return;
+    }
+    case ROTATION_PITCH_180_ROLL_180: {
+      *x = -*x;
+      *y = -*y;
+      *z = -*z;
+      return;
+    }
     case ROTATION_ROLL_90: {
       tmp = *z;
       *z = *y;
@@ -318,6 +330,16 @@ void rotation(enum Rotation rotation, float* x, float* y, float* z) {
     }
     case ROTATION_NEGATE_X: {
       *x = -*x;
+      return;
+    }
+    case ROTATION_ROLL_180_NEGATE_X: {
+        *x = -*x;
+        *y = -*y;
+        *z = -*z;
+        return;
+    }
+    case ROTATION_PITCH_180_NEGATE_X: {      
+      *z = -*z;
       return;
     }
   }

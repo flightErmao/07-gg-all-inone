@@ -49,6 +49,10 @@ static enum Rotation parseRotationFromString(const char* rot_str) {
   if (strcmp(rot_str, "ROTATION_YAW_270") == 0) return ROTATION_YAW_270;
   if (strcmp(rot_str, "ROTATION_ROLL_180") == 0) return ROTATION_ROLL_180;
   if (strcmp(rot_str, "ROTATION_PITCH_180") == 0) return ROTATION_PITCH_180;
+  if (strcmp(rot_str, "ROTATION_ROLL_180_YAW_180") == 0) return ROTATION_ROLL_180_YAW_180;
+  if (strcmp(rot_str, "ROTATION_PITCH_180_ROLL_180") == 0) return ROTATION_PITCH_180_ROLL_180;
+  if (strcmp(rot_str, "ROTATION_ROLL_180_NEGATE_X") == 0) return ROTATION_ROLL_180_NEGATE_X;
+  if (strcmp(rot_str, "ROTATION_PITCH_180_NEGATE_X") == 0) return ROTATION_PITCH_180_NEGATE_X;
   return ROTATION_NONE;
 }
 
