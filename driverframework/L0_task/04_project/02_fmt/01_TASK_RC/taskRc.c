@@ -57,7 +57,7 @@ static void generateCmd(pilot_cmd_bus_t* pilot_cmd_bus, const rt_uint16_t* rc_ch
 
   if (armStick && isThrottleAtMin) {
     pilot_cmd_bus->ram_status = ARM_STATUS_ARM;
-  } else if (!isThrottleAtMin) {
+  } else if (!armStick) {
     pilot_cmd_bus->ram_status = ARM_STATUS_DISARM;
   }
   // TODO: need use joystick control crtl_mode
