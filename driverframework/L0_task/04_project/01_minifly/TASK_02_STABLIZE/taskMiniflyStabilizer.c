@@ -154,9 +154,9 @@ static void stabilizer_minifly_thread_entry(void* parameter) {
 void stabilizerGetState(state_t* state) {
   if (!state) return;
   if (state_sub_node != NULL) {
-    if (mcn_poll(state_sub_node)) {
+    // if (mcn_poll(state_sub_node)) {
       mcn_copy(MCN_HUB(minifly_stabilizer_state), state_sub_node, state);
-    }
+    // }
   }
 }
 
