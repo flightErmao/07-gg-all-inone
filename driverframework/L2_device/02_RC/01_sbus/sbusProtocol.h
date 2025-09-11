@@ -52,6 +52,10 @@ typedef struct {
   struct rt_event* sbus_data_received_event;
   struct rt_event* sbus_data_ready_event;
   struct rt_mutex* sbus_mutex;
+  /* incremental sync/parse state */
+  uint8_t sbus_syncing;
+  uint8_t sbus_frame_buf[SBUS_FRAME_SIZE];
+  uint8_t sbus_frame_index;
 } sbus_decoder_t;
 
 rt_inline void sbus_lock(sbus_decoder_t* decoder) {

@@ -60,6 +60,12 @@ bool sbus_parse(sbus_decoder_t* decoder, uint8_t* frame, unsigned len) {
     return false;
   }
 
+  /* optional end symbol check for better integrity */
+  if (frame[SBUS_FRAME_SIZE - 1] != SBUS_END_SYMBOL) {
+    decoder->sbus_frame_drops++;
+    return false;
+  }
+
   unsigned chancount = (decoder->max_channels > SBUS_INPUT_CHANNELS) ? SBUS_INPUT_CHANNELS : decoder->max_channels;
 
   for (unsigned channel = 0; channel < chancount; channel++) {
@@ -78,7 +84,13 @@ bool sbus_parse(sbus_decoder_t* decoder, uint8_t* frame, unsigned len) {
       }
     }
 
-    decoder->sbus_val[channel] = (uint16_t)(value * SBUS_SCALE_FACTOR + .5f) + SBUS_SCALE_OFFSET;
+    uint16_t scaled = (uint16_t)(value * SBUS_SCALE_FACTOR + .5f) + SBUS_SCALE_OFFSET;
+    /* drop frame if any value out of expected range */
+    if (scaled < (uint16_t)SBUS_TARGET_MIN || scaled > (uint16_t)SBUS_TARGET_MAX) {
+      decoder->sbus_frame_drops++;
+      return false;
+    }
+    decoder->sbus_val[channel] = scaled;
   }
 
   if (decoder->max_channels > 17 && chancount > 15) {
@@ -95,23 +107,49 @@ bool sbus_parse(sbus_decoder_t* decoder, uint8_t* frame, unsigned len) {
 }
 
 bool sbus_update(sbus_decoder_t* decoder) {
-  int ret;
+  /* Incrementally consume bytes to find and assemble a full frame */
+  uint8_t byte;
+  int got;
 
-  uint8_t buf[SBUS_FRAME_SIZE];
-  ret = rt_ringbuffer_get(decoder->sbus_rb, buf, SBUS_FRAME_SIZE);
+  while (rt_ringbuffer_data_len(decoder->sbus_rb) > 0) {
+    got = rt_ringbuffer_get(decoder->sbus_rb, &byte, 1);
+    if (got != 1) {
+      break;
+    }
 
-  if (ret < SBUS_FRAME_SIZE) {
-    return false;
+    if (!decoder->sbus_syncing) {
+      if (byte == SBUS_START_SYMBOL) {
+        decoder->sbus_syncing = 1;
+        decoder->sbus_frame_index = 0;
+        decoder->sbus_frame_buf[decoder->sbus_frame_index++] = byte;
+      }
+      /* else: discard until we see start symbol */
+      continue;
+    }
+
+    /* syncing: accumulate bytes */
+    decoder->sbus_frame_buf[decoder->sbus_frame_index++] = byte;
+
+    if (decoder->sbus_frame_index >= SBUS_FRAME_SIZE) {
+      /* full frame collected, attempt parse */
+      bool parsed_ok = sbus_parse(decoder, decoder->sbus_frame_buf, SBUS_FRAME_SIZE);
+      /* reset sync for next frame regardless of success */
+      decoder->sbus_syncing = 0;
+      decoder->sbus_frame_index = 0;
+
+      if (parsed_ok) {
+        bool ready = !decoder->sbus_failsafe && !decoder->sbus_frame_drop;
+        decoder->sbus_data_ready = ready;
+        if (ready && decoder->sbus_data_ready_event != NULL) {
+          rt_event_send(decoder->sbus_data_ready_event, EVENT_SBUS_DATA_READY);
+        }
+        return ready;
+      }
+      /* if parse failed, continue scanning from next byte already in ringbuffer */
+    }
   }
 
-  bool sbus_updated = sbus_parse(decoder, buf, ret);
-  decoder->sbus_data_ready = sbus_updated && !decoder->sbus_failsafe && !decoder->sbus_frame_drop;
-
-  if (decoder->sbus_data_ready && decoder->sbus_data_ready_event != NULL) {
-    rt_event_send(decoder->sbus_data_ready_event, EVENT_SBUS_DATA_READY);
-  }
-
-  return decoder->sbus_data_ready;
+  return false;
 }
 
 uint32_t sbus_input(sbus_decoder_t* decoder, const uint8_t* values, uint32_t size) {

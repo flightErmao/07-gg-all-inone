@@ -136,16 +136,15 @@ static void sbus_thread_entry(void* param) {
 #ifdef RC_SBUS_DEBUGPIN_EN
       DEBUG_PIN_DEBUG0_LOW();
 #endif
-      while (1) {
-        rt_size_t rx_len = rt_device_read(sbus_uart_, 0, read_buf, sizeof(read_buf));
-        if (rx_len <= 0) break;
-        sbus_input(&g_sbus_decoder_, read_buf, rx_len);
+      rt_size_t rx_len = rt_device_read(sbus_uart_, 0, read_buf, sizeof(read_buf));
+      if (rx_len < 0 || rx_len == 0) {
+        continue;
       }
+      sbus_input(&g_sbus_decoder_, read_buf, rx_len);
 
-      if (!sbus_islock(&g_sbus_decoder_)) {
-        uint32_t available_len = rt_ringbuffer_data_len(g_sbus_decoder_.sbus_rb);
-        if (available_len >= SBUS_FRAME_SIZE) {
-          sbus_update(&g_sbus_decoder_);
+      while (!sbus_islock(&g_sbus_decoder_)) {
+        if (!sbus_update(&g_sbus_decoder_)) {
+          break;
         }
       }
     }
