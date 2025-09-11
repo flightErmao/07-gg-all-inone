@@ -18,6 +18,7 @@ MCN_DEFINE(minifly_rc_pilot_cmd, sizeof(pilot_cmd_bus_t));
 static rt_device_t rc_test_dev_ = RT_NULL;
 static rt_uint16_t rc_channels_[MAX_RC_CHANNEL_NUM] = {0};
 static McnNode_t rc_sub_node_ = RT_NULL;
+static rt_bool_t cmdPrintf = RT_FALSE;
 
 static int rc_pilot_cmd_echo(void* parameter) {
   pilot_cmd_bus_t pilot_cmd_bus;
@@ -98,9 +99,10 @@ static void rcThreadEntry(void* param) {
         mcn_publish(MCN_HUB(minifly_rc_pilot_cmd), &pilot_cmd_bus);
       } else {
         rc_loss_count++;
-        if (rc_loss_count > 10) {
-          rt_kprintf("RC loss count: %d\n", rc_loss_count);
-          rc_loss_count = 0;
+        if (rc_loss_count % 10 == 0) {
+          if(cmdPrintf) {
+            rt_kprintf("RC loss count: %d \n", rc_loss_count);
+          }
           is_rc_loss = RT_TRUE;
         }
         if (is_rc_loss) {
@@ -209,3 +211,25 @@ void rcPilotCmdAcquire(pilot_cmd_bus_t* pilot_cmd_bus) {
   }
 #endif
 }
+
+static int cmdRcPri(int argc, char **argv) {
+
+  if (argc < 2) {
+    rt_kprintf("RC printf enable command usage: rc_printf_enable <enable|disable>\n");
+    return -1;
+  }
+
+  if (!rt_strcmp(argv[1], "enable")) {
+    cmdPrintf = RT_TRUE;
+  } else if (!rt_strcmp(argv[1], "disable")) {
+    cmdPrintf = RT_FALSE;
+  } else {
+    rt_kprintf("Invalid command: %s\n", argv[1]);
+    rt_kprintf("Usage: rc_printf_enable <enable|disable>\n");
+    return -1;
+  }
+
+  return 0;
+}
+
+MSH_CMD_EXPORT_ALIAS(cmdRcPri, cmdRcPri, rc printf enable command);
