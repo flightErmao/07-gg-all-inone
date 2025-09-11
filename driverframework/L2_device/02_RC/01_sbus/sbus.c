@@ -172,10 +172,9 @@ static rt_uint16_t sbus_rc_read(rc_dev_t rc, rt_uint16_t chan_mask, rt_uint16_t*
     for (int i = 0; i < rc->config.channel_num; i++) {
       if (chan_mask & (1 << i)) {
         chan_val[i] = SBUS_INVALID_CHANNEL_VALUE;
-        written += 2;
       }
     }
-    return written;
+    return 0;
   }
 #ifdef RC_SBUS_DEBUGPIN_EN
   DEBUG_PIN_DEBUG1_TOGGLE();
