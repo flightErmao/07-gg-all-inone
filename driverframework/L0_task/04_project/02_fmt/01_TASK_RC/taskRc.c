@@ -156,8 +156,8 @@ static int taskRcThreadInit(void) {
   static struct rt_thread task_tid_rc_fmt;
   static rt_uint8_t task_stack_rc_fmt[THREAD_STACK_SIZE] = {0};
 
-  rt_err_t ret = rt_thread_init(&task_tid_rc_fmt, "L0_fmt_rc", rcThreadEntry, RT_NULL, task_stack_rc_fmt,
-                                 THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
+  rt_err_t ret = rt_thread_init(&task_tid_rc_fmt, "joystick", rcThreadEntry, RT_NULL, task_stack_rc_fmt,
+                                THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
   if (ret != RT_EOK) {
     rt_kprintf("Init RC thread failed: %d\n", ret);
     return -RT_ERROR;

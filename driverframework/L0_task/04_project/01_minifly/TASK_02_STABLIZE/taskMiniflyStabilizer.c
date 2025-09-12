@@ -161,7 +161,7 @@ void stabilizerGetState(state_t* state) {
 }
 
 static int taskStabilizerThreadAutoStart(void) {
-  rt_thread_init(&task_tid_stabilizer_minifly, "L0_minifly_stabilizer", stabilizer_minifly_thread_entry, RT_NULL,
+  rt_thread_init(&task_tid_stabilizer_minifly, "stabilizer", stabilizer_minifly_thread_entry, RT_NULL,
                  task_stack_stabilizer_minifly, THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
   rt_thread_startup(&task_tid_stabilizer_minifly);
   return RT_EOK;

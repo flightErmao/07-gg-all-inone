@@ -100,8 +100,8 @@ void configParamTask(void *param) {
 static int configParamTaskInit(void) {
   configParamInit();
 
-  rt_thread_init(&configParamTid, "L0_minifly_configParam", configParamTask, RT_NULL, configParamStack,
-                 THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
+  rt_thread_init(&configParamTid, "configPar", configParamTask, RT_NULL, configParamStack, THREAD_STACK_SIZE,
+                 THREAD_PRIORITY, THREAD_TIMESLICE);
   rt_thread_startup(&configParamTid);
 
   rt_kprintf("Config param task started\r\n");

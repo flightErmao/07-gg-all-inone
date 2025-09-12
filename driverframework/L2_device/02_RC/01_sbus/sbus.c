@@ -120,7 +120,7 @@ static rt_err_t sbus_start_thread(void) {
   static struct rt_thread sbus_thread;
   static rt_uint8_t sbus_thread_stack[THREAD_STACK_SIZE];
 
-  rt_thread_init(&sbus_thread, "L2_rc_sbus", sbus_thread_entry, RT_NULL, sbus_thread_stack, THREAD_STACK_SIZE,
+  rt_thread_init(&sbus_thread, "sbus", sbus_thread_entry, RT_NULL, sbus_thread_stack, THREAD_STACK_SIZE,
                  THREAD_PRIORITY, THREAD_TIMESLICE);
   rt_thread_startup(&sbus_thread);
   return RT_EOK;
