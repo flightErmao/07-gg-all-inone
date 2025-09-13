@@ -86,8 +86,13 @@
 #define ABS(x) _ABS_I(x, _CHOOSE_VAR(_abs, __COUNTER__))
 #endif
 
+#ifndef MIN
 #define MIN(a, b) 	(((a) < (b)) ? (a) : (b))
+#endif
+
+#ifndef MAX
 #define MAX(a, b) 	(((a) > (b)) ? (a) : (b))
+#endif
 
 #define ABS(x) 		(((x) < 0) ? (-x) : (x))
 

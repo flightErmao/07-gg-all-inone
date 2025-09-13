@@ -58,8 +58,8 @@ static rt_err_t parse_motor_remap_config(void) {
     return RT_EOK;  // Already parsed
   }
 
-#ifdef MOTOR_PWM_CHANNEL_REMAP
-  const char* remap_str = MOTOR_PWM_CHANNEL_REMAP;
+#ifdef L2_DEVICE_03_MOTOR_03_PWM_CHANNEL_REMAP
+  const char* remap_str = L2_DEVICE_03_MOTOR_03_PWM_CHANNEL_REMAP;
   int len = strlen(remap_str);
 
   if (len != MAX_PWM_OUT_CHAN) {
@@ -320,7 +320,7 @@ rt_err_t pwm_reg(void) {
   return ret;
 }
 
-#ifdef MOTOR_USING_PWM_EN
+#ifdef L2_DEVICE_03_MOTOR_03_PWM_EN
 static int pwm_auto_start(void) {
   rt_err_t ret;
   ret = pwm_hardware_init();

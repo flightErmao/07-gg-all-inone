@@ -1,26 +1,26 @@
-config MOTOR_USING_PWM_EN
+config L2_DEVICE_03_MOTOR_03_PWM_EN
     bool "Enable PWM motor driver"
     default n
     help
         Enable PWM motor driver support for actuator control.
 
-    if MOTOR_USING_PWM_EN
+    if L2_DEVICE_03_MOTOR_03_PWM_EN
 
-        config MOTOR_PWM_CHANNEL_REMAP
+        config L2_DEVICE_03_MOTOR_03_PWM_CHANNEL_REMAP
             string "Motor channel remap sequence"
-            default "1234"
+            default "4321"
             help
                 Motor channel remap sequence. Default is "1234" (no remap).
                 Examples: "2134", "4321", "1324", etc.
                 This maps logical motor IDs (1-4) to physical PWM channels.
 
-        config MOTOR_USING_PWM_CMD_EN
+        config L2_DEVICE_03_MOTOR_03_PWM_CMD_EN
             bool "Enable PWM motor command interface"
             default n
             help
                 Enable MSH command interface for PWM motor control.
 
-        config MOTOR_USING_PWM_DEBUGPIN_EN
+        config L2_DEVICE_03_MOTOR_03_PWM_DEBUGPIN_EN
             bool "Enable PWM debug pin output"
             default n
             help

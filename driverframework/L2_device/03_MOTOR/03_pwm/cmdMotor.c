@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include "actuator.h"
-#if defined(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN) && defined(MOTOR_USING_PWM_DEBUGPIN_EN)
+#if defined(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN) && defined(L2_DEVICE_03_MOTOR_03_PWM_DEBUGPIN_EN)
 #include "debugPin.h"
 #endif
 
@@ -72,7 +72,7 @@ static int motor_set_duty_cycle(int motor_id, float duty_cycle, int duration_ms)
     rt_uint16_t chan_val = (rt_uint16_t)(1000.0f + duty_cycle * 1000.0f);
 
     /* Write PWM value to specific channel */
-#if defined(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN) && defined(MOTOR_USING_PWM_DEBUGPIN_EN)
+#if defined(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN) && defined(L2_DEVICE_03_MOTOR_03_PWM_DEBUGPIN_EN)
     DEBUG_PIN_DEBUG0_HIGH();
 #endif
     // rt_device_control(motor_device, ACT_CMD_CHANNEL_ENABLE, NULL);
@@ -93,8 +93,8 @@ static int motor_set_duty_cycle(int motor_id, float duty_cycle, int duration_ms)
         rt_kprintf("[cmdMotor] Running for %d ms then auto stop...\n", duration_ms);
         rt_thread_mdelay(duration_ms);
 
-#if defined(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN) && defined(MOTOR_USING_PWM_DEBUGPIN_EN)
-    DEBUG_PIN_DEBUG0_LOW();
+#if defined(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN) && defined(L2_DEVICE_03_MOTOR_03_PWM_DEBUGPIN_EN)
+        DEBUG_PIN_DEBUG0_LOW();
 #endif
         /* Stop motor */
         chan_val = 0;
@@ -240,11 +240,9 @@ static void cmdMotorCalib(int argc, char **argv) {
   motor_calibration();
 }
 
-#ifdef MOTOR_USING_PWM_CMD_EN
 /* Export command to MSH */
 MSH_CMD_EXPORT_ALIAS(cmdMotorTest, cmdMotorTest, motor single test command);
 MSH_CMD_EXPORT_ALIAS(cmdMotorOrder, cmdMotorOrder, motor sequence test command);
 MSH_CMD_EXPORT_ALIAS(cmdMotorCalib, cmdMotorCalib, motor calibration command);
-#endif
 
 #endif /* RT_USING_FINSH */

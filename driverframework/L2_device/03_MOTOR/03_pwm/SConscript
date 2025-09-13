@@ -4,9 +4,12 @@ cwd = GetCurrentDir()
 path = []
 src = []
 
-src = Glob("./*.c")
+src = ['drvPwm.c']
 path = [cwd]
 
-group = DefineGroup("MOTOR_USING_PWM", src, depend=["MOTOR_USING_PWM_EN"], CPPPATH=path)
+if GetDepend(['L2_DEVICE_03_MOTOR_03_PWM_CMD_EN']):
+    src += ['cmdMotor.c']
+
+group = DefineGroup("L2_DEVICE_03_MOTOR_03_PWM_EN", src, depend=["L2_DEVICE_03_MOTOR_03_PWM_EN"], CPPPATH=path)
 
 Return("group")

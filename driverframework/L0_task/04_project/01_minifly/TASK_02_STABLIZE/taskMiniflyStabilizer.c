@@ -101,6 +101,7 @@ void taskStabilizerInit(void) {
   eventInit();
   timerInit();
   stateControlInit();
+  motorInit();
 }
 
 static void stabilizer_minifly_thread_entry(void* parameter) {
@@ -142,7 +143,7 @@ static void stabilizer_minifly_thread_entry(void* parameter) {
     stateControl(&state_, &setpoint_, &contorl_, tick);
 
     if (RATE_DO_EXECUTE(RATE_500_HZ, tick)) {
-#ifdef L2_DEVICE_03_MOTOR_01_PWM_EN
+#if defined(L2_DEVICE_03_MOTOR_01_PWM_EN) || defined(L2_DEVICE_03_MOTOR_03_PWM_EN)
       mixerControl(&contorl_);
 #endif
     }

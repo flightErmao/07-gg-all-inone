@@ -55,7 +55,7 @@ static rt_uint32_t ratioToPulseNs(uint16_t ratio16) {
   return (rt_uint32_t)((((uint64_t)ratio16) * pwm_period_ns_) / UINT16_MAX);
 }
 
-int motorsInit(void) /* Motor initialization */
+static int motorsInit(void) /* Motor initialization */
 {
   motorsComputePwmPeriod();
 
