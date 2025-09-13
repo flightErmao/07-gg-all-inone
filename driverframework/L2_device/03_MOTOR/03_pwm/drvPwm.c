@@ -44,6 +44,8 @@ static struct rt_device_pwm* pwm_device_ = RT_NULL;
 static rt_uint32_t pwm_period_ns_ = 0;
 static bool pwm_initialized_ = false;
 
+rt_inline void pwm_write_(uint8_t chan_id, rt_uint16_t pwm_val);
+
 /* Validate PWM value and return clamped value */
 static rt_uint16_t validate_pwm_value(rt_uint16_t val) {
   if (val == 0) {
@@ -79,6 +81,7 @@ static rt_err_t pwm_hardware_init(void) {
     rt_kprintf("[PWM] can't find device: %s\n", PWM_DEVICE_NAME);
     return -RT_ERROR;
   }
+  pwm_initialized_ = true;
 
   /* Calculate PWM period in nanoseconds using actual timer clock frequency */
   rt_uint32_t timer_clock = get_timer_clock_freq();
@@ -89,25 +92,23 @@ static rt_err_t pwm_hardware_init(void) {
     rt_uint8_t channel = pwm_channel_map[i];
 
     /* Set PWM period and enable channel */
-    rt_err_t err = rt_pwm_set(pwm_device_, channel, pwm_period_ns_, 0);
-    if (err != RT_EOK) {
-      rt_kprintf("[PWM] rt_pwm_set failed ch=%d err=%d\n", channel, err);
-      return err;
-    }
+    // rt_err_t err = rt_pwm_set(pwm_device_, channel, pwm_period_ns_, pwm_fmu_duty_cyc_[i]);
+    // if (err != RT_EOK) {
+    //   rt_kprintf("[PWM] rt_pwm_set failed ch=%d err=%d\n", channel, err);
+    //   return err;
+    // }
+    pwm_write_(i, pwm_fmu_duty_cyc_[i]);
 
-    err = rt_pwm_enable(pwm_device_, channel);
+    rt_err_t err = rt_pwm_enable(pwm_device_, channel);
     if (err != RT_EOK) {
       rt_kprintf("[PWM] rt_pwm_enable failed ch=%d err=%d\n", channel, err);
       return err;
     }
   }
 
-  pwm_initialized_ = true;
   rt_kprintf("[PWM] hardware initialized successfully, freq=%dHz, period=%dns\n", pwm_freq_, pwm_period_ns_);
   return RT_EOK;
 }
-
-rt_inline void pwm_write_(uint8_t chan_id, rt_uint16_t pwm_val);
 
 static rt_err_t pwm_set_frequency(uint16_t freq_to_set) {
   if (freq_to_set < PWM_FREQ_50HZ || freq_to_set > PWM_FREQ_400HZ) {
@@ -121,13 +122,13 @@ static rt_err_t pwm_set_frequency(uint16_t freq_to_set) {
   rt_uint32_t timer_clock = get_timer_clock_freq();
   pwm_period_ns_ = timer_clock / pwm_freq_;
 
-  /* Re-initialize PWM hardware with new frequency */
-  if (pwm_initialized_ && pwm_device_ != RT_NULL) {
-    for (int i = 0; i < MAX_PWM_OUT_CHAN; i++) {
-      rt_uint8_t channel = pwm_channel_map[i];
-      rt_pwm_set(pwm_device_, channel, pwm_period_ns_, 0);
-    }
-  }
+  //   /* Re-initialize PWM hardware with new frequency */
+  //   if (pwm_initialized_ && pwm_device_ != RT_NULL) {
+  //     for (int i = 0; i < MAX_PWM_OUT_CHAN; i++) {
+  //       rt_uint8_t channel = pwm_channel_map[i];
+  //       rt_pwm_set(pwm_device_, channel, pwm_period_ns_, pwm_fmu_duty_cyc_[i]);
+  //     }
+  //   }
 
   /* the timer compare value should be re-configured */
   for (uint8_t i = 0; i < MAX_PWM_OUT_CHAN; i++) {
@@ -165,7 +166,7 @@ rt_err_t pwm_config(actuator_dev_t dev, const struct actuator_configure* cfg) {
   }
 
   /* update device configuration */
-  dev->config = *cfg;
+  //   dev->config = *cfg;
 
   return RT_EOK;
 }
@@ -186,7 +187,8 @@ rt_err_t pwm_control(actuator_dev_t dev, int cmd, void* arg) {
       if (pwm_initialized_ && pwm_device_ != RT_NULL) {
         for (int i = 0; i < MAX_PWM_OUT_CHAN; i++) {
           rt_uint8_t channel = pwm_channel_map[i];
-          rt_pwm_set(pwm_device_, channel, pwm_period_ns_, 0);
+          //   rt_pwm_set(pwm_device_, channel, pwm_period_ns_, 0);
+          pwm_write_(i, pwm_fmu_duty_cyc_[i]);
           rt_pwm_enable(pwm_device_, channel);
         }
       }
@@ -254,7 +256,7 @@ static struct actuator_device act_dev = {.chan_mask = 0x0F, /* 4 channels: 0b000
                                                     .dshot_config = {0}},
                                          .ops = &_act_ops};
 
-rt_err_t drv_pwm_init(void) {
+rt_err_t pwm_reg(void) {
   rt_err_t ret;
 
   /* register actuator hal device */
@@ -266,8 +268,13 @@ rt_err_t drv_pwm_init(void) {
 #ifdef MOTOR_USING_PWM_EN
 static int pwm_auto_start(void) {
   rt_err_t ret;
+  ret = pwm_hardware_init();
+  if (ret != RT_EOK) {
+    rt_kprintf("[PWM] hardware init failed\n");
+    return ret;
+  }
 
-  ret = drv_pwm_init();
+  ret = pwm_reg();
   if (ret != RT_EOK) {
     rt_kprintf("[PWM] driver init failed\n");
     return ret;
