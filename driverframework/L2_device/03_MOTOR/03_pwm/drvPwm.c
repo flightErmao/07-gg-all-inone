@@ -17,6 +17,8 @@
 #include <rtthread.h>
 #include <rtdevice.h>
 #include <stdbool.h>
+#include <string.h>
+#include <stdlib.h>
 #include "actuator.h"
 
 // #define rt_kprintf(...) console_printf(__VA_ARGS__)
@@ -44,7 +46,56 @@ static struct rt_device_pwm* pwm_device_ = RT_NULL;
 static rt_uint32_t pwm_period_ns_ = 0;
 static bool pwm_initialized_ = false;
 
+/* Motor channel remap configuration */
+static rt_uint8_t motor_channel_remap_[MAX_PWM_OUT_CHAN] = {0, 1, 2, 3};  // Default: no remap
+static bool remap_parsed_ = false;
+
 rt_inline void pwm_write_(uint8_t chan_id, rt_uint16_t pwm_val);
+
+/* Parse motor channel remap configuration */
+static rt_err_t parse_motor_remap_config(void) {
+  if (remap_parsed_) {
+    return RT_EOK;  // Already parsed
+  }
+
+#ifdef MOTOR_PWM_CHANNEL_REMAP
+  const char* remap_str = MOTOR_PWM_CHANNEL_REMAP;
+  int len = strlen(remap_str);
+
+  if (len != MAX_PWM_OUT_CHAN) {
+    rt_kprintf("[PWM] Invalid remap string length: %d, expected: %d\n", len, MAX_PWM_OUT_CHAN);
+    return -RT_ERROR;
+  }
+
+  // Parse each character in the remap string
+  for (int i = 0; i < MAX_PWM_OUT_CHAN; i++) {
+    char c = remap_str[i];
+    if (c < '1' || c > '4') {
+      rt_kprintf("[PWM] Invalid remap character: %c at position %d\n", c, i);
+      return -RT_ERROR;
+    }
+
+    // Convert '1'-'4' to 0-3 (0-based index)
+    motor_channel_remap_[i] = c - '1';
+  }
+
+  rt_kprintf("[PWM] Motor remap configured: %s\n", remap_str);
+  rt_kprintf("[PWM] Logical->Physical mapping: ");
+  for (int i = 0; i < MAX_PWM_OUT_CHAN; i++) {
+    rt_kprintf("%d->%d ", i + 1, motor_channel_remap_[i] + 1);
+  }
+  rt_kprintf("\n");
+#else
+  // Use default mapping if not configured
+  for (int i = 0; i < MAX_PWM_OUT_CHAN; i++) {
+    motor_channel_remap_[i] = i;
+  }
+  rt_kprintf("[PWM] Using default motor mapping (no remap)\n");
+#endif
+
+  remap_parsed_ = true;
+  return RT_EOK;
+}
 
 /* Validate PWM value and return clamped value */
 static rt_uint16_t validate_pwm_value(rt_uint16_t val) {
@@ -75,6 +126,12 @@ static rt_err_t pwm_hardware_init(void) {
     return RT_EOK;
   }
 
+  /* Parse motor remap configuration first */
+  if (parse_motor_remap_config() != RT_EOK) {
+    rt_kprintf("[PWM] Failed to parse motor remap configuration\n");
+    return -RT_ERROR;
+  }
+
   /* Find PWM device */
   pwm_device_ = (struct rt_device_pwm*)rt_device_find(PWM_DEVICE_NAME);
   if (pwm_device_ == RT_NULL) {
@@ -92,11 +149,6 @@ static rt_err_t pwm_hardware_init(void) {
     rt_uint8_t channel = pwm_channel_map[i];
 
     /* Set PWM period and enable channel */
-    // rt_err_t err = rt_pwm_set(pwm_device_, channel, pwm_period_ns_, pwm_fmu_duty_cyc_[i]);
-    // if (err != RT_EOK) {
-    //   rt_kprintf("[PWM] rt_pwm_set failed ch=%d err=%d\n", channel, err);
-    //   return err;
-    // }
     pwm_write_(i, pwm_fmu_duty_cyc_[i]);
 
     rt_err_t err = rt_pwm_enable(pwm_device_, channel);
@@ -144,7 +196,9 @@ rt_inline void pwm_write_(uint8_t chan_id, rt_uint16_t pwm_val) {
 
   /* Control actual PWM hardware */
   if (pwm_initialized_ && pwm_device_ != RT_NULL && chan_id < MAX_PWM_OUT_CHAN) {
-    rt_uint8_t channel = pwm_channel_map[chan_id];
+    /* Use remap to get physical channel */
+    rt_uint8_t physical_channel = motor_channel_remap_[chan_id];
+    rt_uint8_t channel = pwm_channel_map[physical_channel];
     rt_uint32_t pulse_ns = (rt_uint32_t)pwm_fmu_duty_cyc_[chan_id] * 1000; /* Convert us to ns */
 
     rt_pwm_set(pwm_device_, channel, pwm_period_ns_, pulse_ns);
@@ -186,8 +240,8 @@ rt_err_t pwm_control(actuator_dev_t dev, int cmd, void* arg) {
       /* set to lowest pwm before open */
       if (pwm_initialized_ && pwm_device_ != RT_NULL) {
         for (int i = 0; i < MAX_PWM_OUT_CHAN; i++) {
-          rt_uint8_t channel = pwm_channel_map[i];
-          //   rt_pwm_set(pwm_device_, channel, pwm_period_ns_, 0);
+          rt_uint8_t physical_channel = motor_channel_remap_[i];
+          rt_uint8_t channel = pwm_channel_map[physical_channel];
           pwm_write_(i, pwm_fmu_duty_cyc_[i]);
           rt_pwm_enable(pwm_device_, channel);
         }
@@ -199,7 +253,8 @@ rt_err_t pwm_control(actuator_dev_t dev, int cmd, void* arg) {
       /* Stop all PWM channels */
       if (pwm_initialized_ && pwm_device_ != RT_NULL) {
         for (int i = 0; i < MAX_PWM_OUT_CHAN; i++) {
-          rt_uint8_t channel = pwm_channel_map[i];
+          rt_uint8_t physical_channel = motor_channel_remap_[i];
+          rt_uint8_t channel = pwm_channel_map[physical_channel];
           rt_pwm_disable(pwm_device_, channel);
         }
       }
