@@ -1,22 +1,8 @@
 #ifndef __MOTORS_H
 #define __MOTORS_H
-// #include "sys.h"
+
 #include <stdint.h>
 #include <stdbool.h>
-// #include "config.h"
-
-/********************************************************************************
- * 本程序只供学习使用，未经作者许可，不得用于其它任何用途
- * ALIENTEK MiniFly
- * 电机驱动代码
- * 正点原子@ALIENTEK
- * 技术论坛:www.openedv.com
- * 创建日期:2017/5/12
- * 版本：V1.3
- * 版权所有，盗版必究。
- * Copyright(C) 广州市星翼电子科技有限公司 2014-2024
- * All rights reserved
- ********************************************************************************/
 
 /* 96M主频下 8位精度输出375K PWM */
 #define TIM_CLOCK_HZ 96000000

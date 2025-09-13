@@ -212,8 +212,7 @@ void rcPilotCmdAcquire(pilot_cmd_bus_t* pilot_cmd_bus) {
 #endif
 }
 
-static int cmdRcPri(int argc, char **argv) {
-
+static int cmdRcLoseCat(int argc, char** argv) {
   if (argc < 2) {
     rt_kprintf("RC printf enable command usage: rc_printf_enable <enable|disable>\n");
     return -1;
@@ -232,4 +231,4 @@ static int cmdRcPri(int argc, char **argv) {
   return 0;
 }
 
-MSH_CMD_EXPORT_ALIAS(cmdRcPri, cmdRcPri, rc printf enable command);
+MSH_CMD_EXPORT_ALIAS(cmdRcLoseCat, cmdRcLoseCat, rc printf enable command);

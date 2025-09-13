@@ -68,4 +68,11 @@ menuconfig L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN
                 Enter the DEBUG3 debug GPIO pin in format like "PA8", "PB2", "PC12".
                 The tool will parse it and map to the correct pin number at runtime.
 
+        config L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_TESTSELF_EN
+            bool "Enable Debug Pin Self Test Command"
+            default n
+            help
+                Enable debug pin self test command that will toggle each enabled debug pin
+                in sequence with 1 second intervals for testing purposes.
+
     endif 

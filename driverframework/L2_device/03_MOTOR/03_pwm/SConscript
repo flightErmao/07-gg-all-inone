@@ -1,0 +1,12 @@
+from building import *
+
+cwd = GetCurrentDir()
+path = []
+src = []
+
+src = Glob("./*.c")
+path = [cwd]
+
+group = DefineGroup("MOTOR_USING_PWM", src, depend=["MOTOR_USING_PWM_EN"], CPPPATH=path)
+
+Return("group")

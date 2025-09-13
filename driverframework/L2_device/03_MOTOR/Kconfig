@@ -1,10 +1,14 @@
 menu "03 MOTOR CONFIG"
-            menu "01 PWM CONFIG"
+            menu "01 PWM CONFIG(Hollow slab)"
                 source "$(PROJECT_ROOT)/driverframework/L2_device/03_MOTOR/01_pwm_no_hal/Kconfig"
             endmenu
             
             menu "02 DSHOT CONFIG"
                 source "$(PROJECT_ROOT)/driverframework/L2_device/03_MOTOR/02_dshot/Kconfig"
+            endmenu
+
+            menu "03 PWM CONFIG"
+                source "$(PROJECT_ROOT)/driverframework/L2_device/03_MOTOR/03_pwm/Kconfig"
             endmenu
 endmenu
 

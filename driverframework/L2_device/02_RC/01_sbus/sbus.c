@@ -4,7 +4,7 @@
 #include "uartConfig.h"
 #include "rc.h"
 
-#ifdef RC_SBUS_DEBUGPIN_EN
+#if defined(RC_SBUS_DEBUGPIN_EN) && defined(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN)
 #include "debugPin.h"
 #endif
 
@@ -43,7 +43,7 @@ static struct rc_device sbus_rc_dev = {
 
 static rt_err_t sbus_uart_rx_ind(rt_device_t dev, rt_size_t size) {
   rt_event_send(g_sbus_decoder_.sbus_data_received_event, EVENT_SBUS_DATA_RECEIVED);
-#ifdef RC_SBUS_DEBUGPIN_EN
+#if defined(RC_SBUS_DEBUGPIN_EN) && defined(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN)
   DEBUG_PIN_DEBUG0_HIGH();
 #endif
   return RT_EOK;
@@ -133,7 +133,7 @@ static void sbus_thread_entry(void* param) {
   while (1) {
     if (rt_event_recv(g_sbus_decoder_.sbus_data_received_event, EVENT_SBUS_DATA_RECEIVED,
                       RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &recved) == RT_EOK) {
-#ifdef RC_SBUS_DEBUGPIN_EN
+#if defined(RC_SBUS_DEBUGPIN_EN) && defined(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN)
       DEBUG_PIN_DEBUG0_LOW();
 #endif
       rt_size_t rx_len = rt_device_read(sbus_uart_, 0, read_buf, sizeof(read_buf));
@@ -175,7 +175,7 @@ static rt_uint16_t sbus_rc_read(rc_dev_t rc, rt_uint16_t chan_mask, rt_uint16_t*
     }
     return 0;
   }
-#ifdef RC_SBUS_DEBUGPIN_EN
+#if defined(RC_SBUS_DEBUGPIN_EN) && defined(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN)
   DEBUG_PIN_DEBUG1_TOGGLE();
 #endif
   uint16_t temp_channels[MAX_SBUS_CHANNEL];

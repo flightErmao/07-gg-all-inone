@@ -27,7 +27,6 @@ typedef struct {
 
 static bool isInit = false;
 uint32_t motor_ratios[] = {0, 0, 0, 0};
-// static const uint32_t MOTORS[] = {MOTOR_M1, MOTOR_M2, MOTOR_M3, MOTOR_M4};
 extern bool isExitFlip;
 
 static motor_pwm_binding_t motor_bindings[NBR_OF_MOTORS] = {
@@ -40,20 +39,14 @@ static motor_pwm_binding_t motor_bindings[NBR_OF_MOTORS] = {
 static struct rt_device_pwm *motor_pwms[NBR_OF_MOTORS] = {RT_NULL, RT_NULL, RT_NULL, RT_NULL};
 static rt_uint32_t pwm_period_ns_ = 0;
 
-/* Calculate target PWM frequency and period (ns)
- * Bare metal frequency: TIM_CLOCK_HZ / (PRESCALE+1) / (PERIOD+1)
- */
 static void motorsComputePwmPeriod(void) {
-  /* Use same configuration as bare metal to map frequency */
   uint32_t pwm_freq_hz = TIM_CLOCK_HZ / (MOTORS_PWM_PRESCALE + 1) / (MOTORS_PWM_PERIOD + 1);
   if (pwm_freq_hz == 0) {
-    /* Fallback to avoid division by zero */
     pwm_freq_hz = 20000; /* 20kHz */
   }
-  /* ns period = 1e9 / frequency */
   pwm_period_ns_ = (rt_uint32_t)(1000000000ULL / pwm_freq_hz);
   if (pwm_period_ns_ == 0) {
-    pwm_period_ns_ = 50000; /* 20kHz -> 50,000ns fallback */
+    pwm_period_ns_ = 50000;
   }
 }
 

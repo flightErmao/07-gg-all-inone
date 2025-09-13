@@ -1,0 +1,45 @@
+config MOTOR_USING_PWM_EN
+    bool "Enable PWM motor driver"
+    default n
+    help
+        Enable PWM motor driver support for actuator control.
+
+    if MOTOR_USING_PWM_EN
+
+        config MOTOR_PWM_FREQUENCY
+            int "PWM frequency (Hz)"
+            default 50
+            help
+                PWM frequency for motor control. Common values: 50Hz, 125Hz, 250Hz, 400Hz.
+
+        config MOTOR_PWM_CHANNEL_NUM
+            int "Number of PWM channels"
+            default 6
+            help
+                Number of PWM output channels available.
+
+        config MOTOR_PWM_RANGE_MIN
+            int "PWM minimum value (us)"
+            default 1000
+            help
+                Minimum PWM pulse width in microseconds.
+
+        config MOTOR_PWM_RANGE_MAX
+            int "PWM maximum value (us)"
+            default 2000
+            help
+                Maximum PWM pulse width in microseconds.
+
+        config MOTOR_USING_PWM_CMD_EN
+            bool "Enable PWM motor command interface"
+            default n
+            help
+                Enable MSH command interface for PWM motor control.
+
+        config MOTOR_USING_PWM_DEBUGPIN_EN
+            bool "Enable PWM debug pin output"
+            default n
+            help
+                Enable debug pin output for PWM motor control.
+
+    endif
