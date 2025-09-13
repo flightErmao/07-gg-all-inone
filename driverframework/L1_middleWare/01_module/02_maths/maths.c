@@ -149,16 +149,15 @@ float applyDeadbandf(float value, float deadband)
     return value;
 }
 
-
-int constrain(int amt, int low, int high)
-{
-    if (amt < low)
-        return low;
-    else if (amt > high)
-        return high;
-    else
-        return amt;
-}
+// int constrain(int amt, int low, int high)
+// {
+//     if (amt < low)
+//         return low;
+//     else if (amt > high)
+//         return high;
+//     else
+//         return amt;
+// }
 
 float constrainf(float amt, float low, float high)
 {
