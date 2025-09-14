@@ -91,6 +91,16 @@ static int motor_set_duty_cycle(int motor_id, float duty_cycle) {
 }
 #endif
 
+static uint16_t limitThrust(int value) {
+  if (value > UINT16_MAX) {
+    value = UINT16_MAX;
+  } else if (value < 0) {
+    value = 0;
+  }
+
+  return (uint16_t)value;
+}
+
 void mixerControl(control_t *control) {
   if (motorSetEnable) {
     return;
@@ -101,25 +111,14 @@ void mixerControl(control_t *control) {
     return;
   }
 
-  float r = (float)control->roll / 2.0f;
-  float p = (float)control->pitch / 2.0f;
-  float y = (float)control->yaw;
-  float t = control->thrust;
-
+  int16_t r = control->roll / 2.0f;
+  int16_t p = control->pitch / 2.0f;
   motorPWM_t motorPWM = {0, 0, 0, 0};
 
-  float m1_val = t - r - p + y;
-  float m2_val = t - r + p - y;
-  float m3_val = t + r + p + y;
-  float m4_val = t + r - p - y;
-
-  motorPWM.m1 = (uint16_t)constrainf(m1_val, 0.0f, (float)UINT16_MAX);
-  motorPWM.m2 = (uint16_t)constrainf(m2_val, 0.0f, (float)UINT16_MAX);
-  motorPWM.m3 = (uint16_t)constrainf(m3_val, 0.0f, (float)UINT16_MAX);
-  motorPWM.m4 = (uint16_t)constrainf(m4_val, 0.0f, (float)UINT16_MAX);
-
-  // rt_kprintf("[mixerControl] r=%.2f, p=%.2f, y=%.2f, t=%.2f\n", r, p, y, t);
-  // rt_kprintf("[mixerControl] PWM: m1=%d, m2=%d, m3=%d, m4=%d\n", motorPWM.m1, motorPWM.m2, motorPWM.m3, motorPWM.m4);
+  motorPWM.m1 = limitThrust(control->thrust - r - p + control->yaw);
+  motorPWM.m2 = limitThrust(control->thrust - r + p - control->yaw);
+  motorPWM.m3 = limitThrust(control->thrust + r + p + control->yaw);
+  motorPWM.m4 = limitThrust(control->thrust + r - p - control->yaw);
 
 #ifdef L2_DEVICE_03_MOTOR_01_PWM_EN
   motorsSetRatio(MOTOR_M1, motorPWM.m1);
