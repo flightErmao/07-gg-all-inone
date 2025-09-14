@@ -137,6 +137,9 @@
 /* DFS: device virtual file system */
 
 /* end of DFS: device virtual file system */
+#define RT_USING_FAL
+#define FAL_USING_DEBUG
+#define FAL_PART_HAS_TABLE_CFG
 
 /* Device Drivers */
 
@@ -379,6 +382,8 @@
 /* end of entertainment: terminal games and other interesting software packages */
 #define PKG_USING_OPTPARSE
 #define PKG_USING_OPTPARSE_LATEST_VERSION
+#define PKG_USING_UPARAM
+#define PKG_USING_UPARAM_LATEST_VERSION
 /* end of miscellaneous packages */
 
 /* Arduino libraries */
@@ -444,6 +449,7 @@
 #define PROJECT_MINIFLY_TASK_STABLIZE_ATKP_LOG_EN
 #define PROJECT_MINIFLY_TASK04_DISTRIBUTE_EN
 #define PROJECT_MINIFLY_TASK04_DISTRIBUTE_ACK_EN
+#define PROJECT_MINIFLY_TASK04_DISTRIBUTE_PID_EN
 #define PROJECT_MINIFLY_TASK05_PARAM_EN
 #define PROJECT_FMT_TASK01_RC_EN
 #define PROJECT_FMT_TASK01_RC_DEVICE_DEFAULT "rc_sbus"
@@ -567,6 +573,8 @@
 #define BSP_USING_PWM1_CH2
 #define BSP_USING_PWM1_CH3
 #define BSP_USING_PWM1_CH4
+#define BSP_USING_ON_CHIP_FLASH
+#define L3_PERIPHERAL_USING_ON_CHIP_FLASH_AUTOSTART_FALINIT
 /* end of L3_PERIPHERAL_CONFIG */
 /* end of DriverFramework Config */
 

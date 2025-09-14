@@ -40,6 +40,7 @@ static void atkpReceiveAnl(atkp_t *anlPacket) {
 #endif
   } else if (anlPacket->msgID == DOWN_PID1) {
 #ifdef PROJECT_MINIFLY_TASK04_DISTRIBUTE_PID_EN
+#include "anlPid.h"
     anlPid1(anlPacket);
 #endif
   } else if (anlPacket->msgID == DOWN_PID2) {

@@ -13,5 +13,6 @@ menu "L3_PERIPHERAL_CONFIG"
     source "$(PROJECT_ROOT)/driverframework/L3_peripheral/21_pwmConfig/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L3_peripheral/22_timConfig/Kconfig"
     
+    source "$(PROJECT_ROOT)/driverframework/L3_peripheral/30_flashConfig/Kconfig"
 
 endmenu

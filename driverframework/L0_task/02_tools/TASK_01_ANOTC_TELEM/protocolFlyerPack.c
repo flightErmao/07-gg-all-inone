@@ -217,3 +217,25 @@ void packPid(uint8_t group, float p1_p, float p1_i, float p1_d, float p2_p, floa
   p.dataLen = _cnt;
   anotcMqStash(&p);
 }
+
+void packCheck(uint8_t head, uint8_t check_sum) {
+  atkp_t p;
+
+  p.msgID = UP_CHECK;
+  p.dataLen = 2;
+  p.data[0] = head;
+  p.data[1] = check_sum;
+  anotcMqStash(&p);
+}
+
+uint8_t atkpCheckSum(atkp_t *packet) {
+  uint8_t sum;
+  sum = DOWN_BYTE1;
+  sum += DOWN_BYTE2;
+  sum += packet->msgID;
+  sum += packet->dataLen;
+  for (int i = 0; i < packet->dataLen; i++) {
+    sum += packet->data[i];
+  }
+  return sum;
+}

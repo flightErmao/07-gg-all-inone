@@ -15,6 +15,11 @@
 #define D_ACK_READ_VERSION 0xA0
 #define D_ACK_RESET_PARAM 0xA1
 
+#define UP_BYTE1 0xAA
+#define UP_BYTE2 0xAA
+#define DOWN_BYTE1 0xAA
+#define DOWN_BYTE2 0xAF
+
 typedef struct {
   uint8_t msgID;
   uint8_t dataLen;
@@ -39,5 +44,8 @@ void packMotorPWM(uint16_t m_1, uint16_t m_2, uint16_t m_3, uint16_t m_4, uint16
                   uint16_t m_8);
 void packRcData(uint16_t thrust, uint16_t yaw, uint16_t roll, uint16_t pitch, uint16_t aux1, uint16_t aux2,
                 uint16_t aux3, uint16_t aux4, uint16_t aux5, uint16_t aux6);
+
+void packCheck(uint8_t head, uint8_t check_sum);
+uint8_t atkpCheckSum(atkp_t *packet);
 
 #endif /* __PROTOCOL_ATKP_INTERFACE_H__ */

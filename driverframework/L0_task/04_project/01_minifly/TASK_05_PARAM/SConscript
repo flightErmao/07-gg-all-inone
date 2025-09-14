@@ -1,7 +1,6 @@
 from building import *
 import os
 
-# 获取当前目录
 cwd = GetCurrentDir()
 path = [cwd]
 src = []
