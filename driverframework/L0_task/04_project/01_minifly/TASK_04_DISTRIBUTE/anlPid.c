@@ -1,17 +1,15 @@
 #include "anlPid.h"
 #include "rtconfig.h"
+#include "taskParam.h"
 
 #ifdef PROJECT_MINIFLY_TASK04_DISTRIBUTE_PID_EN
-// #include "pidMinifly.h"
 #include "attitudePid.h"
 
-// extern void setMotorPWM(int16_t enable, int16_t m1_set, int16_t m2_set, int16_t m3_set, int16_t m4_set);
-// extern void attitudePIDwriteToConfigParam(void);
-// extern void positionPIDwriteToConfigParam(void);
-
-// extern PidObject pidRateRoll, pidRatePitch, pidRateYaw;
-// extern PidObject pidAngleRoll, pidAnglePitch, pidAngleYaw;
-// extern PidObject pidVZ, pidZ, pidVX, pidVY, pidX, pidY;
+static void copyPidParam(PidObject src, pidInit_t *des) {
+  des->kp = src.kp;
+  des->ki = src.ki;
+  des->kd = src.kd;
+}
 
 void anlPid1(atkp_t *anlPacket) {
   pidRateRoll.kp = 0.1 * ((int16_t)(*(anlPacket->data + 0) << 8) | *(anlPacket->data + 1));
@@ -26,6 +24,12 @@ void anlPid1(atkp_t *anlPacket) {
 
   uint8_t cksum = atkpCheckSum(anlPacket);
   packCheck(anlPacket->msgID, cksum);
+
+  configParam_t configParam_temp;
+  copyPidParam(pidRateRoll, &configParam_temp.pidRate.roll);
+  copyPidParam(pidRatePitch, &configParam_temp.pidRate.pitch);
+  copyPidParam(pidRateYaw, &configParam_temp.pidRate.yaw);
+  updateConfigRatePID(configParam_temp.pidRate);
 }
 
 void anlPid2(atkp_t *anlPacket) {
@@ -41,6 +45,12 @@ void anlPid2(atkp_t *anlPacket) {
 
   uint8_t cksum = atkpCheckSum(anlPacket);
   packCheck(anlPacket->msgID, cksum);
+
+  configParam_t configParam_temp;
+  copyPidParam(pidAngleRoll, &configParam_temp.pidAngle.roll);
+  copyPidParam(pidAnglePitch, &configParam_temp.pidAngle.pitch);
+  copyPidParam(pidAngleYaw, &configParam_temp.pidAngle.yaw);
+  updateConfigAnglePID(configParam_temp.pidAngle);
 }
 
 void anlPid3(atkp_t *anlPacket) {
@@ -91,6 +101,8 @@ void anlPid6(atkp_t *anlPacket) {
 
   uint8_t cksum = atkpCheckSum(anlPacket);
   packCheck(anlPacket->msgID, cksum);
+
+  configParamGiveSemaphore();
 }
 
 #endif /* PROJECT_MINIFLY_TASK04_DISTRIBUTE_PID_EN */

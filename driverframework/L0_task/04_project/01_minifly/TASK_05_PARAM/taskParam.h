@@ -4,15 +4,9 @@
 #include <stdbool.h>
 #include "pidMinifly.h"
 #include "stdint.h"
+#include "pidMinifly.h"
 
-typedef struct {
-  pidInit_t vx; /*X轴速度PID*/
-  pidInit_t vy; /*Y轴速度PID*/
-  pidInit_t vz; /*Z轴速度PID*/
-  pidInit_t x;  /*X轴位置PID*/
-  pidInit_t y;  /*Y轴位置PID*/
-  pidInit_t z;  /*Z轴位置PID*/
-} pidParamPos_t;
+#pragma pack(push, 1)  // 设置1字节对齐
 
 typedef struct {
   uint8_t version;      /*软件版本号*/
@@ -25,7 +19,11 @@ typedef struct {
   uint8_t cksum;        /*校验*/
 } configParam_t;
 
+#pragma pack(pop)  // 恢复默认对齐
+
 void getConfigParam(configParam_t *configParam_temp);
+void updateConfigAnglePID(pidParam_t pidParam_temp);
+void updateConfigRatePID(pidParam_t pidParam_temp);
 void configParamGiveSemaphore(void);
 void resetConfigParamPID(void);
 

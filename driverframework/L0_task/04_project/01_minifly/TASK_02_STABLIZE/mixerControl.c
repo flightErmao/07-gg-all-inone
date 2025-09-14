@@ -95,14 +95,31 @@ void mixerControl(control_t *control) {
   if (motorSetEnable) {
     return;
   }
-  int32_t r = control->roll / 2.0f;
-  int32_t p = control->pitch / 2.0f;
+
+  if (control == NULL) {
+    rt_kprintf("[mixerControl] Error: control pointer is NULL\n");
+    return;
+  }
+
+  float r = (float)control->roll / 2.0f;
+  float p = (float)control->pitch / 2.0f;
+  float y = (float)control->yaw;
+  float t = control->thrust;
+
   motorPWM_t motorPWM = {0, 0, 0, 0};
 
-  motorPWM.m1 = (uint16_t)constrain(control->thrust - r - p + control->yaw, 0, UINT16_MAX);
-  motorPWM.m2 = (uint16_t)constrain(control->thrust - r + p - control->yaw, 0, UINT16_MAX);
-  motorPWM.m3 = (uint16_t)constrain(control->thrust + r + p + control->yaw, 0, UINT16_MAX);
-  motorPWM.m4 = (uint16_t)constrain(control->thrust + r - p - control->yaw, 0, UINT16_MAX);
+  float m1_val = t - r - p + y;
+  float m2_val = t - r + p - y;
+  float m3_val = t + r + p + y;
+  float m4_val = t + r - p - y;
+
+  motorPWM.m1 = (uint16_t)constrainf(m1_val, 0.0f, (float)UINT16_MAX);
+  motorPWM.m2 = (uint16_t)constrainf(m2_val, 0.0f, (float)UINT16_MAX);
+  motorPWM.m3 = (uint16_t)constrainf(m3_val, 0.0f, (float)UINT16_MAX);
+  motorPWM.m4 = (uint16_t)constrainf(m4_val, 0.0f, (float)UINT16_MAX);
+
+  // rt_kprintf("[mixerControl] r=%.2f, p=%.2f, y=%.2f, t=%.2f\n", r, p, y, t);
+  // rt_kprintf("[mixerControl] PWM: m1=%d, m2=%d, m3=%d, m4=%d\n", motorPWM.m1, motorPWM.m2, motorPWM.m3, motorPWM.m4);
 
 #ifdef L2_DEVICE_03_MOTOR_01_PWM_EN
   motorsSetRatio(MOTOR_M1, motorPWM.m1);
@@ -111,6 +128,11 @@ void mixerControl(control_t *control) {
   motorsSetRatio(MOTOR_M4, motorPWM.m4);
 
 #elif defined(L2_DEVICE_03_MOTOR_03_PWM_EN)
+
+  if (motorPWM.m1 > UINT16_MAX || motorPWM.m2 > UINT16_MAX || motorPWM.m3 > UINT16_MAX || motorPWM.m4 > UINT16_MAX) {
+    rt_kprintf("[mixerControl] Error: PWM value out of range\n");
+    return;
+  }
 
   float duty_m1 = scaleRangef((float)motorPWM.m1, 0.0f, 65535.0f, 0.0f, 1.0f);
   float duty_m2 = scaleRangef((float)motorPWM.m2, 0.0f, 65535.0f, 0.0f, 1.0f);

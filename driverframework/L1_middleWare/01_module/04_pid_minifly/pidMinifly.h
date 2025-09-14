@@ -18,6 +18,16 @@ typedef struct {
 } pidParam_t;
 
 typedef struct {
+  pidInit_t vx; /*X轴速度PID*/
+  pidInit_t vy; /*Y轴速度PID*/
+  pidInit_t vz; /*Z轴速度PID*/
+  pidInit_t x;  /*X轴位置PID*/
+  pidInit_t y;  /*Y轴位置PID*/
+  pidInit_t z;  /*Z轴位置PID*/
+} pidParamPos_t;
+
+
+typedef struct {
   float desired;      //< set point
   float error;        //< error
   float prevError;    //< previous error

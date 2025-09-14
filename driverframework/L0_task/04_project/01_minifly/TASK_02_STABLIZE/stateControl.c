@@ -26,7 +26,7 @@ static bool resetControl(const state_t *state, const setpoint_t *setpoint, contr
     attitudeDesired_.yaw = state->attitude.yaw; /*复位计算的期望yaw值*/
     if (cnt++ > 1500) {
       cnt = 0;
-      configParamGiveSemaphore();
+      // configParamGiveSemaphore();
     }
     return true;
   } else {

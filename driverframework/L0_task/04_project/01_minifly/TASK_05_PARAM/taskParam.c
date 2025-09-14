@@ -7,21 +7,17 @@
 #include "configParamDefault.h"
 #include <fal.h>
 
-#define THREAD_PRIORITY 10
+#define THREAD_PRIORITY 20
 #define THREAD_STACK_SIZE 1024
 #define THREAD_TIMESLICE 5
-
-static rt_align(RT_ALIGN_SIZE) rt_uint8_t configParamStack[THREAD_STACK_SIZE];
-static struct rt_thread configParamTid;
-static rt_sem_t configParam_sem;
-
+static rt_sem_t configParam_sem = RT_NULL;
 static configParam_t configParam;
-#ifdef PROJECT_MINIFLY_TASK05_PARAM_AUTO_SAVE_EN
-static uint32_t lenth = 0;
-static const struct fal_partition *param_partition = RT_NULL;
-#endif
 static bool isInit = false;
 static bool isConfigParamOK = false;
+
+#ifdef PROJECT_MINIFLY_TASK05_PARAM_AUTO_SAVE_EN
+static const struct fal_partition *param_partition = RT_NULL;
+#endif
 
 static uint8_t configParamCksum(configParam_t *data) {
   int i;
@@ -39,9 +35,6 @@ static void configParamInit(void) {
   if (isInit) return;
 
 #ifdef PROJECT_MINIFLY_TASK05_PARAM_AUTO_SAVE_EN
-  lenth = sizeof(configParam);
-  lenth = lenth / 4 + (lenth % 4 ? 1 : 0);
-
   param_partition = fal_partition_find("par");
   if (param_partition == RT_NULL) {
     rt_kprintf("FAL partition 'par' not found\r\n");
@@ -55,12 +48,16 @@ static void configParamInit(void) {
       if (configParam.version == VERSION) {
         if (configParamCksum(&configParam) == configParam.cksum) {
           rt_kprintf("Version V%1.1f check [OK]\r\n", configParam.version / 10.0f);
+          rt_kprintf("Read data: version=%d, trimP=%.2f, trimR=%.2f, thrustBase=%d\r\n", configParam.version,
+                     configParam.trimP, configParam.trimR, configParam.thrustBase);
           isConfigParamOK = true;
         } else {
-          rt_kprintf("Version check [FAIL]\r\n");
+          rt_kprintf("Checksum check [FAIL] - expected: %d, actual: %d\r\n", configParam.cksum,
+                     configParamCksum(&configParam));
           isConfigParamOK = false;
         }
       } else {
+        rt_kprintf("Version check [FAIL] - expected: %d, actual: %d\r\n", VERSION, configParam.version);
         isConfigParamOK = false;
       }
     }
@@ -72,16 +69,26 @@ static void configParamInit(void) {
     configParam.cksum = configParamCksum(&configParam);
 #ifdef PROJECT_MINIFLY_TASK05_PARAM_AUTO_SAVE_EN
     if (param_partition != RT_NULL) {
-      int ret = fal_partition_write(param_partition, 0, (const rt_uint8_t *)&configParam, sizeof(configParam));
+      rt_enter_critical();
+      int ret = fal_partition_erase(param_partition, 0, param_partition->len);
       if (ret < 0) {
-        rt_kprintf("FAL partition write failed\r\n");
+        rt_kprintf("FAL partition erase failed\r\n");
+      } else {
+        rt_kprintf("Writing data: version=%d, trimP=%.2f, trimR=%.2f, thrustBase=%d, cksum=%d\r\n", configParam.version,
+                   configParam.trimP, configParam.trimR, configParam.thrustBase, configParam.cksum);
+        ret = fal_partition_write(param_partition, 0, (const rt_uint8_t *)&configParam, sizeof(configParam));
+        if (ret < 0) {
+          rt_kprintf("FAL partition write failed\r\n");
+        } else {
+          rt_kprintf("FAL partition write success, size: %d bytes\r\n", sizeof(configParam));
+        }
       }
+      rt_exit_critical();
     }
 #endif
     isConfigParamOK = true;
   }
 
-  // Initialize semaphore
   configParam_sem = rt_sem_create("config_sem", 0, RT_IPC_FLAG_PRIO);
   if (configParam_sem == RT_NULL) {
     rt_kprintf("config param sem create ERR\n");
@@ -96,21 +103,30 @@ void configParamTask(void *param) {
   uint8_t cksum = 0;
 
   while (1) {
-    // Wait for semaphore signal
     if (rt_sem_take(configParam_sem, RT_WAITING_FOREVER) == RT_EOK) {
       cksum = configParamCksum(&configParam);
 
       if (configParam.cksum != cksum) {
         configParam.cksum = cksum;
 #ifdef PROJECT_MINIFLY_TASK05_PARAM_AUTO_SAVE_EN
-        // watchdogInit(500);
         if (param_partition != RT_NULL) {
-          int ret = fal_partition_write(param_partition, 0, (const rt_uint8_t *)&configParam, sizeof(configParam));
+          rt_enter_critical();
+          int ret = fal_partition_erase(param_partition, 0, param_partition->len);
           if (ret < 0) {
-            rt_kprintf("FAL partition write failed\r\n");
+            rt_kprintf("FAL partition erase failed\r\n");
+          } else {
+            rt_kprintf("Updating data: version=%d, trimP=%.2f, trimR=%.2f, thrustBase=%d, cksum=%d\r\n",
+                       configParam.version, configParam.trimP, configParam.trimR, configParam.thrustBase,
+                       configParam.cksum);
+            ret = fal_partition_write(param_partition, 0, (const rt_uint8_t *)&configParam, sizeof(configParam));
+            if (ret < 0) {
+              rt_kprintf("FAL partition write failed\r\n");
+            } else {
+              rt_kprintf("FAL partition update success, size: %d bytes\r\n", sizeof(configParam));
+            }
           }
+          rt_exit_critical();
         }
-        // watchdogInit(WATCHDOG_RESET_MS);
 #endif
       }
     }
@@ -118,6 +134,9 @@ void configParamTask(void *param) {
 }
 
 static int configParamTaskInit(void) {
+  static struct rt_thread configParamTid;
+  static rt_uint8_t configParamStack[THREAD_STACK_SIZE];
+
   configParamInit();
 
   rt_thread_init(&configParamTid, "configPar", configParamTask, RT_NULL, configParamStack, THREAD_STACK_SIZE,
@@ -152,3 +171,7 @@ void getConfigParam(configParam_t *configParam_temp) {
     *configParam_temp = configParam;
   }
 }
+
+void updateConfigAnglePID(pidParam_t pidParam_temp) { configParam.pidAngle = pidParam_temp; }
+
+void updateConfigRatePID(pidParam_t pidParam_temp) { configParam.pidRate = pidParam_temp; }
