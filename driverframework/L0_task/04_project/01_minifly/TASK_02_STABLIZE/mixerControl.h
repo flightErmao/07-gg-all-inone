@@ -2,16 +2,10 @@
 #define __MIXER_CONTROL_H
 #include "stabilizerTypes.h"
 
-typedef struct {
-  uint32_t m1;
-  uint32_t m2;
-  uint32_t m3;
-  uint32_t m4;
-} motorPWM_t;
-
-bool powerControlTest(void);
+// bool powerControlTest(void);
 void mixerControl(control_t* control);
 void motorInit(void);
-void getMotorPWM(motorPWM_t* get);
-void setMotorPWM(bool enable, uint32_t m1_set, uint32_t m2_set, uint32_t m3_set, uint32_t m4_set);
+
+// void getMotorPWM(motorPWM_t* get);
+// void setMotorPWM(bool enable, uint32_t m1_set, uint32_t m2_set, uint32_t m3_set, uint32_t m4_set);
 #endif
