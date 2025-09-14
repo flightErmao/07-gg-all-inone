@@ -91,7 +91,7 @@ static rt_err_t atkp_parse_byte(uint8_t c) {
         rt_mq_send(&parsed_data_mq_, &atkp_rx_packet_, sizeof(atkp_t));
         return RT_EOK;
       } else {
-        rt_kprintf("ATKP checksum error\n");
+        // rt_kprintf("ATKP checksum error\n");
       }
       atkp_rx_state_ = waitForStartByte1;
       break;
