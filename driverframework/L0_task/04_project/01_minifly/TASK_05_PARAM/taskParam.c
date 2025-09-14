@@ -3,10 +3,9 @@
 #include <stdbool.h>
 #include <string.h>
 #include <math.h>
-#include "config.h"
 #include "taskParam.h"
 #include "configParamDefault.h"
-#include "stmflash.h"
+#include <fal.h>
 
 #define THREAD_PRIORITY 10
 #define THREAD_STACK_SIZE 1024
@@ -19,6 +18,7 @@ static rt_sem_t configParam_sem;
 static configParam_t configParam;
 #ifdef PROJECT_MINIFLY_TASK05_PARAM_AUTO_SAVE_EN
 static uint32_t lenth = 0;
+static const struct fal_partition *param_partition = RT_NULL;
 #endif
 static bool isInit = false;
 static bool isConfigParamOK = false;
@@ -42,18 +42,28 @@ static void configParamInit(void) {
   lenth = sizeof(configParam);
   lenth = lenth / 4 + (lenth % 4 ? 1 : 0);
 
-  STMFLASH_Read(CONFIG_PARAM_ADDR, (uint32_t *)&configParam, lenth);
-
-  if (configParam.version == VERSION) {
-    if (configParamCksum(&configParam) == configParam.cksum) {
-      rt_kprintf("Version V%1.1f check [OK]\r\n", configParam.version / 10.0f);
-      isConfigParamOK = true;
-    } else {
-      rt_kprintf("Version check [FAIL]\r\n");
-      isConfigParamOK = false;
-    }
-  } else {
+  param_partition = fal_partition_find("par");
+  if (param_partition == RT_NULL) {
+    rt_kprintf("FAL partition 'par' not found\r\n");
     isConfigParamOK = false;
+  } else {
+    int ret = fal_partition_read(param_partition, 0, (rt_uint8_t *)&configParam, sizeof(configParam));
+    if (ret < 0) {
+      rt_kprintf("FAL partition read failed\r\n");
+      isConfigParamOK = false;
+    } else {
+      if (configParam.version == VERSION) {
+        if (configParamCksum(&configParam) == configParam.cksum) {
+          rt_kprintf("Version V%1.1f check [OK]\r\n", configParam.version / 10.0f);
+          isConfigParamOK = true;
+        } else {
+          rt_kprintf("Version check [FAIL]\r\n");
+          isConfigParamOK = false;
+        }
+      } else {
+        isConfigParamOK = false;
+      }
+    }
   }
 #endif
 
@@ -61,7 +71,12 @@ static void configParamInit(void) {
     memcpy((uint8_t *)&configParam, (uint8_t *)&configParamDefault, sizeof(configParam));
     configParam.cksum = configParamCksum(&configParam);
 #ifdef PROJECT_MINIFLY_TASK05_PARAM_AUTO_SAVE_EN
-    STMFLASH_Write(CONFIG_PARAM_ADDR, (uint32_t *)&configParam, lenth);
+    if (param_partition != RT_NULL) {
+      int ret = fal_partition_write(param_partition, 0, (const rt_uint8_t *)&configParam, sizeof(configParam));
+      if (ret < 0) {
+        rt_kprintf("FAL partition write failed\r\n");
+      }
+    }
 #endif
     isConfigParamOK = true;
   }
@@ -89,7 +104,12 @@ void configParamTask(void *param) {
         configParam.cksum = cksum;
 #ifdef PROJECT_MINIFLY_TASK05_PARAM_AUTO_SAVE_EN
         // watchdogInit(500);
-        STMFLASH_Write(CONFIG_PARAM_ADDR, (uint32_t *)&configParam, lenth);
+        if (param_partition != RT_NULL) {
+          int ret = fal_partition_write(param_partition, 0, (const rt_uint8_t *)&configParam, sizeof(configParam));
+          if (ret < 0) {
+            rt_kprintf("FAL partition write failed\r\n");
+          }
+        }
         // watchdogInit(WATCHDOG_RESET_MS);
 #endif
       }
