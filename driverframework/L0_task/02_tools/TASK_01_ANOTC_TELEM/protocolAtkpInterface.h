@@ -11,6 +11,10 @@
 #define PERIOD_50ms 50
 #define PERIOD_100ms 100
 
+#define D_ACK_READ_PID 0x01
+#define D_ACK_READ_VERSION 0xA0
+#define D_ACK_RESET_PARAM 0xA1
+
 typedef struct {
   uint8_t msgID;
   uint8_t dataLen;

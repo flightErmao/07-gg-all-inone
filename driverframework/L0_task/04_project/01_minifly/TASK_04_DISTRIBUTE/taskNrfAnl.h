@@ -27,7 +27,6 @@
 #include "anlPid.h"
 #endif
 
-/* 下行指令 */
 #define D_COMMAND_ACC_CALIB 0x01
 #define D_COMMAND_GYRO_CALIB 0x02
 #define D_COMMAND_MAG_CALIB 0x04
@@ -42,10 +41,6 @@
 #define D_COMMAND_FLIGHT_LOCK 0xA0
 #define D_COMMAND_FLIGHT_ULOCK 0xA1
 
-/* 下行应答 */
-#define D_ACK_READ_PID 0x01
-#define D_ACK_READ_VERSION 0xA0
-#define D_ACK_RESET_PARAM 0xA1
 
 typedef enum {
   DOWN_COMMAND = 0x01,

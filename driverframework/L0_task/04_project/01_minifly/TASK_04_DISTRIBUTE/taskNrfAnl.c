@@ -23,19 +23,18 @@ static void atkpReceiveAnl(atkp_t *anlPacket) {
 #endif
   } else if (anlPacket->msgID == DOWN_ACK) {
 #ifdef PROJECT_MINIFLY_TASK04_DISTRIBUTE_ACK_EN
+#include "anlAck.h"
     anlAck(anlPacket);
 #endif
   } else if (anlPacket->msgID == DOWN_RCDATA) {
 #ifdef PROJECT_MINIFLY_TASK04_DISTRIBUTE_RCDATA_EN
     anlRcData(anlPacket);
 #endif
-  } else if (anlPacket->msgID == DOWN_POWER) /*nrf51822*/
-  {
+  } else if (anlPacket->msgID == DOWN_POWER) {
 #ifdef PROJECT_MINIFLY_TASK04_DISTRIBUTE_POWER_EN
     anlPower(anlPacket);
 #endif
-  } else if (anlPacket->msgID == DOWN_REMOTER) /*遥控器*/
-  {
+  } else if (anlPacket->msgID == DOWN_REMOTER) {
 #ifdef PROJECT_MINIFLY_TASK04_DISTRIBUTE_REMOTE_EN
     anlRemote(anlPacket);
 #endif
