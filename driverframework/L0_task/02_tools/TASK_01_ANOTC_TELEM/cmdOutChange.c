@@ -2,6 +2,8 @@
 #include <string.h>
 #include "deviceManager.h"
 
+#ifdef TASK_TOOL_01_ANOTC_CUT_DEV
+
 /* Switch telemetry output device: target in {"uart1", "uart2", "usb"(alias "vcom")} */
 static int anotc_telem_switch_output(const char *target) {
   if (target == RT_NULL) {
@@ -26,7 +28,7 @@ static int anotc_telem_switch_output(const char *target) {
   }
 
   /* Re-init device with new name */
-  if (task_dev_init(next_name) != RT_EOK) {
+  if (uartDevAnotcInit(next_name) != RT_EOK) {
     rt_kprintf("切换到 %s 失败\n", next_name);
     return -RT_ERROR;
   }
@@ -58,3 +60,5 @@ static int cmdAtkpChange(int argc, char **argv) {
 }
 
 MSH_CMD_EXPORT_ALIAS(cmdAtkpChange, cmdAtkpChange, anotc telem output switch command);
+
+#endif

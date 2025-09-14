@@ -1,7 +1,13 @@
 #include <rtthread.h>
 #include <rtdevice.h>
-#include "taskNrfRec.h"
 #include "taskNrfAnl.h"
+#include "rtconfig.h"
+
+#ifdef PROJECT_MINIFLY_TASK_NRF_EN
+#include "taskNrfRec.h"
+#elif defined(TASK_TOOL_01_ANOTC_TELEM_EN)
+#include "deviceManager.h"
+#endif
 
 #define THREAD_PRIORITY 8
 #define THREAD_STACK_SIZE 2048
@@ -66,7 +72,11 @@ static void taskNrfAnlEntry(void *parameter) {
     if (recv_mq != NULL) {
       break;
     }
+#ifdef PROJECT_MINIFLY_TASK_NRF_EN
     recv_mq = getNrfRecvMq();
+#elif defined(TASK_TOOL_01_ANOTC_TELEM_EN)
+    recv_mq = getAnotcRecMq();
+#endif
     rt_thread_mdelay(100);
   }
 
@@ -80,7 +90,7 @@ static void taskNrfAnlEntry(void *parameter) {
 }
 
 static int taskNrfAnlInit(void) {
-  rt_thread_init(&taskNrfAnlTid, "L0_minifly_nrfAnl", taskNrfAnlEntry, RT_NULL, taskNrfAnlStack, THREAD_STACK_SIZE,
+  rt_thread_init(&taskNrfAnlTid, "antoDist", taskNrfAnlEntry, RT_NULL, taskNrfAnlStack, THREAD_STACK_SIZE,
                  THREAD_PRIORITY, THREAD_TIMESLICE);
   rt_thread_startup(&taskNrfAnlTid);
   rt_kprintf("nrf anl task started\n");

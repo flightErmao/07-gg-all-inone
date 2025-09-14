@@ -36,10 +36,6 @@ static struct rt_messagequeue device_recv_mq_;
 
 static rt_device_t nrf_dev = RT_NULL;
 
-struct uart_rx_msg {
-  rt_device_t dev;
-  rt_size_t size;
-};
 static struct rt_messagequeue rx_mq;
 static char rx_msg_pool[256];
 
@@ -48,7 +44,7 @@ static atkp_t rxPacket;
 
 /* UART RX indicate callback: post message to queue */
 static rt_err_t nrf_rx_indicate(rt_device_t dev, rt_size_t size) {
-  struct uart_rx_msg msg;
+  uart_rx_msg_t msg;
   msg.dev = dev;
   msg.size = size;
   rt_err_t result = rt_mq_send(&rx_mq, &msg, sizeof(msg));
@@ -78,7 +74,7 @@ void radiolinkTask(void* param) {
   static uint8_t rx_buffer[LOCAL_RX_BUF_SIZE + 1];
 
   while (1) {
-    struct uart_rx_msg msg;
+    uart_rx_msg_t msg;
     rt_memset(&msg, 0, sizeof(msg));
     if (rt_mq_recv(&rx_mq, &msg, sizeof(msg), RT_WAITING_FOREVER) > 0) {
 #ifdef PROJECT_MINIFLY_TASK_NRF_DEBUGPIN_EN
@@ -165,7 +161,7 @@ static int taskNrfRecInit(void) {
   rt_device_control(device, RT_DEVICE_CTRL_CONFIG, &config);
 
   rt_err_t mq_ret =
-      rt_mq_init(&rx_mq, "nrf_rxmq", rx_msg_pool, sizeof(struct uart_rx_msg), sizeof(rx_msg_pool), RT_IPC_FLAG_FIFO);
+      rt_mq_init(&rx_mq, "nrf_rxmq", rx_msg_pool, sizeof(uart_rx_msg_t), sizeof(rx_msg_pool), RT_IPC_FLAG_FIFO);
   if (mq_ret != RT_EOK) {
     rt_kprintf("nrf rx mq init failed\n");
     return -1;

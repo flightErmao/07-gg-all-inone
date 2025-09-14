@@ -1,6 +1,7 @@
 #include <rtdevice.h>
 #include "deviceManager.h"
 #include "taskAnotcTelem.h"
+
 #define THREAD_PRIORITY 25
 #define THREAD_STACK_SIZE 2048
 #define THREAD_TIMESLICE 5
@@ -65,9 +66,9 @@ static void taskAnotcMqRecEntry(void *param) {
 }
 
 static int taskAnotcMqRec(void) {
-  task_dev_init(TASK_TOOL_01_ANOTC_TELEM_DEVICE_DEFAULT);
+  uartDevAnotcInit(TASK_TOOL_01_ANOTC_TELEM_DEVICE_DEFAULT);
   task_msg_init();
-  rt_thread_init(&taskAnotcMqRecTid, "rec", taskAnotcMqRecEntry, RT_NULL, taskAnotcMqRecStack, THREAD_STACK_SIZE,
+  rt_thread_init(&taskAnotcMqRecTid, "antoRec", taskAnotcMqRecEntry, RT_NULL, taskAnotcMqRecStack, THREAD_STACK_SIZE,
                  THREAD_PRIORITY, THREAD_TIMESLICE);
   rt_thread_startup(&taskAnotcMqRecTid);
 
@@ -75,7 +76,7 @@ static int taskAnotcMqRec(void) {
 }
 
 static int taskAnotcMqSend(void) {
-  rt_thread_init(&taskAnotcMqSendTid, "send", taskAnotcMqSendEntry, RT_NULL, taskAnotcMqSendStack,
+  rt_thread_init(&taskAnotcMqSendTid, "antoSend", taskAnotcMqSendEntry, RT_NULL, taskAnotcMqSendStack,
                  SENSOR_TASK_STACK_SIZE, SENSOR_TASK_PRIORITY, SENSOR_TASK_TIMESLICE);
   rt_thread_startup(&taskAnotcMqSendTid);
 
