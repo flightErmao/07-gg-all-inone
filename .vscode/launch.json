@@ -62,6 +62,26 @@
             ]
         },
         {
+            "name": "20-AT32F435",
+            "type": "cortex-debug",
+            "request": "launch",
+            "cwd": "${workspaceRoot}",
+            "executable": "target/02_at32/01_at32f435/rt-thread.elf",
+            // target\02_at32\01_at32f435\rt-thread.elf
+            "serverpath": "${env:JLINK_SERVER}",
+            "servertype": "jlink",
+            "device": "AT32F437VMT7",
+            "interface": "swd",
+            "armToolchainPath": "${workspaceRoot}/tools/toolchain/arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi/bin",
+            "serialNumber": "", //If you have more than one J-Link probe, add the serial number here.
+            // "svdFile": "target/amov/icf5/GD32F4xx.svd",
+            //"runToMain": true,
+            "showDevDebugOutput": "raw",
+            "openOCDLaunchCommands": [
+                "adapter_khz 4000"
+            ]
+        },
+        {
             "name": "flyer_01_minifly",
             "type": "cortex-debug",
             "request": "launch",
