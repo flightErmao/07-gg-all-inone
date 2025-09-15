@@ -19,6 +19,7 @@ bool attitudeControlTest(void);
 
 void attitudeRatePID(const Axis3f *actualRate, const attitude_t *desiredRate, control_t *output);
 void attitudeAnglePID(const attitude_t *actualAngle, const attitude_t *desiredAngle, attitude_t *outDesiredRate);
+void attitudeAnglePidFpv(const setpoint_t *setpoint, const attitude_t *actualAngle, attitude_t *desiredAngle, attitude_t *outDesiredRate);
 void attitudeControllerResetRollAttitudePID(void);
 void attitudeControllerResetPitchAttitudePID(void);
 void attitudeResetAllPID(void);

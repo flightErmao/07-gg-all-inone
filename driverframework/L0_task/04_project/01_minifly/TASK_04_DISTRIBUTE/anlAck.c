@@ -33,7 +33,7 @@ void anlAck(atkp_t *anlPacket) {
   //   {
   //     resetConfigParamPID();
 
-  //     attitudeControlInit(RATE_PID_DT, ANGEL_PID_DT);        /*初始化姿态PID*/
+  //     attitudeControlInit(RATE_PID_DT, ANGLE_PID_DT);        /*初始化姿态PID*/
   //     positionControlInit(VELOCITY_PID_DT, POSITION_PID_DT); /*初始化位置PID*/
 
   //     packPid(1, pidRateRoll.kp, pidRateRoll.ki, pidRateRoll.kd, pidRatePitch.kp, pidRatePitch.ki, pidRatePitch.kd,

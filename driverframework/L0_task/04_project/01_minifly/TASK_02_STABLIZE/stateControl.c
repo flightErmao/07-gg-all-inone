@@ -8,11 +8,13 @@
 #endif
 #include "taskParam.h"
 
+#define FPV
+
 static float actualThrust_;
 static attitude_t attitudeDesired_;
 static attitude_t rateDesired_;
 
-void stateControlInit(void) { attitudeControlInit(RATE_PID_DT, ANGEL_PID_DT); /*初始化姿态PID*/ }
+void stateControlInit(void) { attitudeControlInit(RATE_PID_DT, ANGLE_PID_DT); /*初始化姿态PID*/ }
 
 static bool resetControl(const state_t *state, const setpoint_t *setpoint, control_t *control) {
   static uint16_t cnt = 0;
@@ -46,11 +48,13 @@ static void generateAttituedeDesierd(const setpoint_t *setpoint) {
   }
 }
 
+#ifdef MINIFLY
 static void updateYawAngle(const setpoint_t *setpoint) {
-  attitudeDesired_.yaw += setpoint->attitude.yaw / ANGEL_PID_RATE;
+  attitudeDesired_.yaw += setpoint->attitude.yaw / ANGLE_PID_RATE;
   if (attitudeDesired_.yaw > 180.0f) attitudeDesired_.yaw -= 360.0f;
   if (attitudeDesired_.yaw < -180.0f) attitudeDesired_.yaw += 360.0f;
 }
+#endif
 
 void stateControl(const state_t *state, const setpoint_t *setpoint, control_t *control, const uint32_t tick) {
   generateAttituedeDesierd(setpoint);
@@ -59,10 +63,16 @@ void stateControl(const state_t *state, const setpoint_t *setpoint, control_t *c
     return;
   }
 
-  if (RATE_DO_EXECUTE(ANGEL_PID_RATE, tick)) {
+#ifdef MINIFLY
+  if (RATE_DO_EXECUTE(ANGLE_PID_RATE, tick)) {
     attitudeAnglePID(&state->attitude, &attitudeDesired_, &rateDesired_);
     updateYawAngle(setpoint);
   }
+#elif defined(FPV)
+  if (RATE_DO_EXECUTE(ANGLE_PID_RATE, tick)) {
+    attitudeAnglePidFpv(setpoint, &state->attitude, &attitudeDesired_, &rateDesired_);
+  }
+#endif
 
   if (RATE_DO_EXECUTE(RATE_PID_RATE, tick)) {
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN

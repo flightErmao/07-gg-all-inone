@@ -102,6 +102,7 @@ static uint16_t limitThrust(int value) {
 }
 
 void mixerControl(control_t *control) {
+  motorPWM_t motorPWM = {0, 0, 0, 0};
   if (motorSetEnable) {
     return;
   }
@@ -111,14 +112,10 @@ void mixerControl(control_t *control) {
     return;
   }
 
-  int16_t r = control->roll / 2.0f;
-  int16_t p = control->pitch / 2.0f;
-  motorPWM_t motorPWM = {0, 0, 0, 0};
-
-  motorPWM.m1 = limitThrust(control->thrust - r - p + control->yaw);
-  motorPWM.m2 = limitThrust(control->thrust - r + p - control->yaw);
-  motorPWM.m3 = limitThrust(control->thrust + r + p + control->yaw);
-  motorPWM.m4 = limitThrust(control->thrust + r - p - control->yaw);
+  motorPWM.m1 = limitThrust(control->thrust - control->roll - control->pitch + control->yaw);
+  motorPWM.m2 = limitThrust(control->thrust - control->roll + control->pitch - control->yaw);
+  motorPWM.m3 = limitThrust(control->thrust + control->roll + control->pitch + control->yaw);
+  motorPWM.m4 = limitThrust(control->thrust + control->roll - control->pitch - control->yaw);
 
 #ifdef L2_DEVICE_03_MOTOR_01_PWM_EN
   motorsSetRatio(MOTOR_M1, motorPWM.m1);

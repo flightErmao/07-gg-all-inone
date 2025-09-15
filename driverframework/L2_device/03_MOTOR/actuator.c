@@ -15,7 +15,11 @@
  *****************************************************************************/
 
 #include "actuator.h"
-#include "ap_math.h"
+
+static uint16_t constrain_uint16(uint16_t amt, uint16_t low, uint16_t high)
+{
+    return ((amt) < (low) ? (low) : ((amt) > (high) ? (high) : (amt)));
+}
 
 static rt_err_t hal_actuator_init(struct rt_device* dev)
 {

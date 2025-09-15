@@ -66,6 +66,24 @@ void attitudeAnglePID(const attitude_t *actualAngle, const attitude_t *desiredAn
   outDesiredRate->yaw = pidUpdate(&pidAngleYaw, yawError);
 }
 
+void attitudeAnglePidFpv(const setpoint_t *setpoint, const attitude_t *actualAngle, attitude_t *desiredAngle, attitude_t *outDesiredRate) {
+  outDesiredRate->roll = pidUpdate(&pidAngleRoll, desiredAngle->roll - actualAngle->roll);
+  outDesiredRate->pitch = pidUpdate(&pidAnglePitch, desiredAngle->pitch - actualAngle->pitch);
+
+  if (setpoint->attitudeRate.yaw == 0) {
+    if (desiredAngle->yaw == 0) {
+      desiredAngle->yaw = actualAngle->yaw;
+    }
+    float yawError = desiredAngle->yaw - actualAngle->yaw;
+    if (yawError >= +180.0f) yawError -= 360.0f;
+    if (yawError <= -180.0f) yawError += 360.0f;
+    outDesiredRate->yaw = pidUpdate(&pidAngleYaw, yawError);
+  } else {
+    desiredAngle->yaw = 0;
+    outDesiredRate->yaw = setpoint->attitudeRate.yaw;
+  }
+}
+
 void attitudeControllerResetRollAttitudePID(void) { pidReset(&pidAngleRoll); }
 
 void attitudeControllerResetPitchAttitudePID(void) { pidReset(&pidAnglePitch); }
