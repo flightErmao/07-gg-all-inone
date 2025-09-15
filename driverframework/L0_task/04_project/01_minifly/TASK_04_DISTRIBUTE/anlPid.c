@@ -1,6 +1,7 @@
 #include "anlPid.h"
 #include "rtconfig.h"
 #include "taskParam.h"
+#include <rtthread.h>
 
 #ifdef PROJECT_MINIFLY_TASK04_DISTRIBUTE_PID_EN
 #include "attitudePid.h"
@@ -101,7 +102,7 @@ void anlPid6(atkp_t *anlPacket) {
 
   uint8_t cksum = atkpCheckSum(anlPacket);
   packCheck(anlPacket->msgID, cksum);
-
+  rt_thread_mdelay(500);
   configParamGiveSemaphore();
 }
 
