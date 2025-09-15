@@ -8,7 +8,7 @@
 #endif
 #include "taskParam.h"
 
-#define FPV
+#define MINIFLY
 
 static float actualThrust_;
 static attitude_t attitudeDesired_;
@@ -65,8 +65,8 @@ void stateControl(const state_t *state, const setpoint_t *setpoint, control_t *c
 
 #ifdef MINIFLY
   if (RATE_DO_EXECUTE(ANGLE_PID_RATE, tick)) {
-    attitudeAnglePID(&state->attitude, &attitudeDesired_, &rateDesired_);
     updateYawAngle(setpoint);
+    attitudeAnglePID(&state->attitude, &attitudeDesired_, &rateDesired_);
   }
 #elif defined(FPV)
   if (RATE_DO_EXECUTE(ANGLE_PID_RATE, tick)) {
@@ -88,4 +88,10 @@ void getAttitudeDesired(attitude_t *get) {
   get->pitch = attitudeDesired_.pitch;
   get->roll = attitudeDesired_.roll;
   get->yaw = attitudeDesired_.yaw;
+}
+
+void getRateDesired(attitude_t *get) {
+  get->pitch = rateDesired_.pitch;
+  get->roll = rateDesired_.roll;
+  get->yaw = rateDesired_.yaw;
 }

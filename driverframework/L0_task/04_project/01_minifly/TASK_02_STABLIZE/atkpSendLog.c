@@ -22,16 +22,18 @@ void sendFlyerStates(uint16_t count_ms) {
     state_t state_flyer = {0};
     attitude_t attitude_current;
     attitude_t attitude_desired;
+    attitude_t rate_desired;
 
     stabilizerGetState(&state_flyer);
     getAttitudeDesired(&attitude_desired);
+    getRateDesired(&rate_desired);
 
     attitude_current.roll = state_flyer.attitude.roll;
     attitude_current.pitch = state_flyer.attitude.pitch;
     attitude_current.yaw = state_flyer.attitude.yaw;
 
-    sendUserDatafloat6(1, attitude_current.roll, attitude_current.pitch, attitude_current.yaw, attitude_desired.roll,
-                       attitude_desired.pitch, attitude_desired.yaw);
+    sendUserDatafloat6(1, attitude_current.roll, attitude_current.pitch, state_flyer.gyro_filter.z,
+                       attitude_desired.roll, attitude_desired.pitch, rate_desired.yaw);
   }
 }
 
