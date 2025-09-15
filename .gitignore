@@ -10,3 +10,8 @@ python/01_sensor_minifly/imuraw.csv
 target/01-stm32/stm32f405-smdz-breadfruit/board/CubeMX_Config/EWARM/*
 target/01-stm32/04-stm32h743/board/CubeMX_Config/Src/system_stm32h7xx.c
 target/flyer_board/02_fmuV2/board/CubeMX_Config/Src/stm32f4xx_it.c
+**/*/rtconfig.cpython-311.pyc
+**/*/*.bin
+**/*/*.map
+**/*/*.elf
+**/*/*.sconsign.dblite

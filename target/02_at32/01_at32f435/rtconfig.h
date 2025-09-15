@@ -1,6 +1,8 @@
 #ifndef RT_CONFIG_H__
 #define RT_CONFIG_H__
 
+#define SOC_AT32F435ZMT7
+
 /* RT-Thread Kernel */
 
 /* klibc options */
@@ -146,8 +148,9 @@
 #define RT_USING_DEVICE_IPC
 #define RT_UNAMED_PIPE_NUMBER 64
 #define RT_USING_SERIAL
-#define RT_USING_SERIAL_V1
-#define RT_SERIAL_RB_BUFSZ 64
+#define RT_USING_SERIAL_V2
+#define RT_SERIAL_BUF_STRATEGY_OVERWRITE
+#define RT_SERIAL_USING_DMA
 #define RT_USING_PIN
 /* end of Device Drivers */
 
@@ -316,6 +319,10 @@
 /* NXP HAL & SDK Drivers */
 
 /* end of NXP HAL & SDK Drivers */
+
+/* NUVOTON Drivers */
+
+/* end of NUVOTON Drivers */
 /* end of HAL & SDK Drivers */
 
 /* sensors drivers */
@@ -398,21 +405,83 @@
 #define SOC_FAMILY_AT32
 #define SOC_SERIES_AT32F435
 
-/* Hardware Drivers Config */
+/* DriverFramework Config */
 
-#define SOC_AT32F435ZMT7
+/* L0_TASK_CONFIG */
 
-/* Onboard Peripheral Drivers */
+/* end of L0_TASK_CONFIG */
 
-#define BSP_USING_SERIAL
-/* end of Onboard Peripheral Drivers */
+/* L1_MIDDLEWARE_CONFIG */
 
-/* On-chip Peripheral Drivers */
+/* end of L1_MIDDLEWARE_CONFIG */
+
+/* L2_DEVICE_CONFIG */
+
+/* 01 IMU CONFIG */
+
+/* 01 ICM42688_130 CONFIG */
+
+/* end of 01 ICM42688_130 CONFIG */
+
+/* 02 MPU6500_minifly CONFIG */
+
+/* end of 02 MPU6500_minifly CONFIG */
+
+/* 03 MPU6000_FMUV2 CONFIG */
+
+/* end of 03 MPU6000_FMUV2 CONFIG */
+/* end of 01 IMU CONFIG */
+
+/* 02 RC CONFIG */
+
+/* 01 SBUS CONFIG */
+
+/* end of 01 SBUS CONFIG */
+
+/* 02 CRSF CONFIG */
+
+/* end of 02 CRSF CONFIG */
+/* end of 02 RC CONFIG */
+
+/* 03 MOTOR CONFIG */
+
+/* 01 PWM CONFIG(Hollow slab) */
+
+/* end of 01 PWM CONFIG(Hollow slab) */
+
+/* 02 DSHOT CONFIG */
+
+/* end of 02 DSHOT CONFIG */
+
+/* 03 PWM CONFIG */
+
+/* end of 03 PWM CONFIG */
+/* end of 03 MOTOR CONFIG */
+
+/* 04 BARO CONFIG */
+
+/* 01 SPL16 CONFIG */
+
+/* end of 01 SPL16 CONFIG */
+
+/* 02 SPA06 CONFIG */
+
+/* end of 02 SPA06 CONFIG */
+
+/* 03 DPS3XX CONFIG */
+
+/* end of 03 DPS3XX CONFIG */
+/* end of 04 BARO CONFIG */
+/* end of L2_DEVICE_CONFIG */
+
+/* L3_PERIPHERAL_CONFIG */
 
 #define BSP_USING_GPIO
 #define BSP_USING_UART
 #define BSP_USING_UART1
-/* end of On-chip Peripheral Drivers */
-/* end of Hardware Drivers Config */
+#define BSP_UART1_RX_BUFSIZE 256
+#define BSP_UART1_TX_BUFSIZE 64
+/* end of L3_PERIPHERAL_CONFIG */
+/* end of DriverFramework Config */
 
 #endif
