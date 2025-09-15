@@ -20,6 +20,12 @@ typedef struct {
   uint32_t m4;
 } motorPWM_t;
 
+typedef enum {
+  CW = 0,
+  CCW = 1,
+} motorDir_e;
+
+static motorDir_e frontRightDir = CCW;
 static bool motorSetEnable = false;
 
 #ifdef L2_DEVICE_03_MOTOR_03_PWM_EN
@@ -112,10 +118,20 @@ void mixerControl(control_t *control) {
     return;
   }
 
-  motorPWM.m1 = limitThrust(control->thrust - control->roll - control->pitch - control->yaw);
-  motorPWM.m2 = limitThrust(control->thrust - control->roll + control->pitch + control->yaw);
-  motorPWM.m3 = limitThrust(control->thrust + control->roll + control->pitch - control->yaw);
-  motorPWM.m4 = limitThrust(control->thrust + control->roll - control->pitch + control->yaw);
+  // 注意，如果电机右前方是顺时钟，则下方control->yaw需要全部用相反的符合
+  // 目前使用的电机顺序1~4，分别为右前，右后，左后，左前
+  // 目前使用的右前方电机转向为逆时针
+  int16_t yawValue = 0;
+  if (frontRightDir == CW) {
+    yawValue = control->yaw;
+  } else {
+    yawValue = -control->yaw;
+  }
+
+  motorPWM.m1 = limitThrust(control->thrust - control->roll - control->pitch + yawValue);
+  motorPWM.m2 = limitThrust(control->thrust - control->roll + control->pitch - yawValue);
+  motorPWM.m3 = limitThrust(control->thrust + control->roll + control->pitch + yawValue);
+  motorPWM.m4 = limitThrust(control->thrust + control->roll - control->pitch - yawValue);
 
 #ifdef L2_DEVICE_03_MOTOR_01_PWM_EN
   motorsSetRatio(MOTOR_M1, motorPWM.m1);

@@ -8,8 +8,6 @@
 #endif
 #include "taskParam.h"
 
-#define MINIFLY
-
 static float actualThrust_;
 static attitude_t attitudeDesired_;
 static attitude_t rateDesired_;
@@ -24,8 +22,8 @@ static bool resetControl(const state_t *state, const setpoint_t *setpoint, contr
     control->pitch = 0;
     control->yaw = 0;
     control->thrust = 0;
-    attitudeResetAllPID();                      /*复位姿态PID*/
-    attitudeDesired_.yaw = state->attitude.yaw; /*复位计算的期望yaw值*/
+    attitudeResetAllPID();
+    attitudeDesired_.yaw = state->attitude.yaw;
     if (cnt++ > 1500) {
       cnt = 0;
       // configParamGiveSemaphore();
@@ -48,13 +46,11 @@ static void generateAttituedeDesierd(const setpoint_t *setpoint) {
   }
 }
 
-#ifdef MINIFLY
 static void updateYawAngle(const setpoint_t *setpoint) {
   attitudeDesired_.yaw += setpoint->attitude.yaw / ANGLE_PID_RATE;
   if (attitudeDesired_.yaw > 180.0f) attitudeDesired_.yaw -= 360.0f;
   if (attitudeDesired_.yaw < -180.0f) attitudeDesired_.yaw += 360.0f;
 }
-#endif
 
 void stateControl(const state_t *state, const setpoint_t *setpoint, control_t *control, const uint32_t tick) {
   generateAttituedeDesierd(setpoint);
@@ -63,16 +59,10 @@ void stateControl(const state_t *state, const setpoint_t *setpoint, control_t *c
     return;
   }
 
-#ifdef MINIFLY
   if (RATE_DO_EXECUTE(ANGLE_PID_RATE, tick)) {
     updateYawAngle(setpoint);
     attitudeAnglePID(&state->attitude, &attitudeDesired_, &rateDesired_);
   }
-#elif defined(FPV)
-  if (RATE_DO_EXECUTE(ANGLE_PID_RATE, tick)) {
-    attitudeAnglePidFpv(setpoint, &state->attitude, &attitudeDesired_, &rateDesired_);
-  }
-#endif
 
   if (RATE_DO_EXECUTE(RATE_PID_RATE, tick)) {
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
