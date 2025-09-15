@@ -3,4 +3,5 @@ menu "DriverFramework Config"
     source "$(PROJECT_ROOT)/driverframework/L1_middleWare/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L2_device/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L3_peripheral/Kconfig"
+    # source "$(PROJECT_ROOT)/driverframework/L4_soc/Kconfig"
 endmenu

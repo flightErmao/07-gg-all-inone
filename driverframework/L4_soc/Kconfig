@@ -1,0 +1,49 @@
+menu "L4_SOC_CONFIG"
+
+    config SOC_FAMILY_STM32
+        bool "STM32 SoC Family"
+
+    config SOC_FAMILY_AT32
+        bool "AT32 SoC Family"
+
+    menu "STM32 Series Selection"
+        depends on SOC_FAMILY_STM32
+
+        config SOC_SERIES_STM32F1
+            bool "STM32F1 Series"
+
+        config SOC_SERIES_STM32F2
+            bool "STM32F2 Series"
+
+        config SOC_SERIES_STM32F3
+            bool "STM32F3 Series"
+
+        config SOC_SERIES_STM32F4
+            bool "STM32F4 Series"
+
+            if SOC_SERIES_STM32F4
+                config SOC_STM32F427II
+                    bool "STM32F427II"
+            endif
+
+    endmenu
+
+    menu "AT32 Series Selection"
+        depends on SOC_FAMILY_AT32
+
+    config SOC_SERIES_AT32F435
+        bool "AT32F435 Series"
+
+        if SOC_SERIES_AT32F435
+            config SOC_AT32F435ZMT7
+                bool "AT32F435ZMT7"
+        endif
+
+
+    config SOC_SERIES_AT32F437
+        bool "AT32F437 Series"
+
+    endmenu
+
+endmenu
+
