@@ -1,0 +1,7 @@
+rolrate      200   10  1
+pitchrate    200   10  1
+yawrate      150   10  1
+
+rolangle     150   0   5
+pitchangle   150   0   5
+yawangle     150   0   0
