@@ -1,0 +1,15 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+src = []
+path = []
+
+src += Glob("./*.c")
+path += [cwd]
+
+group = DefineGroup("L3_PERIPHERAL_31_SDIO_AUTO_MOUNT", src, depend=["AUTO_MOUNT_SD"], CPPPATH=path)
+
+env = DefaultEnvironment()
+
+Return("group")

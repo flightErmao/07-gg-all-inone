@@ -4,6 +4,10 @@
 #include <drv_gpio.h>
 #include <rtdevice.h>
 
+#ifdef AUTO_MOUNT_SD
+#include "mountSdAuto.h"
+#endif
+
 #define LED0_PIN GET_PIN(E, 12)
 
 int main(void)
@@ -25,5 +29,8 @@ int main(void)
     rt_thread_mdelay(500);
     rt_pin_write(LED0_PIN, PIN_LOW);
     rt_thread_mdelay(500);
+    #ifdef AUTO_MOUNT_SD
+    mountSdAuto();
+    #endif
   }
 }

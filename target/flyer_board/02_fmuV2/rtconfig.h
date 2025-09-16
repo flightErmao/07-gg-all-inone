@@ -136,6 +136,30 @@
 
 /* DFS: device virtual file system */
 
+#define RT_USING_DFS
+#define DFS_USING_POSIX
+#define DFS_USING_WORKDIR
+#define DFS_FD_MAX 16
+#define RT_USING_DFS_V1
+#define DFS_FILESYSTEMS_MAX 4
+#define DFS_FILESYSTEM_TYPES_MAX 4
+#define RT_USING_DFS_ELMFAT
+
+/* elm-chan's FatFs, Generic FAT Filesystem Module */
+
+#define RT_DFS_ELM_CODE_PAGE 437
+#define RT_DFS_ELM_WORD_ACCESS
+#define RT_DFS_ELM_USE_LFN_3
+#define RT_DFS_ELM_USE_LFN 3
+#define RT_DFS_ELM_LFN_UNICODE_0
+#define RT_DFS_ELM_LFN_UNICODE 0
+#define RT_DFS_ELM_MAX_LFN 255
+#define RT_DFS_ELM_DRIVES 2
+#define RT_DFS_ELM_MAX_SECTOR_SIZE 512
+#define RT_DFS_ELM_REENTRANT
+#define RT_DFS_ELM_MUTEX_TIMEOUT 3000
+/* end of elm-chan's FatFs, Generic FAT Filesystem Module */
+#define RT_USING_DFS_DEVFS
 /* end of DFS: device virtual file system */
 #define RT_USING_FAL
 #define FAL_USING_DEBUG
@@ -149,10 +173,20 @@
 #define RT_USING_SERIAL_V2
 #define RT_SERIAL_BUF_STRATEGY_OVERWRITE
 #define RT_SERIAL_USING_DMA
-#define RT_USING_I2C
-#define RT_USING_I2C_BITOPS
 #define RT_USING_PWM
+#define RT_USING_SDIO
+#define RT_SDIO_STACK_SIZE 512
+#define RT_SDIO_THREAD_PRIORITY 15
+#define RT_MMCSD_STACK_SIZE 1024
+#define RT_MMCSD_THREAD_PRIORITY 22
+#define RT_MMCSD_MAX_PARTITION 16
 #define RT_USING_SPI
+#define RT_USING_BLK
+
+/* Partition Types */
+
+#define RT_BLK_PARTITION_DFS
+/* end of Partition Types */
 #define RT_USING_PIN
 #define RT_USING_KTIME
 /* end of Device Drivers */
@@ -373,8 +407,6 @@
 
 /* samples: kernel and components samples */
 
-#define PKG_USING_PERIPHERAL_SAMPLES
-#define PKG_USING_PERIPHERAL_SAMPLES_LATEST_VERSION
 /* end of samples: kernel and components samples */
 
 /* entertainment: terminal games and other interesting software packages */
@@ -382,8 +414,6 @@
 /* end of entertainment: terminal games and other interesting software packages */
 #define PKG_USING_OPTPARSE
 #define PKG_USING_OPTPARSE_LATEST_VERSION
-#define PKG_USING_UPARAM
-#define PKG_USING_UPARAM_LATEST_VERSION
 /* end of miscellaneous packages */
 
 /* Arduino libraries */
@@ -460,12 +490,6 @@
 
 #define L1_MIDDLEWARE_01_MODULE_01_FLOATCONVER_EN
 #define L1_MIDDLEWARE_01_MODULE_02_MATHS_EN
-#define L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN
-#define L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_0_EN
-#define L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_0_PIN "PD13"
-#define L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_1_EN
-#define L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_1_PIN "PD14"
-#define L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_TESTSELF_EN
 #define L1_MIDDLEWARE_01_MODULE_04_PID_MINIFLY_EN
 /* end of L1_MIDDLEWARE_CONFIG */
 
@@ -490,7 +514,7 @@
 #define SENSOR_SPI_NAME_MPU6000 "spi1"
 #define SENSOR_SPI_SLAVE_NAME_MPU6000 "spi10"
 #define SENSOR_MPU6000_SPI_CS_PIN_NAME "PC2"
-#define SENSOR_MPU6000_SPI_MAX_HZ 4000000
+#define SENSOR_MPU6000_SPI_MAX_HZ 3000000
 /* end of 03 MPU6000_FMUV2 CONFIG */
 /* end of 01 IMU CONFIG */
 
@@ -502,7 +526,6 @@
 #define RC_SBUS_UART_NAME "uart3"
 #define RC_SBUS_BAUDRATE 100000
 #define RC_SBUS_INVERTED
-#define RC_SBUS_DEBUGPIN_EN
 /* end of 01 SBUS CONFIG */
 
 /* 02 CRSF CONFIG */
@@ -562,9 +585,9 @@
 #define BSP_USING_UART3
 #define BSP_UART3_RX_USING_DMA
 #define BSP_UART3_TX_USING_DMA
-#define BSP_UART3_RX_BUFSIZE 64
+#define BSP_UART3_RX_BUFSIZE 256
 #define BSP_UART3_TX_BUFSIZE 64
-#define BSP_UART3_DMA_PING_BUFSIZE 32
+#define BSP_UART3_DMA_PING_BUFSIZE 64
 #define BSP_USING_SPI
 #define BSP_USING_SPI1
 #define BSP_USING_USBD
@@ -576,6 +599,10 @@
 #define BSP_USING_PWM1_CH4
 #define BSP_USING_ON_CHIP_FLASH
 #define L3_PERIPHERAL_USING_ON_CHIP_FLASH_AUTOSTART_FALINIT
+#define BSP_USING_SDIO
+#define BSP_USING_SDIO1
+#define BSP_USING_SDCARD
+#define AUTO_MOUNT_SD
 /* end of L3_PERIPHERAL_CONFIG */
 /* end of DriverFramework Config */
 

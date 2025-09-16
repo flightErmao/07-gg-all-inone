@@ -1,5 +1,5 @@
 menuconfig BSP_USING_ON_CHIP_FLASH
-    bool "Enable ON-CHIP FLASH CONFIG"
+    bool "Enable 30 FLASHONCHIP CONFIG"
     default n
     if BSP_USING_ON_CHIP_FLASH
         config L3_PERIPHERAL_USING_ON_CHIP_FLASH_AUTOSTART_FALINIT

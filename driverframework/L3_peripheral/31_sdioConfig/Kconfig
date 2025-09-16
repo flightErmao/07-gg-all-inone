@@ -1,0 +1,20 @@
+menuconfig BSP_USING_SDIO
+    bool "Enable 31 SDIO CONFIG"
+    select RT_USING_SDIO
+    select RT_USING_DFS
+    default n
+    if BSP_USING_SDIO
+        config BSP_USING_SDIO1
+            bool "Enable SDIO1"
+            default n
+        config BSP_USING_SDCARD
+            bool "Enable SDCARD"                        
+            select RT_USING_DFS_ELMFAT
+            select RT_USING_PIN
+            default n
+        config AUTO_MOUNT_SD
+            bool "Enable auto mount SD"
+            select BSP_USING_SDCARD
+            default n
+    endif
+        
