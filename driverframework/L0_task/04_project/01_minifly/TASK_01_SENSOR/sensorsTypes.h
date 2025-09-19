@@ -46,11 +46,11 @@ typedef union {
 } Axis3f;
 
 typedef struct {
+  uint32_t timestamp;
   Axis3i16 acc_raw;
   Axis3i16 gyro_raw;
   Axis3f acc_filter;
   Axis3f gyro_filter;
-  uint32_t timestamp;  // 添加时间戳成员变量
 } sensorData_t;
 
 // 恢复GCC诊断设置
