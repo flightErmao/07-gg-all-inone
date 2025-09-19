@@ -3,3 +3,21 @@ menuconfig TASK_TOOL_02_SD_MLOG
     default n
     help
        open sd mlog task
+
+    if TASK_TOOL_02_SD_MLOG
+
+        config TASK_TOOL_02_SD_MLOG_TEST
+            bool "ENABLE: TASK_TOOL_02_SD_MLOG_TEST"
+            default n
+            help
+                enable mlog test command and functionality
+
+        config MLOG_TEST_02_SD_MLOG_FREQ_HZ
+            int "Mlog test data generation frequency (Hz)"
+            depends on TASK_TOOL_02_SD_MLOG_TEST
+            default 100
+            range 1 1000
+            help
+                frequency for generating test data in Hz
+
+    endif
