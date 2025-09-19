@@ -1,0 +1,5 @@
+menuconfig TASK_TOOL_02_SD_MLOG
+    bool "ENABLE: TASK_TOOL_02_SD_MLOG"
+    default n
+    help
+       open sd mlog task

@@ -4,6 +4,7 @@ menu "L0_TASK_CONFIG"
     source "$(PROJECT_ROOT)/driverframework/L0_task/01_demo/TASK_03_SPI_TEST/Kconfig"
     
     source "$(PROJECT_ROOT)/driverframework/L0_task/02_tools/TASK_01_ANOTC_TELEM/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L0_task/02_tools/TASK_02_SD_MLOG/Kconfig"
 
     source "$(PROJECT_ROOT)/driverframework/L0_task/03_work/TASK_01_GPS_TEST/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L0_task/03_work/TASK_02_BARO_TEST/Kconfig"

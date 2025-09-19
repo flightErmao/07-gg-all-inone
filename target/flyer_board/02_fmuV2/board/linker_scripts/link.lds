@@ -45,14 +45,19 @@ SECTIONS
         __rt_init_start = .;
         KEEP(*(SORT(.rti_fn*)))
         __rt_init_end = .;
-
         . = ALIGN(4);
 
         PROVIDE(__ctors_start__ = .);
         KEEP (*(SORT(.init_array.*)))
         KEEP (*(.init_array))
         PROVIDE(__ctors_end__ = .);
+        . = ALIGN(4);
 
+        /* section information for mlog. */
+        . = ALIGN(4);
+        __fmt_mlog_start = .;
+        KEEP(*(MlogTab))
+        __fmt_mlog_end = .;
         . = ALIGN(4);
 
         _etext = .;
