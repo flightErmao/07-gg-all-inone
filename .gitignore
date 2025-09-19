@@ -15,3 +15,4 @@ target/flyer_board/02_fmuV2/board/CubeMX_Config/Src/stm32f4xx_it.c
 **/*/*.map
 **/*/*.elf
 **/*/*.sconsign.dblite
+python/02_mlog/out/*.csv
