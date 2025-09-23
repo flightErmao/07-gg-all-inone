@@ -3,7 +3,7 @@
 
 #include "stabilizerTypes.h"
 
-#if defined(PROJECT_MINIFLY_TASK06_RC_EN) || defined(PROJECT_FMT_TASK01_RC_EN)
+// #if defined(PROJECT_MINIFLY_TASK06_RC_EN) || defined(PROJECT_FMT_TASK01_RC_EN)
 #include "taskRc.h"
 
 /**
@@ -15,4 +15,4 @@ void commanderGetSetpoint(const pilot_cmd_bus_t* rc_data, setpoint_t* setpoint);
 
 #endif
 
-#endif
+// #endif

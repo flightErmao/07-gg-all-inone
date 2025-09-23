@@ -18,8 +18,8 @@ static rt_timer_t rc_timer = RT_NULL;
 static rt_event_t rc_event = RT_NULL;
 #define RC_EVENT_TIMER (1 << 0)
 
-MCN_DECLARE(minifly_rc_pilot_cmd);
-MCN_DEFINE(minifly_rc_pilot_cmd, sizeof(pilot_cmd_bus_t));
+MCN_DECLARE(rc);
+MCN_DEFINE(rc, sizeof(pilot_cmd_bus_t));
 
 static McnNode_t rc_sub_node = RT_NULL;
 
@@ -41,14 +41,14 @@ static int rc_pilot_cmd_echo(void *parameter) {
 }
 
 static void mcnTopicInit(void) {
-  rt_err_t result = mcn_advertise(MCN_HUB(minifly_rc_pilot_cmd), rc_pilot_cmd_echo);
+  rt_err_t result = mcn_advertise(MCN_HUB(rc), rc_pilot_cmd_echo);
   if (result != RT_EOK) {
-    rt_kprintf("Failed to advertise minifly_rc_pilot_cmd topic: %d\n", result);
+    rt_kprintf("Failed to advertise rc topic: %d\n", result);
   }
 
-  rc_sub_node = mcn_subscribe(MCN_HUB(minifly_rc_pilot_cmd), RT_NULL, RT_NULL);
+  rc_sub_node = mcn_subscribe(MCN_HUB(rc), RT_NULL, RT_NULL);
   if (rc_sub_node == RT_NULL) {
-    rt_kprintf("Failed to subscribe to minifly_rc_pilot_cmd topic\n");
+    rt_kprintf("Failed to subscribe to rc topic\n");
   }
 }
 
@@ -150,7 +150,7 @@ static void rc_minifly_thread_entry(void *parameter) {
         rc_data.ram_status = rcRawData.arm_status ? ARM_STATUS_ARM : ARM_STATUS_DISARM;
       }
 
-      mcn_publish(MCN_HUB(minifly_rc_pilot_cmd), &rc_data);
+      mcn_publish(MCN_HUB(rc), &rc_data);
     }
   }
 }
@@ -159,7 +159,7 @@ void rcPilotCmdAcquire(pilot_cmd_bus_t *rc_data) {
   if (!rc_data) return;
 #ifdef PROJECT_MINIFLY_TASK06_RC_EN
   if (rc_sub_node != NULL) {
-    mcn_copy(MCN_HUB(minifly_rc_pilot_cmd), rc_sub_node, rc_data);
+    mcn_copy(MCN_HUB(rc), rc_sub_node, rc_data);
   }
 #endif
 }

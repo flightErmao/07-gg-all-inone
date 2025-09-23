@@ -12,8 +12,8 @@
 #define THREAD_STACK_SIZE 2048
 #define THREAD_TIMESLICE 5
 
-MCN_DECLARE(minifly_rc_pilot_cmd);
-MCN_DEFINE(minifly_rc_pilot_cmd, sizeof(pilot_cmd_bus_t));
+MCN_DECLARE(rc);
+MCN_DEFINE(rc, sizeof(pilot_cmd_bus_t));
 
 static rt_device_t rc_test_dev_ = RT_NULL;
 static rt_uint16_t rc_channels_[MAX_RC_CHANNEL_NUM] = {0};
@@ -96,7 +96,7 @@ static void rcThreadEntry(void* param) {
         remapRcThrottlePitchRoll(rc_joystick_percent, rc_flight_limit, &rc_value_remap);
         remapValue2PilotCmdBus(&pilot_cmd_bus, rc_value_remap, rc_timestamp);
         generateCmd(&pilot_cmd_bus, rc_channels_);
-        mcn_publish(MCN_HUB(minifly_rc_pilot_cmd), &pilot_cmd_bus);
+        mcn_publish(MCN_HUB(rc), &pilot_cmd_bus);
       } else {
         rc_loss_count++;
         if (rc_loss_count % 10 == 0) {
@@ -107,7 +107,7 @@ static void rcThreadEntry(void* param) {
         }
         if (is_rc_loss) {
           rcLossHandler(&pilot_cmd_bus, rc_timestamp);
-          mcn_publish(MCN_HUB(minifly_rc_pilot_cmd), &pilot_cmd_bus);
+          mcn_publish(MCN_HUB(rc), &pilot_cmd_bus);
         }
       }
     } else {
@@ -138,15 +138,15 @@ static rt_err_t rcDeviceInit(void) {
 }
 
 static rt_err_t mcnTopicInit(void) {
-  rt_err_t result = mcn_advertise(MCN_HUB(minifly_rc_pilot_cmd), rc_pilot_cmd_echo);
+  rt_err_t result = mcn_advertise(MCN_HUB(rc), rc_pilot_cmd_echo);
   if (result != RT_EOK) {
-    rt_kprintf("Failed to advertise minifly_rc_pilot_cmd topic: %d\n", result);
+    rt_kprintf("Failed to advertise rc topic: %d\n", result);
     return -RT_ERROR;
   }
 
-  rc_sub_node_ = mcn_subscribe(MCN_HUB(minifly_rc_pilot_cmd), RT_NULL, RT_NULL);
+  rc_sub_node_ = mcn_subscribe(MCN_HUB(rc), RT_NULL, RT_NULL);
   if (rc_sub_node_ == RT_NULL) {
-    rt_kprintf("Failed to subscribe to minifly_rc_pilot_cmd topic\n");
+    rt_kprintf("Failed to subscribe to rc topic\n");
     return -RT_ERROR;
   }
   return result;
@@ -207,7 +207,7 @@ void rcPilotCmdAcquire(pilot_cmd_bus_t* pilot_cmd_bus) {
   if (!pilot_cmd_bus) return;
 #ifdef PROJECT_FMT_TASK01_RC_EN
   if (rc_sub_node_ != NULL) {
-    mcn_copy(MCN_HUB(minifly_rc_pilot_cmd), rc_sub_node_, pilot_cmd_bus);
+    mcn_copy(MCN_HUB(rc), rc_sub_node_, pilot_cmd_bus);
   }
 #endif
 }
