@@ -84,10 +84,16 @@ static rt_err_t bmi270_init(const char *spi_bus_name, const char *spi_slave_name
   if (bmi270.setIoFunctions(read_multi_wrap, write_multi_wrap, delay_ms_wrap, gpio_cs_control_wrap) != 0) {
     return RT_ERROR;
   }
+
   if (bmi270.detect() != 0) {
     return RT_ERROR;
   }
-  if (bmi270.configure() != 0) {
+
+  // if (bmi270.init() != 0) {
+  //   return RT_ERROR;
+  // }
+
+  if (bmi270.calibrate() != 0) {
     return RT_ERROR;
   }
   setImuParam();

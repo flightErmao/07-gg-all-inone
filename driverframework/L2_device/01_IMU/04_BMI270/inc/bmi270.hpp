@@ -2,7 +2,6 @@
 
 #include <stdint.h>
 #include <stddef.h>
-
 #include "bmi270_regs.hpp"
 
 class Bmi270 {
@@ -18,15 +17,10 @@ class Bmi270 {
   ~Bmi270();
 
   int setIoFunctions(ReadMultiRegFn read_fn, WriteMultiRegFn write_fn, DelayMsFn delay_fn, GpioCsControlFn cs_fn);
-
-  int init();
-  int configure();
-  int calibrate();
   int detect();
-
-  int readBurstImu(uint8_t out14[14]);
-
-  DelayMsFn getDelayMs() const { return delay_ms_; }
+  int init();
+  int calibrate();
+  int readBurstImu(uint8_t* out14);
 
  private:
   int readReg8(uint8_t reg, uint8_t* val);

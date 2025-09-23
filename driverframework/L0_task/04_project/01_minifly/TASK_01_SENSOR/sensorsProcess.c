@@ -78,13 +78,21 @@ static bool getAccScale(Axis3i16 accRaw) {
 }
 
 static inline void sensorsLoadRawFromBuffer(const uint8_t* buffer) {
+#ifdef BSP_USING_BMI270
+  sensors.acc_raw.x = (int16_t)((((int16_t)buffer[1]) << 8) | buffer[0]);
+  sensors.acc_raw.y = (int16_t)((((int16_t)buffer[3]) << 8) | buffer[2]);
+  sensors.acc_raw.z = (int16_t)((((int16_t)buffer[5]) << 8) | buffer[4]);
+  sensors.gyro_raw.x = (int16_t)((((int16_t)buffer[7]) << 8) | buffer[6]);
+  sensors.gyro_raw.y = (int16_t)((((int16_t)buffer[9]) << 8) | buffer[8]);
+  sensors.gyro_raw.z = (int16_t)((((int16_t)buffer[11]) << 8) | buffer[10]);
+#elif
   sensors.acc_raw.x = (int16_t)((((int16_t)buffer[2]) << 8) | buffer[3]);
   sensors.acc_raw.y = (int16_t)((((int16_t)buffer[0]) << 8) | buffer[1]);
   sensors.acc_raw.z = (int16_t)((((int16_t)buffer[4]) << 8) | buffer[5]);
-
   sensors.gyro_raw.x = (int16_t)((((int16_t)buffer[10]) << 8) | buffer[11]);
   sensors.gyro_raw.y = (int16_t)((((int16_t)buffer[8]) << 8) | buffer[9]);
   sensors.gyro_raw.z = (int16_t)((((int16_t)buffer[12]) << 8) | buffer[13]);
+#endif
 }
 
 void initImuRotationDir(void) {

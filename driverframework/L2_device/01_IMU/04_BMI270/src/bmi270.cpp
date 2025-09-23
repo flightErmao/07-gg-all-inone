@@ -2,8 +2,6 @@
 #include "bmi270_config_blob_data.h"
 #include <string.h>
 
-static inline int16_t be16_to_s16(uint8_t hi, uint8_t lo) { return (int16_t)((int16_t)((uint16_t)hi << 8) | lo); }
-
 Bmi270& Bmi270::instance() {
   static Bmi270 inst;
   return inst;
@@ -178,15 +176,6 @@ int Bmi270::enableCrt() {
 
 int Bmi270::init() {
   if (!read_multi_reg_ || !write_multi_reg_ || !delay_ms_ || !gpio_cs_control_) return -1;
-  if (detect() != 0) return -1;
-  if (basicInit() != 0) return -1;
-  if (initConfig() != 0) return -1;
-  if (enableCas() != 0) return -1;
-  return 0;
-}
-
-int Bmi270::configure() {
-  if (!read_multi_reg_ || !write_multi_reg_ || !delay_ms_ || !gpio_cs_control_) return -1;
   if (basicInit() != 0) return -1;
   if (initConfig() != 0) return -1;
   if (enableCas() != 0) return -1;
@@ -202,7 +191,7 @@ int Bmi270::calibrate() {
   return 0;
 }
 
-int Bmi270::readBurstImu(uint8_t out14[14]) {
+int Bmi270::readBurstImu(uint8_t* out14) {
   if (!read_multi_reg_ || !out14) return -1;
   return (read_multi_reg_(BMI270_REG_ACC_DATA_X_LSB, out14, 14) == 0) ? 0 : -1;
 }
