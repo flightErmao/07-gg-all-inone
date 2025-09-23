@@ -25,8 +25,8 @@ static rt_uint8_t task_stack_sensor_minifly[THREAD_STACK_SIZE];
 static rt_device_t dev_sensor_imu = RT_NULL;
 static uint8_t mlog_push_en = 0;
 
-MCN_DECLARE(minifly_sensor_imu);
-MCN_DEFINE(minifly_sensor_imu, sizeof(sensorData_t));
+MCN_DECLARE(sensor_imu);
+MCN_DEFINE(sensor_imu, sizeof(sensorData_t));
 
 static McnNode_t sensor_sub_node = RT_NULL;
 
@@ -109,14 +109,14 @@ static void mlogInit(void) {
 }
 
 static void rtosToolsInit(void) {
-  rt_err_t result = mcn_advertise(MCN_HUB(minifly_sensor_imu), sensor_imu_echo);
+  rt_err_t result = mcn_advertise(MCN_HUB(sensor_imu), sensor_imu_echo);
   if (result != RT_EOK) {
-    rt_kprintf("Failed to advertise minifly_sensor_imu topic: %d\n", result);
+    rt_kprintf("Failed to advertise sensor_imu topic: %d\n", result);
   }
 
-  sensor_sub_node = mcn_subscribe(MCN_HUB(minifly_sensor_imu), RT_NULL, RT_NULL);
+  sensor_sub_node = mcn_subscribe(MCN_HUB(sensor_imu), RT_NULL, RT_NULL);
   if (sensor_sub_node == RT_NULL) {
-    rt_kprintf("Failed to subscribe to minifly_sensor_imu topic\n");
+    rt_kprintf("Failed to subscribe to sensor_imu topic\n");
   }
 
 #ifdef PROJECT_MINIFLY_TASK_SENSOR_TIMER_TRIGGER_EN
@@ -163,7 +163,7 @@ static void sensor_minifly_thread_entry(void *parameter) {
         uint32_t timestamp = rt_tick_get();
         sensors_data = processAccGyroMeasurements(sensor_buffer);
         sensors_data.timestamp = timestamp;
-        mcn_publish(MCN_HUB(minifly_sensor_imu), &sensors_data);
+        mcn_publish(MCN_HUB(sensor_imu), &sensors_data);
 
 #ifdef TASK_TOOL_02_SD_MLOG
         if (Minifly_Sensor_IMU_ID >= 0 && mlog_push_en) {
@@ -189,7 +189,7 @@ static void sensor_minifly_thread_entry(void *parameter) {
 void sensorsAcquire(sensorData_t *sensors) {
   if (!sensors) return;
   if (mcn_poll(sensor_sub_node)) {
-    mcn_copy(MCN_HUB(minifly_sensor_imu), sensor_sub_node, sensors);
+    mcn_copy(MCN_HUB(sensor_imu), sensor_sub_node, sensors);
   }
 }
 
