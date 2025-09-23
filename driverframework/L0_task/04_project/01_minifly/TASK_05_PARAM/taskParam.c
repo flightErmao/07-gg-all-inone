@@ -5,7 +5,10 @@
 #include <math.h>
 #include "taskParam.h"
 #include "configParamDefault.h"
+
+#ifdef PROJECT_MINIFLY_TASK05_PARAM_AUTO_SAVE_EN
 #include <fal.h>
+#endif
 
 #define THREAD_PRIORITY 20
 #define THREAD_STACK_SIZE 1024

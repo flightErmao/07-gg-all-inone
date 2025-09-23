@@ -11,13 +11,16 @@
 #include "taskAnotcTelem.h"
 
 void sendFlyerStates(uint16_t count_ms) {
-  // if (!(count_ms % PERIOD_20ms)) {
-  //   state_t state_flyer = {0};
-  //   stabilizerGetState(&state_flyer);
-  //   packStatus(state_flyer.attitude.roll, -state_flyer.attitude.pitch, -state_flyer.attitude.yaw,
-  //              (int32_t)(state_flyer.position.z * 1000), state_flyer.fly_mode, state_flyer.armed);
-  // }
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_FLYER_ANGLE
+  if (!(count_ms % PERIOD_20ms)) {
+    state_t state_flyer = {0};
+    stabilizerGetState(&state_flyer);
+    packStatus(state_flyer.attitude.roll, -state_flyer.attitude.pitch, -state_flyer.attitude.yaw,
+               (int32_t)(state_flyer.position.z * 1000), state_flyer.fly_mode, state_flyer.armed);
+  }
+#endif
 
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_DEBUG
   if (!(count_ms % PERIOD_20ms)) {
     state_t state_flyer = {0};
     attitude_t attitude_current;
@@ -35,6 +38,7 @@ void sendFlyerStates(uint16_t count_ms) {
     sendUserDatafloat6(1, attitude_current.roll, attitude_current.pitch, state_flyer.gyro_filter.z,
                        attitude_desired.roll, attitude_desired.pitch, rate_desired.yaw);
   }
+#endif
 }
 
 int addPeriodFunStablize(void) {
