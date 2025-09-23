@@ -1,0 +1,22 @@
+[
+ {
+  "name": "VCONSOLE",
+  "path": "/packages/tools/vconsole",
+  "ver": "latest"
+ },
+ {
+  "name": "CMSIS_CORE",
+  "path": "/packages/system/CMSIS/CMSIS-Core",
+  "ver": "latest"
+ },
+ {
+  "name": "STM32H7_HAL_DRIVER",
+  "path": "/packages/peripherals/hal-sdk/stm32/stm32h7_hal_driver",
+  "ver": "latest"
+ },
+ {
+  "name": "STM32H7_CMSIS_DRIVER",
+  "path": "/packages/peripherals/hal-sdk/stm32/stm32h7_cmsis_driver",
+  "ver": "latest"
+ }
+]

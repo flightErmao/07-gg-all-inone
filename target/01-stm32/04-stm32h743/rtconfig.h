@@ -144,9 +144,9 @@
 #define RT_USING_DEVICE_IPC
 #define RT_UNAMED_PIPE_NUMBER 64
 #define RT_USING_SERIAL
-#define RT_USING_SERIAL_V1
+#define RT_USING_SERIAL_V2
+#define RT_SERIAL_BUF_STRATEGY_OVERWRITE
 #define RT_SERIAL_USING_DMA
-#define RT_SERIAL_RB_BUFSZ 64
 #define RT_USING_PIN
 /* end of Device Drivers */
 
@@ -446,15 +446,28 @@
 
 /* 02 RC CONFIG */
 
+/* 01 SBUS CONFIG */
+
+/* end of 01 SBUS CONFIG */
+
+/* 02 CRSF CONFIG */
+
+/* end of 02 CRSF CONFIG */
+/* end of 02 RC CONFIG */
+
 /* 03 MOTOR CONFIG */
 
-/* 01 PWM CONFIG */
+/* 01 PWM CONFIG(Hollow slab) */
 
-/* end of 01 PWM CONFIG */
+/* end of 01 PWM CONFIG(Hollow slab) */
 
 /* 02 DSHOT CONFIG */
 
 /* end of 02 DSHOT CONFIG */
+
+/* 03 PWM CONFIG */
+
+/* end of 03 PWM CONFIG */
 /* end of 03 MOTOR CONFIG */
 
 /* 04 BARO CONFIG */
@@ -480,8 +493,9 @@
 #define HSE_VALUE 8000000
 #define BSP_USING_GPIO
 #define BSP_USING_UART
-#define BSP_STM32_UART_V1_TX_TIMEOUT 6000
 #define BSP_USING_UART1
+#define BSP_UART1_RX_BUFSIZE 256
+#define BSP_UART1_TX_BUFSIZE 64
 #define BSP_USING_USBD
 /* end of L3_PERIPHERAL_CONFIG */
 /* end of DriverFramework Config */
