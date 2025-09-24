@@ -9,13 +9,12 @@
  * 2025-09-24     gg           V3.0 Refactored for modular design
  */
 
-#ifdef DSHOT_CMD_MOTOR_EN
-
 #include <rtthread.h>
 #include "actuator.h"
 #include <stdlib.h>
-/* update delay for telemetry readback */
-#define MOTOR_CMD_UPDATE_DELAY_MS 50
+#include "rtconfig.h"
+
+#ifdef DSHOT_CMD_MOTOR_EN
 
 /* Helper: test mode control via actuator device */
 static rt_device_t find_dshot_device(void) { return rt_device_find(DSHOT_DEVICE_NAME); }
@@ -41,14 +40,7 @@ static void setMotorTestOverride(const uint16_t *values) {
     rt_kprintf("[cmdDshot] DShot device not found\n");
     return;
   }
-  for (uint8_t i = 0; i < DSHOT_MOTOR_NUMS; i++) {
-    rt_uint16_t mask = (rt_uint16_t)(1u << i);
-    rt_uint16_t val = values[i];
-    rt_size_t written = rt_device_write(dev, mask, &val, 1);
-    if (written != 1) {
-      rt_kprintf("[cmdDshot] write motor %d failed, ret=%d\n", i + 1, written);
-    }
-  }
+  rt_device_write(dev, 0x0F, values, 1);
 }
 
 /* Helper: convert 0.0-1.0 duty to DShot value 0-2047 */
@@ -93,14 +85,14 @@ static void cmdMotorTest(int argc, char **argv) {
 }
 
 /* Motors order test: run each motor sequentially */
-static void cmdMortorOrder(int argc, char **argv) {
+static void cmdMotorOrder(int argc, char **argv) {
   int duration_ms = 2000;
   float duty = 0.10f;
   if (argc == 3) {
     duty = atof(argv[1]);
     duration_ms = atoi(argv[2]);
   } else if (argc != 1) {
-    rt_kprintf("Usage: cmdMortorOrder [duty 0.0-1.0] [duration_ms]\n");
+    rt_kprintf("Usage: cmdMotorOrder [duty 0.0-1.0] [duration_ms]\n");
     return;
   }
 
@@ -125,6 +117,6 @@ static void cmdMortorOrder(int argc, char **argv) {
 }
 
 MSH_CMD_EXPORT_ALIAS(cmdMotorTest, cmdMotorTest, dshot single motor test command);
-MSH_CMD_EXPORT_ALIAS(cmdMortorOrder, cmdMortorOrder, dshot motor sequence test command);
+MSH_CMD_EXPORT_ALIAS(cmdMotorOrder, cmdMotorOrder, dshot motor sequence test command);
 
 #endif  // CONFIG_DSHOT_CMD_MOTOR_EN

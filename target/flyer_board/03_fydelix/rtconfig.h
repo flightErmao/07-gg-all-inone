@@ -211,6 +211,7 @@
 
 /* Interprocess Communication (IPC) */
 
+
 /* Socket is in the 'Network' category */
 
 /* end of Interprocess Communication (IPC) */
@@ -242,6 +243,7 @@
 /* RT-Thread online packages */
 
 /* IoT - internet of things */
+
 
 /* Wi-Fi */
 
@@ -402,6 +404,7 @@
 
 /* Arduino libraries */
 
+
 /* Projects and Demos */
 
 /* end of Projects and Demos */
@@ -532,8 +535,8 @@
 #define DSHOT_PROTOCOL_TYPE "dshot_600"
 #define DSHOT_MOTOR_NUMS 4
 #define DSHOT_GPIO_PORT "GPIOB"
-#define DSHOT_GPIO_PIN_MOTOR1 6
-#define DSHOT_GPIO_PIN_MOTOR2 7
+#define DSHOT_GPIO_PIN_MOTOR1 7
+#define DSHOT_GPIO_PIN_MOTOR2 6
 #define DSHOT_GPIO_PIN_MOTOR3 8
 #define DSHOT_GPIO_PIN_MOTOR4 9
 #define DSHOT_TIMER_SELECT 4
