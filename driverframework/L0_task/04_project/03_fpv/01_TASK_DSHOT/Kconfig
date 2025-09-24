@@ -1,0 +1,15 @@
+menuconfig PROJECT_MINIFLY_TASK_DSHOT_EN
+    bool "ENABLE: PROJECT_MINIFLY_TASK_DSHOT_EN"
+    default n
+    help
+        Enable DShot task which periodically publishes motor RPM command via uMCN
+        and writes mapped values to DShot device.
+    if PROJECT_MINIFLY_TASK_DSHOT_EN
+        config PROJECT_MINIFLY_TASK_DSHOT_TIMER_HZ
+            int "DShot task timer frequency (Hz)"
+            default 500
+            help
+                Periodic frequency of DShot task. Task waits timer event, then
+                copies the latest uMCN command and writes to DShot device.
+    endif
+

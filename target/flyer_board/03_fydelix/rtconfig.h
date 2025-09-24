@@ -211,7 +211,6 @@
 
 /* Interprocess Communication (IPC) */
 
-
 /* Socket is in the 'Network' category */
 
 /* end of Interprocess Communication (IPC) */
@@ -243,7 +242,6 @@
 /* RT-Thread online packages */
 
 /* IoT - internet of things */
-
 
 /* Wi-Fi */
 
@@ -404,7 +402,6 @@
 
 /* Arduino libraries */
 
-
 /* Projects and Demos */
 
 /* end of Projects and Demos */
@@ -467,8 +464,10 @@
 #define PROJECT_MINIFLY_TASK_STABLIZE_LOG_FLYER_ANGLE
 #define PROJECT_MINIFLY_TASK05_PARAM_EN
 #define PROJECT_FMT_TASK01_RC_EN
-#define PROJECT_FMT_TASK01_RC_DEVICE_DEFAULT "rc_sbus"
+#define PROJECT_FMT_TASK01_RC_DEVICE_DEFAULT "sbus"
 #define PROJECT_FMT_TASK01_RC_ATKP_LOG_EN
+#define PROJECT_MINIFLY_TASK_DSHOT_EN
+#define PROJECT_MINIFLY_TASK_DSHOT_TIMER_HZ 500
 /* end of L0_TASK_CONFIG */
 
 /* L1_MIDDLEWARE_CONFIG */
@@ -528,6 +527,18 @@
 
 /* 02 DSHOT CONFIG */
 
+#define L2_DEVICE_03_MOTOR_02_DSHOT_EN
+#define DSHOT_DEVICE_NAME "dshot"
+#define DSHOT_PROTOCOL_TYPE "dshot_600"
+#define DSHOT_MOTOR_NUMS 4
+#define DSHOT_GPIO_PORT "GPIOB"
+#define DSHOT_GPIO_PIN_MOTOR1 6
+#define DSHOT_GPIO_PIN_MOTOR2 7
+#define DSHOT_GPIO_PIN_MOTOR3 8
+#define DSHOT_GPIO_PIN_MOTOR4 9
+#define DSHOT_TIMER_SELECT 4
+#define DSHOT_BI_DIRECTIONAL
+#define DSHOT_CMD_MOTOR_EN
 /* end of 02 DSHOT CONFIG */
 
 /* 03 PWM CONFIG */

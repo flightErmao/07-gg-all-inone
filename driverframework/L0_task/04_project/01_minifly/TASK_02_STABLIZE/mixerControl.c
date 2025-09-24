@@ -5,6 +5,10 @@
 #include <rtthread.h>
 #include <rtdevice.h>
 
+#ifdef PROJECT_MINIFLY_TASK_DSHOT_EN
+#include "taskDshot.h"
+#endif
+
 #ifdef L2_DEVICE_03_MOTOR_01_PWM_EN
 #include "motorsPwm.h"
 #endif
@@ -133,7 +137,11 @@ void mixerControl(control_t *control) {
   motorPWM.m3 = limitThrust(control->thrust + control->roll + control->pitch + yawValue);
   motorPWM.m4 = limitThrust(control->thrust + control->roll - control->pitch - yawValue);
 
-#ifdef L2_DEVICE_03_MOTOR_01_PWM_EN
+#ifdef PROJECT_MINIFLY_TASK_DSHOT_EN
+  /* publish raw 0~65535 motor values to DShot task via uMCN */
+  task_dshot_publish_raw((uint16_t)motorPWM.m1, (uint16_t)motorPWM.m2, (uint16_t)motorPWM.m3, (uint16_t)motorPWM.m4);
+
+#elif defined(L2_DEVICE_03_MOTOR_01_PWM_EN)
   motorsSetRatio(MOTOR_M1, motorPWM.m1);
   motorsSetRatio(MOTOR_M2, motorPWM.m2);
   motorsSetRatio(MOTOR_M3, motorPWM.m3);

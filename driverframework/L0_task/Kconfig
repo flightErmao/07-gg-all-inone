@@ -17,4 +17,6 @@ menu "L0_TASK_CONFIG"
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/01_minifly/TASK_06_RC/Kconfig"
 
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/02_fmt/01_TASK_RC/Kconfig"
+
+    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/03_fpv/01_TASK_DSHOT/Kconfig"
 endmenu
