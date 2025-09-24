@@ -6,22 +6,22 @@
 	url = https://github.com/Tool-01-middleware/env-windows.git
 [submodule "driverframework/L1_middleWare/03_package/vconsole-latest"]
 	path = driverframework/L1_middleWare/03_package/vconsole-latest
-	url = git@github.com:Tool-01-middleware/vconsole.git
+	url = https://github.com/Tool-01-middleware/vconsole.git
 [submodule "driverframework/L1_middleWare/03_package/uMCN-latest"]
 	path = driverframework/L1_middleWare/03_package/uMCN-latest
-	url = git@github.com:Tool-01-middleware/uMCN.git
+	url = https://github.com/Tool-01-middleware/uMCN.git
 [submodule "driverframework/L1_middleWare/03_package/CMSIS-Core-latest"]
 	path = driverframework/L1_middleWare/03_package/CMSIS-Core-latest
-	url = git@github.com:Tool-01-middleware/CMSIS-Core.git
+	url = https://github.com/Tool-01-middleware/CMSIS-Core.git
 [submodule "driverframework/L1_middleWare/03_package/stm32f4_hal_driver-latest"]
 	path = driverframework/L1_middleWare/03_package/stm32f4_hal_driver-latest
-	url = git@github.com:Tool-01-middleware/stm32f4_hal_driver.git
+	url = https://github.com/Tool-01-middleware/stm32f4_hal_driver.git
 [submodule "driverframework/L1_middleWare/03_package/stm32f4_cmsis_driver-latest"]
 	path = driverframework/L1_middleWare/03_package/stm32f4_cmsis_driver-latest
-	url = git@github.com:Tool-01-middleware/stm32f4_cmsis_driver.git
+	url = https://github.com/Tool-01-middleware/stm32f4_cmsis_driver.git
 [submodule "driverframework/L1_middleWare/03_package/at32f435_437_cmsis_driver-latest"]
 	path = driverframework/L1_middleWare/03_package/at32f435_437_cmsis_driver-latest
-	url = git@github.com:Tool-01-middleware/AT32F435_437_CMSIS_Driver.git
+	url = https://github.com/Tool-01-middleware/AT32F435_437_CMSIS_Driver.git
 [submodule "driverframework/L1_middleWare/03_package/at32f435_437_hal_driver-latest"]
 	path = driverframework/L1_middleWare/03_package/at32f435_437_hal_driver-latest
-	url = git@github.com:Tool-01-middleware/AT32F435_437_HAL_Driver.git
+	url = https://github.com/Tool-01-middleware/AT32F435_437_HAL_Driver.git
