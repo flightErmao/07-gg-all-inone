@@ -32,3 +32,14 @@ git update-index --assume-unchanged .vscode/launch.json
 
 3.4 恢复上传
 git update-index --no-assume-unchanged .vscode/launch.json
+
+4. 关于子模块
+# 方案B：强制把两个路径注册为子模块并拉取
+rm -rf driverframework/L1_middleWare/03_package/at32f435_437_cmsis_driver-latest
+rm -rf driverframework/L1_middleWare/03_package/at32f435_437_hal_driver-latest
+
+git submodule add -f https://github.com/Tool-01-middleware/AT32F435_437_CMSIS_Driver.git driverframework/L1_middleWare/03_package/at32f435_437_cmsis_driver-latest
+git submodule add -f https://github.com/Tool-01-middleware/AT32F435_437_HAL_Driver.git   driverframework/L1_middleWare/03_package/at32f435_437_hal_driver-latest
+
+git submodule sync --recursive
+git submodule update --init --recursive --jobs 8 --depth 1
