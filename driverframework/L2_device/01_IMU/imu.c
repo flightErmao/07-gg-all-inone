@@ -31,6 +31,16 @@ static rt_ssize_t hal_imu_read(struct rt_device* dev, rt_off_t pos, void* buffer
   return rb;
 }
 
+static rt_err_t hal_imu_control(struct rt_device* dev, int cmd, void* args) {
+  imu_dev_t imu;
+  RT_ASSERT(dev != RT_NULL);
+  imu = (imu_dev_t)dev;
+  if (imu->ops->imu_control) {
+    return imu->ops->imu_control(imu, cmd, args);
+  }
+  return -RT_ENOSYS;
+}
+
 rt_err_t hal_imu_register(imu_dev_t imu, const char* name, rt_uint32_t flag, void* data) {
   struct rt_device* device;
 
@@ -49,7 +59,7 @@ rt_err_t hal_imu_register(imu_dev_t imu, const char* name, rt_uint32_t flag, voi
   device->close = RT_NULL;
   device->read = hal_imu_read;
   device->write = RT_NULL;
-  device->control = RT_NULL;
+  device->control = hal_imu_control;
   device->user_data = data;
 
   /* register a imu device */

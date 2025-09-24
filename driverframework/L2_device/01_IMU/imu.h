@@ -75,13 +75,10 @@ struct imu_ops {
    * @param cfg imu configuration
    */
   rt_err_t (*imu_config)(imu_dev_t dev, const imu_configure_t* cfg);
-  // /**
-  //  * @brief imu control function (optional) (TODO: trigger CRT and store gain to eeprom?)
-  //  * @param dev imu device
-  //  * @param cmd operation command
-  //  * @param arg command argument (optional)
-  // */
-  // rt_err_t (*imu_control)(imu_dev_t dev, int cmd, void* arg);
+  /**
+   * @brief imu control function (optional) (e.g. trigger calibration)
+   */
+  rt_err_t (*imu_control)(imu_dev_t dev, int cmd, void* arg);
   /**
    * @brief imu read data function
    * @param dev imu device
@@ -91,6 +88,10 @@ struct imu_ops {
    * @param size read data size
    */
   int8_t (*imu_read)(imu_dev_t dev, rt_off_t pos, void* data, rt_size_t size);
+};
+
+enum imu_cmds {
+  IMU_CMD_CALIBRATE = 1,
 };
 
 rt_err_t hal_imu_register(imu_dev_t imu, const char* name, rt_uint32_t flag, void* data);

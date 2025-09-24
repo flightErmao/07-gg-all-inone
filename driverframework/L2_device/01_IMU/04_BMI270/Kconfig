@@ -1,21 +1,33 @@
-config BSP_USING_MPU6000
-    bool "Enable MPU6000 IMU Sensor"
+config BSP_USING_BMI270
+    bool "Enable BMI270 IMU Sensor"
     default n
     select BSP_USING_SPI
     help
-        Enable MPU6000 IMU sensor support
+        Enable BMI270 IMU sensor support
         
-    if BSP_USING_MPU6000
-        config SENSOR_NAME_MPU6000
-            string "IMU MPU6000 NAME FOR TASK FIND"
-            default "mpu6000"
-        config SENSOR_SPI_NAME_MPU6000
-            string "IMU MPU6000 SPI NAME"
+    if BSP_USING_BMI270
+        config SENSOR_NAME_BMI270
+            string "IMU BMI270 NAME FOR TASK FIND"
+            default "bmi270"
+            
+        config SENSOR_SPI_NAME_BMI270
+            string "IMU BMI270 SPI NAME"
             default "spi1"
-        config SENSOR_MPU6000_SPI_CS_PIN
-            string "IMU MPU6000 SPI CS PIN"
-            default "GET_PIN(A, 4)"
-        config SENSOR_MPU6000_DEBUGPIN_EN
+
+        config SENSOR_SPI_SLAVE_NAME_BMI270
+            string "IMU BMI270 SPI SLAVE NAME"
+            default "spi10"
+
+        config SENSOR_BMI270_SPI_MAX_HZ
+            int "IMU BMI270 SPI MAX CLOCK (Hz)"
+            default 10000000
+            range 100000 20000000
+
+        config SENSOR_BMI270_SPI_CS_PIN
+            string "IMU BMI270 SPI CS PIN"
+            default "PA4"
+
+        config SENSOR_BMI270_DEBUGPIN_EN
             bool "ENABLE: DEBUG PIN"
             default n
             help
