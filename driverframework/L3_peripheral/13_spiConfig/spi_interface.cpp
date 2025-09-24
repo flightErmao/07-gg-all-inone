@@ -13,9 +13,22 @@ bool SpiInterface::init(const char *spi_bus_name, const char *spi_slave_name, co
 
   rt_base_t cs_pin = parse_pin_name_from_config(cs_pin_name);
   rt_pin_mode(cs_pin, PIN_MODE_OUTPUT);
+  
+#ifdef SOC_FAMILY_AT32
+  void *cs_gpio_x;
+  uint16_t cs_gpio_pin;
+  get_gpio_from_pin_index(cs_pin, &cs_gpio_x, &cs_gpio_pin);
+  
+  if (rt_hw_spi_device_attach(spi_bus_name, spi_slave_name, (gpio_type*)cs_gpio_x, cs_gpio_pin) != RT_EOK) {
+    return false;
+  }
+#elif defined(SOC_FAMILY_STM32)
   if (rt_hw_spi_device_attach(spi_bus_name, spi_slave_name, cs_pin) != RT_EOK) {
     return false;
   }
+#else
+  #error "Unsupported SOC family"
+#endif
 
   rt_device_t dev = rt_device_find(spi_slave_name);
   if (dev == RT_NULL) {
@@ -103,4 +116,17 @@ int SpiInterface::read_multi(uint8_t reg, uint8_t *buff, uint8_t len) {
   if (buff == RT_NULL || len == 0) return -1;
   uint8_t cmd = (uint8_t)(reg | 0x80u);
   return spi_read_reg_wrapper(&cmd, 1, buff, len);
+}
+
+int SpiInterface::readMultiReg16(uint8_t reg, uint8_t *buff, uint8_t len) {
+  if (buff == RT_NULL || len == 0) return -1;
+  uint8_t cmd[2] = {0};
+  cmd[0] = (uint8_t)(reg | 0x80u);
+  return spi_read_reg_wrapper(cmd, 2, buff, len);
+}
+
+int SpiInterface::writeMultiReg8(uint8_t reg, uint8_t *buff, uint16_t len) {
+  if (buff == RT_NULL || len == 0) return -1;
+  uint8_t cmd = reg;
+  return spi_write_reg_wrapper(&cmd, 1, buff, len);
 }

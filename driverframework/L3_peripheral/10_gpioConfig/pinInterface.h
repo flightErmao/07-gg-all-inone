@@ -14,6 +14,16 @@ extern "C" {
  */
 rt_base_t parse_pin_name_from_config(const char *pin_name);
 
+#ifdef SOC_FAMILY_AT32
+/**
+ * @brief 从 rt_base_t 引脚编号中提取 GPIO 端口和引脚号 (AT32)
+ * @param pin_index 引脚编号
+ * @param gpio_x GPIO 端口指针
+ * @param gpio_pin GPIO 引脚位
+ */
+void get_gpio_from_pin_index(rt_base_t pin_index, void **gpio_x, uint16_t *gpio_pin);
+#endif
+
 #ifdef __cplusplus
 }
 #endif
