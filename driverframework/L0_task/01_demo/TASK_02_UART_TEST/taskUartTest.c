@@ -11,10 +11,10 @@
 #define THREAD_STACK_SIZE 2048
 #define THREAD_TIMESLICE 5
 
-struct uart_rx_msg {
-  rt_device_t dev;
-  rt_size_t size;
-};
+// struct uart_rx_msg {
+//   rt_device_t dev;
+//   rt_size_t size;
+// };
 
 static rt_device_t uart_test_dev = RT_NULL;
 static struct rt_messagequeue rx_mq;
