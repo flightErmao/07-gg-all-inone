@@ -150,6 +150,22 @@
             "openOCDLaunchCommands": [
                 "adapter_khz 4000"
             ]
+        },
+        {
+            "name": "flyer_03_fydelix",
+            "type": "cortex-debug",
+            "request": "launch",
+            "cwd": "${workspaceRoot}",
+            "executable": "target/flyer_board/03_fydelix/rt-thread.elf",
+            "serverpath": "${env:JLINK_SERVER}",
+            "servertype": "jlink",
+            "device": "AT32F437VMT7",
+            "interface": "swd",
+            "armToolchainPath": "${workspaceRoot}/tools/toolchain/arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi/bin",        
+            "showDevDebugOutput": "raw",
+            "openOCDLaunchCommands": [
+                "adapter_khz 4000"
+            ]
         }
     ]
 }
