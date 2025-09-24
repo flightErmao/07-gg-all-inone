@@ -54,6 +54,13 @@ SECTIONS
 
         . = ALIGN(4);
 
+        /* section information for mlog. */
+        . = ALIGN(4);
+        __fmt_mlog_start = .;
+        KEEP(*(MlogTab))
+        __fmt_mlog_end = .;
+        . = ALIGN(4);
+
         _etext = .;
     } > ROM = 0
 

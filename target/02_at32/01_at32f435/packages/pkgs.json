@@ -1,2 +1,17 @@
 [
+ {
+  "name": "CMSIS_CORE",
+  "path": "/packages/system/CMSIS/CMSIS-Core",
+  "ver": "latest"
+ },
+ {
+  "name": "AT32F435_437_HAL_DRIVER",
+  "path": "/packages/peripherals/hal-sdk/at32/at32f435_437_hal_driver",
+  "ver": "latest"
+ },
+ {
+  "name": "AT32F435_437_CMSIS_DRIVER",
+  "path": "/packages/peripherals/hal-sdk/at32/at32f435_437_cmsis_driver",
+  "ver": "latest"
+ }
 ]

@@ -24,11 +24,11 @@ int main(void)
 {
     rt_uint32_t speed = 200;
     /* set led2 pin mode to output */
-    rt_pin_mode(LED2_PIN, PIN_MODE_OUTPUT);
-    /* set led3 pin mode to output */
-    rt_pin_mode(LED3_PIN, PIN_MODE_OUTPUT);
-    /* set led4 pin mode to output */
-    rt_pin_mode(LED4_PIN, PIN_MODE_OUTPUT);
+    // rt_pin_mode(LED2_PIN, PIN_MODE_OUTPUT);
+    // /* set led3 pin mode to output */
+    // rt_pin_mode(LED3_PIN, PIN_MODE_OUTPUT);
+    // /* set led4 pin mode to output */
+    // rt_pin_mode(LED4_PIN, PIN_MODE_OUTPUT);
 
     while (1)
     {
