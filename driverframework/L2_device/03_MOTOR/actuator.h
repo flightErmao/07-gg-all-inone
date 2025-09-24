@@ -26,6 +26,10 @@ extern "C" {
 #define ACT_CMD_CHANNEL_ENABLE  0x20
 #define ACT_CMD_CHANNEL_DISABLE 0x21
 #define ACT_CMD_SET_PROTOCOL    0x22
+/* Added for actuator test mode and direction control */
+#define ACT_CMD_TEST_ENABLE     0x23
+#define ACT_CMD_TEST_DISABLE    0x24
+#define ACT_CMD_CHANGE_DIR      0x25
 
 enum {
     ACT_PROTOCOL_PWM = 1,
@@ -37,8 +41,8 @@ struct pwm_drv_configure {
 };
 
 struct dshot_drv_configure {
-    rt_uint16_t speed;   /* 600, 300, 150 */
-    rt_bool_t telem_req; /* telemetry request */
+  rt_uint16_t dshot_protol; /* 600, 300, 150 */
+  rt_bool_t bi_dshot;       /* Bidirectional or Unidirectional */
 };
 
 struct actuator_configure {
@@ -52,9 +56,10 @@ struct actuator_device {
     struct rt_device parent;
     const struct actuator_ops* ops;
     struct actuator_configure config;
-    rt_uint16_t chan_mask; /* channel mask */
-    rt_uint16_t range[2];  /* [min, max] value */
-    rt_bool_t suspend;     /* suspend device */
+    rt_uint16_t chan_mask;           /* channel mask */
+    rt_uint16_t range[2];            /* [min, max] value */
+    rt_bool_t suspend;               /* suspend device */
+    rt_bool_t direction_changing[4]; /* direction change in progress for each motor */
 };
 typedef struct actuator_device* actuator_dev_t;
 

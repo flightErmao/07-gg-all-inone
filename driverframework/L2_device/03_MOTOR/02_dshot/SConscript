@@ -1,13 +1,18 @@
 from building import *
+import os
 
 cwd = GetCurrentDir()
-
 path = []
 src = []
 
-src = Glob("./*.c")
-path = [cwd]
+src = Glob("./src/*.c")
+path = [cwd, os.path.join(cwd, "inc")]
 
-group = DefineGroup("L2_DEVICE_03_MOTOR_02_DSHOT_EN", src, depend=["L2_DEVICE_03_MOTOR_02_DSHOT_EN"], CPPPATH=path)
+group = DefineGroup(
+    "L2_DEVICE_03_MOTOR_02_DSHOT_EN",
+    src,
+    depend=["L2_DEVICE_03_MOTOR_02_DSHOT_EN"],
+    CPPPATH=path,
+)
 
 Return("group")
