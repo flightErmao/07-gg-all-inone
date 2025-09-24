@@ -112,7 +112,7 @@ int SpiInterface::write_reg(uint8_t reg, uint8_t val) {
   return spi_write_reg_wrapper(&cmd, 1, &val, 1);
 }
 
-int SpiInterface::read_multi(uint8_t reg, uint8_t *buff, uint8_t len) {
+int SpiInterface::readMultiReg8(uint8_t reg, uint8_t *buff, uint8_t len) {
   if (buff == RT_NULL || len == 0) return -1;
   uint8_t cmd = (uint8_t)(reg | 0x80u);
   return spi_read_reg_wrapper(&cmd, 1, buff, len);

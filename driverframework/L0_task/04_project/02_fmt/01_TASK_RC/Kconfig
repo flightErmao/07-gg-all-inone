@@ -8,9 +8,9 @@ menuconfig PROJECT_FMT_TASK01_RC_EN
     if PROJECT_FMT_TASK01_RC_EN
         config PROJECT_FMT_TASK01_RC_DEVICE_DEFAULT
             string "RC device name"
-            default "rc_sbus"
+            default "sbus"
             help
-                The RC device name to use (e.g. rc_sbus, rc_crsf).
+                The RC device name to use (e.g. sbus, crsf).
 
         config PROJECT_FMT_TASK01_RC_ATKP_LOG_EN
             bool "ENABLE: PROJECT_FMT_TASK01_RC_ATKP_LOG_EN"

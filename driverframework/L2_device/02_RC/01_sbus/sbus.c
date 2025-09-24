@@ -108,7 +108,7 @@ static rt_err_t sbus_init_uart(const char* uart_name) {
 }
 
 static rt_err_t sbus_register_rc(void) {
-  rt_err_t result = hal_rc_register(&sbus_rc_dev, "rc_sbus", RT_DEVICE_FLAG_RDWR, RT_NULL);
+  rt_err_t result = hal_rc_register(&sbus_rc_dev, "sbus", RT_DEVICE_FLAG_RDWR, RT_NULL);
   if (result != RT_EOK) {
     rt_kprintf("[SBUS] rc register failed\n");
     return result;

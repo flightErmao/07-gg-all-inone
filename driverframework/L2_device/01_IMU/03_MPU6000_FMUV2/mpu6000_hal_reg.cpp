@@ -14,7 +14,7 @@ static SpiInterface g_spi_;
 
 static int write_reg_wrap(uint8_t reg, uint8_t val) { return g_spi_.write_reg(reg, val); }
 
-static int read_multi_wrap(uint8_t reg, uint8_t *buff, uint8_t len) { return g_spi_.read_multi(reg, buff, len); }
+static int read_multi_wrap(uint8_t reg, uint8_t *buff, uint8_t len) { return g_spi_.readMultiReg8(reg, buff, len); }
 
 static void delay_ms_wrap(unsigned int ms) { rt_thread_mdelay(ms); }
 
@@ -33,7 +33,8 @@ const static struct imu_ops mpu6000_dev = {
 };
 
 static struct imu_device imu_dev = {
-    .ops = &mpu6000_dev, .config = {0},  // 初始化为空配置
+    .ops = &mpu6000_dev,
+    .config = {0},
 };
 
 static void setImuParam(void){

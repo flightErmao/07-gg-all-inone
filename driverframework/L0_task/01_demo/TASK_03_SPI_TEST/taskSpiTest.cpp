@@ -29,9 +29,7 @@ static int write_reg_wrap(uint8_t reg, uint8_t val) { return g_spi_.write_reg(re
 
 static void delay_ms_wrap(unsigned int ms) { rt_thread_mdelay(ms); }
 
-static int read_multi_wrap(uint8_t reg, uint8_t *buff, uint8_t len) { 
-    return g_spi_.read_multi(reg, buff, len); 
-}
+static int read_multi_wrap(uint8_t reg, uint8_t *buff, uint8_t len) { return g_spi_.readMultiReg8(reg, buff, len); }
 
 /**
  * @brief Test accelerometer range configuration

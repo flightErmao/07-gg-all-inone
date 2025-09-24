@@ -19,11 +19,9 @@ class SpiInterface {
   bool init(const char *spi_bus_name, const char *spi_slave_name, const char *cs_pin_name);
   bool configure(rt_uint16_t mode, rt_uint32_t max_hz);
 
-  // 简化接口，适配 MPU6000 的读写函数签名（返回0成功，非0失败）
   int write_reg(uint8_t reg, uint8_t val);
-  int read_multi(uint8_t reg, uint8_t *buff, uint8_t len);
+  int readMultiReg8(uint8_t reg, uint8_t *buff, uint8_t len);
 
-  // 扩展接口：读多寄存器（16位命令头）与多寄存器写入（8位）
   int readMultiReg16(uint8_t reg, uint8_t *buff, uint8_t len);
   int writeMultiReg8(uint8_t reg, uint8_t *buff, uint16_t len);
 
