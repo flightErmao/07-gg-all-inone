@@ -518,14 +518,13 @@
 
 /* 01 SBUS CONFIG */
 
-#define RC_USING_SBUS
-#define RC_SBUS_UART_NAME "uart3"
-#define RC_SBUS_BAUDRATE 100000
-#define RC_SBUS_INVERTED
 /* end of 01 SBUS CONFIG */
 
 /* 02 CRSF CONFIG */
 
+#define RC_USING_CRSF
+#define RC_CRSF_UART_NAME "uart3"
+#define RC_CRSF_BAUDRATE 420000
 /* end of 02 CRSF CONFIG */
 /* end of 02 RC CONFIG */
 

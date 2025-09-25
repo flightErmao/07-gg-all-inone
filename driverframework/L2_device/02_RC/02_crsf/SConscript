@@ -1,14 +1,9 @@
 from building import *
 
 cwd = GetCurrentDir()
-path = []
-src = []
+src = Glob("./src/*.c")
+path = [cwd, os.path.join(cwd, "inc")]
 
-src = Glob("./*.c")
-src += Glob("./*.cpp")
-path = [cwd]
-
-# 定义编译组
 group = DefineGroup("RC_USING_CRSF", src, depend=["RC_USING_CRSF"], CPPPATH=path)
 
 Return("group")
