@@ -18,6 +18,12 @@ config RC_USING_CRSF
             help
                 CRSF uses 420000 baud, 8N1.
 
+        config RC_CRSF_AUTO_START
+            bool "Auto start CRSF thread"
+            default y
+            help
+                When enabled, use INIT_COMPONENT_EXPORT to auto start CRSF init/thread like SBUS.
+
         config RC_CRSF_DEBUGPIN_EN
             bool "ENABLE: RC_CRSF_DEBUGPIN_EN"
             default n

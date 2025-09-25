@@ -6,7 +6,7 @@ menuconfig L3_PERIPHERAL_02_NVIC_CONFIG_EN
 
     if L3_PERIPHERAL_02_NVIC_CONFIG_EN
         config L3_PERIPHERAL_02_NVIC_STM32_PRIORITY_GROUP
-            int "STM32 Priority Group (0-4)"
+            int "MCU Priority Group (0-4)"
             range 0 4
             default 0
             help

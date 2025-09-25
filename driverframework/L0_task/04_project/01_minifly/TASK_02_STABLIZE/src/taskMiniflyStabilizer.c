@@ -29,8 +29,8 @@ static state_t state_;
 static setpoint_t setpoint_;
 static control_t contorl_;
 
-MCN_DECLARE(flyer_state);
-MCN_DEFINE(flyer_state, sizeof(state_t));
+MCN_DECLARE(state);
+MCN_DEFINE(state, sizeof(state_t));
 static McnNode_t state_sub_node = RT_NULL;
 
 // TO DO : should check if sensors are calibrated
@@ -63,14 +63,14 @@ static int sensor_state_echo(void* parameter) {
 }
 
 static void mcnTopicInit(void) {
-  rt_err_t result = mcn_advertise(MCN_HUB(flyer_state), sensor_state_echo);
+  rt_err_t result = mcn_advertise(MCN_HUB(state), sensor_state_echo);
   if (result != RT_EOK) {
-    rt_kprintf("Failed to advertise flyer_state topic: %d\n", result);
+    rt_kprintf("Failed to advertise state topic: %d\n", result);
   }
 
-  state_sub_node = mcn_subscribe(MCN_HUB(flyer_state), RT_NULL, RT_NULL);
+  state_sub_node = mcn_subscribe(MCN_HUB(state), RT_NULL, RT_NULL);
   if (state_sub_node == RT_NULL) {
-    rt_kprintf("Failed to subscribe to flyer_state topic\n");
+    rt_kprintf("Failed to subscribe to state topic\n");
   }
 }
 
@@ -125,7 +125,7 @@ static void stabilizer_minifly_thread_entry(void* parameter) {
       sensorsAcquire(&sensorData);
       imuUpdate(sensorData.acc_filter, sensorData.gyro_filter, &state_, ATTITUDE_ESTIMAT_DT);
       state_.attitude.timestamp = rt_tick_get();
-      mcn_publish(MCN_HUB(flyer_state), &state_);
+      mcn_publish(MCN_HUB(state), &state_);
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
       DEBUG_PIN_DEBUG3_LOW();
 #endif
@@ -157,7 +157,7 @@ void stabilizerGetState(state_t* state) {
   if (!state) return;
   if (state_sub_node != NULL) {
     // if (mcn_poll(state_sub_node)) {
-    mcn_copy(MCN_HUB(flyer_state), state_sub_node, state);
+    mcn_copy(MCN_HUB(state), state_sub_node, state);
     // }
   }
 }

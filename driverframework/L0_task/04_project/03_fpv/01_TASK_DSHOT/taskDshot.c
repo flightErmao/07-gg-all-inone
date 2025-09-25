@@ -5,8 +5,13 @@
 #include "maths.h"
 #include "rtconfig.h"
 #include "floatConvert.h"
+
+#ifndef DSHOT_DEVICE_NAME
+#define DSHOT_DEVICE_NAME "dshot"
+#endif
+
 /* task definition */
-#define THREAD_PRIORITY 4
+#define THREAD_PRIORITY 6
 #define THREAD_STACK_SIZE 2048
 #define THREAD_TIMESLICE 5
 
@@ -20,7 +25,7 @@ static inline uint16_t map65535_to_dshot(uint16_t v) {
 }
 
 /* mcn topic */
-MCN_DEFINE(dshot_cmd, sizeof(dshot_cmd_bus_t));
+MCN_DEFINE(dshot, sizeof(dshot_cmd_bus_t));
 
 static struct rt_thread task_tid_dshot;
 static rt_uint8_t task_stack_dshot[THREAD_STACK_SIZE];
@@ -43,7 +48,7 @@ void task_dshot_publish_raw(uint16_t m1, uint16_t m2, uint16_t m3, uint16_t m4) 
   msg.motor_val[2] = m3;
   msg.motor_val[3] = m4;
   msg.timestamp = rt_tick_get();
-  mcn_publish(MCN_HUB(dshot_cmd), &msg);
+  mcn_publish(MCN_HUB(dshot), &msg);
 }
 
 static int dshot_cmd_echo(void *parameter) {
@@ -74,8 +79,8 @@ static void device_init(void) {
 }
 
 static void rtos_init(void) {
-  mcn_advertise(MCN_HUB(dshot_cmd), dshot_cmd_echo);
-  dshot_cmd_sub = mcn_subscribe(MCN_HUB(dshot_cmd), RT_NULL, RT_NULL);
+  mcn_advertise(MCN_HUB(dshot), dshot_cmd_echo);
+  dshot_cmd_sub = mcn_subscribe(MCN_HUB(dshot), RT_NULL, RT_NULL);
 
   rt_event_init(&dshot_event, "dshot_evt", RT_IPC_FLAG_PRIO);
 
@@ -105,10 +110,10 @@ static void task_dshot_entry(void *parameter) {
 
   while (1) {
     rt_uint32_t rec = 0;
-    rt_event_recv(&dshot_event, 1u, RT_EVENT_FLAG_AND | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &rec);
+    rt_event_recv(&dshot_event, 1u, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &rec);
 
-    mcn_copy(MCN_HUB(dshot_cmd), dshot_cmd_sub, &latest);
-    
+    mcn_copy(MCN_HUB(dshot), dshot_cmd_sub, &latest);
+
     if (dshot_dev) {
       uint16_t mapped[4];
       mapped[0] = map65535_to_dshot(latest.motor_val[0]);
@@ -117,10 +122,7 @@ static void task_dshot_entry(void *parameter) {
       mapped[3] = map65535_to_dshot(latest.motor_val[3]);
 
       /* write all 4 channels; DShot driver expects size == motor count */
-      rt_size_t written = rt_device_write(dshot_dev, 0x0F, mapped, 4 * sizeof(uint16_t));
-      if (written != 4 * sizeof(uint16_t)) {
-        // optional: print occasionally to avoid flooding
-      }
+      rt_device_write(dshot_dev, 0x0F, mapped, 4);
     }
   }
 }

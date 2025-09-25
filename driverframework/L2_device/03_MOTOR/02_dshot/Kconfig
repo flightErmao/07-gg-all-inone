@@ -36,14 +36,14 @@ if L2_DEVICE_03_MOTOR_02_DSHOT_EN
     config DSHOT_GPIO_PIN_MOTOR1
         int "DShot Motor 1 GPIO Pin"
         range 0 15
-        default 6
+        default 7
         help
             GPIO pin number for Motor 1
 
     config DSHOT_GPIO_PIN_MOTOR2
         int "DShot Motor 2 GPIO Pin"
         range 0 15
-        default 7
+        default 6
         help
             GPIO pin number for Motor 2
 
@@ -90,7 +90,7 @@ if L2_DEVICE_03_MOTOR_02_DSHOT_EN
 
     config DSHOT_CMD_MOTOR_EN
         bool "Enable DShot Motor Command Interface"
-        default n
+        default y
         help
             Enable DShot motor command interface for testing and control
             This adds 'motor' command to MSH shell

@@ -174,29 +174,29 @@ void motorInit(void) {
 #endif
 }
 
-static void cmdMotorEnable(int argc, char **argv) {
-  if (argc == 1) {
-    /* No arguments - show current status */
-    rt_kprintf("Motor control is currently %s\n", motorSetEnable ? "DISABLED" : "ENABLED");
-    rt_kprintf("Usage: cmdMotorEnable [enable|disable]\n");
-    return;
-  }
+// static void cmdMotorEnable(int argc, char **argv) {
+//   if (argc == 1) {
+//     /* No arguments - show current status */
+//     rt_kprintf("Motor control is currently %s\n", motorSetEnable ? "DISABLED" : "ENABLED");
+//     rt_kprintf("Usage: cmdMotorEnable [enable|disable]\n");
+//     return;
+//   }
 
-  if (argc == 2) {
-    if (strcmp(argv[1], "enable") == 0) {
-      motorSetEnable = false; /* false means motor control is enabled */
-      rt_kprintf("Motor control ENABLED , Motor test can't run\n");
-    } else if (strcmp(argv[1], "disable") == 0) {
-      motorSetEnable = true; /* true means motor control is disabled */
-      rt_kprintf("Motor control DISABLED , Motor test can run!\n");
-    } else {
-      rt_kprintf("Invalid argument. Use 'enable' or 'disable'\n");
-      rt_kprintf("Usage: cmdMotorEnable [enable|disable]\n");
-    }
-  } else {
-    rt_kprintf("Too many arguments\n");
-    rt_kprintf("Usage: cmdMotorEnable [enable|disable]\n");
-  }
-}
+//   if (argc == 2) {
+//     if (strcmp(argv[1], "enable") == 0) {
+//       motorSetEnable = false; /* false means motor control is enabled */
+//       rt_kprintf("Motor control ENABLED , Motor test can't run\n");
+//     } else if (strcmp(argv[1], "disable") == 0) {
+//       motorSetEnable = true; /* true means motor control is disabled */
+//       rt_kprintf("Motor control DISABLED , Motor test can run!\n");
+//     } else {
+//       rt_kprintf("Invalid argument. Use 'enable' or 'disable'\n");
+//       rt_kprintf("Usage: cmdMotorEnable [enable|disable]\n");
+//     }
+//   } else {
+//     rt_kprintf("Too many arguments\n");
+//     rt_kprintf("Usage: cmdMotorEnable [enable|disable]\n");
+//   }
+// }
 
-MSH_CMD_EXPORT_ALIAS(cmdMotorEnable, cmdMotorEnable, Enable motor control);
+// MSH_CMD_EXPORT_ALIAS(cmdMotorEnable, cmdMotorEnable, Enable motor control);

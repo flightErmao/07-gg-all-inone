@@ -23,10 +23,12 @@
 static struct rt_thread task_tid_sensor_minifly;
 static rt_uint8_t task_stack_sensor_minifly[THREAD_STACK_SIZE];
 static rt_device_t dev_sensor_imu = RT_NULL;
+#ifdef TASK_TOOL_02_SD_MLOG
 static uint8_t mlog_push_en = 0;
+#endif
 
-MCN_DECLARE(sensor_imu);
-MCN_DEFINE(sensor_imu, sizeof(sensorData_t));
+MCN_DECLARE(imu);
+MCN_DEFINE(imu, sizeof(sensorData_t));
 
 static McnNode_t sensor_sub_node = RT_NULL;
 
@@ -109,14 +111,14 @@ static void mlogInit(void) {
 }
 
 static void rtosToolsInit(void) {
-  rt_err_t result = mcn_advertise(MCN_HUB(sensor_imu), sensor_imu_echo);
+  rt_err_t result = mcn_advertise(MCN_HUB(imu), sensor_imu_echo);
   if (result != RT_EOK) {
-    rt_kprintf("Failed to advertise sensor_imu topic: %d\n", result);
+    rt_kprintf("Failed to advertise imu topic: %d\n", result);
   }
 
-  sensor_sub_node = mcn_subscribe(MCN_HUB(sensor_imu), RT_NULL, RT_NULL);
+  sensor_sub_node = mcn_subscribe(MCN_HUB(imu), RT_NULL, RT_NULL);
   if (sensor_sub_node == RT_NULL) {
-    rt_kprintf("Failed to subscribe to sensor_imu topic\n");
+    rt_kprintf("Failed to subscribe to imu topic\n");
   }
 
 #ifdef PROJECT_MINIFLY_TASK_SENSOR_TIMER_TRIGGER_EN
@@ -135,7 +137,9 @@ static void rtosToolsInit(void) {
 #endif
 }
 
+#ifdef TASK_TOOL_02_SD_MLOG
 static void mlogStartCb(void) { mlog_push_en = 1; }
+#endif
 
 static void sensor_minifly_thread_entry(void *parameter) {
   deviceInit();
@@ -144,7 +148,9 @@ static void sensor_minifly_thread_entry(void *parameter) {
   sensorsBiasObjInit();
   initImuRotationDir();
   mlogInit();
+#ifdef TASK_TOOL_02_SD_MLOG
   mlog_register_callback(MLOG_CB_START, mlogStartCb);
+#endif
 
   uint8_t sensor_buffer[SENSORS_MPU6500_BUFF_LEN] = {0};
   sensorData_t sensors_data = {0};
@@ -163,7 +169,7 @@ static void sensor_minifly_thread_entry(void *parameter) {
         uint32_t timestamp = rt_tick_get();
         sensors_data = processAccGyroMeasurements(sensor_buffer);
         sensors_data.timestamp = timestamp;
-        mcn_publish(MCN_HUB(sensor_imu), &sensors_data);
+        mcn_publish(MCN_HUB(imu), &sensors_data);
 
 #ifdef TASK_TOOL_02_SD_MLOG
         if (Minifly_Sensor_IMU_ID >= 0 && mlog_push_en) {
@@ -189,7 +195,7 @@ static void sensor_minifly_thread_entry(void *parameter) {
 void sensorsAcquire(sensorData_t *sensors) {
   if (!sensors) return;
   if (mcn_poll(sensor_sub_node)) {
-    mcn_copy(MCN_HUB(sensor_imu), sensor_sub_node, sensors);
+    mcn_copy(MCN_HUB(imu), sensor_sub_node, sensors);
   }
 }
 
