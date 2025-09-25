@@ -1,13 +1,9 @@
 from building import *
 import os
 
-# 获取当前目录
 cwd = GetCurrentDir()
-path = [cwd]
-src = []
-group = []
-
-src = Glob("./*.c")
+src = Glob("./src/*.c")
+path = [cwd, os.path.join(cwd, "inc")]
 
 group = DefineGroup(
     "TASK_TOOL_01_ANOTC_TELEM_EN", src, depend=["TASK_TOOL_01_ANOTC_TELEM_EN"], CPPPATH=path

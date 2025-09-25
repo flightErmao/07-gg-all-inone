@@ -1,14 +1,9 @@
 from building import *
 import os
 
-# 获取当前目录
 cwd = GetCurrentDir()
-path = [cwd]
-
-src = []
-group = []
-
-src = Glob("./*.c")
+src = Glob("./src/*.c")
+path = [cwd, os.path.join(cwd, "inc")]
 
 group = DefineGroup(
     "PROJECT_MINIFLY_TASK04_DISTRIBUTE_EN", src, depend=["PROJECT_MINIFLY_TASK04_DISTRIBUTE_EN"], CPPPATH=path

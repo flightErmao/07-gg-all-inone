@@ -1,11 +1,8 @@
 from building import *
 
 cwd = GetCurrentDir()
-path = []
-src = []
-
-src = Glob("./*.c")
-path = [cwd]
+src = Glob("./src/*.c")
+path = [cwd, os.path.join(cwd, "inc")]
 
 group = DefineGroup("RC_USING_SBUS", src, depend=["RC_USING_SBUS"], CPPPATH=path)
 

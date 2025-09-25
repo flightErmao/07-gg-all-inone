@@ -194,7 +194,7 @@ void sensorsAcquire(sensorData_t *sensors) {
 }
 
 static int taskSensorThreadAutoStart(void) {
-  rt_thread_init(&task_tid_sensor_minifly, "sensor", sensor_minifly_thread_entry, RT_NULL, task_stack_sensor_minifly,
+  rt_thread_init(&task_tid_sensor_minifly, "imu", sensor_minifly_thread_entry, RT_NULL, task_stack_sensor_minifly,
                  THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
   rt_thread_startup(&task_tid_sensor_minifly);
   return 0;
