@@ -105,7 +105,7 @@
 #define RT_USING_DEVICE
 #define RT_USING_CONSOLE
 #define RT_CONSOLEBUF_SIZE 128
-#define RT_CONSOLE_DEVICE_NAME "uart3"
+#define RT_CONSOLE_DEVICE_NAME "uart2"
 #define RT_VER_NUM 0x50201
 #define RT_BACKTRACE_LEVEL_MAX_NR 32
 /* end of RT-Thread Kernel */
@@ -519,7 +519,7 @@
 /* 01 SBUS CONFIG */
 
 #define RC_USING_SBUS
-#define RC_SBUS_UART_NAME "uart2"
+#define RC_SBUS_UART_NAME "uart3"
 #define RC_SBUS_BAUDRATE 100000
 #define RC_SBUS_INVERTED
 /* end of 01 SBUS CONFIG */
