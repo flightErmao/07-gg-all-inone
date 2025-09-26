@@ -436,22 +436,11 @@
 #define TASK_DEMO_01_LED_BLINK_PRIORITY 30
 #define TASK_DEMO_01_LED_BLINK_TIMER_INTERVAL 500
 #define TASK_DEMO_01_LED_BLINK_PIN "PC13"
-#define TASK_TOOL_01_ANOTC_TELEM_EN
-#define TASK_TOOL_01_ANOTC_TELEM_DEVICE_DEFAULT "uart1"
-#define TASK_TOOL_01_ANOTC_TELEM_BAUD_RATE 500000
-#define WORK_TASK_BARO_REPORT_EN
-#define TASK_SEND_DATA_ANOTC
-#define TASK_BARO_ATKP_LOG_EN
-#define BARO_REPORT_USING_DPS368
-
-/* Select barometer and device name in L1_module -> MODULE_BARO_REPORT */
-
 /* end of L0_TASK_CONFIG */
 
 /* L1_MIDDLEWARE_CONFIG */
 
 #define L1_MIDDLEWARE_02_MODE_01_LED_BLINK_EN
-#define L1_MIDDLEWARE_PACKAGE_01_UMCN_USING_UMCN
 /* end of L1_MIDDLEWARE_CONFIG */
 
 /* L2_DEVICE_CONFIG */
@@ -469,19 +458,36 @@
 /* 03 MPU6000_FMUV2 CONFIG */
 
 /* end of 03 MPU6000_FMUV2 CONFIG */
+
+/* 04 BMI270 CONFIG */
+
+/* end of 04 BMI270 CONFIG */
 /* end of 01 IMU CONFIG */
 
 /* 02 RC CONFIG */
 
+/* 01 SBUS CONFIG */
+
+/* end of 01 SBUS CONFIG */
+
+/* 02 CRSF CONFIG */
+
+/* end of 02 CRSF CONFIG */
+/* end of 02 RC CONFIG */
+
 /* 03 MOTOR CONFIG */
 
-/* 01 PWM CONFIG */
+/* 01 PWM CONFIG(Hollow slab) */
 
-/* end of 01 PWM CONFIG */
+/* end of 01 PWM CONFIG(Hollow slab) */
 
 /* 02 DSHOT CONFIG */
 
 /* end of 02 DSHOT CONFIG */
+
+/* 03 PWM CONFIG */
+
+/* end of 03 PWM CONFIG */
 /* end of 03 MOTOR CONFIG */
 
 /* 04 BARO CONFIG */
@@ -502,6 +508,21 @@
 #define SENSOR_DPS368_I2C_ADDR 0x76
 /* end of 03 DPS3XX CONFIG */
 /* end of 04 BARO CONFIG */
+
+/* 05 MAG CONFIG */
+
+/* 01 QMC5883L CONFIG */
+
+/* end of 01 QMC5883L CONFIG */
+
+/* 02 QMC6308 CONFIG */
+
+#define BSP_USING_MAG_QMC6308
+#define SENSOR_NAME_QMC6308 "qmc6308"
+#define SENSOR_I2C_NAME_QMC6308 "hwi2c1"
+#define SENSOR_QMC6308_I2C_ADDR 0x2C
+/* end of 02 QMC6308 CONFIG */
+/* end of 05 MAG CONFIG */
 /* end of L2_DEVICE_CONFIG */
 
 /* L3_PERIPHERAL_CONFIG */
@@ -524,7 +545,11 @@
 #define BSP_I2C1_SPEED 800000
 #define BSP_I2C1_TX_USING_DMA
 #define BSP_I2C1_RX_USING_DMA
+
+/* Enable 14 USB CONFIG */
+
 #define BSP_USING_USBD
+/* end of Enable 14 USB CONFIG */
 /* end of L3_PERIPHERAL_CONFIG */
 /* end of DriverFramework Config */
 

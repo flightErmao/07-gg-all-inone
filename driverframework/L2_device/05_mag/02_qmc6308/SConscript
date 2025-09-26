@@ -7,8 +7,8 @@ src = []
 src = Glob("./src/*.c")
 src += Glob("./src/*.cpp")
 
-path = [cwd, os.path.join(cwd, 'inc')]
+path = [cwd, os.path.join(cwd, "inc")]
 
-group = DefineGroup('QMC6308', src, depend = ['BSP_USING_MAG_QMC6308'], CPPPATH = path)
+group = DefineGroup("QMC6308", src, depend=["BSP_USING_MAG_QMC6308"], CPPPATH=path)
 
-Return('group')
+Return("group")

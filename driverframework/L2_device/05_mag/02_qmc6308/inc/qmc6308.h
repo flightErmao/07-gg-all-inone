@@ -70,31 +70,29 @@
 
 #define QMC6308_ID_VALUE 0x80
 
-enum
-{
-    AXIS_X = 0,
-    AXIS_Y = 1,
-    AXIS_Z = 2,
+enum {
+  AXIS_X = 0,
+  AXIS_Y = 1,
+  AXIS_Z = 2,
 
-    AXIS_TOTAL
+  AXIS_TOTAL
 };
 
-typedef struct
-{
-    signed char sign[3];
-    unsigned char map[3];
+typedef struct {
+  signed char sign[3];
+  unsigned char map[3];
 } qmc6308_map;
 
-typedef uint8_t (*mqc6308_i2c_read_block)(uint8_t, uint8_t *, uint8_t);
+typedef uint8_t (*mqc6308_i2c_read_block)(uint8_t, uint8_t*, uint8_t);
 typedef uint8_t (*mqc6308_i2c_write_reg)(uint8_t, uint8_t);
 
 extern mqc6308_i2c_read_block qmc6308_read_block;
 extern mqc6308_i2c_write_reg qmc6308_write_reg;
 
 int qmc6308_init(void);
-int qmc6308_read_mag_xyz(float *data);
+int qmc6308_read_mag_xyz(float* data);
 
 int qmc6308_init_zerozero(void);
-int qmc6308_read_mag_xyz_zerozero(int16_t *data);
+int qmc6308_read_mag_xyz_zerozero(int16_t* data);
 
 #endif

@@ -14,41 +14,37 @@
  * limitations under the License.
  *****************************************************************************/
 
-#include "hal_mag.h"
+#include "mag.h"
 
-static rt_size_t hal_mag_read(struct rt_device* dev, rt_off_t pos, void* buffer, rt_size_t size)
-{
-    rt_size_t rb = 0;
-    mag_dev_t mag;
+static rt_ssize_t hal_mag_read(struct rt_device* dev, rt_off_t pos, void* buffer, rt_size_t size) {
+  rt_ssize_t rb = 0;
+  mag_dev_t mag;
 
-    RT_ASSERT(dev != RT_NULL);
-    RT_ASSERT(buffer != RT_NULL);
+  RT_ASSERT(dev != RT_NULL);
+  RT_ASSERT(buffer != RT_NULL);
 
-    mag = (mag_dev_t)dev;
+  mag = (mag_dev_t)dev;
 
-    if (pos == MAG_RD_REPORT && mag->ops->mag_read)
-    {
-        rb = mag->ops->mag_read(mag, buffer);
-    }
+  if (pos == MAG_RD_REPORT && mag->ops->mag_read) {
+    rb = (rt_ssize_t)mag->ops->mag_read(mag, buffer);
+  }
 
-    return rb;
+  return rb;
 }
 
-static rt_err_t hal_mag_control(struct rt_device* dev, int cmd, void* args)
-{
-    rt_err_t ret = RT_EOK;
-    mag_dev_t mag;
+static rt_err_t hal_mag_control(struct rt_device* dev, int cmd, void* args) {
+  rt_err_t ret = RT_EOK;
+  mag_dev_t mag;
 
-    RT_ASSERT(dev != RT_NULL);
+  RT_ASSERT(dev != RT_NULL);
 
-    mag = (mag_dev_t)dev;
+  mag = (mag_dev_t)dev;
 
-    if (mag->ops->mag_control)
-    {
-        ret = mag->ops->mag_control(mag, cmd, args);
-    }
+  if (mag->ops->mag_control) {
+    ret = mag->ops->mag_control(mag, cmd, args);
+  }
 
-    return ret;
+  return ret;
 }
 
 /**
@@ -60,30 +56,29 @@ static rt_err_t hal_mag_control(struct rt_device* dev, int cmd, void* args)
  * @param data device data
  * @return rt_err_t RT_EOK for success
  */
-rt_err_t hal_mag_register(mag_dev_t mag, const char* name, rt_uint32_t flag, void* data)
-{
-    rt_err_t ret;
-    struct rt_device* device;
+rt_err_t hal_mag_register(mag_dev_t mag, const char* name, rt_uint32_t flag, void* data) {
+  rt_err_t ret;
+  struct rt_device* device;
 
-    RT_ASSERT(mag != RT_NULL);
+  RT_ASSERT(mag != RT_NULL);
 
-    device = &(mag->parent);
+  device = &(mag->parent);
 
-    device->type = RT_Device_Class_I2CBUS;
-    device->ref_count = 0;
-    device->rx_indicate = RT_NULL;
-    device->tx_complete = RT_NULL;
+  device->type = RT_Device_Class_I2CBUS;
+  device->ref_count = 0;
+  device->rx_indicate = RT_NULL;
+  device->tx_complete = RT_NULL;
 
-    device->init = RT_NULL;
-    device->open = RT_NULL;
-    device->close = RT_NULL;
-    device->read = hal_mag_read;
-    device->write = RT_NULL;
-    device->control = hal_mag_control;
-    device->user_data = data;
+  device->init = RT_NULL;
+  device->open = RT_NULL;
+  device->close = RT_NULL;
+  device->read = hal_mag_read;
+  device->write = RT_NULL;
+  device->control = hal_mag_control;
+  device->user_data = data;
 
-    /* register device to system */
-    ret = rt_device_register(device, name, flag);
+  /* register device to system */
+  ret = rt_device_register(device, name, flag);
 
-    return ret;
+  return ret;
 }

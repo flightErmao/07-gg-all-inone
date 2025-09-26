@@ -1,14 +1,5 @@
-menuconfig BSP_USING_MAG_QMC5883L
-    bool "Enable: MAG_QMC5883L"
-    default n
-    if BSP_USING_MAG_QMC5883L
-        config SENSOR_NAME_QMC5883L
-            string "MAG QMC5883L NAME"
-            default "QMC5883L"
-        config SENSOR_I2C_NAME_QMC5883L
-            string "MAG QMC5883L I2C NAME"
-            default "hwi2c2"
-        config SENSOR_QMC5883L_I2C_ADDR
-            int "QMC5883L_I2C_ADDR"
-            default 0x0D
-    endif
+menuconfig BSP_USING_MAG_QMC5883L bool "Enable: MAG_QMC5883L" default n if BSP_USING_MAG_QMC5883L config
+    SENSOR_NAME_QMC5883L string
+    "MAG QMC5883L NAME" default "QMC5883L" config SENSOR_I2C_NAME_QMC5883L string
+                                "MAG QMC5883L I2C NAME" default "hwi2c2" config
+                                    SENSOR_QMC5883L_I2C_ADDR int "QMC5883L_I2C_ADDR" default 0x0D endif

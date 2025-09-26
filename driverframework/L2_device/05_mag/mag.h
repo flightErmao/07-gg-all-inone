@@ -20,8 +20,7 @@
 #include <rtdevice.h>
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
 /* mag read pos */
@@ -30,46 +29,42 @@ extern "C"
 /* mag command */
 #define MAG_CMD_CHECK_READY 0x20
 
-    typedef struct
-    {
-        uint32_t timestamp_ms;
-        int16_t value_x;
-        int16_t value_y;
-        int16_t value_z;
-    } mag_report_t;
+typedef struct {
+  uint32_t timestamp_ms;
+  int16_t value_x;
+  int16_t value_y;
+  int16_t value_z;
+} mag_report_t;
 
-    struct mag_configure
-    {
-        rt_uint16_t osr; /* oversampling ratio */
-    };
+struct mag_configure {
+  rt_uint16_t osr; /* oversampling ratio */
+};
 
-    struct mag_device
-    {
-        struct rt_device parent;
-        const struct mag_ops* ops;
-        uint8_t id;
-    };
-    typedef struct mag_device* mag_dev_t;
+struct mag_device {
+  struct rt_device parent;
+  const struct mag_ops* ops;
+  uint8_t id;
+};
+typedef struct mag_device* mag_dev_t;
 
-    /* mag driver opeations */
-    struct mag_ops
-    {
-        /**
-         * @brief mag meter control function (optional)
-         * @param dev magmeter device
-         * @param cmd operation command
-         * @param arg command arguments
-         */
-        rt_err_t (*mag_control)(mag_dev_t dev, int cmd, void* arg);
-        /**
-         * @brief read magmeter report
-         * @param dev magmeter device
-         * @param report magmeter report buffer
-         */
-        rt_size_t (*mag_read)(mag_dev_t dev, mag_report_t* report);
-    };
+/* mag driver opeations */
+struct mag_ops {
+  /**
+   * @brief mag meter control function (optional)
+   * @param dev magmeter device
+   * @param cmd operation command
+   * @param arg command arguments
+   */
+  rt_err_t (*mag_control)(mag_dev_t dev, int cmd, void* arg);
+  /**
+   * @brief read magmeter report
+   * @param dev magmeter device
+   * @param report magmeter report buffer
+   */
+  rt_size_t (*mag_read)(mag_dev_t dev, mag_report_t* report);
+};
 
-    rt_err_t hal_mag_register(mag_dev_t mag, const char* name, rt_uint32_t flag, void* data);
+rt_err_t hal_mag_register(mag_dev_t mag, const char* name, rt_uint32_t flag, void* data);
 
 #ifdef __cplusplus
 }

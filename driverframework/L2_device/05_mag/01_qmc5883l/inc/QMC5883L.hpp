@@ -43,36 +43,35 @@
 #define QMC5883L_CONFIG_STANDBY 0b00000000
 #define QMC5883L_CONFIG_CONT 0b00000001
 
-class QMC5883L : public Mag
-{
-   public:
-    int id_;
-    uint8_t mode;
-    uint8_t rate;
-    uint8_t range;
-    uint8_t oversampling;
+class QMC5883L : public Mag {
+ public:
+  int id_;
+  uint8_t mode;
+  uint8_t rate;
+  uint8_t range;
+  uint8_t oversampling;
 
-    QMC5883L(int id);
+  QMC5883L(int id);
 
-    bool Init();
+  bool Init();
 
-    bool ReadWhoAmI(uint8_t *who_am_i);
+  bool ReadWhoAmI(uint8_t* who_am_i);
 
-    bool Read(MagData &data);
+  bool Read(MagData& data);
 
-    void ExecutePeriodically();
+  void ExecutePeriodically();
 
-    void SoftReset();
+  void SoftReset();
 
-    bool WaitForReady(int max_wait_time_ms);
+  bool WaitForReady(int max_wait_time_ms);
 
-    bool Deinit();
+  bool Deinit();
 
-    // bool WaitForReady(int max_wait_time_ms);
-   protected:
-    MagData data_;
-    Device *port_ = nullptr;
-    static constexpr uint8_t QMC5883L_I2C_SLAVE_ADDRESS = 0x0D;
-    // dspd::Socket *mag_post_to_ap_socket_;
-    static constexpr float coe_8g = 0.0333333f;
+  // bool WaitForReady(int max_wait_time_ms);
+ protected:
+  MagData data_;
+  Device* port_ = nullptr;
+  static constexpr uint8_t QMC5883L_I2C_SLAVE_ADDRESS = 0x0D;
+  // dspd::Socket *mag_post_to_ap_socket_;
+  static constexpr float coe_8g = 0.0333333f;
 };
