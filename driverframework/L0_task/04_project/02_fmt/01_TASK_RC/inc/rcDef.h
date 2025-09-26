@@ -13,7 +13,7 @@
 #define  HIGH_SPEED_PITCH   (30.0)
 #define  HIGH_SPEED_ROLL    (30.0)
 
-#define  MIN_THRUST			(25.0)
+#define MIN_THRUST (5.0)
 #define  ALT_THRUST		    (100.0)
 #define  MAX_YAW			(200.0)
 

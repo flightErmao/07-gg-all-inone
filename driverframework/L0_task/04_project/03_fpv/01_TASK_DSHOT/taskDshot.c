@@ -29,7 +29,7 @@ static rt_device_t dshot_dev = RT_NULL;
 static inline uint16_t map65535_to_dshot(uint16_t v) {
   float fv = (float)v;
   float out = scaleRangef(fv, 0.0f, 65535.0f, 48.0f, 2047.0f);
-  if (out < 48.0f) out = 48.0f;
+  if (out < 48.0f + 1e-3f) out = 0.0f;
   if (out > 2047.0f) out = 2047.0f;
   return (uint16_t)(out);
 }

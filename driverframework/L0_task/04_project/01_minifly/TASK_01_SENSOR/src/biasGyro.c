@@ -3,7 +3,7 @@
 #include "biasGyro.h"
 
 #define SENSORS_NBR_OF_BIAS_SAMPLES 1024
-#define GYRO_VARIANCE_BASE 4000 /* 陀螺仪零偏方差阈值 */
+#define GYRO_VARIANCE_BASE 5000 /* 陀螺仪零偏方差阈值 */
 
 typedef struct {
   Axis3f bias;
