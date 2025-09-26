@@ -156,7 +156,7 @@
             "type": "cortex-debug",
             "request": "launch",
             "cwd": "${workspaceRoot}",
-            "executable": "target/flyer_board/03_fydelix/rt-thread.elf",
+            "executable": "target/02_flyer_board/03_fydelix/rt-thread.elf",
             "serverpath": "${env:JLINK_SERVER}",
             "servertype": "jlink",
             "device": "AT32F437VMT7",
