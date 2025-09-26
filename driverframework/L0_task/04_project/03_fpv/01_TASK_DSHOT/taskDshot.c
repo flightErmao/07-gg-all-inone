@@ -6,23 +6,14 @@
 #include "rtconfig.h"
 #include "floatConvert.h"
 
-#ifndef DSHOT_DEVICE_NAME
-#define DSHOT_DEVICE_NAME "dshot"
-#endif
-
 /* task definition */
 #define THREAD_PRIORITY 6
 #define THREAD_STACK_SIZE 2048
 #define THREAD_TIMESLICE 5
 
-/* map 0~65535 to 48~2047 (DShot throttle range) */
-static inline uint16_t map65535_to_dshot(uint16_t v) {
-  float fv = (float)v;
-  float out = scaleRangef(fv, 0.0f, 65535.0f, 48.0f, 2047.0f);
-  if (out < 48.0f) out = 48.0f;
-  if (out > 2047.0f) out = 2047.0f;
-  return (uint16_t)(out);
-}
+#ifndef DSHOT_DEVICE_NAME
+#define DSHOT_DEVICE_NAME "dshot"
+#endif
 
 /* mcn topic */
 MCN_DEFINE(dshot, sizeof(dshot_cmd_bus_t));
@@ -32,8 +23,16 @@ static rt_uint8_t task_stack_dshot[THREAD_STACK_SIZE];
 static McnNode_t dshot_cmd_sub = RT_NULL;
 static struct rt_event dshot_event;
 static rt_timer_t dshot_timer = RT_NULL;
-
 static rt_device_t dshot_dev = RT_NULL;
+
+/* map 0~65535 to 48~2047 (DShot throttle range) */
+static inline uint16_t map65535_to_dshot(uint16_t v) {
+  float fv = (float)v;
+  float out = scaleRangef(fv, 0.0f, 65535.0f, 48.0f, 2047.0f);
+  if (out < 48.0f) out = 48.0f;
+  if (out > 2047.0f) out = 2047.0f;
+  return (uint16_t)(out);
+}
 
 static void dshot_timer_cb(void *parameter) {
   RT_UNUSED(parameter);
