@@ -3,4 +3,5 @@ menu "L2_DEVICE_CONFIG"
     source "$(PROJECT_ROOT)/driverframework/L2_device/02_RC/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L2_device/03_MOTOR/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L2_device/04_BARO/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L2_device/05_mag/Kconfig"
 endmenu

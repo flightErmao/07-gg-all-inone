@@ -1,0 +1,14 @@
+menuconfig BSP_USING_MAG_QMC6308
+    bool "Enable: MAG_QMC6308"
+    default n
+    if BSP_USING_MAG_QMC6308
+        config SENSOR_NAME_QMC6308
+            string "MAG QMC6308 NAME"
+            default "qmc6308"
+        config SENSOR_I2C_NAME_QMC6308
+            string "MAG QMC6308 I2C NAME"
+            default "hwi2c1"
+        config SENSOR_QMC6308_I2C_ADDR
+            int "QMC6308_I2C_ADDR"
+            default 0x2C
+    endif

@@ -1,0 +1,11 @@
+menu "05 MAG CONFIG"
+            menu "01 QMC5883L CONFIG"
+                source "$(PROJECT_ROOT)/driverframework/L2_device/05_mag/01_qmc5883l/Kconfig"
+            endmenu
+            
+            menu "02 QMC6308 CONFIG"
+                source "$(PROJECT_ROOT)/driverframework/L2_device/05_mag/02_qmc6308/Kconfig"
+            endmenu
+        
+endmenu
+
