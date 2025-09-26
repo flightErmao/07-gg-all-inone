@@ -1,0 +1,22 @@
+from building import *
+import os
+
+# 获取当前目录
+cwd = GetCurrentDir()
+path = [cwd]
+src = []
+group = []
+
+# 获取当前目录下的所有源文件
+src = Glob("./*.c")
+
+# 定义编译组（受 Kconfig 开关控制）
+group = DefineGroup(
+    "TASK_03_MAG_RTK",
+    src,
+    depend=["WORK_TASK_MAG_TEST_6308_EN"],
+    CPPPATH=path,
+)
+
+Return("group")
+

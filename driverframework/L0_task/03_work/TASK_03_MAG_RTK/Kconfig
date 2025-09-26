@@ -1,0 +1,46 @@
+menuconfig WORK_TASK_MAG_TEST_6308_EN
+    bool "ENABLE: WORK_TASK_MAG_TEST_6308_EN"
+    default n
+    help
+        Enable MAG RTK test task using QMC6308 on I2C
+
+    if WORK_TASK_MAG_TEST_6308_EN
+
+        config WORK_TASK_MAG_TEST_6308_I2C_NAME
+            string "I2C bus device name"
+            default "hwi2c1"
+            help
+                The I2C bus device name used to access QMC6308
+
+        config WORK_TASK_MAG_TEST_6308_I2C_ADDR
+            hex "I2C device address"
+            default 0x2C
+            help
+                7-bit I2C address of QMC6308
+
+        config WORK_TASK_MAG_TEST_6308_ID_REG
+            hex "ID register address"
+            default 0x00
+            help
+                Register address to read device ID from
+
+        config WORK_TASK_MAG_TEST_6308_ID_EXPECT
+            hex "Expected ID register value"
+            default 0x80
+            help
+                Expected value read from the ID register
+
+        config WORK_TASK_MAG_TEST_6308_UART_NAME
+            string "UART device name"
+            default "uart1"
+            help
+                UART device to communicate test results
+
+        config WORK_TASK_MAG_TEST_6308_UART_BAUD
+            int "UART baudrate"
+            default 115200
+            help
+                UART baudrate to use
+
+    endif
+
