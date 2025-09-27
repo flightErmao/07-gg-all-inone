@@ -118,19 +118,6 @@ static void stabilizer_minifly_thread_entry(void* parameter) {
     rt_event_recv(stabilizer_event, STABILIZER_EVENT_FLAG, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER,
                   RT_NULL);
 
-    if (RATE_DO_EXECUTE(ATTITUDE_ESTIMAT_RATE, tick)) {
-#ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
-      DEBUG_PIN_DEBUG3_HIGH();
-#endif
-      sensorsAcquire(&sensorData);
-      imuUpdate(sensorData.acc_filter, sensorData.gyro_filter, &state_, ATTITUDE_ESTIMAT_DT);
-      state_.attitude.timestamp = rt_tick_get();
-      mcn_publish(MCN_HUB(state), &state_);
-#ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
-      DEBUG_PIN_DEBUG3_LOW();
-#endif
-    }
-
 #if defined(PROJECT_MINIFLY_TASK06_RC_EN) || defined(PROJECT_FMT_TASK01_RC_EN)
     // if (RATE_DO_EXECUTE(RATE_100_HZ, tick) && getIsCalibrated() == true)
     if (RATE_DO_EXECUTE(RATE_100_HZ, tick)) {
@@ -139,6 +126,20 @@ static void stabilizer_minifly_thread_entry(void* parameter) {
       commanderGetSetpoint(&rc_data, &setpoint_);
     }
 #endif
+
+    if (RATE_DO_EXECUTE(ATTITUDE_ESTIMAT_RATE, tick)) {
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
+      DEBUG_PIN_DEBUG3_HIGH();
+#endif
+      sensorsAcquire(&sensorData);
+      imuUpdate(sensorData.acc_filter, sensorData.gyro_filter, &state_, ATTITUDE_ESTIMAT_DT);
+      state_.attitude.timestamp = rt_tick_get();
+      state_.armed = setpoint_.armed;
+      mcn_publish(MCN_HUB(state), &state_);
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
+      DEBUG_PIN_DEBUG3_LOW();
+#endif
+    }
 
     stateControl(&state_, &setpoint_, &contorl_, tick);
 

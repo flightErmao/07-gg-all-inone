@@ -115,6 +115,23 @@ void sendUserDatafloat12_u32(uint8_t group, float a, float b, float c, float d, 
   anotcMqStash(&p);
 }
 
+void sendUserDatauint16_4(uint8_t group, uint16_t a, uint16_t b, uint16_t c, uint16_t d) {
+  uint8_t _cnt = 0;
+  atkp_t p;
+
+  p.msgID = UP_USER_DATA1 + group - 1;
+
+  uint16_t values[4] = {a, b, c, d};
+  for (uint8_t i = 0; i < 4; i++) {
+    uint16_t temp = values[i];
+    p.data[_cnt++] = BYTE1(temp);
+    p.data[_cnt++] = BYTE0(temp);
+  }
+
+  p.dataLen = _cnt;
+  anotcMqStash(&p);
+}
+
 void sendUserDatauint16_8(uint8_t group, uint16_t a, uint16_t b, uint16_t c, uint16_t d, uint16_t e, uint16_t f, uint16_t g, uint16_t h) {
   uint8_t _cnt = 0;
   atkp_t p;

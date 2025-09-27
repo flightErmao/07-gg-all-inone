@@ -5,6 +5,10 @@
 #include "maths.h"
 #include "rtconfig.h"
 #include "floatConvert.h"
+#include "string.h"
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_EN
+#include "taskMiniflyStabilizer.h"
+#endif
 
 /* task definition */
 #define THREAD_PRIORITY 6
@@ -29,16 +33,17 @@ static struct rt_event dshot_event;
 static rt_timer_t dshot_timer = RT_NULL;
 static rt_device_t dshot_dev = RT_NULL;
 
-/* map 0~65535 to 48~2047 (DShot throttle range) */
-static inline uint16_t map65535_to_dshot(uint16_t v) {
-  float fv = (float)v;
-  float out = scaleRangef(fv, 0.0f, 65535.0f, 48.0f, 2047.0f);
-  if (out < 48.0f + 1e-3f) out = 0.0f;
-  if (out > 2047.0f) out = 2047.0f;
+/* global mapped motor values for external access */
+static uint16_t dshot_mapped[4] = {0, 0, 0, 0};
+
+/* map motor value to DShot throttle range with armed state check */
+static inline uint16_t map_motor_to_dshot(uint16_t motor_val) {
+  float fv = (float)motor_val;
+  float out = scaleRangef(fv, 0.0f, 65535.0f, 48.0f, 2048.0f);
   return (uint16_t)(out);
 }
 
-static void dshot_timer_cb(void *parameter) {
+static void dshot_timer_cb(void* parameter) {
   RT_UNUSED(parameter);
   rt_event_send(&dshot_event, 1u);
 }
@@ -54,10 +59,18 @@ void task_dshot_publish_raw(uint16_t m1, uint16_t m2, uint16_t m3, uint16_t m4) 
   mcn_publish(MCN_HUB(dshot), &msg);
 }
 
-static int dshot_cmd_echo(void *parameter) {
+/* API to get mapped motor values for external access */
+void task_dshot_get_mapped(uint16_t* m1, uint16_t* m2, uint16_t* m3, uint16_t* m4) {
+  if (m1) *m1 = dshot_mapped[0];
+  if (m2) *m2 = dshot_mapped[1];
+  if (m3) *m3 = dshot_mapped[2];
+  if (m4) *m4 = dshot_mapped[3];
+}
+
+static int dshot_cmd_echo(void* parameter) {
   dshot_cmd_bus_t data;
 
-  if (mcn_copy_from_hub((McnHub *)parameter, &data) != RT_EOK) {
+  if (mcn_copy_from_hub((McnHub*)parameter, &data) != RT_EOK) {
     return -1;
   }
   char m1[10];
@@ -105,11 +118,13 @@ static void rtos_init(void) {
   }
 }
 
-static void task_dshot_entry(void *parameter) {
+static void task_dshot_entry(void* parameter) {
   device_init();
   rtos_init();
 
   dshot_cmd_bus_t latest = {0};
+  state_t state = {0};
+  bool armed = false;
 
   while (1) {
     rt_uint32_t rec = 0;
@@ -121,15 +136,25 @@ static void task_dshot_entry(void *parameter) {
 
     mcn_copy(MCN_HUB(dshot), dshot_cmd_sub, &latest);
 
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_EN
+    stabilizerGetState(&state);
+    armed = state.armed;
+#else
+    armed = true;
+#endif
+
     if (dshot_dev) {
-      uint16_t mapped[4];
-      mapped[0] = map65535_to_dshot(latest.motor_val[0]);
-      mapped[1] = map65535_to_dshot(latest.motor_val[1]);
-      mapped[2] = map65535_to_dshot(latest.motor_val[2]);
-      mapped[3] = map65535_to_dshot(latest.motor_val[3]);
+      if (armed) {
+        dshot_mapped[0] = map_motor_to_dshot(latest.motor_val[0]);
+        dshot_mapped[1] = map_motor_to_dshot(latest.motor_val[1]);
+        dshot_mapped[2] = map_motor_to_dshot(latest.motor_val[2]);
+        dshot_mapped[3] = map_motor_to_dshot(latest.motor_val[3]);
+      } else {
+        memset(dshot_mapped, 0, sizeof(dshot_mapped));
+      }
 
       /* write all 4 channels; DShot driver expects size == motor count */
-      rt_device_write(dshot_dev, 0x0F, mapped, 4);
+      rt_device_write(dshot_dev, 0x0F, dshot_mapped, 4);
     }
   }
 }

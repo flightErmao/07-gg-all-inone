@@ -16,5 +16,18 @@ menuconfig PROJECT_MINIFLY_TASK_DSHOT_EN
             default n
             help
                 Debug pin for DShot task.
+        
+        config PROJECT_MINIFLY_TASK_DSHOT_ATKP_LOG_EN
+            bool "ENABLE: PROJECT_MINIFLY_TASK_DSHOT_ATKP_LOG_EN"
+            default n
+            help
+                Enable ATKP logging for DShot motor data.
+        
+        config PROJECT_MINIFLY_TASK_DSHOT_ATKP_LOG_GROUP
+            int "ATKP log group ID for motor data"
+            default 1
+            depends on PROJECT_MINIFLY_TASK_DSHOT_ATKP_LOG_EN
+            help
+                Group ID used for sending motor data via ATKP protocol.
     endif
 
