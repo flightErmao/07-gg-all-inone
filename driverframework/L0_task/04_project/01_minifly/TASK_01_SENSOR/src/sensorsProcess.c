@@ -6,6 +6,7 @@
 #include "rotation.h"
 #include <math.h>
 #include <string.h>
+#include "mlogImu.h"
 
 #define SENSORS_ACC_SCALE_SAMPLES 200
 
@@ -111,12 +112,16 @@ sensorData_t processAccGyroMeasurements(const uint8_t* buffer) {
   gyroRemoveBiasRaw(&sensors.gyro_filter, &sensors.gyro_raw, &gyroBias);
   gyroApplyScale(&sensors.gyro_filter);
   gyroApplyRotation(imu_mount_rotation, &sensors.gyro_filter);
+  mlogImuCopyGyroData(&sensors.gyro_filter, RT_NULL);
   applyAxis3fLpfGyro(&sensors.gyro_filter);
+  mlogImuCopyGyroData(RT_NULL, &sensors.gyro_filter);
 
   getAccScale(sensors.acc_raw);
   accApplyScale(&sensors.acc_filter, &sensors.acc_raw);
   accApplyRotation(imu_mount_rotation, &sensors.acc_filter);
+  mlogImuCopyAccData(&sensors.acc_filter, RT_NULL);
   applyAxis3fLpfAcc(&sensors.acc_filter);
+  mlogImuCopyAccData(RT_NULL, &sensors.acc_filter);
 
   return sensors;
 }

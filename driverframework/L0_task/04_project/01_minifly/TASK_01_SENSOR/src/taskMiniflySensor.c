@@ -7,11 +7,7 @@
 #include "floatConvert.h"
 #include "uMCN.h"
 #include "rtconfig.h"
-
-#ifdef TASK_TOOL_02_SD_MLOG
-#include "mlog.h"
-#include "taskMlog.h"
-#endif
+#include "mlogImu.h"
 
 /*task definition*/
 #define THREAD_PRIORITY 4
@@ -23,9 +19,6 @@
 static struct rt_thread task_tid_sensor_minifly;
 static rt_uint8_t task_stack_sensor_minifly[THREAD_STACK_SIZE];
 static rt_device_t dev_sensor_imu = RT_NULL;
-#ifdef TASK_TOOL_02_SD_MLOG
-static uint8_t mlog_push_en = 0;
-#endif
 
 MCN_DECLARE(imu);
 MCN_DEFINE(imu, sizeof(sensorData_t));
@@ -40,20 +33,6 @@ static void sensor_timer_cb(void *parameter) {
   RT_UNUSED(parameter);
   rt_event_send(&sensor_event, SENSOR_EVENT_FLAG_TRIGGER);
 }
-#endif
-
-#ifdef TASK_TOOL_02_SD_MLOG
-/* Mlog bus definition for sensor data */
-static mlog_elem_t Minifly_Sensor_IMU_Elems[] __attribute__((used)) = {
-    MLOG_ELEMENT(timestamp, MLOG_UINT32),
-    MLOG_ELEMENT_VEC(acc_raw, MLOG_INT16, 3),
-    MLOG_ELEMENT_VEC(gyro_raw, MLOG_INT16, 3),
-    MLOG_ELEMENT_VEC(acc_filter, MLOG_FLOAT, 3),
-    MLOG_ELEMENT_VEC(gyro_filter, MLOG_FLOAT, 3),
-};
-MLOG_BUS_DEFINE(Minifly_Sensor_IMU, Minifly_Sensor_IMU_Elems);
-
-static int Minifly_Sensor_IMU_ID = -1;
 #endif
 
 static int sensor_imu_echo(void *parameter) {
@@ -98,17 +77,7 @@ static void deviceInit(void) {
   }
 }
 
-static void mlogInit(void) {
-#ifdef TASK_TOOL_02_SD_MLOG
-  /* Initialize mlog bus ID for sensor data */
-  Minifly_Sensor_IMU_ID = mlog_get_bus_id("Minifly_Sensor_IMU");
-  if (Minifly_Sensor_IMU_ID < 0) {
-    rt_kprintf("Failed to get mlog bus ID for Minifly_Sensor_IMU\n");
-  } else {
-    rt_kprintf("Minifly_Sensor_IMU mlog bus ID: %d\n", Minifly_Sensor_IMU_ID);
-  }
-#endif
-}
+static void mlogInit(void) { mlogImuInit(); }
 
 static void rtosToolsInit(void) {
   rt_err_t result = mcn_advertise(MCN_HUB(imu), sensor_imu_echo);
@@ -137,10 +106,6 @@ static void rtosToolsInit(void) {
 #endif
 }
 
-#ifdef TASK_TOOL_02_SD_MLOG
-static void mlogStartCb(void) { mlog_push_en = 1; }
-#endif
-
 static void sensor_minifly_thread_entry(void *parameter) {
   deviceInit();
   rtosToolsInit();
@@ -148,9 +113,6 @@ static void sensor_minifly_thread_entry(void *parameter) {
   sensorsBiasObjInit();
   initImuRotationDir();
   mlogInit();
-#ifdef TASK_TOOL_02_SD_MLOG
-  mlog_register_callback(MLOG_CB_START, mlogStartCb);
-#endif
 
   uint8_t sensor_buffer[SENSORS_MPU6500_BUFF_LEN] = {0};
   sensorData_t sensors_data = {0};
@@ -170,12 +132,7 @@ static void sensor_minifly_thread_entry(void *parameter) {
         sensors_data = processAccGyroMeasurements(sensor_buffer);
         sensors_data.timestamp = timestamp;
         mcn_publish(MCN_HUB(imu), &sensors_data);
-
-#ifdef TASK_TOOL_02_SD_MLOG
-        if (Minifly_Sensor_IMU_ID >= 0 && mlog_push_en) {
-          mlog_push_msg((uint8_t*)&sensors_data, Minifly_Sensor_IMU_ID, sizeof(sensorData_t));
-        }
-#endif
+        mlogImuPushData(timestamp);
       } else {
         static int err_cnt = 0;
         if (++err_cnt % 100 == 0) {
