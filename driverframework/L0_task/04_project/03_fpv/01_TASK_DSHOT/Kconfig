@@ -29,5 +29,13 @@ menuconfig PROJECT_MINIFLY_TASK_DSHOT_EN
             depends on PROJECT_MINIFLY_TASK_DSHOT_ATKP_LOG_EN
             help
                 Group ID used for sending motor data via ATKP protocol.
+        
+        config PROJECT_MINIFLY_TASK_DSHOT_MLOG_EN
+            bool "ENABLE: PROJECT_MINIFLY_TASK_DSHOT_MLOG_EN"
+            default n
+            depends on TASK_TOOL_02_SD_MLOG
+            help
+                Enable mlog logging for DShot motor data. This will log motor values,
+                mapped DShot values, and armed state to SD card via mlog system.
     endif
 

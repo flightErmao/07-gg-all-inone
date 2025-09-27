@@ -9,6 +9,7 @@
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_EN
 #include "taskMiniflyStabilizer.h"
 #endif
+#include "mlogDshot.h"
 
 /* task definition */
 #define THREAD_PRIORITY 6
@@ -92,6 +93,9 @@ static void device_init(void) {
   } else {
     rt_kprintf("[taskDshot] device %s not found\n", DSHOT_DEVICE_NAME);
   }
+
+  /* Initialize mlog DShot functionality */
+  mlogDshotInit();
 }
 
 static void rtos_init(void) {
@@ -156,6 +160,9 @@ static void task_dshot_entry(void* parameter) {
       /* write all 4 channels; DShot driver expects size == motor count */
       rt_device_write(dshot_dev, 0x0F, dshot_mapped, 4);
     }
+
+    /* Push data to mlog */
+    mlogDshotPush(dshot_mapped, rt_tick_get());
   }
 }
 
