@@ -1,6 +1,8 @@
 #include "rtthread.h"
 #include <rtdevice.h>
 
+#ifdef TASK_TOOL_02_SD_MLOG_TEST_THREAD
+
 #ifdef PKG_USING_UMCN
 #include "uMCN.h"
 #endif
@@ -304,6 +306,6 @@ void mlog_test_get_data(sensorData_t *data) {
 #endif
 }
 
-#ifdef TASK_TOOL_02_SD_MLOG_TEST_THREAD
 INIT_APP_EXPORT(mlog_test_start);
+
 #endif

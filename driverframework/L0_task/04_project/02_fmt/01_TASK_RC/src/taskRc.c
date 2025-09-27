@@ -212,23 +212,23 @@ void rcPilotCmdAcquire(pilot_cmd_bus_t* pilot_cmd_bus) {
 #endif
 }
 
-static int cmdRcLoseCat(int argc, char** argv) {
-  if (argc < 2) {
-    rt_kprintf("RC printf enable command usage: rc_printf_enable <enable|disable>\n");
-    return -1;
-  }
+// static int cmdRcLoseCat(int argc, char** argv) {
+//   if (argc < 2) {
+//     rt_kprintf("RC printf enable command usage: rc_printf_enable <enable|disable>\n");
+//     return -1;
+//   }
 
-  if (!rt_strcmp(argv[1], "enable")) {
-    cmdPrintf = RT_TRUE;
-  } else if (!rt_strcmp(argv[1], "disable")) {
-    cmdPrintf = RT_FALSE;
-  } else {
-    rt_kprintf("Invalid command: %s\n", argv[1]);
-    rt_kprintf("Usage: rc_printf_enable <enable|disable>\n");
-    return -1;
-  }
+//   if (!rt_strcmp(argv[1], "enable")) {
+//     cmdPrintf = RT_TRUE;
+//   } else if (!rt_strcmp(argv[1], "disable")) {
+//     cmdPrintf = RT_FALSE;
+//   } else {
+//     rt_kprintf("Invalid command: %s\n", argv[1]);
+//     rt_kprintf("Usage: rc_printf_enable <enable|disable>\n");
+//     return -1;
+//   }
 
-  return 0;
-}
+//   return 0;
+// }
 
-MSH_CMD_EXPORT_ALIAS(cmdRcLoseCat, cmdRcLoseCat, rc printf enable command);
+// MSH_CMD_EXPORT_ALIAS(cmdRcLoseCat, cmdRcLoseCat, rc printf enable command);

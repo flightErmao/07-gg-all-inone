@@ -11,6 +11,10 @@
 #define THREAD_STACK_SIZE 2048
 #define THREAD_TIMESLICE 5
 
+#if defined(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN) && defined(PROJECT_MINIFLY_TASK_DSHOT_DEBUG_PIN_EN)
+#include "debugPin.h"
+#endif
+
 #ifndef DSHOT_DEVICE_NAME
 #define DSHOT_DEVICE_NAME "dshot"
 #endif
@@ -110,6 +114,10 @@ static void task_dshot_entry(void *parameter) {
   while (1) {
     rt_uint32_t rec = 0;
     rt_event_recv(&dshot_event, 1u, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, &rec);
+
+#if defined(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN) && defined(PROJECT_MINIFLY_TASK_DSHOT_DEBUG_PIN_EN)
+    DEBUG_PIN_DEBUG0_TOGGLE();
+#endif
 
     mcn_copy(MCN_HUB(dshot), dshot_cmd_sub, &latest);
 

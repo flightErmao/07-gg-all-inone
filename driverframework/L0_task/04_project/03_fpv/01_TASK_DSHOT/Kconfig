@@ -11,5 +11,10 @@ menuconfig PROJECT_MINIFLY_TASK_DSHOT_EN
             help
                 Periodic frequency of DShot task. Task waits timer event, then
                 copies the latest uMCN command and writes to DShot device.
+        config PROJECT_MINIFLY_TASK_DSHOT_DEBUG_PIN_EN
+            bool "ENABLE: PROJECT_MINIFLY_TASK_DSHOT_DEBUG_PIN_EN"
+            default n
+            help
+                Debug pin for DShot task.
     endif
 

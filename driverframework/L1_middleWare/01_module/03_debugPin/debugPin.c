@@ -21,7 +21,7 @@ static debug_pin_config_t debug_pins[4] = {0};
  * @brief 初始化调试引脚
  */
 static int debug_pin_init(void) {
-  printf("[DEBUG_PIN] 开始初始化调试引脚\n");
+  rt_kprintf("[DEBUG_PIN] 开始初始化调试引脚\n");
 
   // 初始化DEBUG0引脚
 #ifdef L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_0_EN
@@ -35,7 +35,7 @@ static int debug_pin_init(void) {
   rt_pin_mode(debug_pins[0].rt_pin, PIN_MODE_OUTPUT);
   rt_pin_write(debug_pins[0].rt_pin, PIN_LOW);
 
-  printf("[DEBUG_PIN] DEBUG0引脚初始化完成，引脚: %ld\n", debug_pins[0].rt_pin);
+  rt_kprintf("[DEBUG_PIN] DEBUG0引脚初始化完成，引脚: %ld\n", debug_pins[0].rt_pin);
 #endif
 
   // 初始化DEBUG1引脚
@@ -50,7 +50,7 @@ static int debug_pin_init(void) {
   rt_pin_mode(debug_pins[1].rt_pin, PIN_MODE_OUTPUT);
   rt_pin_write(debug_pins[1].rt_pin, PIN_LOW);
 
-  printf("[DEBUG_PIN] DEBUG1引脚初始化完成，引脚: %ld\n", debug_pins[1].rt_pin);
+  rt_kprintf("[DEBUG_PIN] DEBUG1引脚初始化完成，引脚: %ld\n", debug_pins[1].rt_pin);
 #endif
 
   // 初始化DEBUG2引脚
@@ -65,7 +65,7 @@ static int debug_pin_init(void) {
   rt_pin_mode(debug_pins[2].rt_pin, PIN_MODE_OUTPUT);
   rt_pin_write(debug_pins[2].rt_pin, PIN_LOW);
 
-  printf("[DEBUG_PIN] DEBUG2引脚初始化完成，引脚: %ld\n", debug_pins[2].rt_pin);
+  rt_kprintf("[DEBUG_PIN] DEBUG2引脚初始化完成，引脚: %ld\n", debug_pins[2].rt_pin);
 #endif
 
   // 初始化DEBUG3引脚
@@ -80,10 +80,10 @@ static int debug_pin_init(void) {
   rt_pin_mode(debug_pins[3].rt_pin, PIN_MODE_OUTPUT);
   rt_pin_write(debug_pins[3].rt_pin, PIN_LOW);
 
-  printf("[DEBUG_PIN] DEBUG3引脚初始化完成，引脚: %ld\n", debug_pins[3].rt_pin);
+  rt_kprintf("[DEBUG_PIN] DEBUG3引脚初始化完成，引脚: %ld\n", debug_pins[3].rt_pin);
 #endif
 
-  printf("[DEBUG_PIN] 调试引脚初始化完成\n");
+  rt_kprintf("[DEBUG_PIN] 调试引脚初始化完成\n");
   return 0;
 }
 
