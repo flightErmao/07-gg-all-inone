@@ -65,9 +65,6 @@ void stateControl(const state_t *state, const setpoint_t *setpoint, control_t *c
   }
 
   if (RATE_DO_EXECUTE(RATE_PID_RATE, tick)) {
-#ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
-    DEBUG_PIN_DEBUG0_TOGGLE();
-#endif
     attitudeRatePID(&state->gyro_filter, &rateDesired_, control);
   }
 
