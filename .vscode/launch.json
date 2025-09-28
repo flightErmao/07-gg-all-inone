@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "01-STM32F411CE",
+            "name": "1-01-STM32F411CE",
             "type": "cortex-debug",
             "request": "launch",
             "cwd": "${workspaceRoot}",
@@ -24,7 +24,7 @@
             ]
         },
         {
-            "name": "03-STM32F405RG",
+            "name": "1-02-STM32F405RG",
             "type": "cortex-debug",
             "request": "launch",
             "cwd": "${workspaceRoot}",
@@ -43,7 +43,7 @@
             ]
         },
         {
-            "name": "04-STM32H743",
+            "name": "1-03-STM32H743",
             "type": "cortex-debug",
             "request": "launch",
             "cwd": "${workspaceRoot}",
@@ -62,7 +62,7 @@
             ]
         },
         {
-            "name": "05-STM32F407-8M",
+            "name": "1-04-STM32F407-8M",
             "type": "cortex-debug",
             "request": "launch",
             "cwd": "${workspaceRoot}",
@@ -82,7 +82,7 @@
             ]
         },
         {
-            "name": "20-AT32F435",
+            "name": "1-11-AT32F435",
             "type": "cortex-debug",
             "request": "launch",
             "cwd": "${workspaceRoot}",
@@ -102,7 +102,7 @@
             ]
         },
         {
-            "name": "flyer_01_minifly",
+            "name": "2-01-flyer_minifly",
             "type": "cortex-debug",
             "request": "launch",
             "cwd": "${workspaceRoot}",
@@ -118,7 +118,7 @@
             ]
         },
         {
-            "name": "flyer_02_fmuV2",
+            "name": "2-02-flyer_fmuV2",
             "type": "cortex-debug",
             "request": "launch",
             "cwd": "${workspaceRoot}",
@@ -134,7 +134,7 @@
             ]
         },
         {
-            "name": "trace_fmuV2",
+            "name": "2-02-01-flyer_fmuV2-trace",
             "type": "cortex-debug",
             "request": "attach",
             "cwd": "${workspaceRoot}",
@@ -152,7 +152,7 @@
             ]
         },
         {
-            "name": "flyer_03_fydelix",
+            "name": "2-03-flyer_fydelix",
             "type": "cortex-debug",
             "request": "launch",
             "cwd": "${workspaceRoot}",
@@ -161,11 +161,44 @@
             "servertype": "jlink",
             "device": "AT32F437VMT7",
             "interface": "swd",
-            "armToolchainPath": "${workspaceRoot}/tools/toolchain/arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi/bin",        
+            "armToolchainPath": "${workspaceRoot}/tools/toolchain/arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi/bin",
             "showDevDebugOutput": "raw",
             "openOCDLaunchCommands": [
                 "adapter_khz 4000"
             ]
-        }
+        },
+        {
+            "name": "3-01-tool_mag_check",
+            "type": "cortex-debug",
+            "request": "launch",
+            "cwd": "${workspaceRoot}",
+            "executable": "target/03_tools_work/01_mag_check/rt-thread.elf",
+            "serverpath": "${env:JLINK_SERVER}",
+            "servertype": "jlink",
+            "device": "STM32F411CE",
+            "interface": "swd",
+            "armToolchainPath": "${workspaceRoot}/tools/toolchain/arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi/bin",
+            "serialNumber": "", //If you have more than one J-Link probe, add the serial number here.
+            "showDevDebugOutput": "raw",
+            "openOCDLaunchCommands": [
+                "adapter_khz 4000"
+            ]
+        },
+        {
+            "name": "3-01-tool_baro_show",
+            "type": "cortex-debug",
+            "request": "launch",
+            "cwd": "${workspaceRoot}",
+            "executable": "target/03_tools_work/01_baro_show/rt-thread.elf",
+            "serverpath": "${env:JLINK_SERVER}",
+            "servertype": "jlink",
+            "device": "STM32F411CE",
+            "interface": "swd",
+            "armToolchainPath": "${workspaceRoot}/tools/toolchain/arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi/bin",
+            "serialNumber": "", //If you have more than one J-Link probe, add the serial number here.
+            "showDevDebugOutput": "raw",
+            "openOCDLaunchCommands": [
+                "adapter_khz 4000"
+            ]
     ]
 }
