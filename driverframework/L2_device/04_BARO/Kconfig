@@ -1,13 +1,45 @@
-menu "04 BARO CONFIG"
-            menu "01 SPL16 CONFIG"
-                source "$(PROJECT_ROOT)/driverframework/L2_device/04_BARO/01_SPL16_001/Kconfig"
-            endmenu
+menuconfig BSP_USING_BARO
+    bool "04 BARO CONFIG"
+    default n
+    if BSP_USING_BARO
+        choice BSP_BARO_TYPE
+            prompt "Barometer Type Selection"
+            default BSP_USING_SPL06_001
             
-            menu "02 SPA06 CONFIG"
-                source "$(PROJECT_ROOT)/driverframework/L2_device/04_BARO/02_SPA06_003/Kconfig"
-            endmenu
-            
-            menu "03 DPS3XX CONFIG"
-                source "$(PROJECT_ROOT)/driverframework/L2_device/04_BARO/03_DPS3XX/Kconfig"
-            endmenu
-endmenu
+            config BSP_USING_SPL06_001
+                bool "SPL06-001"
+                help
+                    Use SPL06-001 barometer sensor
+                    
+            config BSP_USING_SPA06_003
+                bool "SPA06-003"
+                help
+                    Use SPA06-003 barometer sensor
+                    
+            config BSP_USING_SPL16_001
+                bool "SPL16-001"
+                help
+                    Use SPL16-001 barometer sensor
+                    
+            config BSP_USING_DPS368
+                bool "DPS368"
+                help
+                    Use DPS368 barometer sensor
+        endchoice
+        
+        if BSP_USING_SPL06_001
+            source "$(PROJECT_ROOT)/driverframework/L2_device/04_BARO/01_SPL06_001/Kconfig"
+        endif
+        
+        if BSP_USING_SPA06_003
+            source "$(PROJECT_ROOT)/driverframework/L2_device/04_BARO/02_SPA06_003/Kconfig"
+        endif
+        
+        if BSP_USING_SPL16_001
+            source "$(PROJECT_ROOT)/driverframework/L2_device/04_BARO/03_SPL16_001/Kconfig"
+        endif
+        
+        if BSP_USING_DPS368
+            source "$(PROJECT_ROOT)/driverframework/L2_device/04_BARO/04_DPS368/Kconfig"
+        endif
+    endif

@@ -12,7 +12,7 @@
                     help
                         Use hardware I2C controller
                         
-                config RT_USING_I2C_BITOPS                    
+                config BSP_USING_SOFT_I2C
                     bool "Software I2C"
                     help
                         Use software I2C (bit-banging)
@@ -58,7 +58,7 @@
                     endif
             endif
             
-            if RT_USING_I2C_BITOPS
+            if BSP_USING_SOFT_I2C
                 menuconfig BSP_USING_I2C1
                     bool "Enable SOFT I2C1"
                     default y
