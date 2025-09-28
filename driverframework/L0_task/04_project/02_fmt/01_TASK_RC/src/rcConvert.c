@@ -19,26 +19,25 @@ static float limit(float value,float min, float max)
 
 void getLimitFromConfig(flightLimit_t *limit)
 {
-	enum flightSpeed speed = MID_SPEED;
+  enum flightSpeed speed = HIGH_SPEED;
 
-	switch(speed)
-	{
-		case LOW_SPEED:
-			limit->max_thrust = LOW_SPEED_THRUST;
-			limit->max_pitch = LOW_SPEED_PITCH;
-			limit->max_roll = LOW_SPEED_ROLL;
-			break;
-		case MID_SPEED:
-			limit->max_thrust = MID_SPEED_THRUST;
-			limit->max_pitch = MID_SPEED_PITCH;
-			limit->max_roll = MID_SPEED_ROLL;
-			break;
-		case HIGH_SPEED:
-			limit->max_thrust = HIGH_SPEED_THRUST;
-			limit->max_pitch = HIGH_SPEED_PITCH;
-			limit->max_roll = HIGH_SPEED_ROLL;
-			break;
-	}
+  switch (speed) {
+    case LOW_SPEED:
+      limit->max_thrust = LOW_SPEED_THRUST;
+      limit->max_pitch = LOW_SPEED_PITCH;
+      limit->max_roll = LOW_SPEED_ROLL;
+      break;
+    case MID_SPEED:
+      limit->max_thrust = MID_SPEED_THRUST;
+      limit->max_pitch = MID_SPEED_PITCH;
+      limit->max_roll = MID_SPEED_ROLL;
+      break;
+    case HIGH_SPEED:
+      limit->max_thrust = HIGH_SPEED_THRUST;
+      limit->max_pitch = HIGH_SPEED_PITCH;
+      limit->max_roll = HIGH_SPEED_ROLL;
+      break;
+  }
 }
 
 void normalizationRcChannels(joystickPercent *percent,uint16_t *channels)

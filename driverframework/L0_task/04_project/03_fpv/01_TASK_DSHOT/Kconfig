@@ -37,5 +37,12 @@ menuconfig PROJECT_MINIFLY_TASK_DSHOT_EN
             help
                 Enable mlog logging for DShot motor data. This will log motor values,
                 mapped DShot values, and armed state to SD card via mlog system.
+        
+        config PROJECT_MINIFLY_TASK_DSHOT_FILTER_DEBUG_EN
+            bool "ENABLE: PROJECT_MINIFLY_TASK_DSHOT_FILTER_DEBUG_EN"
+            default n
+            help
+                Enable debug output for motor filter. This will print raw and filtered
+                motor values every 100 iterations to help tune filter parameters.
     endif
 

@@ -10,6 +10,7 @@
 #include "taskMiniflyStabilizer.h"
 #endif
 #include "mlogDshot.h"
+#include "motorFilter.h"
 
 /* task definition */
 #define THREAD_PRIORITY 6
@@ -36,6 +37,9 @@ static rt_device_t dshot_dev = RT_NULL;
 
 /* global mapped motor values for external access */
 static uint16_t dshot_mapped[4] = {0, 0, 0, 0};
+
+/* motor filter instance */
+static motor_filter_t motor_filter;
 
 /* map motor value to DShot throttle range with armed state check */
 static inline uint16_t map_motor_to_dshot(uint16_t motor_val) {
@@ -96,6 +100,10 @@ static void device_init(void) {
 
   /* Initialize mlog DShot functionality */
   mlogDshotInit();
+
+  /* Initialize motor filter */
+  motor_filter_init(&motor_filter);
+  rt_kprintf("[taskDshot] motor filter initialized\n");
 }
 
 static void rtos_init(void) {
@@ -127,6 +135,7 @@ static void task_dshot_entry(void* parameter) {
   rtos_init();
 
   dshot_cmd_bus_t latest = {0};
+  dshot_cmd_bus_t filtered = {0};
   state_t state = {0};
   bool armed = false;
 
@@ -140,6 +149,21 @@ static void task_dshot_entry(void* parameter) {
 
     mcn_copy(MCN_HUB(dshot), dshot_cmd_sub, &latest);
 
+    /* Apply motor filter to reduce noise */
+    motor_filter_apply(&motor_filter, latest.motor_val, filtered.motor_val);
+    filtered.timestamp = latest.timestamp;
+
+    /* Optional: Print filter debug info (can be disabled in production) */
+#ifdef PROJECT_MINIFLY_TASK_DSHOT_FILTER_DEBUG_EN
+    static int debug_counter = 0;
+    if (++debug_counter >= 100) { /* Print every 100 iterations */
+      debug_counter = 0;
+      rt_kprintf("[taskDshot] Raw: %d,%d,%d,%d -> Filtered: %d,%d,%d,%d\n", latest.motor_val[0], latest.motor_val[1],
+                 latest.motor_val[2], latest.motor_val[3], filtered.motor_val[0], filtered.motor_val[1],
+                 filtered.motor_val[2], filtered.motor_val[3]);
+    }
+#endif
+
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_EN
     stabilizerGetState(&state);
     armed = state.armed;
@@ -149,10 +173,11 @@ static void task_dshot_entry(void* parameter) {
 
     if (dshot_dev) {
       if (armed) {
-        dshot_mapped[0] = map_motor_to_dshot(latest.motor_val[0]);
-        dshot_mapped[1] = map_motor_to_dshot(latest.motor_val[1]);
-        dshot_mapped[2] = map_motor_to_dshot(latest.motor_val[2]);
-        dshot_mapped[3] = map_motor_to_dshot(latest.motor_val[3]);
+        /* Use filtered motor values instead of raw values */
+        dshot_mapped[0] = map_motor_to_dshot(filtered.motor_val[0]);
+        dshot_mapped[1] = map_motor_to_dshot(filtered.motor_val[1]);
+        dshot_mapped[2] = map_motor_to_dshot(filtered.motor_val[2]);
+        dshot_mapped[3] = map_motor_to_dshot(filtered.motor_val[3]);
       } else {
         memset(dshot_mapped, 0, sizeof(dshot_mapped));
       }
