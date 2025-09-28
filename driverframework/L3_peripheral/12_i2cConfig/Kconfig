@@ -3,41 +3,94 @@
         default n        
         select RT_USING_I2C
         if BSP_USING_I2C
-            menuconfig BSP_USING_HARD_I2C1
-                bool "Enable HARD I2C1"
-                default y
-                if BSP_USING_HARD_I2C1
-                    config BSP_I2C1_SPEED
-                        int "I2C1 Speed (Hz)"
-                        default 400000
-                        range 100000 1000000
-                        help
-                            I2C1 bus speed in Hz. Default is 400KHz (400000).
-                        
-                    config BSP_I2C1_TX_USING_DMA
-                        bool "Enable HARD I2C1 TX DMA"
-                        default n        
-                    config BSP_I2C1_RX_USING_DMA
-                        bool "Enable HARD I2C1 RX DMA"
-                        default n
-                endif            
+            choice BSP_I2C_TYPE
+                prompt "I2C Type Selection"
+                default BSP_USING_HARD_I2C
                 
-            menuconfig BSP_USING_HARD_I2C2
-                bool "Enable HARD I2C2"
-                default n
-                if BSP_USING_HARD_I2C2
-                    config BSP_I2C2_SPEED
-                        int "I2C2 Speed (Hz)"
-                        default 400000
-                        range 100000 1000000
-                        help
-                            I2C2 bus speed in Hz. Default is 400KHz (400000).
+                config BSP_USING_HARD_I2C
+                    bool "Hardware I2C"
+                    help
+                        Use hardware I2C controller
                         
-                    config BSP_I2C2_TX_USING_DMA
-                        bool "Enable HARD I2C2 TX DMA"
-                        default n        
-                    config BSP_I2C2_RX_USING_DMA
-                        bool "Enable HARD I2C2 RX DMA"
-                        default n
-                endif
+                config RT_USING_I2C_BITOPS                    
+                    bool "Software I2C"
+                    help
+                        Use software I2C (bit-banging)
+            endchoice
+            
+            if BSP_USING_HARD_I2C
+                menuconfig BSP_USING_HARD_I2C1
+                    bool "Enable HARD I2C1"
+                    default y
+                    if BSP_USING_HARD_I2C1
+                        config BSP_I2C1_SPEED
+                            int "I2C1 Speed (Hz)"
+                            default 400000
+                            range 100000 1000000
+                            help
+                                I2C1 bus speed in Hz. Default is 400KHz (400000).
+                            
+                        config BSP_I2C1_TX_USING_DMA
+                            bool "Enable HARD I2C1 TX DMA"
+                            default n        
+                        config BSP_I2C1_RX_USING_DMA
+                            bool "Enable HARD I2C1 RX DMA"
+                            default n
+                    endif            
+                    
+                menuconfig BSP_USING_HARD_I2C2
+                    bool "Enable HARD I2C2"
+                    default n
+                    if BSP_USING_HARD_I2C2
+                        config BSP_I2C2_SPEED
+                            int "I2C2 Speed (Hz)"
+                            default 400000
+                            range 100000 1000000
+                            help
+                                I2C2 bus speed in Hz. Default is 400KHz (400000).
+                            
+                        config BSP_I2C2_TX_USING_DMA
+                            bool "Enable HARD I2C2 TX DMA"
+                            default n        
+                        config BSP_I2C2_RX_USING_DMA
+                            bool "Enable HARD I2C2 RX DMA"
+                            default n
+                    endif
+            endif
+            
+            if RT_USING_I2C_BITOPS
+                menuconfig BSP_USING_I2C1
+                    bool "Enable SOFT I2C1"
+                    default y
+                    if BSP_USING_I2C1
+                        config BSP_I2C1_SCL_PIN
+                            int "I2C1 SCL Pin"
+                            default 24
+                            help
+                                I2C1 SCL pin number. Default is PB8 (24).
+                                
+                        config BSP_I2C1_SDA_PIN
+                            int "I2C1 SDA Pin"
+                            default 25
+                            help
+                                I2C1 SDA pin number. Default is PB9 (25).
+                    endif
+                    
+                menuconfig BSP_USING_I2C2
+                    bool "Enable SOFT I2C2"
+                    default n
+                    if BSP_USING_I2C2
+                        config BSP_I2C2_SCL_PIN
+                            int "I2C2 SCL Pin"
+                            default 24
+                            help
+                                I2C2 SCL pin number. Default is PB8 (24).
+                                
+                        config BSP_I2C2_SDA_PIN
+                            int "I2C2 SDA Pin"
+                            default 25
+                            help
+                                I2C2 SDA pin number. Default is PB9 (25).
+                    endif
+            endif
         endif
