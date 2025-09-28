@@ -7,7 +7,7 @@ src = []
 src = Glob("./src/*.c")
 src += Glob("./src/*.cpp")
 
-path = [cwd, os.path.join(cwd, "inc")]
+path = [cwd, os.path.join(cwd, 'inc')]
 
 group = DefineGroup('SPA06_003', src, depend = ['DEVICE_SPA06_003'], CPPPATH = path)
 

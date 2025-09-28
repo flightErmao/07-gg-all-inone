@@ -4,12 +4,11 @@ cwd = GetCurrentDir()
 path = []
 src = []
 
-src = Glob("./*.c")
-src += Glob("./*.cpp")
-path = [cwd]
-path += [os.path.join(cwd, 'util')]
+src = Glob("./src/*.c")
+src += Glob("./src/*.cpp")
 
-# 定义编译组
+path = [cwd, os.path.join(cwd, 'inc')]
+
 group = DefineGroup("DPS368", src, depend=["BSP_USING_DPS368"], CPPPATH=path)
 
 Return("group")
