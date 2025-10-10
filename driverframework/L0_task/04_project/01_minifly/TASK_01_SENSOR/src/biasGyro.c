@@ -1,9 +1,13 @@
 #include <math.h>
 #include <stdlib.h>
 #include "biasGyro.h"
+#include "rtconfig.h"
 
 #define SENSORS_NBR_OF_BIAS_SAMPLES 1024
-#define GYRO_VARIANCE_BASE 5000 /* 陀螺仪零偏方差阈值 */
+#ifndef PROJECT_MINIFLY_TASK_SENSOR_GYRO_VARIANCE_BASE
+#define PROJECT_MINIFLY_TASK_SENSOR_GYRO_VARIANCE_BASE 5000
+#endif
+#define GYRO_VARIANCE_BASE PROJECT_MINIFLY_TASK_SENSOR_GYRO_VARIANCE_BASE /* 陀螺仪零偏方差阈值 */
 
 typedef struct {
   Axis3f bias;

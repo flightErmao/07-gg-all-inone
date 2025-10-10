@@ -27,4 +27,11 @@ menuconfig PROJECT_MINIFLY_TASK_SENSOR_EN
             help
                 Rotation to apply to IMU data after scale and bias removal.
 
+        config PROJECT_MINIFLY_TASK_SENSOR_GYRO_VARIANCE_BASE
+            int "Gyro static variance threshold"
+            default 5000
+            help
+                Static variance threshold for gyro bias detection. Used to decide
+                when the gyro is stable enough to take the mean as bias.
+
     endif
