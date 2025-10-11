@@ -4,6 +4,7 @@
 #include "floatConvert.h"
 #include "stabilizerTypes.h"
 #include "stateControl.h"
+#include "mcnStablize.h"
 
 #ifdef TASK_TOOL_01_ANOTC_TELEM_EN
 
