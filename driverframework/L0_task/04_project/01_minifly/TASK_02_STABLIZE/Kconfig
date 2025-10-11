@@ -85,6 +85,13 @@ menuconfig PROJECT_MINIFLY_TASK_STABLIZE_EN
                 endif
             endif
 
+        config PROJECT_MINIFLY_TASK_STABLIZE_MLOG_EN
+            bool "ENABLE: PROJECT_MINIFLY_TASK_STABLIZE_MLOG_EN"
+            default n
+            depends on TASK_TOOL_02_SD_MLOG
+            help
+                Enable mlog (SD card logging) for the stabilize task.
+
         config PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
             bool "ENABLE: PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN"
             default n

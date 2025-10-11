@@ -4,11 +4,12 @@
 #include "taskMiniflyStabilizer.h"
 #include "sensfusion6.h"
 #include "taskMiniflySensor.h"
-#include "mcnStablize.h"
+#include "aMcnStabilize.h"
 #include "biasGyro.h"
 #include "commandMinifly.h"
 #include "stateControl.h"
 #include "mixerControl.h"
+#include "aMlogStabilize.h"
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
 #include "debugPin.h"
 #endif
@@ -50,6 +51,7 @@ static void taskStabilizerInit(void) {
   timerInit();
   stateControlInit();
   motorInit();
+  mlogStabilizerInit();
 }
 
 static void rcAndCmdGenerate(setpoint_t* setpoint, uint32_t tick) {
@@ -89,6 +91,26 @@ static void mixerControlExcute(control_t* control, uint32_t tick) {
   }
 }
 
+static void mlogAngleRateLog(state_t* state, uint32_t tick) {
+#if defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_EN)
+  if (RATE_DO_EXECUTE(RATE_500_HZ, tick)) {
+    attitude_t rate_desired = {0};
+    attitude_t rate_current = {0};
+
+    getRateDesired(&rate_desired);
+    rate_current.roll = state->gyro_filter.x;
+    rate_current.pitch = state->gyro_filter.y;
+    rate_current.yaw = state->gyro_filter.z;
+
+    mlogStabilizerCopyAngleRateData(&rate_desired, &rate_current);
+    mlogStabilizerPushAngleRateData(rt_tick_get());
+  }
+#else
+  RT_UNUSED(state);
+  RT_UNUSED(tick);
+#endif
+}
+
 static void stabilizer_minifly_thread_entry(void* parameter) {
   uint32_t tick = 0;
   taskStabilizerInit();
@@ -105,6 +127,7 @@ static void stabilizer_minifly_thread_entry(void* parameter) {
     flyerStateUpdate(&state_, tick);
     stateControl(&state_, &setpoint_, &contorl_, tick);
     mixerControlExcute(&contorl_, tick);
+    mlogAngleRateLog(&state_, tick);
     tick++;
   }
 }
