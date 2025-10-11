@@ -123,3 +123,40 @@ void attitudePIDwriteToConfigParam(void) {
   // configParam.pidRate.yaw.ki = pidRateYaw.ki;
   // configParam.pidRate.yaw.kd = pidRateYaw.kd;
 }
+
+/* PID debug data access functions implementation */
+void getAnglePidRollDebug(float* outP, float* outI, float* outD) {
+  if (outP) *outP = pidAngleRoll.outP;
+  if (outI) *outI = pidAngleRoll.outI;
+  if (outD) *outD = pidAngleRoll.outD;
+}
+
+void getAnglePidPitchDebug(float* outP, float* outI, float* outD) {
+  if (outP) *outP = pidAnglePitch.outP;
+  if (outI) *outI = pidAnglePitch.outI;
+  if (outD) *outD = pidAnglePitch.outD;
+}
+
+void getAnglePidYawDebug(float* outP, float* outI, float* outD) {
+  if (outP) *outP = pidAngleYaw.outP;
+  if (outI) *outI = pidAngleYaw.outI;
+  if (outD) *outD = pidAngleYaw.outD;
+}
+
+void getRatePidRollDebug(float* outP, float* outI, float* outD) {
+  if (outP) *outP = pidRateRoll.outP;
+  if (outI) *outI = pidRateRoll.outI;
+  if (outD) *outD = pidRateRoll.outD;
+}
+
+void getRatePidPitchDebug(float* outP, float* outI, float* outD) {
+  if (outP) *outP = pidRatePitch.outP;
+  if (outI) *outI = pidRatePitch.outI;
+  if (outD) *outD = pidRatePitch.outD;
+}
+
+void getRatePidYawDebug(float* outP, float* outI, float* outD) {
+  if (outP) *outP = pidRateYaw.outP;
+  if (outI) *outI = pidRateYaw.outI;
+  if (outD) *outD = pidRateYaw.outD;
+}

@@ -5,6 +5,7 @@
 #include "stabilizerTypes.h"
 #include "stateControl.h"
 #include "mcnStablize.h"
+#include "attitudePid.h"
 
 #ifdef TASK_TOOL_01_ANOTC_TELEM_EN
 
@@ -54,6 +55,40 @@ void sendFlyerStates(uint16_t count_ms) {
 
     sendUserDatafloat6(PROJECT_MINIFLY_TASK_STABLIZE_LOG_GROUP_RATE, rate_current.roll, rate_current.pitch,
                        rate_current.yaw, rate_desired.roll, rate_desired.pitch, rate_desired.yaw);
+  }
+#endif
+
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_PID_DEBUG
+  if (!(count_ms % PERIOD_20ms)) {
+    float angle_roll_p, angle_roll_i, angle_roll_d;
+    float angle_pitch_p, angle_pitch_i, angle_pitch_d;
+    float angle_yaw_p, angle_yaw_i, angle_yaw_d;
+
+    getAnglePidRollDebug(&angle_roll_p, &angle_roll_i, &angle_roll_d);
+    getAnglePidPitchDebug(&angle_pitch_p, &angle_pitch_i, &angle_pitch_d);
+    getAnglePidYawDebug(&angle_yaw_p, &angle_yaw_i, &angle_yaw_d);
+
+    sendUserDatafloat9(PROJECT_MINIFLY_TASK_STABLIZE_LOG_GROUP_ANGLE_PID, 
+                       angle_roll_p, angle_roll_i, angle_roll_d,
+                       angle_pitch_p, angle_pitch_i, angle_pitch_d,
+                       angle_yaw_p, angle_yaw_i, angle_yaw_d);
+  }
+#endif
+
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_PID_DEBUG
+  if (!(count_ms % PERIOD_20ms)) {
+    float rate_roll_p, rate_roll_i, rate_roll_d;
+    float rate_pitch_p, rate_pitch_i, rate_pitch_d;
+    float rate_yaw_p, rate_yaw_i, rate_yaw_d;
+
+    getRatePidRollDebug(&rate_roll_p, &rate_roll_i, &rate_roll_d);
+    getRatePidPitchDebug(&rate_pitch_p, &rate_pitch_i, &rate_pitch_d);
+    getRatePidYawDebug(&rate_yaw_p, &rate_yaw_i, &rate_yaw_d);
+
+    sendUserDatafloat9(PROJECT_MINIFLY_TASK_STABLIZE_LOG_GROUP_RATE_PID,
+                       rate_roll_p, rate_roll_i, rate_roll_d,
+                       rate_pitch_p, rate_pitch_i, rate_pitch_d,
+                       rate_yaw_p, rate_yaw_i, rate_yaw_d);
   }
 #endif
 }

@@ -64,6 +64,11 @@ void sendUserDatafloat6(uint8_t group, float a, float b, float c, float d, float
   anotc_telem_send_floats(group, values, 6, MSG_ASYNC);
 }
 
+void sendUserDatafloat9(uint8_t group, float a, float b, float c, float d, float e, float f, float g, float h, float i) {
+  float values[9] = {a, b, c, d, e, f, g, h, i};
+  anotc_telem_send_floats(group, values, 9, MSG_ASYNC);
+}
+
 void sendUserDatafloat6_u32(uint8_t group, float a, float b, float c, float d, float e, float f, uint32_t uint32_t) {
   uint8_t _cnt = 0;
   atkp_t p;

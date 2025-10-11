@@ -25,4 +25,12 @@ void attitudeControllerResetPitchAttitudePID(void);
 void attitudeResetAllPID(void);
 void attitudePIDwriteToConfigParam(void);
 
+/* PID debug data access functions */
+void getAnglePidRollDebug(float* outP, float* outI, float* outD);
+void getAnglePidPitchDebug(float* outP, float* outI, float* outD);
+void getAnglePidYawDebug(float* outP, float* outI, float* outD);
+void getRatePidRollDebug(float* outP, float* outI, float* outD);
+void getRatePidPitchDebug(float* outP, float* outI, float* outD);
+void getRatePidYawDebug(float* outP, float* outI, float* outD);
+
 #endif /* __ATTITUDE_PID_H */
