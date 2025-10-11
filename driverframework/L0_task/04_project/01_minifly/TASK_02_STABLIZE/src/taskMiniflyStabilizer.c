@@ -52,9 +52,45 @@ static void taskStabilizerInit(void) {
   motorInit();
 }
 
+static void rcAndCmdGenerate(setpoint_t* setpoint, uint32_t tick) {
+#if defined(PROJECT_MINIFLY_TASK06_RC_EN) || defined(PROJECT_FMT_TASK01_RC_EN)
+  // if (RATE_DO_EXECUTE(RATE_100_HZ, tick) && getIsCalibrated() == true)
+  if (RATE_DO_EXECUTE(RATE_100_HZ, tick)) {
+    pilot_cmd_bus_t rc_data = {0};
+    rcPilotCmdAcquire(&rc_data);
+    commanderGetSetpoint(&rc_data, setpoint);
+  }
+#endif
+}
+
+static void flyerStateUpdate(state_t* state, uint32_t tick) {
+  if (RATE_DO_EXECUTE(ATTITUDE_ESTIMAT_RATE, tick)) {
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
+      DEBUG_PIN_DEBUG3_HIGH();
+#endif
+      sensorData_t sensorData = {0};
+      sensorsAcquire(&sensorData);
+      imuUpdate(sensorData.acc_filter, sensorData.gyro_filter, state, ATTITUDE_ESTIMAT_DT);
+      state->attitude.timestamp = rt_tick_get();
+      state->armed = setpoint_.armed;
+      mcnStateReportPublish(state);
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
+      DEBUG_PIN_DEBUG3_LOW();
+#endif
+  }
+}
+
+static void mixerControlExcute(control_t* control, uint32_t tick) {
+  if (RATE_DO_EXECUTE(RATE_500_HZ, tick)) {
+#if defined(L2_DEVICE_03_MOTOR_01_PWM_EN) || defined(L2_DEVICE_03_MOTOR_03_PWM_EN) || \
+    defined(PROJECT_MINIFLY_TASK_DSHOT_EN)
+    mixerControl(control);
+#endif
+  }
+}
+
 static void stabilizer_minifly_thread_entry(void* parameter) {
   uint32_t tick = 0;
-  sensorData_t sensorData = {0};
   taskStabilizerInit();
 
   while (!sensorsAreCalibrated()) {
@@ -65,39 +101,10 @@ static void stabilizer_minifly_thread_entry(void* parameter) {
   while (1) {
     rt_event_recv(stabilizer_event, STABILIZER_EVENT_FLAG, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER,
                   RT_NULL);
-
-#if defined(PROJECT_MINIFLY_TASK06_RC_EN) || defined(PROJECT_FMT_TASK01_RC_EN)
-    // if (RATE_DO_EXECUTE(RATE_100_HZ, tick) && getIsCalibrated() == true)
-    if (RATE_DO_EXECUTE(RATE_100_HZ, tick)) {
-      pilot_cmd_bus_t rc_data = {0};
-      rcPilotCmdAcquire(&rc_data);
-      commanderGetSetpoint(&rc_data, &setpoint_);
-    }
-#endif
-
-    if (RATE_DO_EXECUTE(ATTITUDE_ESTIMAT_RATE, tick)) {
-#ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
-      DEBUG_PIN_DEBUG3_HIGH();
-#endif
-      sensorsAcquire(&sensorData);
-      imuUpdate(sensorData.acc_filter, sensorData.gyro_filter, &state_, ATTITUDE_ESTIMAT_DT);
-      state_.attitude.timestamp = rt_tick_get();
-      state_.armed = setpoint_.armed;
-      mcnStateReportPublish(&state_);
-#ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
-      DEBUG_PIN_DEBUG3_LOW();
-#endif
-    }
-
+    rcAndCmdGenerate(&setpoint_, tick);
+    flyerStateUpdate(&state_, tick);
     stateControl(&state_, &setpoint_, &contorl_, tick);
-
-    if (RATE_DO_EXECUTE(RATE_500_HZ, tick)) {
-#if defined(L2_DEVICE_03_MOTOR_01_PWM_EN) || defined(L2_DEVICE_03_MOTOR_03_PWM_EN) || \
-    defined(PROJECT_MINIFLY_TASK_DSHOT_EN)
-      mixerControl(&contorl_);
-#endif
-    }
-
+    mixerControlExcute(&contorl_, tick);
     tick++;
   }
 }
