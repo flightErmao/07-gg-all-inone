@@ -25,18 +25,34 @@ void sendFlyerStates(uint16_t count_ms) {
     state_t state_flyer = {0};
     attitude_t attitude_current;
     attitude_t attitude_desired;
-    attitude_t rate_desired;
 
     stabilizerGetState(&state_flyer);
     getAttitudeDesired(&attitude_desired);
-    getRateDesired(&rate_desired);
 
     attitude_current.roll = state_flyer.attitude.roll;
     attitude_current.pitch = state_flyer.attitude.pitch;
     attitude_current.yaw = state_flyer.attitude.yaw;
 
-    sendUserDatafloat6(1, attitude_current.roll, attitude_current.pitch, state_flyer.gyro_filter.z,
-                       attitude_desired.roll, attitude_desired.pitch, rate_desired.yaw);
+    sendUserDatafloat6(PROJECT_MINIFLY_TASK_STABLIZE_LOG_GROUP_ANGLE, attitude_current.roll, attitude_current.pitch,
+                       attitude_current.yaw, attitude_desired.roll, attitude_desired.pitch, attitude_desired.yaw);
+  }
+#endif
+
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_DEBUG
+  if (!(count_ms % PERIOD_20ms)) {
+    state_t state_flyer = {0};
+    attitude_t rate_current;
+    attitude_t rate_desired;
+
+    stabilizerGetState(&state_flyer);
+    getRateDesired(&rate_desired);
+
+    rate_current.roll = state_flyer.gyro_filter.x;
+    rate_current.pitch = state_flyer.gyro_filter.y;
+    rate_current.yaw = state_flyer.gyro_filter.z;
+
+    sendUserDatafloat6(PROJECT_MINIFLY_TASK_STABLIZE_LOG_GROUP_RATE, rate_current.roll, rate_current.pitch,
+                       rate_current.yaw, rate_desired.roll, rate_desired.pitch, rate_desired.yaw);
   }
 #endif
 }
