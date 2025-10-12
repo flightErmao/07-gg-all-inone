@@ -4,19 +4,13 @@
 #include "uMCN.h"
 #include <rtthread.h>
 
-typedef struct {
-  uint16_t motor_val[4]; /* 0~65535 from mixerControl */
-  uint32_t timestamp;
-} dshot_cmd_bus_t;
-
-/* uMCN topic extern (declared here, defined in taskDshot.c) */
-MCN_DECLARE(dshot_cmd);
-
 /* Publisher interface for mixerControl: publish raw 0~65535 values */
 void task_dshot_publish_raw(uint16_t m1, uint16_t m2, uint16_t m3, uint16_t m4);
 
 /* API to get mapped motor values for external access */
 void task_dshot_get_mapped(uint16_t *m1, uint16_t *m2, uint16_t *m3, uint16_t *m4);
+
+void getMotorFreq(float* values);
 
 #endif
 

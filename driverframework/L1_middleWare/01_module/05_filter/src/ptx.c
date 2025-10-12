@@ -1,8 +1,6 @@
-#include "module/filter/ptx.h"
-
+#include "ptx.h"
 #include <math.h>
-
-#include "module/math/trigonometric.h"
+#include "trigonometric.h"
 
 static float bf_pt1FilterCalcGain(float f_cut, float dT) {
     float RC = 1 / (2 * M_PIf * f_cut);

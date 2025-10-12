@@ -6,24 +6,32 @@
 #include "rtconfig.h"
 #include "floatConvert.h"
 #include "string.h"
+#include "mlogDshot.h"
+#include "motorFilter.h"
+
+#if defined(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN) && defined(PROJECT_MINIFLY_TASK_DSHOT_DEBUG_PIN_EN)
+#include "debugPin.h"
+#endif
+
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_EN
 #include "taskMiniflyStabilizer.h"
 #endif
-#include "mlogDshot.h"
-#include "motorFilter.h"
+
+#ifndef DSHOT_DEVICE_NAME
+#define DSHOT_DEVICE_NAME "dshot"
+#endif
 
 /* task definition */
 #define THREAD_PRIORITY 6
 #define THREAD_STACK_SIZE 2048
 #define THREAD_TIMESLICE 5
 
-#if defined(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN) && defined(PROJECT_MINIFLY_TASK_DSHOT_DEBUG_PIN_EN)
-#include "debugPin.h"
-#endif
+#define INVALID_RPM_MCN 2000.0f  // Invalid RPM value to indicate motor stopped
 
-#ifndef DSHOT_DEVICE_NAME
-#define DSHOT_DEVICE_NAME "dshot"
-#endif
+typedef struct {
+  uint16_t motor_val[4]; /* 0~65535 from mixerControl */
+  uint32_t timestamp;
+} dshot_cmd_bus_t;
 
 /* mcn topic */
 MCN_DEFINE(dshot, sizeof(dshot_cmd_bus_t));
@@ -40,6 +48,13 @@ static uint16_t dshot_mapped[4] = {0, 0, 0, 0};
 
 /* motor filter instance */
 static motor_filter_t motor_filter;
+
+#ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
+/* motor pole pairs, default to 7 for 14-pole motors */
+// TODO: should be read from config
+static uint8_t motor_pole_pairs = 7;
+static float dshot_rpm_pub[DSHOT_MOTOR_NUMS];
+#endif
 
 /* map motor value to DShot throttle range with armed state check */
 static inline uint16_t map_motor_to_dshot(uint16_t motor_val) {
@@ -130,6 +145,26 @@ static void rtos_init(void) {
   }
 }
 
+#ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
+static void dshotReadRpm(void) {
+  uint16_t rpm_read_temp[DSHOT_MOTOR_NUMS];
+  uint16_t dshot_erpm_raw[DSHOT_MOTOR_NUMS];
+  // Read RPM data from all physical motors
+  rt_device_read(dshot_dev, 0, rpm_read_temp, 0);
+
+  // Apply reverse mapping to get logical motor RPM values
+  for (uint8_t i = 0; i < DSHOT_MOTOR_NUMS; i++) {
+    dshot_erpm_raw[i] = rpm_read_temp[i];
+    if (dshot_erpm_raw[i] == 0) {
+      // TODO:we need safe guard to lock to disarm when in the air and bidir-dshot link invalid
+      dshot_rpm_pub[i] = INVALID_RPM_MCN;
+    } else {
+      dshot_rpm_pub[i] = (float)((float)(1000000 / motor_pole_pairs) / (dshot_erpm_raw[i] * 1.0f));
+    }
+  }
+}
+#endif
+
 static void task_dshot_entry(void* parameter) {
   device_init();
   rtos_init();
@@ -184,6 +219,9 @@ static void task_dshot_entry(void* parameter) {
 
       /* write all 4 channels; DShot driver expects size == motor count */
       rt_device_write(dshot_dev, 0x0F, dshot_mapped, 4);
+#ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
+      dshotReadRpm();
+#endif
     }
 
     /* Push data to mlog */
@@ -200,4 +238,16 @@ static int task_dshot_autostart(void) {
 
 #ifdef PROJECT_MINIFLY_TASK_DSHOT_EN
 INIT_APP_EXPORT(task_dshot_autostart);
+#endif
+
+#ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
+void getMotorFreq(float* values) {
+  if (values == NULL) return;
+  if (sizeof(values) != sizeof(float) * DSHOT_MOTOR_NUMS) {
+    return;
+  }
+  memcpy(values, dshot_rpm_pub, sizeof(dshot_rpm_pub));
+}
+#elif
+void getMotorFreq(float* values) { memset(values, 0, sizeof(float) * DSHOT_MOTOR_NUMS); }
 #endif

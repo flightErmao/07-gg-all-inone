@@ -1,6 +1,5 @@
-#include "module/filter/biquad.h"
-
-#include "module/math/trigonometric.h"
+#include "biquad.h"
+#include "trigonometric.h"
 
 // get notch filter Q given center frequency (f0) and lower cutoff frequency (f1)
 // Q = f0 / (f2 - f1) ; f2 = f0^2 / f1

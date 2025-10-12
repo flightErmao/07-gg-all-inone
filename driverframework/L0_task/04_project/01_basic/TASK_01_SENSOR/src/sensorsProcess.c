@@ -7,7 +7,10 @@
 #include <math.h>
 #include <string.h>
 #include "mlogImu.h"
-
+#ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
+#include "rpmFilter.h"
+#include "taskDshot.h"
+#endif
 #define SENSORS_ACC_SCALE_SAMPLES 200
 
 static sensorData_t sensors;
@@ -105,24 +108,38 @@ void initImuRotationDir(void) {
 #endif
 }
 
-sensorData_t processAccGyroMeasurements(const uint8_t* buffer) {
-  sensorsLoadRawFromBuffer(buffer);
-
+static void dealWithGyroData(void) {
   gyroBiasFound = getGyroBias(sensors.gyro_raw, &gyroBias);
   gyroRemoveBiasRaw(&sensors.gyro_filter, &sensors.gyro_raw, &gyroBias);
   gyroApplyScale(&sensors.gyro_filter);
   gyroApplyRotation(imu_mount_rotation, &sensors.gyro_filter);
   mlogImuCopyGyroData(&sensors.gyro_filter, RT_NULL);
+#ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
+  float rpmData[3] = {0};
+  float rpmfilteredGyroData[3] = {0};
+  getMotorFreq(rpmData);
+  rpmFilter(sensors.gyro_filter.axis, rpmData, rpmfilteredGyroData);
+  applyAxis3fLpfGyro((Axis3f*)rpmfilteredGyroData);
+  mlogImuCopyGyroData(RT_NULL, (Axis3f*)rpmfilteredGyroData);
+#elif
   applyAxis3fLpfGyro(&sensors.gyro_filter);
   mlogImuCopyGyroData(RT_NULL, &sensors.gyro_filter);
+#endif
+}
 
+static void dealWithAccData(void) {
   getAccScale(sensors.acc_raw);
   accApplyScale(&sensors.acc_filter, &sensors.acc_raw);
   accApplyRotation(imu_mount_rotation, &sensors.acc_filter);
   mlogImuCopyAccData(&sensors.acc_filter, RT_NULL);
   applyAxis3fLpfAcc(&sensors.acc_filter);
   mlogImuCopyAccData(RT_NULL, &sensors.acc_filter);
+}
 
+sensorData_t processAccGyroMeasurements(const uint8_t* buffer) {
+  sensorsLoadRawFromBuffer(buffer);
+  dealWithGyroData();
+  dealWithAccData();
   return sensors;
 }
 
