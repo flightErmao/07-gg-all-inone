@@ -73,11 +73,8 @@ static void sensor_minifly_thread_entry(void *parameter) {
 
   while (1) {
 #ifdef PROJECT_MINIFLY_TASK_SENSOR_TIMER_TRIGGER_EN
-    {
-      rt_uint32_t received = 0;
-      rt_event_recv(&sensor_event, SENSOR_EVENT_FLAG_TRIGGER, RT_EVENT_FLAG_AND | RT_EVENT_FLAG_CLEAR,
-                    RT_WAITING_FOREVER, &received);
-    }
+    rt_event_recv(&sensor_event, SENSOR_EVENT_FLAG_TRIGGER, RT_EVENT_FLAG_AND | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER,
+                  RT_NULL);
 #endif
     if (dev_sensor_imu) {
       int rb = rt_device_read(dev_sensor_imu, 0, sensor_buffer, SENSORS_MPU6500_BUFF_LEN);

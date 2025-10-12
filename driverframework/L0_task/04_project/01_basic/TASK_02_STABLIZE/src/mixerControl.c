@@ -136,13 +136,13 @@ void mixerControl(control_t *control) {
 
 #ifdef PROJECT_MINIFLY_TASK_DSHOT_EN
   /* Publish raw 0~65535 motor values to DShot task via uMCN */
-  dshot_cmd_bus_t dshot_cmd;
-  dshot_cmd.motor_val[0] = (uint16_t)motorPWM.m1;
-  dshot_cmd.motor_val[1] = (uint16_t)motorPWM.m2;
-  dshot_cmd.motor_val[2] = (uint16_t)motorPWM.m3;
-  dshot_cmd.motor_val[3] = (uint16_t)motorPWM.m4;
-  dshot_cmd.timestamp = rt_tick_get();
-  mcnDshotCmdPublish(&dshot_cmd);
+  mixer_data_t mixer_data_pub;
+  mixer_data_pub.motor_val[0] = (uint16_t)motorPWM.m1;
+  mixer_data_pub.motor_val[1] = (uint16_t)motorPWM.m2;
+  mixer_data_pub.motor_val[2] = (uint16_t)motorPWM.m3;
+  mixer_data_pub.motor_val[3] = (uint16_t)motorPWM.m4;
+  mixer_data_pub.timestamp = rt_tick_get();
+  mcnMixerPublish(&mixer_data_pub);
 
 #elif defined(L2_DEVICE_03_MOTOR_01_PWM_EN)
   motorsSetRatio(MOTOR_M1, motorPWM.m1);
@@ -170,43 +170,9 @@ void mixerControl(control_t *control) {
 }
 
 void motorInit(void) {
-#ifdef PROJECT_MINIFLY_TASK_DSHOT_EN
-  /* Initialize DShot command MCN */
-  if (mcnDshotCmdInit() != 0) {
-    rt_kprintf("[mixerControl] Failed to initialize DShot command MCN\n");
-  }
-#endif
-
 #ifdef L2_DEVICE_03_MOTOR_03_PWM_EN
   if (motor_device_init() != 0) {
     rt_kprintf("[mixerControl] Failed to initialize motor device\n");
   }
 #endif
 }
-
-// static void cmdMotorEnable(int argc, char **argv) {
-//   if (argc == 1) {
-//     /* No arguments - show current status */
-//     rt_kprintf("Motor control is currently %s\n", motorSetEnable ? "DISABLED" : "ENABLED");
-//     rt_kprintf("Usage: cmdMotorEnable [enable|disable]\n");
-//     return;
-//   }
-
-//   if (argc == 2) {
-//     if (strcmp(argv[1], "enable") == 0) {
-//       motorSetEnable = false; /* false means motor control is enabled */
-//       rt_kprintf("Motor control ENABLED , Motor test can't run\n");
-//     } else if (strcmp(argv[1], "disable") == 0) {
-//       motorSetEnable = true; /* true means motor control is disabled */
-//       rt_kprintf("Motor control DISABLED , Motor test can run!\n");
-//     } else {
-//       rt_kprintf("Invalid argument. Use 'enable' or 'disable'\n");
-//       rt_kprintf("Usage: cmdMotorEnable [enable|disable]\n");
-//     }
-//   } else {
-//     rt_kprintf("Too many arguments\n");
-//     rt_kprintf("Usage: cmdMotorEnable [enable|disable]\n");
-//   }
-// }
-
-// MSH_CMD_EXPORT_ALIAS(cmdMotorEnable, cmdMotorEnable, Enable motor control);

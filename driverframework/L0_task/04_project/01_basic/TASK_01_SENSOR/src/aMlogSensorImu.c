@@ -7,9 +7,6 @@ typedef struct {
     float acc_filter_after[3];   // acceleration data after filtering
     float gyro_filter_before[3]; // gyro data before filtering
     float gyro_filter_after[3];  // gyro data after filtering
-#ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
-    float rpm_data[4];  // motor RPM data (4 motors)
-#endif
 } mlogImuData_t;
 
 void mlogImuSetEnable(uint8_t enable);
@@ -23,9 +20,6 @@ static mlog_elem_t Sensor_IMU_Elems[] __attribute__((used)) = {
     MLOG_ELEMENT_VEC(acc_filter_after, MLOG_FLOAT, 3),
     MLOG_ELEMENT_VEC(gyro_filter_before, MLOG_FLOAT, 3),
     MLOG_ELEMENT_VEC(gyro_filter_after, MLOG_FLOAT, 3),
-#ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
-    MLOG_ELEMENT_VEC(rpm_data, MLOG_FLOAT, 4),
-#endif
 };
 MLOG_BUS_DEFINE(Sensor_IMU, Sensor_IMU_Elems);
 
@@ -103,21 +97,6 @@ void mlogImuCopyGyroData(const Axis3f* gyro_before, const Axis3f* gyro_after) {
     }
 }
 
-#ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
-/**
- * @brief Copy RPM data to mlog buffer
- * @param rpm_data motor RPM data array (4 motors)
- */
-void mlogImuCopyRpmData(const float* rpm_data) {
-  if (rpm_data != RT_NULL) {
-    mlog_imu_data.rpm_data[0] = rpm_data[0];
-    mlog_imu_data.rpm_data[1] = rpm_data[1];
-    mlog_imu_data.rpm_data[2] = rpm_data[2];
-    mlog_imu_data.rpm_data[3] = rpm_data[3];
-  }
-}
-#endif
-
 /**
  * @brief Push data to mlog
  * @param timestamp timestamp
@@ -153,13 +132,6 @@ void mlogImuCopyGyroData(const Axis3f* gyro_before, const Axis3f* gyro_after) {
     RT_UNUSED(gyro_after);
     /* Do nothing when mlog is disabled */
 }
-
-#ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
-void mlogImuCopyRpmData(const float* rpm_data) {
-  RT_UNUSED(rpm_data);
-  /* Do nothing when mlog is disabled */
-}
-#endif
 
 void mlogImuPushData(uint32_t timestamp) {
     RT_UNUSED(timestamp);

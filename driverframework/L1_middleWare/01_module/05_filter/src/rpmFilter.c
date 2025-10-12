@@ -9,6 +9,8 @@
 // TODO: this should be read from config
 #define TICK_INTERVAL 0.001f
 
+#define constrainG(val, min, max) ((val) < (min) ? (min) : ((val) > (max) ? (max) : (val)))
+
 static float motorLPFCutoffFrequency;
 static float rpmFilterMinFrequency;
 static float rpmFilterMaxFrequency;
@@ -27,7 +29,7 @@ static float filterStrength[3];
 static void updateRpmFilterCoeWeight(float frequency, uint8_t motorIndex, uint8_t filterIndex) {
   biquadFilter_t* template = &rpmNotchFilter[0][motorIndex][filterIndex];
   float weight = 1.0f;
-  frequency = constrain(frequency, rpmFilterMinFrequency, rpmFilterMaxFrequency);
+  frequency = constrainG(frequency, rpmFilterMinFrequency, rpmFilterMaxFrequency);
   if (frequency < rpmFilterMinFrequency + rpmFilterFadeRangeFrequency) {
     weight = weight * (frequency - rpmFilterMinFrequency) / rpmFilterFadeRangeFrequency;
   }

@@ -1,6 +1,5 @@
 
 #include <rtthread.h>
-#include "taskStabilizer.h"
 #include "floatConvert.h"
 #include "stabilizerTypes.h"
 #include "stateControl.h"
@@ -16,7 +15,7 @@ void sendFlyerStates(uint16_t count_ms) {
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_FLYER_ANGLE
   if (!(count_ms % PERIOD_20ms)) {
     state_t state_flyer = {0};
-    stabilizerGetState(&state_flyer);
+    mcnStateAcquire(&state_flyer);
     packStatus(state_flyer.attitude.roll, -state_flyer.attitude.pitch, -state_flyer.attitude.yaw,
                (int32_t)(state_flyer.position.z * 1000), state_flyer.fly_mode, state_flyer.armed);
   }
@@ -28,7 +27,7 @@ void sendFlyerStates(uint16_t count_ms) {
     attitude_t attitude_current;
     attitude_t attitude_desired;
 
-    stabilizerGetState(&state_flyer);
+    mcnStateAcquire(&state_flyer);
     getAttitudeDesired(&attitude_desired);
 
     attitude_current.roll = state_flyer.attitude.roll;
@@ -46,7 +45,7 @@ void sendFlyerStates(uint16_t count_ms) {
     attitude_t rate_current;
     attitude_t rate_desired;
 
-    stabilizerGetState(&state_flyer);
+    mcnStateAcquire(&state_flyer);
     getRateDesired(&rate_desired);
 
     rate_current.roll = state_flyer.gyro_filter.x;

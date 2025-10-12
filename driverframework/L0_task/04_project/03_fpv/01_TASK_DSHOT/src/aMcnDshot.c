@@ -5,10 +5,8 @@
 /* ==================== RPM Data MCN ==================== */
 #ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
 
-/* MCN topic definition */
-MCN_DEFINE(rpm_data, sizeof(rpm_data_bus_t));
-
-/* MCN subscriber node */
+MCN_DECLARE(rpm);
+MCN_DEFINE(rpm, sizeof(rpm_data_bus_t));
 static McnNode_t rpm_data_sub_node = RT_NULL;
 
 /* Echo function for RPM data */
@@ -31,16 +29,16 @@ static int rpm_data_echo(void* parameter) {
 }
 
 /* Initialize MCN rpm data */
-int mcnRpmDataInit(void) {
-  rt_err_t result = mcn_advertise(MCN_HUB(rpm_data), rpm_data_echo);
+static int mcnRpmDataInit(void) {
+  rt_err_t result = mcn_advertise(MCN_HUB(rpm), rpm_data_echo);
   if (result != RT_EOK) {
-    rt_kprintf("[aMcnDshot] Failed to advertise rpm_data topic: %d\n", result);
+    rt_kprintf("[aMcnDshot] Failed to advertise rpm topic: %d\n", result);
     return -1;
   }
-  
-  rpm_data_sub_node = mcn_subscribe(MCN_HUB(rpm_data), RT_NULL, RT_NULL);
+
+  rpm_data_sub_node = mcn_subscribe(MCN_HUB(rpm), RT_NULL, RT_NULL);
   if (rpm_data_sub_node == RT_NULL) {
-    rt_kprintf("[aMcnDshot] Failed to subscribe to rpm_data topic\n");
+    rt_kprintf("[aMcnDshot] Failed to subscribe to rpm topic\n");
     return -1;
   }
   
@@ -49,33 +47,25 @@ int mcnRpmDataInit(void) {
 }
 
 /* Publish RPM data to MCN */
-int mcnRpmDataPublish(const rpm_data_bus_t* rpm_data) {
-  if (!rpm_data) {
+int mcnRpmDataPublish(const rpm_data_bus_t* rpm) {
+  if (!rpm) {
     return -1;
   }
-  
-  return mcn_publish(MCN_HUB(rpm_data), rpm_data);
+
+  return mcn_publish(MCN_HUB(rpm), rpm);
 }
 
 /* Acquire RPM data from MCN */
-int mcnRpmDataAcquire(rpm_data_bus_t* rpm_data) {
-  if (!rpm_data) {
+int mcnRpmDataAcquire(rpm_data_bus_t* rpm) {
+  if (!rpm) {
     return -1;
   }
-  
+
   if (rpm_data_sub_node == RT_NULL) {
     return -1;
   }
-  
-  if (mcn_poll(rpm_data_sub_node)) {
-    return mcn_copy(MCN_HUB(rpm_data), rpm_data_sub_node, rpm_data);
-  }
-  
-  return -1;
+  return mcn_copy(MCN_HUB(rpm), rpm_data_sub_node, rpm);
 }
 
 INIT_COMPONENT_EXPORT(mcnRpmDataInit);
-
-
-#endif /* L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN */
-
+#endif

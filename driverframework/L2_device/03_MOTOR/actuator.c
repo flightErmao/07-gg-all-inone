@@ -78,13 +78,6 @@ static rt_ssize_t hal_actuator_read(struct rt_device* dev, rt_off_t pos, void* b
   RT_ASSERT(dev != RT_NULL);
   RT_ASSERT(buffer != RT_NULL);
 
-  if (pos == 0) {
-    return 0;
-  }
-
-  /* apply channel mask */
-  pos = pos & act->chan_mask;
-
   if (act->ops->act_read) {
     rb = act->ops->act_read(act, pos, buffer, size);
   }

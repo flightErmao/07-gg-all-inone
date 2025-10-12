@@ -1,7 +1,9 @@
 #include "rtthread.h"
 #include <rtdevice.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include "stabilizerTypes.h"
 #include "sensorsTypes.h"
-#include "taskStabilizer.h"
 #include "sensfusion6.h"
 #include "aMcnSensorImu.h"
 #include "aMcnStabilize.h"
@@ -46,7 +48,6 @@ static int timerInit() {
 }
 
 static void taskStabilizerInit(void) {
-  mcnStateReportInit();
   eventInit();
   timerInit();
   stateControlInit();
@@ -74,7 +75,7 @@ static void flyerStateUpdate(state_t* state, uint32_t tick) {
       imuUpdate(sensorData.acc_filter, sensorData.gyro_filter, state, ATTITUDE_ESTIMAT_DT);
       state->attitude.timestamp = rt_tick_get();
       state->armed = setpoint_.armed;
-      mcnStateReportPublish(state);
+      mcnStatePub(state);
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
       DEBUG_PIN_DEBUG3_LOW();
 #endif
