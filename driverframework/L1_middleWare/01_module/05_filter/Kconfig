@@ -1,0 +1,6 @@
+menuconfig L1_MIDDLEWARE_01_MODULE_05_FILTER_EN
+    bool "ENABLE: L1_MIDDLEWARE_01_MODULE_05_FILTER_EN"
+    default n
+    help
+        Enable filter module.
+    

@@ -1,0 +1,12 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+src = Glob("./src/*.c")
+path = [cwd, os.path.join(cwd, "inc")]
+
+group = DefineGroup(
+    "L1_MIDDLEWARE_01_MODULE_05_FILTER_EN", src, depend=["L1_MIDDLEWARE_01_MODULE_05_FILTER_EN"], CPPPATH=path
+)
+
+Return("group")
