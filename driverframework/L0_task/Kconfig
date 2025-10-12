@@ -10,12 +10,12 @@ menu "L0_TASK_CONFIG"
     source "$(PROJECT_ROOT)/driverframework/L0_task/03_work/TASK_02_BARO_SHOW/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L0_task/03_work/TASK_03_MAG_RTK/Kconfig"
 
-    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/01_minifly/TASK_01_SENSOR/Kconfig"
-    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/01_minifly/TASK_02_STABLIZE/Kconfig"
-    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/01_minifly/TASK_03_NRF_REC/Kconfig"
-    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/01_minifly/TASK_04_DISTRIBUTE/Kconfig"
-    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/01_minifly/TASK_05_PARAM/Kconfig"
-    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/01_minifly/TASK_06_RC/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/01_basic/TASK_01_SENSOR/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/01_basic/TASK_02_STABLIZE/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/01_basic/TASK_03_NRF_REC/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/01_basic/TASK_04_DISTRIBUTE/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/01_basic/TASK_05_PARAM/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/01_basic/TASK_06_RC/Kconfig"
 
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/02_fmt/01_TASK_RC/Kconfig"
 

@@ -56,7 +56,6 @@ static void taskStabilizerInit(void) {
 
 static void rcAndCmdGenerate(setpoint_t* setpoint, uint32_t tick) {
 #if defined(PROJECT_MINIFLY_TASK06_RC_EN) || defined(PROJECT_FMT_TASK01_RC_EN)
-  // if (RATE_DO_EXECUTE(RATE_100_HZ, tick) && getIsCalibrated() == true)
   if (RATE_DO_EXECUTE(RATE_100_HZ, tick)) {
     pilot_cmd_bus_t rc_data = {0};
     rcPilotCmdAcquire(&rc_data);
