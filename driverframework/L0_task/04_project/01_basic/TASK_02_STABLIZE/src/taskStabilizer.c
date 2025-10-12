@@ -1,9 +1,9 @@
 #include "rtthread.h"
 #include <rtdevice.h>
 #include "sensorsTypes.h"
-#include "taskMiniflyStabilizer.h"
+#include "taskStabilizer.h"
 #include "sensfusion6.h"
-#include "taskMiniflySensor.h"
+#include "aMcnSensorImu.h"
 #include "aMcnStabilize.h"
 #include "biasGyro.h"
 #include "commandMinifly.h"
@@ -70,7 +70,7 @@ static void flyerStateUpdate(state_t* state, uint32_t tick) {
       DEBUG_PIN_DEBUG3_HIGH();
 #endif
       sensorData_t sensorData = {0};
-      sensorsAcquire(&sensorData);
+      mcnSensorImuAcquire(&sensorData);
       imuUpdate(sensorData.acc_filter, sensorData.gyro_filter, state, ATTITUDE_ESTIMAT_DT);
       state->attitude.timestamp = rt_tick_get();
       state->armed = setpoint_.armed;

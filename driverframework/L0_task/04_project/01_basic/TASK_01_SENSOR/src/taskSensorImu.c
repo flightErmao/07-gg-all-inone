@@ -3,27 +3,13 @@
 #include "imu.h"
 #include "biasGyro.h"
 #include "filterLpf2p.h"
-#include "sensorsProcess.h"
-#include "floatConvert.h"
-#include "uMCN.h"
+#include "imuProcess.h"
 #include "rtconfig.h"
-#include "mlogImu.h"
-
-/*task definition*/
-#define THREAD_PRIORITY 4
-#define THREAD_STACK_SIZE 4096
-#define THREAD_TIMESLICE 5
+#include "aMlogSensorImu.h"
+#include "aMcnSensorImu.h"
 
 #define SENSORS_MPU6500_BUFF_LEN 14
-
-static struct rt_thread task_tid_sensor_minifly;
-static rt_uint8_t task_stack_sensor_minifly[THREAD_STACK_SIZE];
 static rt_device_t dev_sensor_imu = RT_NULL;
-
-MCN_DECLARE(imu);
-MCN_DEFINE(imu, sizeof(sensorData_t));
-
-static McnNode_t sensor_sub_node = RT_NULL;
 
 #ifdef PROJECT_MINIFLY_TASK_SENSOR_TIMER_TRIGGER_EN
 #define SENSOR_EVENT_FLAG_TRIGGER (1u << 0)
@@ -34,27 +20,6 @@ static void sensor_timer_cb(void *parameter) {
   rt_event_send(&sensor_event, SENSOR_EVENT_FLAG_TRIGGER);
 }
 #endif
-
-static int sensor_imu_echo(void *parameter) {
-  sensorData_t sensor_data;
-
-  if (mcn_copy_from_hub((McnHub *)parameter, &sensor_data) != RT_EOK) {
-    return -1;
-  }
-
-  char ax[16], ay[16], az[16], gx[16], gy[16], gz[16];
-  float_to_string(sensor_data.acc_filter.x, ax, sizeof(ax));
-  float_to_string(sensor_data.acc_filter.y, ay, sizeof(ay));
-  float_to_string(sensor_data.acc_filter.z, az, sizeof(az));
-  float_to_string(sensor_data.gyro_filter.x, gx, sizeof(gx));
-  float_to_string(sensor_data.gyro_filter.y, gy, sizeof(gy));
-  float_to_string(sensor_data.gyro_filter.z, gz, sizeof(gz));
-
-  rt_kprintf("Sensor IMU Echo - acc: %s, %s, %s, gyro: %s, %s, %s, timestamp: %lu\n", ax, ay, az, gx, gy, gz,
-             sensor_data.timestamp);
-
-  return 0;
-}
 
 static void deviceInit(void) {
   rt_device_t dev_temp = RT_NULL;
@@ -77,18 +42,7 @@ static void deviceInit(void) {
   }
 }
 
-static void mlogInit(void) { mlogImuInit(); }
-
 static void rtosToolsInit(void) {
-  rt_err_t result = mcn_advertise(MCN_HUB(imu), sensor_imu_echo);
-  if (result != RT_EOK) {
-    rt_kprintf("Failed to advertise imu topic: %d\n", result);
-  }
-
-  sensor_sub_node = mcn_subscribe(MCN_HUB(imu), RT_NULL, RT_NULL);
-  if (sensor_sub_node == RT_NULL) {
-    rt_kprintf("Failed to subscribe to imu topic\n");
-  }
 
 #ifdef PROJECT_MINIFLY_TASK_SENSOR_TIMER_TRIGGER_EN
   rt_event_init(&sensor_event, "sns_evt", RT_IPC_FLAG_PRIO);
@@ -112,7 +66,7 @@ static void sensor_minifly_thread_entry(void *parameter) {
   filterInitLpf2AccGyro();
   sensorsBiasObjInit();
   initImuRotationDir();
-  mlogInit();
+  mlogImuInit();
 
   uint8_t sensor_buffer[SENSORS_MPU6500_BUFF_LEN] = {0};
   sensorData_t sensors_data = {0};
@@ -131,7 +85,7 @@ static void sensor_minifly_thread_entry(void *parameter) {
         uint32_t timestamp = rt_tick_get();
         sensors_data = processAccGyroMeasurements(sensor_buffer);
         sensors_data.timestamp = timestamp;
-        mcn_publish(MCN_HUB(imu), &sensors_data);
+        mcnSensorImuPublish(&sensors_data);
         mlogImuPushData(timestamp);
       } else {
         static int err_cnt = 0;
@@ -149,17 +103,15 @@ static void sensor_minifly_thread_entry(void *parameter) {
   }
 }
 
-void sensorsAcquire(sensorData_t *sensors) {
-  if (!sensors) return;
-  if (mcn_poll(sensor_sub_node)) {
-    mcn_copy(MCN_HUB(imu), sensor_sub_node, sensors);
-  }
-}
-
 static int taskSensorThreadAutoStart(void) {
-  rt_thread_init(&task_tid_sensor_minifly, "imu", sensor_minifly_thread_entry, RT_NULL, task_stack_sensor_minifly,
+#define THREAD_PRIORITY 4
+#define THREAD_STACK_SIZE 2048
+#define THREAD_TIMESLICE 5
+  static struct rt_thread task_tid_sensor_imu;
+  static rt_uint8_t task_stack_sensor_imu[THREAD_STACK_SIZE];
+  rt_thread_init(&task_tid_sensor_imu, "imu", sensor_minifly_thread_entry, RT_NULL, task_stack_sensor_imu,
                  THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
-  rt_thread_startup(&task_tid_sensor_minifly);
+  rt_thread_startup(&task_tid_sensor_imu);
   return 0;
 }
 

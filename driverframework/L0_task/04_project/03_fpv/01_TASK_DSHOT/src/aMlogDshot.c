@@ -1,4 +1,4 @@
-#include "mlogDshot.h"
+#include "aMlogDshot.h"
 
 #ifdef TASK_TOOL_02_SD_MLOG
 #include "mlog.h"
@@ -12,17 +12,17 @@ typedef struct {
 
 static void mlogDshotStartCb(void);
 
-#ifdef TASK_TOOL_02_SD_MLOG
+#ifdef PROJECT_MINIFLY_TASK_DSHOT_MLOG_EN
 /* Mlog bus definition for DShot data - simplified */
-static mlog_elem_t Minifly_DShot_Motor_Elems[] __attribute__((used)) = {
+static mlog_elem_t DShot_Motor_Elems[] __attribute__((used)) = {
     MLOG_ELEMENT(timestamp, MLOG_UINT32),
     MLOG_ELEMENT_VEC(dshot_mapped, MLOG_UINT16, 4),
 };
-MLOG_BUS_DEFINE(Minifly_DShot_Motor, Minifly_DShot_Motor_Elems);
+MLOG_BUS_DEFINE(DShot_Motor, DShot_Motor_Elems);
 
 /* Static variables */
 static mlogDshotData_t mlog_dshot_data = {0};
-static int Minifly_DShot_Motor_ID = -1;
+static int DShot_Motor_ID = -1;
 static uint8_t mlog_push_en = 0;
 
 /**
@@ -30,11 +30,11 @@ static uint8_t mlog_push_en = 0;
  */
 void mlogDshotInit(void) {
     /* Initialize mlog bus ID for DShot data */
-    Minifly_DShot_Motor_ID = mlog_get_bus_id("Minifly_DShot_Motor");
-    if (Minifly_DShot_Motor_ID < 0) {
-        rt_kprintf("Failed to get mlog bus ID for Minifly_DShot_Motor\n");
+    DShot_Motor_ID = mlog_get_bus_id("DShot_Motor");
+    if (DShot_Motor_ID < 0) {
+        rt_kprintf("Failed to get mlog bus ID for DShot_Motor\n");
     } else {
-        rt_kprintf("Minifly_DShot_Motor mlog bus ID: %d\n", Minifly_DShot_Motor_ID);
+        rt_kprintf("DShot_Motor mlog bus ID: %d\n", DShot_Motor_ID);
     }
     
     /* Register mlog start callback */
@@ -54,7 +54,7 @@ static void mlogDshotStartCb(void) {
  * @param timestamp timestamp
  */
 void mlogDshotPush(const uint16_t* dshot_mapped, uint32_t timestamp) {
-    if (Minifly_DShot_Motor_ID < 0 || !mlog_push_en) {
+    if (DShot_Motor_ID < 0 || !mlog_push_en) {
         return;
     }
     
@@ -70,7 +70,7 @@ void mlogDshotPush(const uint16_t* dshot_mapped, uint32_t timestamp) {
     mlog_dshot_data.timestamp = timestamp;
     
     /* Push to mlog */
-    mlog_push_msg((uint8_t*)&mlog_dshot_data, Minifly_DShot_Motor_ID, sizeof(mlogDshotData_t));
+    mlog_push_msg((uint8_t*)&mlog_dshot_data, DShot_Motor_ID, sizeof(mlogDshotData_t));
 }
 
 #else /* TASK_TOOL_02_SD_MLOG not defined */

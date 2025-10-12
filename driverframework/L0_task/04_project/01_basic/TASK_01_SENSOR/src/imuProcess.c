@@ -2,14 +2,14 @@
 #include "rtthread.h"
 #include "biasGyro.h"
 #include "filterLpf2p.h"
-#include "sensorsProcess.h"
+#include "imuProcess.h"
 #include "rotation.h"
 #include <math.h>
 #include <string.h>
-#include "mlogImu.h"
+#include "aMlogSensorImu.h"
 #ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
 #include "rpmFilter.h"
-#include "taskDshot.h"
+#include "aMcnDshot.h"
 #endif
 #define SENSORS_ACC_SCALE_SAMPLES 200
 
@@ -115,13 +115,22 @@ static void dealWithGyroData(void) {
   gyroApplyRotation(imu_mount_rotation, &sensors.gyro_filter);
   mlogImuCopyGyroData(&sensors.gyro_filter, RT_NULL);
 #ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
-  float rpmData[3] = {0};
   float rpmfilteredGyroData[3] = {0};
-  getMotorFreq(rpmData);
-  rpmFilter(sensors.gyro_filter.axis, rpmData, rpmfilteredGyroData);
-  applyAxis3fLpfGyro((Axis3f*)rpmfilteredGyroData);
-  mlogImuCopyGyroData(RT_NULL, (Axis3f*)rpmfilteredGyroData);
-#elif
+
+  /* Acquire RPM data from MCN */
+  rpm_data_bus_t rpm_msg;
+  if (mcnRpmDataAcquire(&rpm_msg) == RT_EOK) {
+    // Copy RPM data to mlog (only when RPM filter is enabled)
+    mlogImuCopyRpmData(rpm_msg.rpm);
+    rpmFilter(sensors.gyro_filter.axis, rpm_msg.rpm, rpmfilteredGyroData);
+    applyAxis3fLpfGyro((Axis3f*)rpmfilteredGyroData);
+    mlogImuCopyGyroData(RT_NULL, (Axis3f*)rpmfilteredGyroData);
+  } else {
+    // No RPM data available, use normal LPF
+    applyAxis3fLpfGyro(&sensors.gyro_filter);
+    mlogImuCopyGyroData(RT_NULL, &sensors.gyro_filter);
+  }
+#else
   applyAxis3fLpfGyro(&sensors.gyro_filter);
   mlogImuCopyGyroData(RT_NULL, &sensors.gyro_filter);
 #endif

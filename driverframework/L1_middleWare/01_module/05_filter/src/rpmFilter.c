@@ -42,18 +42,18 @@ static void updateRpmFilterCoeWeight(float frequency, uint8_t motorIndex, uint8_
 // TO DO: Load RPM filter strength parameters from flash
 static void getFilterStrength(void) {
   filterStrength[0] = 1.0f;
-  filterStrength[1] = 0.5f;
-  filterStrength[2] = 0.3f;
+  filterStrength[1] = 1.0f;
+  filterStrength[2] = 1.0f;
 }
 
 int initRpmFilter(void) {
   getFilterStrength();
 
   motorLPFCutoffFrequency = 150.0f;
-  rpmFilterMinFrequency = 100.0f;
+  rpmFilterMinFrequency = 50.0f;
   rpmFilterMaxFrequency = 0.48f * 1 / TICK_INTERVAL;  // 0.96 nyquist frequency
   rpmFilterFadeRangeFrequency = 50.0f;
-  rpmFilterNotchQ = 5.0f;
+  rpmFilterNotchQ = 10.0f;
 
   for (uint8_t i = 0; i < DSHOT_MOTOR_NUMS; i++) {
     bf_pt1FilterInit(&motorLPF[i], motorLPFCutoffFrequency, TICK_INTERVAL);

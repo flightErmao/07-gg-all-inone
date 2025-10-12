@@ -1,6 +1,6 @@
 
 #include <rtthread.h>
-#include "taskMiniflyStabilizer.h"
+#include "taskStabilizer.h"
 #include "floatConvert.h"
 #include "stabilizerTypes.h"
 #include "stateControl.h"

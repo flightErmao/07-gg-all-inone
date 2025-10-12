@@ -1,4 +1,4 @@
-#include "mlogImu.h"
+#include "aMlogSensorImu.h"
 
 /* Mlog IMU data structure - redesigned */
 typedef struct {
@@ -7,6 +7,9 @@ typedef struct {
     float acc_filter_after[3];   // acceleration data after filtering
     float gyro_filter_before[3]; // gyro data before filtering
     float gyro_filter_after[3];  // gyro data after filtering
+#ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
+    float rpm_data[4];  // motor RPM data (4 motors)
+#endif
 } mlogImuData_t;
 
 void mlogImuSetEnable(uint8_t enable);
@@ -14,18 +17,21 @@ static void mlogImuStartCb(void);
 
 #ifdef TASK_TOOL_02_SD_MLOG
 /* Mlog bus definition for IMU data - redefined */
-static mlog_elem_t Minifly_Sensor_IMU_Elems[] __attribute__((used)) = {
+static mlog_elem_t Sensor_IMU_Elems[] __attribute__((used)) = {
     MLOG_ELEMENT(timestamp, MLOG_UINT32),
     MLOG_ELEMENT_VEC(acc_filter_before, MLOG_FLOAT, 3),
     MLOG_ELEMENT_VEC(acc_filter_after, MLOG_FLOAT, 3),
     MLOG_ELEMENT_VEC(gyro_filter_before, MLOG_FLOAT, 3),
     MLOG_ELEMENT_VEC(gyro_filter_after, MLOG_FLOAT, 3),
+#ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
+    MLOG_ELEMENT_VEC(rpm_data, MLOG_FLOAT, 4),
+#endif
 };
-MLOG_BUS_DEFINE(Minifly_Sensor_IMU, Minifly_Sensor_IMU_Elems);
+MLOG_BUS_DEFINE(Sensor_IMU, Sensor_IMU_Elems);
 
 /* Static variables */
 static mlogImuData_t mlog_imu_data = {0};
-static int Minifly_Sensor_IMU_ID = -1;
+static int Sensor_IMU_ID = -1;
 static uint8_t mlog_push_en = 0;
 
 /**
@@ -33,11 +39,11 @@ static uint8_t mlog_push_en = 0;
  */
 void mlogImuInit(void) {
     /* Initialize mlog bus ID for sensor data */
-    Minifly_Sensor_IMU_ID = mlog_get_bus_id("Minifly_Sensor_IMU");
-    if (Minifly_Sensor_IMU_ID < 0) {
-        rt_kprintf("Failed to get mlog bus ID for Minifly_Sensor_IMU\n");
+    Sensor_IMU_ID = mlog_get_bus_id("Sensor_IMU");
+    if (Sensor_IMU_ID < 0) {
+        rt_kprintf("Failed to get mlog bus ID for Sensor_IMU\n");
     } else {
-        rt_kprintf("Minifly_Sensor_IMU mlog bus ID: %d\n", Minifly_Sensor_IMU_ID);
+        rt_kprintf("Sensor_IMU mlog bus ID: %d\n", Sensor_IMU_ID);
     }
     
     /* Register mlog start callback */
@@ -97,6 +103,21 @@ void mlogImuCopyGyroData(const Axis3f* gyro_before, const Axis3f* gyro_after) {
     }
 }
 
+#ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
+/**
+ * @brief Copy RPM data to mlog buffer
+ * @param rpm_data motor RPM data array (4 motors)
+ */
+void mlogImuCopyRpmData(const float* rpm_data) {
+  if (rpm_data != RT_NULL) {
+    mlog_imu_data.rpm_data[0] = rpm_data[0];
+    mlog_imu_data.rpm_data[1] = rpm_data[1];
+    mlog_imu_data.rpm_data[2] = rpm_data[2];
+    mlog_imu_data.rpm_data[3] = rpm_data[3];
+  }
+}
+#endif
+
 /**
  * @brief Push data to mlog
  * @param timestamp timestamp
@@ -104,8 +125,8 @@ void mlogImuCopyGyroData(const Axis3f* gyro_before, const Axis3f* gyro_after) {
 void mlogImuPushData(uint32_t timestamp) {
     mlog_imu_data.timestamp = timestamp;
     
-    if (Minifly_Sensor_IMU_ID >= 0 && mlog_push_en) {
-        mlog_push_msg((uint8_t*)&mlog_imu_data, Minifly_Sensor_IMU_ID, sizeof(mlogImuData_t));
+    if (Sensor_IMU_ID >= 0 && mlog_push_en) {
+        mlog_push_msg((uint8_t*)&mlog_imu_data, Sensor_IMU_ID, sizeof(mlogImuData_t));
     }
 }
 
@@ -132,6 +153,13 @@ void mlogImuCopyGyroData(const Axis3f* gyro_before, const Axis3f* gyro_after) {
     RT_UNUSED(gyro_after);
     /* Do nothing when mlog is disabled */
 }
+
+#ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
+void mlogImuCopyRpmData(const float* rpm_data) {
+  RT_UNUSED(rpm_data);
+  /* Do nothing when mlog is disabled */
+}
+#endif
 
 void mlogImuPushData(uint32_t timestamp) {
     RT_UNUSED(timestamp);

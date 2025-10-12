@@ -8,20 +8,20 @@ typedef struct {
 } mlogStabilizerAngleRateData_t;
 
 void mlogStabilizerSetEnable(uint8_t enable);
-static void mlogStabilizerStartCb(void);
 
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_MLOG_EN
+static void mlogStabilizerStartCb(void);
 /* Mlog bus definition for stabilizer angle rate data */
-static mlog_elem_t MF_Stab_AngleRate_Elems[] __attribute__((used)) = {
+static mlog_elem_t Stabilize_Elems[] __attribute__((used)) = {
     MLOG_ELEMENT(timestamp, MLOG_UINT32),
     MLOG_ELEMENT_VEC(rate_desired, MLOG_FLOAT, 3),
     MLOG_ELEMENT_VEC(rate_current, MLOG_FLOAT, 3),
 };
-MLOG_BUS_DEFINE(MF_Stab_AngleRate, MF_Stab_AngleRate_Elems);
+MLOG_BUS_DEFINE(Stabilize, Stabilize_Elems);
 
 /* Static variables */
 static mlogStabilizerAngleRateData_t mlog_stabilizer_angle_rate_data = {0};
-static int MF_Stab_AngleRate_ID = -1;
+static int Stabilize_ID = -1;
 static uint8_t mlog_stabilizer_push_en = 0;
 
 /**
@@ -29,13 +29,13 @@ static uint8_t mlog_stabilizer_push_en = 0;
  */
 void mlogStabilizerInit(void) {
     /* Initialize mlog bus ID for stabilizer angle rate data */
-    MF_Stab_AngleRate_ID = mlog_get_bus_id("MF_Stab_AngleRate");
-    if (MF_Stab_AngleRate_ID < 0) {
-        rt_kprintf("Failed to get mlog bus ID for MF_Stab_AngleRate\n");
+    Stabilize_ID = mlog_get_bus_id("Stabilize");
+    if (Stabilize_ID < 0) {
+      rt_kprintf("Failed to get mlog bus ID for Stabilize\n");
     } else {
-        rt_kprintf("MF_Stab_AngleRate mlog bus ID: %d\n", MF_Stab_AngleRate_ID);
+      rt_kprintf("Stabilize mlog bus ID: %d\n", Stabilize_ID);
     }
-    
+
     /* Register mlog start callback */
     mlog_register_callback(MLOG_CB_START, mlogStabilizerStartCb);
 }
@@ -80,9 +80,9 @@ void mlogStabilizerCopyAngleRateData(const attitude_t* rate_desired, const attit
  */
 void mlogStabilizerPushAngleRateData(uint32_t timestamp) {
     mlog_stabilizer_angle_rate_data.timestamp = timestamp;
-    
-    if (MF_Stab_AngleRate_ID >= 0 && mlog_stabilizer_push_en) {
-        mlog_push_msg((uint8_t*)&mlog_stabilizer_angle_rate_data, MF_Stab_AngleRate_ID, sizeof(mlogStabilizerAngleRateData_t));
+
+    if (Stabilize_ID >= 0 && mlog_stabilizer_push_en) {
+      mlog_push_msg((uint8_t*)&mlog_stabilizer_angle_rate_data, Stabilize_ID, sizeof(mlogStabilizerAngleRateData_t));
     }
 }
 

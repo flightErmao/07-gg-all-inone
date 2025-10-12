@@ -4,10 +4,7 @@
 #include "maths.h"
 #include <rtthread.h>
 #include <rtdevice.h>
-
-#ifdef PROJECT_MINIFLY_TASK_DSHOT_EN
-#include "taskDshot.h"
-#endif
+#include "aMcnStabilize.h"
 
 #ifdef L2_DEVICE_03_MOTOR_01_PWM_EN
 #include "motorsPwm.h"
@@ -138,8 +135,14 @@ void mixerControl(control_t *control) {
   motorPWM.m4 = limitThrust(control->thrust + control->roll - control->pitch - yawValue);
 
 #ifdef PROJECT_MINIFLY_TASK_DSHOT_EN
-  /* publish raw 0~65535 motor values to DShot task via uMCN */
-  task_dshot_publish_raw((uint16_t)motorPWM.m1, (uint16_t)motorPWM.m2, (uint16_t)motorPWM.m3, (uint16_t)motorPWM.m4);
+  /* Publish raw 0~65535 motor values to DShot task via uMCN */
+  dshot_cmd_bus_t dshot_cmd;
+  dshot_cmd.motor_val[0] = (uint16_t)motorPWM.m1;
+  dshot_cmd.motor_val[1] = (uint16_t)motorPWM.m2;
+  dshot_cmd.motor_val[2] = (uint16_t)motorPWM.m3;
+  dshot_cmd.motor_val[3] = (uint16_t)motorPWM.m4;
+  dshot_cmd.timestamp = rt_tick_get();
+  mcnDshotCmdPublish(&dshot_cmd);
 
 #elif defined(L2_DEVICE_03_MOTOR_01_PWM_EN)
   motorsSetRatio(MOTOR_M1, motorPWM.m1);
@@ -167,6 +170,13 @@ void mixerControl(control_t *control) {
 }
 
 void motorInit(void) {
+#ifdef PROJECT_MINIFLY_TASK_DSHOT_EN
+  /* Initialize DShot command MCN */
+  if (mcnDshotCmdInit() != 0) {
+    rt_kprintf("[mixerControl] Failed to initialize DShot command MCN\n");
+  }
+#endif
+
 #ifdef L2_DEVICE_03_MOTOR_03_PWM_EN
   if (motor_device_init() != 0) {
     rt_kprintf("[mixerControl] Failed to initialize motor device\n");

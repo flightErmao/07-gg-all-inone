@@ -70,3 +70,77 @@ void stabilizerGetState(state_t* state) {
   if (!state) return;
   mcnStateReportAcquire(state);
 }
+
+/* ==================== DShot Command MCN ==================== */
+
+#ifdef PROJECT_MINIFLY_TASK_DSHOT_EN
+
+/* MCN topic definition */
+MCN_DEFINE(dshot_cmd, sizeof(dshot_cmd_bus_t));
+
+/* MCN subscriber node */
+static McnNode_t dshot_cmd_sub_node = RT_NULL;
+
+/* Echo function for dshot command data */
+static int dshot_cmd_echo(void* parameter) {
+  dshot_cmd_bus_t data;
+  if (mcn_copy_from_hub((McnHub*)parameter, &data) != RT_EOK) {
+    return -1;
+  }
+
+  char m1[10], m2[10], m3[10], m4[10];
+  float_to_string(data.motor_val[0], m1, sizeof(m1));
+  float_to_string(data.motor_val[1], m2, sizeof(m2));
+  float_to_string(data.motor_val[2], m3, sizeof(m3));
+  float_to_string(data.motor_val[3], m4, sizeof(m4));
+
+  rt_kprintf("[aMcnStabilize] dshot_cmd: %s, %s, %s, %s, ts: %lu\n", m1, m2, m3, m4, data.timestamp);
+
+  return 0;
+}
+
+/* Initialize MCN dshot command */
+int mcnDshotCmdInit(void) {
+  rt_err_t result = mcn_advertise(MCN_HUB(dshot_cmd), dshot_cmd_echo);
+  if (result != RT_EOK) {
+    rt_kprintf("[aMcnStabilize] Failed to advertise dshot_cmd topic: %d\n", result);
+    return -1;
+  }
+
+  dshot_cmd_sub_node = mcn_subscribe(MCN_HUB(dshot_cmd), RT_NULL, RT_NULL);
+  if (dshot_cmd_sub_node == RT_NULL) {
+    rt_kprintf("[aMcnStabilize] Failed to subscribe to dshot_cmd topic\n");
+    return -1;
+  }
+
+  rt_kprintf("[aMcnStabilize] DShot command MCN initialized\n");
+  return 0;
+}
+
+/* Publish dshot command data to MCN */
+int mcnDshotCmdPublish(const dshot_cmd_bus_t* cmd_data) {
+  if (!cmd_data) {
+    return -1;
+  }
+
+  return mcn_publish(MCN_HUB(dshot_cmd), cmd_data);
+}
+
+/* Acquire dshot command data from MCN */
+int mcnDshotCmdAcquire(dshot_cmd_bus_t* cmd_data) {
+  if (!cmd_data) {
+    return -1;
+  }
+
+  if (dshot_cmd_sub_node == RT_NULL) {
+    return -1;
+  }
+
+  if (mcn_poll(dshot_cmd_sub_node)) {
+    return mcn_copy(MCN_HUB(dshot_cmd), dshot_cmd_sub_node, cmd_data);
+  }
+
+  return -1;
+}
+
+#endif /* PROJECT_MINIFLY_TASK_DSHOT_EN */
