@@ -1,0 +1,37 @@
+menuconfig WORK_TASK_BARO_REPORT_EN
+    bool "ENABLE: WORK_TASK_BARO_REPORT_EN"
+    default n
+    help
+       open baro report task
+
+    if WORK_TASK_BARO_REPORT_EN
+
+        config TASK_BARO_DEVICE_NAME
+            string "Barometer device name"
+            default "spl06_001"
+            help
+                Barometer device name used by rt_device_find.
+                Valid values: spl06_001, spa06_003, spl16_001, dps368.
+
+        config TASK_BARO_SEND_DATA_ANOTC
+            bool "Enable send data to ANOTC telemetry"
+            default y            
+            help
+                Enable sending barometer data to ANOTC telemetry system
+
+        config TASK_BARO_ATKP_LOG_EN
+            bool "Enable ATKP logging for barometer data"
+            default n
+            help
+                Enable ATKP logging for barometer data transmission
+
+        if TASK_BARO_ATKP_LOG_EN
+            config TASK_BARO_ATKP_CHANNEL
+                int "ATKP channel number for barometer data"
+                range 1 8
+                default 1
+                help
+                    ATKP channel number (1-8) for sending barometer data
+        endif
+
+    endif 

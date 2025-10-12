@@ -33,7 +33,6 @@ typedef struct {
   uint32_t timestamp_ms;
   float temperature_deg;
   float pressure_Pa;
-  float altitude_m;
 } baro_report_t;
 
 struct baro_configure {

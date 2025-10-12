@@ -9,6 +9,8 @@ src += Glob("./src/*.cpp")
 
 path = [cwd, os.path.join(cwd, "inc")]
 
-group = DefineGroup('SPA06_003', src, depend = ['DEVICE_SPA06_003'], CPPPATH = path)
+group = DefineGroup(
+    "BSP_USING_SPA06_003", src, depend=["BSP_USING_SPA06_003"], CPPPATH=path
+)
 
-Return('group')
+Return("group")

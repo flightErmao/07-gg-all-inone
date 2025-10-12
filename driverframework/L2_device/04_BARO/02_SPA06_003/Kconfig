@@ -5,13 +5,13 @@ if BSP_USING_SPA06_003
             if SENSOR_SPA06_003_NUM1
                 config SENSOR_SPA06_003_NUM1_I2C_NAME
                     string "SPA06_003_I2C_NUM1_NAME"
-                    default "hwi2c1"
+                    default "i2c1"
                 config SENSOR_SPA06_003_NUM1_DEVICE_NAME
                     string "SPA06_003_device_num1_name"
                     default "a06_03_1"  
                 config SENSOR_SPA06_003_NUM1_I2C_ADDR
                     hex "SPA06_003_I2C_NUM1_ADDR"
-                    default 0x76
+                    default 0x77
                 config SENSOR_SPA06_003_NUM1_ID
                     int "SPA06_003_I2C_NUM1_ID"
                     default 0
@@ -28,7 +28,7 @@ if BSP_USING_SPA06_003
                     default "a06_03_2"               
                 config SENSOR_SPA06_003_NUM2_I2C_ADDR
                     hex "SPA06_003_I2C_NUM2_ADDR"
-                    default 0x76
+                    default 0x77
                 config SENSOR_SPA06_003_NUM2_ID
                     int "SPA06_003_I2C_NUM2_ID"
                     default 1

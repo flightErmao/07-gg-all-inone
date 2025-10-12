@@ -185,7 +185,7 @@
             ]
         },
         {
-            "name": "3-01-tool_baro_show",
+            "name": "3-02-tool_baro_show",
             "type": "cortex-debug",
             "request": "launch",
             "cwd": "${workspaceRoot}",
@@ -200,5 +200,23 @@
             "openOCDLaunchCommands": [
                 "adapter_khz 4000"
             ]
+        },
+        {
+            "name": "3-03-tool_baro_show_spl06",
+            "type": "cortex-debug",
+            "request": "launch",
+            "cwd": "${workspaceRoot}",
+            "executable": "target/03_tools_work/03_baro_show_spl06_001/rt-thread.elf",
+            "serverpath": "${env:JLINK_SERVER}",
+            "servertype": "jlink",
+            "device": "STM32F411CE",
+            "interface": "swd",
+            "armToolchainPath": "${workspaceRoot}/tools/toolchain/arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi/bin",
+            "serialNumber": "", //If you have more than one J-Link probe, add the serial number here.
+            "showDevDebugOutput": "raw",
+            "openOCDLaunchCommands": [
+                "adapter_khz 4000"
+            ]
+        }
     ]
 }

@@ -1,0 +1,39 @@
+#pragma once
+
+#include "spl06001Regs.h"
+
+#ifndef SENSOR_SPL06_001_DEVICE_NAME
+#define SENSOR_SPL06_001_DEVICE_NAME "spl06_001"
+#endif
+
+#ifndef SENSOR_SPL06_001_I2C_NAME
+#define SENSOR_SPL06_001_I2C_NAME "i2c1"
+#endif
+
+#ifndef SENSOR_SPL06_001_I2C_ADDR
+#define SENSOR_SPL06_001_I2C_ADDR 0x77
+#endif
+
+#ifdef SENSOR_SPL06_001_OSR_PRESS
+#define _OSR_P SENSOR_SPL06_001_OSR_PRESS
+#else
+#define _OSR_P SPL06_OVERSAMP_8X
+#endif
+
+#ifdef SENSOR_SPL06_001_MR_PRESS
+#define _MR_P SENSOR_SPL06_001_MR_PRESS
+#else
+#define _MR_P SPL06_SAMPLERATE_4
+#endif
+
+#ifdef SENSOR_SPL06_001_OSR_TEMP
+#define _OSR_T SENSOR_SPL06_001_OSR_TEMP
+#else
+#define _OSR_T SPL06_OVERSAMP_2X
+#endif
+
+#ifdef SENSOR_SPL06_001_MR_TEMP
+#define _MR_T SENSOR_SPL06_001_MR_TEMP
+#else
+#define _MR_T SPL06_SAMPLERATE_2
+#endif

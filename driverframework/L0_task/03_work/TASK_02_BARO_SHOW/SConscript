@@ -1,16 +1,15 @@
 from building import *
+import os
 
 cwd = GetCurrentDir()
-path = []
-src = []
-
 src = Glob("./src/*.c")
-src += Glob("./src/*.cpp")
-
 path = [cwd, os.path.join(cwd, "inc")]
 
 group = DefineGroup(
-    "BSP_USING_SPL06_001", src, depend=["BSP_USING_SPL06_001"], CPPPATH=path
+    "WORK_TASK_BARO_REPORT_ENSK_04_BARO_TEST",
+    src,
+    depend=["WORK_TASK_BARO_REPORT_EN"],
+    CPPPATH=path,
 )
 
 Return("group")

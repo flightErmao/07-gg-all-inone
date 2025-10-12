@@ -1,17 +1,141 @@
 if BSP_USING_SPL06_001
     config SENSOR_SPL06_001_I2C_NAME
-        string "SPA06_003_I2C_NAME"
+        string "SPL06_001 I2C bus name"
         default "i2c1"
 
     config SENSOR_SPL06_001_DEVICE_NAME
-        string "SPA06_003_device_name"
-        default "spl06_001"  
+        string "SPL06_001 device name"
+        default "spl06_001"
 
     config SENSOR_SPL06_001_I2C_ADDR
-        hex "SPA06_003_I2C_ADDR"
-        default 0x76
+        hex "SPL06_001 I2C address (0x76 or 0x77)"
+        default 0x77
+        
+    choice
+        prompt "SPL06_001 pressure measurement rate (MR_P)"
+        default SENSOR_SPL06_001_MR_PRESS_32
+        config SENSOR_SPL06_001_MR_PRESS_1
+            bool "1 Hz"
+        config SENSOR_SPL06_001_MR_PRESS_2
+            bool "2 Hz"
+        config SENSOR_SPL06_001_MR_PRESS_4
+            bool "4 Hz"
+        config SENSOR_SPL06_001_MR_PRESS_8
+            bool "8 Hz"
+        config SENSOR_SPL06_001_MR_PRESS_16
+            bool "16 Hz"
+        config SENSOR_SPL06_001_MR_PRESS_32
+            bool "32 Hz"
+        config SENSOR_SPL06_001_MR_PRESS_64
+            bool "64 Hz"
+        config SENSOR_SPL06_001_MR_PRESS_128
+            bool "128 Hz"
+    endchoice
 
-    config SENSOR_SPL06_001_ID
-        int "SPA06_003_I2C_ID"
-        default 0
+    config SENSOR_SPL06_001_MR_PRESS
+        int
+        default 0 if SENSOR_SPL06_001_MR_PRESS_1
+        default 1 if SENSOR_SPL06_001_MR_PRESS_2
+        default 2 if SENSOR_SPL06_001_MR_PRESS_4
+        default 3 if SENSOR_SPL06_001_MR_PRESS_8
+        default 4 if SENSOR_SPL06_001_MR_PRESS_16
+        default 5 if SENSOR_SPL06_001_MR_PRESS_32
+        default 6 if SENSOR_SPL06_001_MR_PRESS_64
+        default 7 if SENSOR_SPL06_001_MR_PRESS_128
+
+    choice
+        prompt "SPL06_001 pressure oversampling (OSR_P)"
+        default SENSOR_SPL06_001_OSR_PRESS_8X
+        config SENSOR_SPL06_001_OSR_PRESS_1X
+            bool "1X"
+        config SENSOR_SPL06_001_OSR_PRESS_2X
+            bool "2X"
+        config SENSOR_SPL06_001_OSR_PRESS_4X
+            bool "4X"
+        config SENSOR_SPL06_001_OSR_PRESS_8X
+            bool "8X"
+        config SENSOR_SPL06_001_OSR_PRESS_16X
+            bool "16X"
+        config SENSOR_SPL06_001_OSR_PRESS_32X
+            bool "32X"
+        config SENSOR_SPL06_001_OSR_PRESS_64X
+            bool "64X"
+        config SENSOR_SPL06_001_OSR_PRESS_128X
+            bool "128X"
+    endchoice
+
+    config SENSOR_SPL06_001_OSR_PRESS
+        int
+        default 0 if SENSOR_SPL06_001_OSR_PRESS_1X
+        default 1 if SENSOR_SPL06_001_OSR_PRESS_2X
+        default 2 if SENSOR_SPL06_001_OSR_PRESS_4X
+        default 3 if SENSOR_SPL06_001_OSR_PRESS_8X
+        default 4 if SENSOR_SPL06_001_OSR_PRESS_16X
+        default 5 if SENSOR_SPL06_001_OSR_PRESS_32X
+        default 6 if SENSOR_SPL06_001_OSR_PRESS_64X
+        default 7 if SENSOR_SPL06_001_OSR_PRESS_128X
+
+    choice
+        prompt "SPL06_001 temperature measurement rate (MR_T)"
+        default SENSOR_SPL06_001_MR_TEMP_32
+        config SENSOR_SPL06_001_MR_TEMP_1
+            bool "1 Hz"
+        config SENSOR_SPL06_001_MR_TEMP_2
+            bool "2 Hz"
+        config SENSOR_SPL06_001_MR_TEMP_4
+            bool "4 Hz"
+        config SENSOR_SPL06_001_MR_TEMP_8
+            bool "8 Hz"
+        config SENSOR_SPL06_001_MR_TEMP_16
+            bool "16 Hz"
+        config SENSOR_SPL06_001_MR_TEMP_32
+            bool "32 Hz"
+        config SENSOR_SPL06_001_MR_TEMP_64
+            bool "64 Hz"
+        config SENSOR_SPL06_001_MR_TEMP_128
+            bool "128 Hz"
+    endchoice
+
+    config SENSOR_SPL06_001_MR_TEMP
+        int
+        default 0 if SENSOR_SPL06_001_MR_TEMP_1
+        default 1 if SENSOR_SPL06_001_MR_TEMP_2
+        default 2 if SENSOR_SPL06_001_MR_TEMP_4
+        default 3 if SENSOR_SPL06_001_MR_TEMP_8
+        default 4 if SENSOR_SPL06_001_MR_TEMP_16
+        default 5 if SENSOR_SPL06_001_MR_TEMP_32
+        default 6 if SENSOR_SPL06_001_MR_TEMP_64
+        default 7 if SENSOR_SPL06_001_MR_TEMP_128
+
+    choice
+        prompt "SPL06_001 temperature oversampling (OSR_T)"
+        default SENSOR_SPL06_001_OSR_TEMP_8X
+        config SENSOR_SPL06_001_OSR_TEMP_1X
+            bool "1X"
+        config SENSOR_SPL06_001_OSR_TEMP_2X
+            bool "2X"
+        config SENSOR_SPL06_001_OSR_TEMP_4X
+            bool "4X"
+        config SENSOR_SPL06_001_OSR_TEMP_8X
+            bool "8X"
+        config SENSOR_SPL06_001_OSR_TEMP_16X
+            bool "16X"
+        config SENSOR_SPL06_001_OSR_TEMP_32X
+            bool "32X"
+        config SENSOR_SPL06_001_OSR_TEMP_64X
+            bool "64X"
+        config SENSOR_SPL06_001_OSR_TEMP_128X
+            bool "128X"
+    endchoice
+
+    config SENSOR_SPL06_001_OSR_TEMP
+        int
+        default 0 if SENSOR_SPL06_001_OSR_TEMP_1X
+        default 1 if SENSOR_SPL06_001_OSR_TEMP_2X
+        default 2 if SENSOR_SPL06_001_OSR_TEMP_4X
+        default 3 if SENSOR_SPL06_001_OSR_TEMP_8X
+        default 4 if SENSOR_SPL06_001_OSR_TEMP_16X
+        default 5 if SENSOR_SPL06_001_OSR_TEMP_32X
+        default 6 if SENSOR_SPL06_001_OSR_TEMP_64X
+        default 7 if SENSOR_SPL06_001_OSR_TEMP_128X
 endif

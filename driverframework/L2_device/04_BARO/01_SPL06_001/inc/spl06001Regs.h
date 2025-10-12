@@ -1,0 +1,83 @@
+#pragma once
+
+#include <cstdint>
+
+// Register map
+#define SPL06_REG_CHIP_ID 0x0D
+#define SPL06_REG_RESET 0x0C
+#define SPL06_REG_INT_STATUS 0x0A
+#define SPL06_REG_FIFO_STATUS 0x0B
+#define SPL06_REG_PRS_CFG 0x06
+#define SPL06_REG_TMP_CFG 0x07
+#define SPL06_REG_CTRL_MEAS 0x08
+#define SPL06_REG_CONFIG 0x09
+
+// Data registers
+#define SPL06_REG_PRS_MSB 0x00
+#define SPL06_REG_PRS_LSB 0x01
+#define SPL06_REG_PRS_XLSB 0x02
+#define SPL06_REG_TMP_MSB 0x03
+#define SPL06_REG_TMP_LSB 0x04
+#define SPL06_REG_TMP_XLSB 0x05
+
+// Calibration data
+#define SPL06_REG_CALIB_START 0x10
+#define SPL06_REG_CALIB_LEN 18
+
+// Masks and positions
+#define SPL06_PRS_CFG_OVERSAMP_POS 0
+#define SPL06_PRS_CFG_OVERSAMP_MSK 0x0F
+
+#define SPL06_TMP_CFG_OVERSAMP_POS 0
+#define SPL06_TMP_CFG_OVERSAMP_MSK 0x07
+
+#define SPL06_PRS_CFG_SAMPLERATE_POS 4
+#define SPL06_PRS_CFG_SAMPLERATE_MSK 0x70
+
+#define SPL06_TMP_CFG_SAMPLERATE_POS 4
+#define SPL06_TMP_CFG_SAMPLERATE_MSK 0x70
+
+#define SPL06_CTRL_MEAS_POWER_MODE_POS 0
+#define SPL06_CTRL_MEAS_POWER_MODE_MSK 0x07
+
+// Constants
+#define SPL06_SOFT_RESET_CODE 0x09
+// Datasheet: SPL06-001 typical chip id
+#define SPL06_CHIP_ID_EXPECTED 0x10
+
+#define SPL06_I2C_ADDRESS1 0x76
+#define SPL06_I2C_ADDRESS2 0x77
+
+#define SPL06_PRESSURE_SHIFT 0x04
+#define SPL06_TEMPERATURE_SHIFT 0x08
+
+#define SPL06_TMP_SOURCE_INT 0x00
+#define SPL06_TMP_SOURCE_EXT 0x80
+
+// Samplerate
+#define SPL06_SAMPLERATE_1 0x00
+#define SPL06_SAMPLERATE_2 0x01
+#define SPL06_SAMPLERATE_4 0x02
+#define SPL06_SAMPLERATE_8 0x03
+#define SPL06_SAMPLERATE_16 0x04
+#define SPL06_SAMPLERATE_32 0x05
+#define SPL06_SAMPLERATE_64 0x06
+#define SPL06_SAMPLERATE_128 0x07
+
+// Oversampling
+#define SPL06_OVERSAMP_1X 0x00
+#define SPL06_OVERSAMP_2X 0x01
+#define SPL06_OVERSAMP_4X 0x02
+#define SPL06_OVERSAMP_8X 0x03
+#define SPL06_OVERSAMP_16X 0x04
+#define SPL06_OVERSAMP_32X 0x05
+#define SPL06_OVERSAMP_64X 0x06
+#define SPL06_OVERSAMP_128X 0x07
+
+// Work mode
+#define SPL06_SLEEP_MODE 0x00
+#define SPL06_NORMAL_MODE 0x07
+
+// Helper macros
+#define SPL06_GET_BITS(regvar, msk, pos) (((regvar) & (msk)) >> (pos))
+#define SPL06_SET_BITS(regvar, msk, pos, val) (((regvar) & ~(msk)) | (((val) << (pos)) & (msk)))
