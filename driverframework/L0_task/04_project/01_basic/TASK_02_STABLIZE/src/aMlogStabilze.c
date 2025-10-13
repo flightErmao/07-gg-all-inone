@@ -1,6 +1,6 @@
 #include "aMlogStabilize.h"
 #include "stateControl.h"
-#include "commandMinifly.h"
+#include "command.h"
 #include "aMcnStabilize.h"
 
 /* Mlog data structures */

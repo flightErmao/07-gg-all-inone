@@ -9,7 +9,7 @@
 #include "aMcnStabilize.h"
 #include "aMlogStabilize.h"
 #include "biasGyro.h"
-#include "commandMinifly.h"
+#include "command.h"
 #include "stateControl.h"
 #include "mixerControl.h"
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
@@ -97,7 +97,7 @@ static void mixerControlExcute(control_t* control, uint32_t tick) {
   }
 }
 
-static void stabilizer_minifly_thread_entry(void* parameter) {
+static void stabilizer_thread_entry(void* parameter) {
   uint32_t tick = 0;
   taskStabilizerInit();
 
@@ -125,12 +125,12 @@ static int taskStabilizerThreadAutoStart(void) {
 #define THREAD_STACK_SIZE 4096
 #define THREAD_TIMESLICE 5
 
-  static struct rt_thread task_tid_stabilizer_minifly;
-  static rt_uint8_t task_stack_stabilizer_minifly[THREAD_STACK_SIZE];
+  static struct rt_thread task_tid_stabilizer;
+  static rt_uint8_t task_stack_stabilizer[THREAD_STACK_SIZE];
 
-  rt_thread_init(&task_tid_stabilizer_minifly, "stabilizer", stabilizer_minifly_thread_entry, RT_NULL,
-                 task_stack_stabilizer_minifly, THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
-  rt_thread_startup(&task_tid_stabilizer_minifly);
+  rt_thread_init(&task_tid_stabilizer, "stabilizer", stabilizer_thread_entry, RT_NULL, task_stack_stabilizer,
+                 THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
+  rt_thread_startup(&task_tid_stabilizer);
   return RT_EOK;
 }
 

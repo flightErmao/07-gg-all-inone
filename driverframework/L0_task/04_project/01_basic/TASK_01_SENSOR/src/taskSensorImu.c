@@ -60,7 +60,7 @@ static void rtosToolsInit(void) {
 #endif
 }
 
-static void sensor_minifly_thread_entry(void *parameter) {
+static void sensor_imu_thread_entry(void* parameter) {
   deviceInit();
   rtosToolsInit();
   filterInitLpf2AccGyro();
@@ -106,7 +106,7 @@ static int taskSensorThreadAutoStart(void) {
 #define THREAD_TIMESLICE 5
   static struct rt_thread task_tid_sensor_imu;
   static rt_uint8_t task_stack_sensor_imu[THREAD_STACK_SIZE];
-  rt_thread_init(&task_tid_sensor_imu, "imu", sensor_minifly_thread_entry, RT_NULL, task_stack_sensor_imu,
+  rt_thread_init(&task_tid_sensor_imu, "imu", sensor_imu_thread_entry, RT_NULL, task_stack_sensor_imu,
                  THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
   rt_thread_startup(&task_tid_sensor_imu);
   return 0;
