@@ -82,8 +82,9 @@ static int mcnMixerInit(void) {
     rt_kprintf("[aMcnStabilize] Failed to advertise mixer topic: %d\n", result);
     return -1;
   }
-
-  mixer_cmd_sub_node = mcn_subscribe(MCN_HUB(mixer), RT_NULL, RT_NULL);
+  static rt_sem_t event = RT_NULL;
+  event = rt_sem_create("mixer_node_event", 0, RT_IPC_FLAG_FIFO);
+  mixer_cmd_sub_node = mcn_subscribe(MCN_HUB(mixer), event, RT_NULL);
   if (mixer_cmd_sub_node == RT_NULL) {
     rt_kprintf("[aMcnStabilize] Failed to subscribe to mixer topic\n");
     return -1;

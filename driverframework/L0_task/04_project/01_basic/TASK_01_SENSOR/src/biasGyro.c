@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include "biasGyro.h"
 #include "rtconfig.h"
+#include <rtthread.h>
 
 #define SENSORS_NBR_OF_BIAS_SAMPLES 1024
 #ifndef PROJECT_MINIFLY_TASK_SENSOR_GYRO_VARIANCE_BASE
@@ -73,6 +74,18 @@ static void sensorsFindBiasValue(BiasObj *bias) {
 }
 
 bool getGyroBias(Axis3i16 gyroRaw, Axis3f *gyroBiasOut) {
+  if (!gyroBiasRunning.isBiasValueFound) {
+    static bool first_times = true;
+    if (first_times) {
+      rt_thread_mdelay(1000);
+      rt_thread_mdelay(1000);
+      rt_thread_mdelay(1000);
+      first_times = false;
+    }
+  } else {
+    return true;
+  }
+
   sensorsAddBiasValue(&gyroBiasRunning, gyroRaw.x, gyroRaw.y, gyroRaw.z);
 
   if (!gyroBiasRunning.isBiasValueFound) {

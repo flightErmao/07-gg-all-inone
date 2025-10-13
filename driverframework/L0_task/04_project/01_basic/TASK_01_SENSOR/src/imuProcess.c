@@ -19,7 +19,7 @@
 
 static sensorData_t sensors;
 
-static Axis3f gyroBias;
+static Axis3f gyroBias = {0};
 static float accScale = 1;
 static bool gyroBiasFound = false;
 static float g_gyro_deg_per_lsb = (float)((2 * 2000.0) / 65536.0);
@@ -119,9 +119,9 @@ static void dealWithGyroData(void) {
   gyroApplyRotation(imu_mount_rotation, &sensors.gyro_filter);
   mlogImuCopyGyroData(&sensors.gyro_filter, RT_NULL);
 #ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
-  rpm_data_bus_t rpm_msg __attribute__((aligned(4)));
-  mcnRpmDataAcquire(&rpm_msg);
-  rpmFilter((float*)&sensors.gyro_filter, rpm_msg.rpm, (float*)&sensors.gyro_filter);
+  // rpm_data_bus_t rpm_msg __attribute__((aligned(4)));
+  // mcnRpmDataAcquire(&rpm_msg);
+  // rpmFilter((float*)&sensors.gyro_filter, rpm_msg.rpm, (float*)&sensors.gyro_filter);
 #endif
   applyAxis3fLpfGyro(&sensors.gyro_filter);
   mlogImuCopyGyroData(RT_NULL, &sensors.gyro_filter);

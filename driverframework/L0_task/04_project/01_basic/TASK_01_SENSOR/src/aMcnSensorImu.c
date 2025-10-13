@@ -1,5 +1,6 @@
 #include "aMcnSensorImu.h"
 #include "floatConvert.h"
+#include <rtthread.h>
 
 /* MCN topic declaration */
 MCN_DECLARE(imu);
@@ -38,8 +39,9 @@ static int mcnSensorImuInit(void) {
     rt_kprintf("[aMcnSensorImu] Failed to advertise imu topic: %d\n", result);
     return -1;
   }
-  
-  sensor_imu_sub_node = mcn_subscribe(MCN_HUB(imu), RT_NULL, RT_NULL);
+  static rt_sem_t event = RT_NULL;
+  event = rt_sem_create("imu_node_event", 0, RT_IPC_FLAG_FIFO);
+  sensor_imu_sub_node = mcn_subscribe(MCN_HUB(imu), event, RT_NULL);
   if (sensor_imu_sub_node == RT_NULL) {
     rt_kprintf("[aMcnSensorImu] Failed to subscribe to imu topic\n");
     return -1;
