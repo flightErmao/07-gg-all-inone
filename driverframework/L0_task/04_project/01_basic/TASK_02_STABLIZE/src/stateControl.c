@@ -44,20 +44,19 @@ static void generateAttituedeDesierd(const setpoint_t* setpoint, const uint32_t 
     attitudeDesired_.roll = setpoint->attitude.roll;
     attitudeDesired_.pitch = setpoint->attitude.pitch;
   }
-  if (RATE_DO_EXECUTE(ANGLE_PID_RATE, tick)) {
-    attitudeDesired_.yaw += setpoint->attitude.yaw / ANGLE_PID_RATE;
-    if (attitudeDesired_.yaw > 180.0f) attitudeDesired_.yaw -= 360.0f;
-    if (attitudeDesired_.yaw < -180.0f) attitudeDesired_.yaw += 360.0f;
-  }
+
+  attitudeDesired_.yaw += setpoint->attitude.yaw / ANGLE_PID_RATE;
+  if (attitudeDesired_.yaw > 180.0f) attitudeDesired_.yaw -= 360.0f;
+  if (attitudeDesired_.yaw < -180.0f) attitudeDesired_.yaw += 360.0f;
 }
 
 void stateControl(const state_t* state, const setpoint_t* setpoint, control_t* control, const uint32_t tick) {
   if (resetControl(state, setpoint, control)) {
     return;
   }
-  generateAttituedeDesierd(setpoint, tick);
 
   if (RATE_DO_EXECUTE(ANGLE_PID_RATE, tick)) {
+    generateAttituedeDesierd(setpoint, tick);
     attitudeAnglePID(&state->attitude, &attitudeDesired_, &rateDesired_);
   }
 
