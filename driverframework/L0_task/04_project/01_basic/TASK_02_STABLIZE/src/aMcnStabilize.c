@@ -110,4 +110,10 @@ int mcnMixerAcquire(mixer_data_t* mixer_data) {
   return mcn_copy(MCN_HUB(mixer), mixer_cmd_sub_node, mixer_data);
 }
 
+void mcnWaitMixerPub() {
+  if (mixer_cmd_sub_node != RT_NULL) {
+    mcn_poll_sync(mixer_cmd_sub_node, RT_WAITING_FOREVER);
+  }
+}
+
 INIT_COMPONENT_EXPORT(mcnMixerInit);

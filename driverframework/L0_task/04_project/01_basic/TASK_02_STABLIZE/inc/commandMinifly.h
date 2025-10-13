@@ -13,6 +13,12 @@
  */
 void commanderGetSetpoint(const pilot_cmd_bus_t* rc_data, setpoint_t* setpoint);
 
+/**
+ * @brief Get current setpoint
+ * @param setpoint Pointer to setpoint structure to be filled with current values
+ */
+void commanderGetCurrentSetpoint(setpoint_t* setpoint);
+
 #endif
 
 // #endif

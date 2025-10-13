@@ -3,6 +3,9 @@
 #include "taskMlog.h"
 #endif
 
+// External function to access current setpoint from taskStabilizer
+extern void getCurrentSetpointInternal(setpoint_t* setpoint);
+
 static void commanderHandleArmLogging(const setpoint_t* setpoint) {
   static int prev_armed = -1;
 
@@ -47,4 +50,15 @@ void commanderGetSetpoint(const pilot_cmd_bus_t* rc_data, setpoint_t* setpoint) 
   commanderHandleArmLogging(setpoint);
   return;
 }
+
+/**
+ * @brief Get current setpoint
+ * @param setpoint Pointer to setpoint structure to be filled with current values
+ */
+void commanderGetCurrentSetpoint(setpoint_t* setpoint) {
+  if (!setpoint) return;
+  
+  getCurrentSetpointInternal(setpoint);
+}
+
 // #endif

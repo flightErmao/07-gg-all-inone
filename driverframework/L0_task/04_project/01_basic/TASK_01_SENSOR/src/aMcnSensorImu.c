@@ -75,5 +75,11 @@ int mcnSensorImuAcquire(sensorData_t* sensor_data) {
   // return -1;
 }
 
+void mcnWaitImuPub(void) {
+  if (sensor_imu_sub_node != RT_NULL) {
+    mcn_poll_sync(sensor_imu_sub_node, RT_WAITING_FOREVER);
+  }
+}
+
 INIT_COMPONENT_EXPORT(mcnSensorImuInit);
 

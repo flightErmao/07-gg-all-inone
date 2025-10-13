@@ -8,10 +8,6 @@
 #include "floatConvert.h"
 #include "rcDef.h"
 
-#define THREAD_PRIORITY 7
-#define THREAD_STACK_SIZE 2048
-#define THREAD_TIMESLICE 5
-
 MCN_DECLARE(rc);
 MCN_DEFINE(rc, sizeof(pilot_cmd_bus_t));
 
@@ -153,6 +149,10 @@ static rt_err_t mcnTopicInit(void) {
 }
 
 static int taskRcThreadInit(void) {
+#define THREAD_PRIORITY 7
+#define THREAD_STACK_SIZE 2048
+#define THREAD_TIMESLICE 5
+
   static struct rt_thread task_tid_rc_fmt;
   static rt_uint8_t task_stack_rc_fmt[THREAD_STACK_SIZE] = {0};
 
@@ -168,8 +168,6 @@ static int taskRcThreadInit(void) {
     rt_kprintf("Start RC thread failed: %d\n", ret);
     return -RT_ERROR;
   }
-  
-  rt_kprintf("RC task started\n");
   return RT_EOK;
 }
 
@@ -205,30 +203,7 @@ rt_uint16_t* getRcChannels(void) { return rc_channels_; }
 
 void rcPilotCmdAcquire(pilot_cmd_bus_t* pilot_cmd_bus) {
   if (!pilot_cmd_bus) return;
-#ifdef PROJECT_FMT_TASK01_RC_EN
   if (rc_sub_node_ != NULL) {
     mcn_copy(MCN_HUB(rc), rc_sub_node_, pilot_cmd_bus);
   }
-#endif
 }
-
-// static int cmdRcLoseCat(int argc, char** argv) {
-//   if (argc < 2) {
-//     rt_kprintf("RC printf enable command usage: rc_printf_enable <enable|disable>\n");
-//     return -1;
-//   }
-
-//   if (!rt_strcmp(argv[1], "enable")) {
-//     cmdPrintf = RT_TRUE;
-//   } else if (!rt_strcmp(argv[1], "disable")) {
-//     cmdPrintf = RT_FALSE;
-//   } else {
-//     rt_kprintf("Invalid command: %s\n", argv[1]);
-//     rt_kprintf("Usage: rc_printf_enable <enable|disable>\n");
-//     return -1;
-//   }
-
-//   return 0;
-// }
-
-// MSH_CMD_EXPORT_ALIAS(cmdRcLoseCat, cmdRcLoseCat, rc printf enable command);

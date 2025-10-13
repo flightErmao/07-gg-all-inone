@@ -8,6 +8,7 @@
 /* Sensor IMU MCN functions */
 int mcnSensorImuPublish(const sensorData_t* sensor_data);
 int mcnSensorImuAcquire(sensorData_t* sensor_data);
+void mcnWaitImuPub(void);
 
 #endif /* __A_MCN_SENSOR_IMU_H__ */
 

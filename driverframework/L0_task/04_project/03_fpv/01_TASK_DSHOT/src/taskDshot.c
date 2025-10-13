@@ -38,7 +38,7 @@ static float rpm_read_convert_[DSHOT_MOTOR_NUMS] = {0};  // Converted RPM values
 /* map motor value to DShot throttle range with armed state check */
 static inline uint16_t map_motor_to_dshot(uint16_t motor_val) {
   float fv = (float)motor_val;
-  float out = scaleRangef(fv, 0.0f, 65535.0f, 48.0f, 2048.0f);
+  float out = scaleRangef(fv, 0.0f, 65535.0f, 48.0f, 2047.0f);
   return (uint16_t)(out);
 }
 
@@ -186,7 +186,8 @@ static void task_dshot_entry(void* parameter) {
   device_init();
   rtos_init();
   while (1) {
-    rt_event_recv(&dshot_event_, 1u, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, RT_NULL);
+    // rt_event_recv(&dshot_event_, 1u, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, RT_NULL);
+    mcnWaitMixerPub();
     debugPin0();
     mixterRemapToDshotSpeed();
     writeDshotCmdToDevice();

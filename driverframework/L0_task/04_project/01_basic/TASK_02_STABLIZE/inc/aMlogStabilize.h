@@ -10,7 +10,6 @@
 
 /* Function declarations */
 void mlogStabilizerInit(void);
-void mlogStabilizerCopyAngleRateData(const attitude_t* rate_desired, const attitude_t* rate_current);
-void mlogStabilizerPushAngleRateData(uint32_t timestamp);
+void mlogStabilizerPush(uint32_t tick);
 
 #endif /* __MLOG_STABILIZER_H__ */

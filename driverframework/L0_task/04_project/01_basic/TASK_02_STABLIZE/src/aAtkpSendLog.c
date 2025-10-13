@@ -28,7 +28,7 @@ void sendFlyerStates(uint16_t count_ms) {
     attitude_t attitude_desired;
 
     mcnStateAcquire(&state_flyer);
-    getAttitudeDesired(&attitude_desired);
+    getAngleDesired(&attitude_desired);
 
     attitude_current.roll = state_flyer.attitude.roll;
     attitude_current.pitch = state_flyer.attitude.pitch;

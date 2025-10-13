@@ -20,6 +20,8 @@ void mcnStateAcquire(state_t* state);
 int mcnMixerPublish(const mixer_data_t* cmd_data);
 int mcnMixerAcquire(mixer_data_t* cmd_data);
 
+void mcnWaitMixerPub();
+
 #ifdef __cplusplus
 }
 #endif

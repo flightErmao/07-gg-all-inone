@@ -68,7 +68,7 @@ void stateControl(const state_t* state, const setpoint_t* setpoint, control_t* c
   control->thrust = actualThrust_;
 }
 
-void getAttitudeDesired(attitude_t *get) {
+void getAngleDesired(attitude_t* get) {
   get->pitch = attitudeDesired_.pitch;
   get->roll = attitudeDesired_.roll;
   get->yaw = attitudeDesired_.yaw;

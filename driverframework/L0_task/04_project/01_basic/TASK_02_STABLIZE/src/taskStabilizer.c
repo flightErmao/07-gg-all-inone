@@ -7,11 +7,11 @@
 #include "sensfusion6.h"
 #include "aMcnSensorImu.h"
 #include "aMcnStabilize.h"
+#include "aMlogStabilize.h"
 #include "biasGyro.h"
 #include "commandMinifly.h"
 #include "stateControl.h"
 #include "mixerControl.h"
-#include "aMlogStabilize.h"
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
 #include "debugPin.h"
 #endif
@@ -23,6 +23,12 @@ static rt_event_t stabilizer_event = RT_NULL;
 static state_t state_;
 static setpoint_t setpoint_;
 static control_t contorl_;
+
+/**
+ * @brief Get current setpoint (internal access function)
+ * @param setpoint Pointer to setpoint structure to be filled
+ */
+void getCurrentSetpointInternal(setpoint_t* setpoint) { *setpoint = setpoint_; }
 
 static bool sensorsAreCalibrated(void) { return outputGyroBiasFound(); }
 static void stabilizer_timer_callback(void* parameter) { rt_event_send(stabilizer_event, STABILIZER_EVENT_FLAG); }
@@ -91,26 +97,6 @@ static void mixerControlExcute(control_t* control, uint32_t tick) {
   }
 }
 
-static void mlogAngleRateLog(state_t* state, uint32_t tick) {
-#if defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_EN)
-  if (RATE_DO_EXECUTE(RATE_500_HZ, tick)) {
-    attitude_t rate_desired = {0};
-    attitude_t rate_current = {0};
-
-    getRateDesired(&rate_desired);
-    rate_current.roll = state->gyro_filter.x;
-    rate_current.pitch = state->gyro_filter.y;
-    rate_current.yaw = state->gyro_filter.z;
-
-    mlogStabilizerCopyAngleRateData(&rate_desired, &rate_current);
-    mlogStabilizerPushAngleRateData(rt_tick_get());
-  }
-#else
-  RT_UNUSED(state);
-  RT_UNUSED(tick);
-#endif
-}
-
 static void stabilizer_minifly_thread_entry(void* parameter) {
   uint32_t tick = 0;
   taskStabilizerInit();
@@ -121,13 +107,15 @@ static void stabilizer_minifly_thread_entry(void* parameter) {
   rt_timer_start(stabilizer_timer);
 
   while (1) {
-    rt_event_recv(stabilizer_event, STABILIZER_EVENT_FLAG, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER,
-                  RT_NULL);
+    // rt_event_recv(stabilizer_event, STABILIZER_EVENT_FLAG, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR,
+    // RT_WAITING_FOREVER,
+    //               RT_NULL);
+    mcnWaitImuPub();
     rcAndCmdGenerate(&setpoint_, tick);
     flyerStateUpdate(&state_, tick);
     stateControl(&state_, &setpoint_, &contorl_, tick);
     mixerControlExcute(&contorl_, tick);
-    mlogAngleRateLog(&state_, tick);
+    mlogStabilizerPush(tick);
     tick++;
   }
 }

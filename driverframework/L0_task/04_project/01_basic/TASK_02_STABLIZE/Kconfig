@@ -85,12 +85,26 @@ menuconfig PROJECT_MINIFLY_TASK_STABLIZE_EN
                 endif
             endif
 
-        config PROJECT_MINIFLY_TASK_STABLIZE_MLOG_EN
-            bool "ENABLE: PROJECT_MINIFLY_TASK_STABLIZE_MLOG_EN"
+        config PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_EN
+            bool "ENABLE: PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_EN"
             default n
             depends on TASK_TOOL_02_SD_MLOG
             help
-                Enable mlog (SD card logging) for the stabilize task.
+                Enable mlog (SD card logging) for angle rate data in the stabilize task.
+
+        config PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_EN
+            bool "ENABLE: PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_EN"
+            default n
+            depends on TASK_TOOL_02_SD_MLOG
+            help
+                Enable mlog (SD card logging) for angle data in the stabilize task.
+
+        config PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RC_EN
+            bool "ENABLE: PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RC_EN"
+            default n
+            depends on TASK_TOOL_02_SD_MLOG
+            help
+                Enable mlog (SD card logging) for RC data in the stabilize task.
 
         config PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
             bool "ENABLE: PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN"
