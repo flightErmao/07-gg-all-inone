@@ -2,6 +2,15 @@
 #include "rcDef.h"
 #include <stddef.h>
 
+/* RC deadzone configuration */
+#ifdef PROJECT_FMT_TASK01_RC_DEADZONE_PERCENT
+  /* Convert Kconfig integer (x100) to float coefficient */
+  #define RC_DEADZONE_VALUE (PROJECT_FMT_TASK01_RC_DEADZONE_PERCENT / 100.0f)
+#else
+  /* Use default from rcDef.h if Kconfig not defined */
+  #define RC_DEADZONE_VALUE RC_DEADZONE_PERCENT
+#endif
+
 
 static float limit(float value,float min, float max)
 {
@@ -98,7 +107,7 @@ void normalizationRcChannels(joystickPercent *percent,uint16_t *channels)
 		percent->yaw = -(float)(RC_YAW_CHANNEL_CENTER - ch_yaw) / RC_YAW_CHANNEL_RANGE_DOWN;
 	}
 
-	const float deadzone = RC_DEADZONE_PERCENT;
+	const float deadzone = RC_DEADZONE_VALUE;
 
 	if (percent->roll > -deadzone && percent->roll < deadzone) {
 		percent->roll = 0.0f;
