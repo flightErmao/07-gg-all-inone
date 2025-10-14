@@ -121,4 +121,24 @@ menuconfig PROJECT_MINIFLY_TASK_STABLIZE_EN
             help
                 Enable debug pin for the stabilize task.
 
+        # ======== RC Input Smoothing Filter ========
+        menuconfig PROJECT_MINIFLY_TASK_STABLIZE_RC_FILTER_EN
+            bool "ENABLE: RC Input Smoothing Filter"
+            default y
+            help
+                Enable low-pass filter for RC input to smooth deadzone transitions.
+                This reduces noise in the control loop caused by sudden RC value changes.
+
+            if PROJECT_MINIFLY_TASK_STABLIZE_RC_FILTER_EN
+                config PROJECT_MINIFLY_TASK_STABLIZE_RC_FILTER_ALPHA
+                    int "RC Filter Alpha (x100)"
+                    range 1 100
+                    default 20
+                    help
+                        Low-pass filter coefficient (0.01 - 1.00, stored as integer x100).
+                        Larger values = more responsive, smaller = smoother.
+                        Default: 20 (0.20)
+                        Recommended range: 10-30 (0.10-0.30)
+            endif
+
     endif
