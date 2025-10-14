@@ -12,6 +12,7 @@
 #include "command.h"
 #include "stateControl.h"
 #include "mixerControl.h"
+#include "taskStabilizer.h"
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
 #include "debugPin.h"
 #endif
@@ -25,10 +26,13 @@ static setpoint_t setpoint_;
 static control_t contorl_;
 
 /**
- * @brief Get current setpoint (internal access function)
- * @param setpoint Pointer to setpoint structure to be filled
+ * @brief Get current setpoint
+ * @param setpoint Pointer to setpoint structure to be filled with current values
  */
-void getCurrentSetpointInternal(setpoint_t* setpoint) { *setpoint = setpoint_; }
+void commanderGetCurrentSetpoint(setpoint_t* setpoint) {
+  if (!setpoint) return;
+  *setpoint = setpoint_;
+}
 
 static bool sensorsAreCalibrated(void) { return outputGyroBiasFound(); }
 static void stabilizer_timer_callback(void* parameter) { rt_event_send(stabilizer_event, STABILIZER_EVENT_FLAG); }

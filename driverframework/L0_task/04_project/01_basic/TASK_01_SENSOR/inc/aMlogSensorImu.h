@@ -4,7 +4,7 @@
 #include <rtthread.h>
 #include "sensorsTypes.h"
 
-#ifdef TASK_TOOL_02_SD_MLOG
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_EN
 #include "mlog.h"
 #endif
 

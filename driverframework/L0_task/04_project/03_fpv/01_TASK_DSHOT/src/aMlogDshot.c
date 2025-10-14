@@ -4,9 +4,9 @@
 #include "mlog.h"
 #endif
 
-static void mlogDshotStartCb(void);
-
 #ifdef PROJECT_MINIFLY_TASK_DSHOT_MLOG_EN
+
+static void mlogDshotStartCb(void);
 /* Mlog bus definition for DShot data */
 static mlog_elem_t DShot_Motor_Elems[] __attribute__((used)) = {
     MLOG_ELEMENT(timestamp, MLOG_UINT32),

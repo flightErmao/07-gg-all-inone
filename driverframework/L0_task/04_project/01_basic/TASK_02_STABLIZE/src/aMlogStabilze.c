@@ -1,6 +1,7 @@
 #include "aMlogStabilize.h"
 #include "stateControl.h"
 #include "command.h"
+#include "taskStabilizer.h"
 #include "aMcnStabilize.h"
 
 /* Mlog data structures */
@@ -8,13 +9,13 @@ typedef struct {
     uint32_t timestamp;
     float rate_desired[3];  // desired rate: roll, pitch, yaw (deg/s)
     float rate_current[3];  // current rate: roll, pitch, yaw (deg/s)
-} mlogStabilizerRateData_t;
+} __packed mlogStabilizerRateData_t;
 
 typedef struct {
   uint32_t timestamp;
   float angle_desired[3];  // desired angle: roll, pitch, yaw (deg)
   float angle_current[3];  // current angle: roll, pitch, yaw (deg)
-} mlogStabilizerAngleData_t;
+} __packed mlogStabilizerAngleData_t;
 
 typedef struct {
   uint32_t timestamp;
@@ -23,7 +24,7 @@ typedef struct {
   float rc_yaw;
   float rc_throttle;
   uint8_t armed;
-} mlogStabilizerRcData_t;
+} __packed mlogStabilizerRcData_t;
 
 #if defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_EN) || defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_EN) || \
     defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RC_EN)
@@ -180,10 +181,14 @@ void mlogStabilizerPush(uint32_t tick) {
   return;
 #endif
 
+#if defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_EN) || defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_EN) || \
+    defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RC_EN)
+  uint32_t timestamp = rt_tick_get();
+#endif
+
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_EN
   // Push rate data at 500Hz
   if (RATE_DO_EXECUTE(RATE_PID_RATE, tick)) {
-    uint32_t timestamp = rt_tick_get();
     mlogStabilizerRateData_t rate_data = {0};
     rate_data.timestamp = timestamp;
 
@@ -209,7 +214,6 @@ void mlogStabilizerPush(uint32_t tick) {
 
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_EN
   if (RATE_DO_EXECUTE(ANGLE_PID_RATE, tick)) {
-    uint32_t timestamp = rt_tick_get();
     mlogStabilizerAngleData_t angle_data = {0};
     angle_data.timestamp = timestamp;
 
@@ -236,20 +240,19 @@ void mlogStabilizerPush(uint32_t tick) {
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RC_EN
   // Push RC data at 100Hz
   if (RATE_DO_EXECUTE(RATE_100_HZ, tick)) {
-    uint32_t timestamp = rt_tick_get();
     mlogStabilizerRcData_t rc_data = {0};
     rc_data.timestamp = timestamp;
 
     // Get RC data
-    setpoint_t* setpoint = RT_NULL;
-    commanderGetCurrentSetpoint(setpoint);
+    setpoint_t setpoint = {0};
+    commanderGetCurrentSetpoint(&setpoint);
 
     // Fill RC data
-    rc_data.rc_roll = setpoint->attitude.roll;
-    rc_data.rc_pitch = setpoint->attitude.pitch;
-    rc_data.rc_yaw = setpoint->attitude.yaw;
-    rc_data.rc_throttle = setpoint->thrust;
-    rc_data.armed = setpoint->armed;
+    rc_data.rc_roll = setpoint.attitude.roll;
+    rc_data.rc_pitch = setpoint.attitude.pitch;
+    rc_data.rc_yaw = setpoint.attitude.yaw;
+    rc_data.rc_throttle = setpoint.thrust;
+    rc_data.armed = setpoint.armed;
 
     mlogStabilizerPushRcData(&rc_data);
   }

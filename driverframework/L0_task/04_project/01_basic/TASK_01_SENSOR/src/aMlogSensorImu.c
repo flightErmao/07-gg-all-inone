@@ -10,9 +10,10 @@ typedef struct {
 } mlogImuData_t;
 
 void mlogImuSetEnable(uint8_t enable);
+
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_EN
 static void mlogImuStartCb(void);
 
-#ifdef TASK_TOOL_02_SD_MLOG
 /* Mlog bus definition for IMU data - redefined */
 static mlog_elem_t Sensor_IMU_Elems[] __attribute__((used)) = {
     MLOG_ELEMENT(timestamp, MLOG_UINT32),
@@ -109,7 +110,7 @@ void mlogImuPushData(uint32_t timestamp) {
     }
 }
 
-#else /* TASK_TOOL_02_SD_MLOG not defined */
+#else /* PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_EN not defined */
 
 /* Empty implementations when mlog is not enabled */
 void mlogImuInit(void) {
@@ -138,4 +139,4 @@ void mlogImuPushData(uint32_t timestamp) {
     /* Do nothing when mlog is disabled */
 }
 
-#endif /* TASK_TOOL_02_SD_MLOG */
+#endif /* PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_EN */

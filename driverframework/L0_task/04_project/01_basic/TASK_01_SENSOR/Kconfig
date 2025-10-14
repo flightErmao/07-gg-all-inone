@@ -4,19 +4,15 @@ menuconfig PROJECT_MINIFLY_TASK_SENSOR_EN
     help
         Enable sensor test task that periodically calls sensor test interface.
     if PROJECT_MINIFLY_TASK_SENSOR_EN
+        # ======== Basic Configuration ========
         config PROJECT_MINIFLY_TASK_SENSOR_IMU_NAME
             string "IMU device name for sensor_minifly task"
             default "mpu6500_minifly"
             help
                 IMU device name used by sensor_minifly task. Default is the MPU6500 MINIFLY device name.
-        config PROJECT_MINIFLY_TASK_SENSOR_ATKP_LOG_EN
-            bool "ENABLE: PROJECT_MINIFLY_TASK_SENSOR_ATKP_LOG_EN"
-            default n
-            help
-                Enable ATKP logging for the sensor task.
         
         config PROJECT_MINIFLY_TASK_SENSOR_TIMER_TRIGGER_EN
-            bool "ENABLE: PROJECT_MINIFLY_TASK_SENSOR_TIMER_TRIGGER_EN"
+            bool "ENABLE: Timer-Triggered Sampling"
             default n
             help
                 Enable timer-triggered sampling for the sensor task. When enabled, a software timer periodically releases an event, and the task blocks waiting for this event before reading IMU data.
@@ -33,5 +29,35 @@ menuconfig PROJECT_MINIFLY_TASK_SENSOR_EN
             help
                 Static variance threshold for gyro bias detection. Used to decide
                 when the gyro is stable enough to take the mean as bias.
+
+        # ======== DEBUG: ANOTC (ATKP) ========
+        menuconfig PROJECT_MINIFLY_TASK_SENSOR_ATKP_LOG_EN
+            bool "DEBUG: ANOTC (ATKP) Logging"
+            default n
+            help
+                Enable ATKP logging for the sensor task.
+
+        # ======== DEBUG: MLOG (SD Card) ========
+        menuconfig PROJECT_MINIFLY_TASK_SENSOR_MLOG_EN
+            bool "DEBUG: MLOG (SD Card) Logging"
+            default n
+            depends on TASK_TOOL_02_SD_MLOG
+            help
+                Enable mlog (SD card logging) for the sensor task.
+
+        if PROJECT_MINIFLY_TASK_SENSOR_MLOG_EN
+            config PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_EN
+                bool "ENABLE: IMU Data Logging"
+                default n
+                help
+                    Enable mlog (SD card logging) for IMU data in the sensor task.
+        endif
+
+        # ======== DEBUG: PIN ========
+        menuconfig PROJECT_MINIFLY_TASK_SENSOR_DEBUGPIN_EN
+            bool "DEBUG: PIN (Debug Pin)"
+            default n
+            help
+                Enable debug pin for the sensor task.
 
     endif

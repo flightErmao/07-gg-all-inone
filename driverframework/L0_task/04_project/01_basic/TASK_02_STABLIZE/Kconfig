@@ -11,103 +11,112 @@ menuconfig PROJECT_MINIFLY_TASK_STABLIZE_EN
         Enable stabilize task that periodically calls stabilize interface.
         
     if PROJECT_MINIFLY_TASK_STABLIZE_EN
-        config PROJECT_MINIFLY_TASK_STABLIZE_ATKP_LOG_EN
-            bool "ENABLE: PROJECT_MINIFLY_TASK_STABLIZE_ATKP_LOG_EN"
+        # ======== DEBUG: ANOTC (ATKP) ========
+        menuconfig PROJECT_MINIFLY_TASK_STABLIZE_ATKP_LOG_EN
+            bool "DEBUG: ANOTC (ATKP) Logging"
             default n
             help
                 Enable ATKP logging for the stabilize task.
 
             if PROJECT_MINIFLY_TASK_STABLIZE_ATKP_LOG_EN
                 config PROJECT_MINIFLY_TASK_STABLIZE_LOG_FLYER_ANGLE
-                    bool "ENABLE: PROJECT_MINIFLY_TASK_STABLIZE_LOG_FLYER_ANGLE"
+                    bool "ENABLE: Flyer Angle Logging"
                     default n
                     help
                         Enable flyer angle logging for the stabilize task.
 
                 config PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_DEBUG
-                    bool "ENABLE: PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_DEBUG"
+                    bool "ENABLE: Angle Debug Logging"
                     default n
                     help
                         Enable angle debug logging for the stabilize task.
 
-                if PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_DEBUG
-                    config PROJECT_MINIFLY_TASK_STABLIZE_LOG_GROUP_ANGLE
-                        int "LOG GROUP ID FOR ANGLE DEBUG"
-                        range 1 99
-                        default 1
-                        help
-                            Set the group ID for angle debug logging (1-99).
-                endif
+                    if PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_DEBUG
+                        config PROJECT_MINIFLY_TASK_STABLIZE_LOG_GROUP_ANGLE
+                            int "Log Group ID for Angle Debug"
+                            range 1 99
+                            default 1
+                            help
+                                Set the group ID for angle debug logging (1-99).
+                    endif
 
                 config PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_DEBUG
-                    bool "ENABLE: PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_DEBUG"
+                    bool "ENABLE: Rate Debug Logging"
                     default n
                     help
                         Enable rate debug logging for the stabilize task.
 
-                if PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_DEBUG
-                    config PROJECT_MINIFLY_TASK_STABLIZE_LOG_GROUP_RATE
-                        int "LOG GROUP ID FOR RATE DEBUG"
-                        range 1 99
-                        default 2
-                        help
-                            Set the group ID for rate debug logging (1-99).
-                endif
+                    if PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_DEBUG
+                        config PROJECT_MINIFLY_TASK_STABLIZE_LOG_GROUP_RATE
+                            int "Log Group ID for Rate Debug"
+                            range 1 99
+                            default 2
+                            help
+                                Set the group ID for rate debug logging (1-99).
+                    endif
 
                 config PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_PID_DEBUG
-                    bool "ENABLE: PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_PID_DEBUG"
+                    bool "ENABLE: Angle PID Debug Logging"
                     default n
                     help
                         Enable angle PID debug logging for the stabilize task.
 
-                if PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_PID_DEBUG
-                    config PROJECT_MINIFLY_TASK_STABLIZE_LOG_GROUP_ANGLE_PID
-                        int "LOG GROUP ID FOR ANGLE PID DEBUG"
-                        range 1 99
-                        default 3
-                        help
-                            Set the group ID for angle PID debug logging (1-99).
-                endif
+                    if PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_PID_DEBUG
+                        config PROJECT_MINIFLY_TASK_STABLIZE_LOG_GROUP_ANGLE_PID
+                            int "Log Group ID for Angle PID Debug"
+                            range 1 99
+                            default 3
+                            help
+                                Set the group ID for angle PID debug logging (1-99).
+                    endif
 
                 config PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_PID_DEBUG
-                    bool "ENABLE: PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_PID_DEBUG"
+                    bool "ENABLE: Rate PID Debug Logging"
                     default n
                     help
                         Enable rate PID debug logging for the stabilize task.
 
-                if PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_PID_DEBUG
-                    config PROJECT_MINIFLY_TASK_STABLIZE_LOG_GROUP_RATE_PID
-                        int "LOG GROUP ID FOR RATE PID DEBUG"
-                        range 1 99
-                        default 4
-                        help
-                            Set the group ID for rate PID debug logging (1-99).
-                endif
+                    if PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_PID_DEBUG
+                        config PROJECT_MINIFLY_TASK_STABLIZE_LOG_GROUP_RATE_PID
+                            int "Log Group ID for Rate PID Debug"
+                            range 1 99
+                            default 4
+                            help
+                                Set the group ID for rate PID debug logging (1-99).
+                    endif
             endif
 
-        config PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_EN
-            bool "ENABLE: PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_EN"
+        # ======== DEBUG: MLOG (SD Card) ========
+        menuconfig PROJECT_MINIFLY_TASK_STABLIZE_MLOG_EN
+            bool "DEBUG: MLOG (SD Card) Logging"
             default n
             depends on TASK_TOOL_02_SD_MLOG
             help
-                Enable mlog (SD card logging) for angle rate data in the stabilize task.
+                Enable mlog (SD card logging) for the stabilize task.
 
-        config PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_EN
-            bool "ENABLE: PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_EN"
-            default n
-            depends on TASK_TOOL_02_SD_MLOG
-            help
-                Enable mlog (SD card logging) for angle data in the stabilize task.
+        if PROJECT_MINIFLY_TASK_STABLIZE_MLOG_EN
+            config PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_EN
+                bool "ENABLE: Rate Data Logging"
+                default n
+                help
+                    Enable mlog (SD card logging) for angle rate data in the stabilize task.
 
-        config PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RC_EN
-            bool "ENABLE: PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RC_EN"
-            default n
-            depends on TASK_TOOL_02_SD_MLOG
-            help
-                Enable mlog (SD card logging) for RC data in the stabilize task.
+            config PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_EN
+                bool "ENABLE: Angle Data Logging"
+                default n
+                help
+                    Enable mlog (SD card logging) for angle data in the stabilize task.
 
-        config PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
-            bool "ENABLE: PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN"
+            config PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RC_EN
+                bool "ENABLE: RC Data Logging"
+                default n
+                help
+                    Enable mlog (SD card logging) for RC data in the stabilize task.
+        endif
+
+        # ======== DEBUG: PIN ========
+        menuconfig PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
+            bool "DEBUG: PIN (Debug Pin)"
             default n
             help
                 Enable debug pin for the stabilize task.
