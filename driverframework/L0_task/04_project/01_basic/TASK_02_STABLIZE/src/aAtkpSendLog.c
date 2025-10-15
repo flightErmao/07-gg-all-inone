@@ -13,7 +13,12 @@
 
 void sendFlyerStates(uint16_t count_ms) {
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_FLYER_ANGLE
-  if (!(count_ms % PERIOD_20ms)) {
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_FLYER_ANGLE_PERIOD_MS
+#define ATKP_LOG_FLYER_ANGLE_PERIOD PROJECT_MINIFLY_TASK_STABLIZE_LOG_FLYER_ANGLE_PERIOD_MS
+#else
+#define ATKP_LOG_FLYER_ANGLE_PERIOD 20
+#endif
+  if (!(count_ms % ATKP_LOG_FLYER_ANGLE_PERIOD)) {
     state_t state_flyer = {0};
     mcnStateAcquire(&state_flyer);
     packStatus(state_flyer.attitude.roll, -state_flyer.attitude.pitch, -state_flyer.attitude.yaw,
@@ -22,7 +27,12 @@ void sendFlyerStates(uint16_t count_ms) {
 #endif
 
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_DEBUG
-  if (!(count_ms % PERIOD_20ms)) {
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_PERIOD_MS
+#define ATKP_LOG_ANGLE_PERIOD PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_PERIOD_MS
+#else
+#define ATKP_LOG_ANGLE_PERIOD 20
+#endif
+  if (!(count_ms % ATKP_LOG_ANGLE_PERIOD)) {
     state_t state_flyer = {0};
     attitude_t attitude_current;
     attitude_t attitude_desired;
@@ -40,7 +50,12 @@ void sendFlyerStates(uint16_t count_ms) {
 #endif
 
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_DEBUG
-  if (!(count_ms % PERIOD_20ms)) {
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_PERIOD_MS
+#define ATKP_LOG_RATE_PERIOD PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_PERIOD_MS
+#else
+#define ATKP_LOG_RATE_PERIOD 20
+#endif
+  if (!(count_ms % ATKP_LOG_RATE_PERIOD)) {
     state_t state_flyer = {0};
     attitude_t rate_current;
     attitude_t rate_desired;
@@ -58,7 +73,12 @@ void sendFlyerStates(uint16_t count_ms) {
 #endif
 
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_PID_DEBUG
-  if (!(count_ms % PERIOD_20ms)) {
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_PID_PERIOD_MS
+#define ATKP_LOG_ANGLE_PID_PERIOD PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_PID_PERIOD_MS
+#else
+#define ATKP_LOG_ANGLE_PID_PERIOD 20
+#endif
+  if (!(count_ms % ATKP_LOG_ANGLE_PID_PERIOD)) {
     float angle_roll_p, angle_roll_i, angle_roll_d;
     float angle_pitch_p, angle_pitch_i, angle_pitch_d;
     float angle_yaw_p, angle_yaw_i, angle_yaw_d;
@@ -75,7 +95,12 @@ void sendFlyerStates(uint16_t count_ms) {
 #endif
 
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_PID_DEBUG
-  if (!(count_ms % PERIOD_20ms)) {
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_PID_PERIOD_MS
+#define ATKP_LOG_RATE_PID_PERIOD PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_PID_PERIOD_MS
+#else
+#define ATKP_LOG_RATE_PID_PERIOD 20
+#endif
+  if (!(count_ms % ATKP_LOG_RATE_PID_PERIOD)) {
     float rate_roll_p, rate_roll_i, rate_roll_d;
     float rate_pitch_p, rate_pitch_i, rate_pitch_d;
     float rate_yaw_p, rate_yaw_i, rate_yaw_d;

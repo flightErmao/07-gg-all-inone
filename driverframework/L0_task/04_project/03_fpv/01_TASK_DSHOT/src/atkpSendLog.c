@@ -8,7 +8,7 @@
 #include "taskAnotcTelem.h"
 
 void sendDshotMotorData(uint16_t count_ms) {
-  if (!(count_ms % PERIOD_10ms)) {
+  if (!(count_ms % PERIOD_30ms)) {
     uint16_t m1, m2, m3, m4;
     task_dshot_get_mapped(&m1, &m2, &m3, &m4);
 

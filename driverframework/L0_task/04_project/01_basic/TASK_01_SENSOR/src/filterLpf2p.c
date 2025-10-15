@@ -4,7 +4,7 @@
 
 #define M_PI_F (float)3.14159265
 #define IIR_SHIFT 8
-#define GYRO_LPF_CUTOFF_FREQ 80
+#define GYRO_LPF_CUTOFF_FREQ 70
 #define ACCEL_LPF_CUTOFF_FREQ 30
 
 typedef struct {

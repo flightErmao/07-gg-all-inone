@@ -2,6 +2,7 @@
 #include "rtthread.h"
 #include "biasGyro.h"
 #include "filterLpf2p.h"
+#include "filterNotch2p.h"
 #include "imuProcess.h"
 #include "rotation.h"
 #include <math.h>
@@ -123,6 +124,7 @@ static void dealWithGyroData(void) {
   // mcnRpmDataAcquire(&rpm_msg);
   // rpmFilter((float*)&sensors.gyro_filter, rpm_msg.rpm, (float*)&sensors.gyro_filter);
 #endif
+  applyAxis3fNotchGyro(&sensors.gyro_filter);
   applyAxis3fLpfGyro(&sensors.gyro_filter);
   mlogImuCopyGyroData(RT_NULL, &sensors.gyro_filter);
 }
@@ -132,6 +134,7 @@ static void dealWithAccData(void) {
   accApplyScale(&sensors.acc_filter, &sensors.acc_raw);
   accApplyRotation(imu_mount_rotation, &sensors.acc_filter);
   mlogImuCopyAccData(&sensors.acc_filter, RT_NULL);
+  applyAxis3fNotchAcc(&sensors.acc_filter);
   applyAxis3fLpfAcc(&sensors.acc_filter);
   mlogImuCopyAccData(RT_NULL, &sensors.acc_filter);
 }

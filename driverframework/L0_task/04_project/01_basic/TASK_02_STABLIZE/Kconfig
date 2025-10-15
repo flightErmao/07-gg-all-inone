@@ -25,6 +25,15 @@ menuconfig PROJECT_MINIFLY_TASK_STABLIZE_EN
                     help
                         Enable flyer angle logging for the stabilize task.
 
+                if PROJECT_MINIFLY_TASK_STABLIZE_LOG_FLYER_ANGLE
+                    config PROJECT_MINIFLY_TASK_STABLIZE_LOG_FLYER_ANGLE_PERIOD_MS
+                        int "Flyer Angle Log Period (ms)"
+                        range 1 1000
+                        default 20
+                        help
+                            Period (in milliseconds) for flyer angle logging. Default: 20ms.
+                endif
+
                 config PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_DEBUG
                     bool "ENABLE: Angle Debug Logging"
                     default n
@@ -38,6 +47,12 @@ menuconfig PROJECT_MINIFLY_TASK_STABLIZE_EN
                             default 1
                             help
                                 Set the group ID for angle debug logging (1-99).
+                        config PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_PERIOD_MS
+                            int "Angle Debug Log Period (ms)"
+                            range 1 1000
+                            default 20
+                            help
+                                Period (in milliseconds) for angle debug logging. Default: 20ms.
                     endif
 
                 config PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_DEBUG
@@ -53,6 +68,12 @@ menuconfig PROJECT_MINIFLY_TASK_STABLIZE_EN
                             default 2
                             help
                                 Set the group ID for rate debug logging (1-99).
+                        config PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_PERIOD_MS
+                            int "Rate Debug Log Period (ms)"
+                            range 1 1000
+                            default 20
+                            help
+                                Period (in milliseconds) for rate debug logging. Default: 20ms.
                     endif
 
                 config PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_PID_DEBUG
@@ -68,6 +89,12 @@ menuconfig PROJECT_MINIFLY_TASK_STABLIZE_EN
                             default 3
                             help
                                 Set the group ID for angle PID debug logging (1-99).
+                        config PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_PID_PERIOD_MS
+                            int "Angle PID Debug Log Period (ms)"
+                            range 1 1000
+                            default 20
+                            help
+                                Period (in milliseconds) for angle PID debug logging. Default: 20ms.
                     endif
 
                 config PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_PID_DEBUG
@@ -83,6 +110,12 @@ menuconfig PROJECT_MINIFLY_TASK_STABLIZE_EN
                             default 4
                             help
                                 Set the group ID for rate PID debug logging (1-99).
+                        config PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_PID_PERIOD_MS
+                            int "Rate PID Debug Log Period (ms)"
+                            range 1 1000
+                            default 20
+                            help
+                                Period (in milliseconds) for rate PID debug logging. Default: 20ms.
                     endif
             endif
 
