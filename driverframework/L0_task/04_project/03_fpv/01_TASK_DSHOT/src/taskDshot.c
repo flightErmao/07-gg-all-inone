@@ -6,8 +6,11 @@
 #include "rtconfig.h"
 #include "string.h"
 #include "aMlogDshot.h"
-#include "motorFilter.h"
 #include "aMcnDshot.h"
+
+#ifdef PROJECT_MINIFLY_TASK_DSHOT_MOTOR_FILTER_EN
+#include "motorFilter.h"
+#endif
 
 #if defined(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN) && defined(PROJECT_MINIFLY_TASK_DSHOT_DEBUG_PIN_EN)
 #include "debugPin.h"
@@ -27,7 +30,10 @@ static struct rt_event dshot_event_;
 static rt_timer_t dshot_timer_ = RT_NULL;
 static rt_device_t dshot_dev_ = RT_NULL;
 static uint16_t mixer_remap_dshot_speed_[4] = {0, 0, 0, 0};
+
+#ifdef PROJECT_MINIFLY_TASK_DSHOT_MOTOR_FILTER_EN
 static motor_filter_t motor_filter_;
+#endif
 
 #ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
 static uint8_t motor_pole_pairs_ = 7;
@@ -66,9 +72,11 @@ static void device_init(void) {
   /* Initialize mlog DShot functionality */
   mlogDshotInit();
 
+#ifdef PROJECT_MINIFLY_TASK_DSHOT_MOTOR_FILTER_EN
   /* Initialize motor filter */
   motor_filter_init(&motor_filter_);
   rt_kprintf("[taskDshot] motor filter initialized\n");
+#endif
 }
 
 static void rtos_init(void) {
@@ -123,14 +131,19 @@ static void dshotReadRpm(void) {
 
 static void mixterRemapToDshotSpeed(void) {
   mixer_data_t mixer_data_raw = {0};
-  mixer_data_t mixer_data_filtered = {0};
   state_t state = {0};
   bool armed = false;
 
   mcnMixerAcquire(&mixer_data_raw);
 
+#ifdef PROJECT_MINIFLY_TASK_DSHOT_MOTOR_FILTER_EN
+  mixer_data_t mixer_data_filtered = {0};
   motor_filter_apply(&motor_filter_, mixer_data_raw.motor_val, mixer_data_filtered.motor_val);
   mixer_data_filtered.timestamp = mixer_data_raw.timestamp;
+#else
+  /* Use raw data directly without filtering */
+  mixer_data_t mixer_data_filtered = mixer_data_raw;
+#endif
 
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_EN
   mcnStateAcquire(&state);
