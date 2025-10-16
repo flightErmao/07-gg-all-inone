@@ -12,8 +12,7 @@ static mlog_elem_t DShot_Motor_Elems[] __attribute__((used)) = {
     MLOG_ELEMENT(timestamp, MLOG_UINT32),
     MLOG_ELEMENT_VEC(dshot_mapped, MLOG_UINT16, 4),
 #ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
-    MLOG_ELEMENT_VEC(rpm_raw, MLOG_UINT16, 4),
-    MLOG_ELEMENT_VEC(rpm_rpm, MLOG_FLOAT, 4),
+    MLOG_ELEMENT_VEC(erpm, MLOG_UINT16, 4),
 #endif
 };
 MLOG_BUS_DEFINE(DShot_Motor, DShot_Motor_Elems);
@@ -61,14 +60,10 @@ void mlogDshotPush(const mlogDshotData_t* data) {
   mlog_dshot_data.dshot_mapped[3] = data->dshot_mapped[3];
 
 #ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
-  mlog_dshot_data.rpm_raw[0] = data->rpm_raw[0];
-  mlog_dshot_data.rpm_raw[1] = data->rpm_raw[1];
-  mlog_dshot_data.rpm_raw[2] = data->rpm_raw[2];
-  mlog_dshot_data.rpm_raw[3] = data->rpm_raw[3];
-  mlog_dshot_data.rpm_rpm[0] = data->rpm_rpm[0];
-  mlog_dshot_data.rpm_rpm[1] = data->rpm_rpm[1];
-  mlog_dshot_data.rpm_rpm[2] = data->rpm_rpm[2];
-  mlog_dshot_data.rpm_rpm[3] = data->rpm_rpm[3];
+  mlog_dshot_data.erpm[0] = data->erpm[0];
+  mlog_dshot_data.erpm[1] = data->erpm[1];
+  mlog_dshot_data.erpm[2] = data->erpm[2];
+  mlog_dshot_data.erpm[3] = data->erpm[3];
 #endif
 
   /* Push to mlog */

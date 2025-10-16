@@ -37,8 +37,7 @@ static motor_filter_t motor_filter_;
 
 #ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
 static uint8_t motor_pole_pairs_ = 7;
-static uint16_t rpm_read_raw_[DSHOT_MOTOR_NUMS] = {0};   // Raw RPM values from device
-static float rpm_read_convert_[DSHOT_MOTOR_NUMS] = {0};  // Converted motor RPM (mechanical)
+static uint16_t rpm_read_raw_[DSHOT_MOTOR_NUMS] = {0};  // Raw RPM values from device
 static float rpm_freq_hz_[DSHOT_MOTOR_NUMS] = {0};       // Motor frequency in Hz for RPM filter
 #endif
 
@@ -123,14 +122,12 @@ static void dshotReadRpm(void) {
     dshot_erpm100[i] = rpm_read_temp[i];
     if (dshot_erpm100[i] == 0) {
       // TODO:we need safe guard to lock to disarm when in the air and bidir-dshot link invalid
-      rpm_read_convert_[i] = INVALID_RPM_MCN;  // mark invalid RPM for MCN consumers
       rpm_freq_hz_[i] = 0.0f;
     } else {
       // real eRPM = (eRPM/100) * 100
       const float erpm_real = (float)(dshot_erpm100[i] * 100u);
       // mechanical RPM = eRPM / pole_pairs
       const float mech_rpm = erpm_real / (float)motor_pole_pairs_;
-      rpm_read_convert_[i] = mech_rpm;
       rpm_freq_hz_[i] = mech_rpm / 60.0f;
     }
   }
@@ -176,8 +173,7 @@ static void getAndPushMlogData(void) {
   memcpy(mlog_data.dshot_mapped, mixer_remap_dshot_speed_, sizeof(mixer_remap_dshot_speed_));
 
 #ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
-  memcpy(mlog_data.rpm_raw, rpm_read_raw_, sizeof(rpm_read_raw_));
-  memcpy(mlog_data.rpm_rpm, rpm_read_convert_, sizeof(rpm_read_convert_));
+  memcpy(mlog_data.erpm, rpm_read_raw_, sizeof(rpm_read_raw_));
 #endif
   mlogDshotPush(&mlog_data);
 }
@@ -186,7 +182,6 @@ static void readAndPubRpmData(void) {
 #ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
   dshotReadRpm();
   rpm_data_bus_t rpm_msg;
-  // 发布给滤波链的数据为频率Hz
   memcpy(rpm_msg.rpm, rpm_freq_hz_, sizeof(rpm_freq_hz_));
   rpm_msg.timestamp = rt_tick_get();
   mcnRpmDataPublish(&rpm_msg);

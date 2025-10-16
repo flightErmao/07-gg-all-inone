@@ -9,8 +9,7 @@ typedef struct {
   uint32_t timestamp;
   uint16_t dshot_mapped[4];  // mapped DShot values (48~2048)
 #ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
-  uint16_t rpm_raw[4];  // Raw RPM values from bidirectional DShot device
-  float rpm_rpm[4];     // Mechanical RPM per motor
+  uint16_t erpm[4];  // Raw eRPM/100 values from bidirectional DShot device
 #endif
 } __attribute__((aligned(4))) mlogDshotData_t;
 
