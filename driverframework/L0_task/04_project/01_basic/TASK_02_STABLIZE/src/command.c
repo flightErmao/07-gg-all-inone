@@ -7,6 +7,14 @@
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_RC_FILTER_EN
   /* Convert Kconfig integer (x100) to float coefficient */
   #define RC_ATTITUDE_FILTER_ALPHA (PROJECT_MINIFLY_TASK_STABLIZE_RC_FILTER_ALPHA / 100.0f)
+/* Throttle filter parameters */
+#ifndef PROJECT_MINIFLY_TASK_STABLIZE_THR_FILTER_ALPHA
+#define PROJECT_MINIFLY_TASK_STABLIZE_THR_FILTER_ALPHA 15 /* x100 → 0.15 */
+#endif
+#ifndef PROJECT_MINIFLY_TASK_STABLIZE_THR_SLEW
+#define PROJECT_MINIFLY_TASK_STABLIZE_THR_SLEW 800 /* 每次更新最大步进，单位与 throttle 同 */
+#endif
+#define RC_THR_FILTER_ALPHA (PROJECT_MINIFLY_TASK_STABLIZE_THR_FILTER_ALPHA / 100.0f)
 #endif
 
 static void commanderHandleArmLogging(const setpoint_t* setpoint) {
@@ -91,7 +99,38 @@ void commanderGetSetpoint(const pilot_cmd_bus_t* rc_data, setpoint_t* setpoint) 
   setpoint->attitude.yaw = -rc_data->stick_yaw;
 #endif
 
+  /* Throttle filtering: LPF + slew limit */
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_RC_FILTER_EN
+  {
+    static float thr_filtered = 0.0f;
+    static uint8_t thr_initialized = 0;
+    static uint8_t thr_prev_armed = 0;
+
+    if (rc_data->ram_status != thr_prev_armed) {
+      if (rc_data->ram_status == ARM_STATUS_DISARM) {
+        thr_initialized = 0;
+      }
+      thr_prev_armed = rc_data->ram_status;
+    }
+
+    if (!thr_initialized) {
+      thr_filtered = rc_data->stick_throttle;
+      thr_initialized = 1;
+    }
+
+    float thr_lpf = RC_THR_FILTER_ALPHA * rc_data->stick_throttle + (1.0f - RC_THR_FILTER_ALPHA) * thr_filtered;
+    float delta = thr_lpf - thr_filtered;
+    float limit = (float)PROJECT_MINIFLY_TASK_STABLIZE_THR_SLEW;
+    if (limit > 0.0f) {
+      if (delta > limit) delta = limit;
+      if (delta < -limit) delta = -limit;
+    }
+    thr_filtered += delta;
+    setpoint->thrust = thr_filtered;
+  }
+#else
   setpoint->thrust = rc_data->stick_throttle;
+#endif
   setpoint->mode.x = modeDisable;
   setpoint->mode.y = modeDisable;
   setpoint->mode.z = modeDisable;
