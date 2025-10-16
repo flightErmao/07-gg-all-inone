@@ -38,7 +38,8 @@ static motor_filter_t motor_filter_;
 #ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
 static uint8_t motor_pole_pairs_ = 7;
 static uint16_t rpm_read_raw_[DSHOT_MOTOR_NUMS] = {0};   // Raw RPM values from device
-static float rpm_read_convert_[DSHOT_MOTOR_NUMS] = {0};  // Converted RPM values for MCN publication
+static float rpm_read_convert_[DSHOT_MOTOR_NUMS] = {0};  // Converted motor RPM (mechanical)
+static float rpm_freq_hz_[DSHOT_MOTOR_NUMS] = {0};       // Motor frequency in Hz for RPM filter
 #endif
 
 /* map motor value to DShot throttle range with armed state check */
@@ -103,7 +104,7 @@ static void rtos_init(void) {
 #ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
 static void dshotReadRpm(void) {
   uint16_t rpm_read_temp[DSHOT_MOTOR_NUMS] = {0};
-  uint16_t dshot_erpm_raw[DSHOT_MOTOR_NUMS] = {0};
+  uint32_t dshot_erpm100[DSHOT_MOTOR_NUMS] = {0};
   // Read RPM data from all physical motors
   if (dshot_dev_) {
     rt_device_read(dshot_dev_, 0, rpm_read_temp, 0);
@@ -113,17 +114,24 @@ static void dshotReadRpm(void) {
 
   // Save raw RPM values for mlog
   for (uint8_t i = 0; i < DSHOT_MOTOR_NUMS; i++) {
+    // store raw eRPM/100 as read from device
     rpm_read_raw_[i] = rpm_read_temp[i];
   }
 
-  // Apply reverse mapping to get logical motor RPM values for MCN publication
+  // Convert: eRPM/100 -> eRPM -> mechanical RPM -> frequency Hz
   for (uint8_t i = 0; i < DSHOT_MOTOR_NUMS; i++) {
-    dshot_erpm_raw[i] = rpm_read_temp[i];
-    if (dshot_erpm_raw[i] == 0) {
+    dshot_erpm100[i] = rpm_read_temp[i];
+    if (dshot_erpm100[i] == 0) {
       // TODO:we need safe guard to lock to disarm when in the air and bidir-dshot link invalid
-      rpm_read_convert_[i] = INVALID_RPM_MCN;
+      rpm_read_convert_[i] = INVALID_RPM_MCN;  // mark invalid RPM for MCN consumers
+      rpm_freq_hz_[i] = 0.0f;
     } else {
-      rpm_read_convert_[i] = (float)((float)(1000000 / motor_pole_pairs_) / (dshot_erpm_raw[i] * 1.0f));
+      // real eRPM = (eRPM/100) * 100
+      const float erpm_real = (float)(dshot_erpm100[i] * 100u);
+      // mechanical RPM = eRPM / pole_pairs
+      const float mech_rpm = erpm_real / (float)motor_pole_pairs_;
+      rpm_read_convert_[i] = mech_rpm;
+      rpm_freq_hz_[i] = mech_rpm / 60.0f;
     }
   }
 }
@@ -169,6 +177,7 @@ static void getAndPushMlogData(void) {
 
 #ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
   memcpy(mlog_data.rpm_raw, rpm_read_raw_, sizeof(rpm_read_raw_));
+  memcpy(mlog_data.rpm_rpm, rpm_read_convert_, sizeof(rpm_read_convert_));
 #endif
   mlogDshotPush(&mlog_data);
 }
@@ -177,7 +186,8 @@ static void readAndPubRpmData(void) {
 #ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
   dshotReadRpm();
   rpm_data_bus_t rpm_msg;
-  memcpy(rpm_msg.rpm, rpm_read_convert_, sizeof(rpm_read_convert_));
+  // 发布给滤波链的数据为频率Hz
+  memcpy(rpm_msg.rpm, rpm_freq_hz_, sizeof(rpm_freq_hz_));
   rpm_msg.timestamp = rt_tick_get();
   mcnRpmDataPublish(&rpm_msg);
 #endif

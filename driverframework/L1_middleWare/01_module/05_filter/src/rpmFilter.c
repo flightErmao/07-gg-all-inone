@@ -29,6 +29,15 @@ static float filterStrength[3];
 static void updateRpmFilterCoeWeight(float frequency, uint8_t motorIndex, uint8_t filterIndex) {
   biquadFilter_t* template = &rpmNotchFilter[0][motorIndex][filterIndex];
   float weight = 1.0f;
+  if (!(frequency == frequency) || frequency <= 0.0f) {
+    // invalid frequency: fully bypass this notch
+    template->weight = 0.0f;
+    for (uint8_t axis = 1; axis < 3; axis++) {
+      biquadFilter_t* target = &rpmNotchFilter[axis][motorIndex][filterIndex];
+      target->weight = 0.0f;
+    }
+    return;
+  }
   frequency = constrainG(frequency, rpmFilterMinFrequency, rpmFilterMaxFrequency);
   if (frequency < rpmFilterMinFrequency + rpmFilterFadeRangeFrequency) {
     weight = weight * (frequency - rpmFilterMinFrequency) / rpmFilterFadeRangeFrequency;
@@ -51,11 +60,11 @@ static void getFilterStrength(void) {
 int initRpmFilter(void) {
   getFilterStrength();
 
-  motorLPFCutoffFrequency = 150.0f;
-  rpmFilterMinFrequency = 50.0f;
-  rpmFilterMaxFrequency = 0.48f * 1 / TICK_INTERVAL;  // 0.96 nyquist frequency
-  rpmFilterFadeRangeFrequency = 50.0f;
-  rpmFilterNotchQ = 10.0f;
+  motorLPFCutoffFrequency = 150.0f;                   // eRPM数据LPF 150Hz
+  rpmFilterMinFrequency = 100.0f;                     // 最小跟踪频率 100Hz
+  rpmFilterMaxFrequency = 0.48f * 1 / TICK_INTERVAL;  // 0.48*fs，接近奈奎斯特
+  rpmFilterFadeRangeFrequency = 50.0f;                // 50Hz 淡出范围
+  rpmFilterNotchQ = 5.0f;                             // Q=5.0 窄陷波
 
   for (uint8_t i = 0; i < DSHOT_MOTOR_NUMS; i++) {
     bf_pt1FilterInit(&motorLPF[i], motorLPFCutoffFrequency, TICK_INTERVAL);
@@ -64,7 +73,7 @@ int initRpmFilter(void) {
     for (uint8_t motorIndex = 0; motorIndex < DSHOT_MOTOR_NUMS; motorIndex++) {
       for (uint8_t filterIndex = 0; filterIndex < 3; filterIndex++) {
         initBiquadFilter(&rpmNotchFilter[axis][motorIndex][filterIndex], rpmFilterMinFrequency, TICK_INTERVAL,
-                         rpmFilterNotchQ, FILTER_NOTCH, 1.0f);
+                         rpmFilterNotchQ, FILTER_NOTCH, 0.0f);
       }
     }
   }
@@ -86,7 +95,11 @@ void rpmFilter(float* gyroData, float* rpmData, float* filteredGyroData) {
   // step 3: filt rpm_hz
   float motorFrequency[DSHOT_MOTOR_NUMS];
   for (uint8_t i = 0; i < DSHOT_MOTOR_NUMS; i++) {
-    motorFrequency[i] = bf_pt1FilterApply(&motorLPF[i], rpmData[i]);
+    float fi = rpmData[i];
+    if (!(fi == fi) || fi < 0.0f || fi > (0.5f / TICK_INTERVAL)) {
+      fi = 0.0f;  // clamp invalid input to 0 Hz
+    }
+    motorFrequency[i] = bf_pt1FilterApply(&motorLPF[i], fi);
   }
 
   // step 4: recalculate biquad filters

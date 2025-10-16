@@ -46,12 +46,12 @@ menuconfig PROJECT_MINIFLY_TASK_DSHOT_EN
                 will be filtered before being mapped to DShot range. When disabled,
                 raw motor values will be used directly without filtering.
         
-        config PROJECT_MINIFLY_TASK_DSHOT_FILTER_DEBUG_EN
-            bool "ENABLE: PROJECT_MINIFLY_TASK_DSHOT_FILTER_DEBUG_EN"
-            default n
-            depends on PROJECT_MINIFLY_TASK_DSHOT_MOTOR_FILTER_EN
-            help
-                Enable debug output for motor filter. This will print raw and filtered
-                motor values every 100 iterations to help tune filter parameters.
+        # config PROJECT_MINIFLY_TASK_DSHOT_FILTER_DEBUG_EN
+        #     bool "ENABLE: PROJECT_MINIFLY_TASK_DSHOT_FILTER_DEBUG_EN"
+        #     default n
+        #     depends on PROJECT_MINIFLY_TASK_DSHOT_MOTOR_FILTER_EN
+        #     help
+        #         Enable debug output for motor filter. This will print raw and filtered
+        #         motor values every 100 iterations to help tune filter parameters.
     endif
 
