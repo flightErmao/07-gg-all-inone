@@ -4,13 +4,6 @@ menuconfig PROJECT_MINIFLY_TASK04_DISTRIBUTE_EN
     help
        open distribute task
     if PROJECT_MINIFLY_TASK04_DISTRIBUTE_EN
-
-        config PROJECT_MINIFLY_TASK04_DISTRIBUTE_DEBUGPIN_EN
-        bool "ENABLE: PROJECT_MINIFLY_TASK04_DISTRIBUTE_DEBUGPIN_EN"
-        default n
-        help
-            "enable debug pin"
-
         config PROJECT_MINIFLY_TASK04_DISTRIBUTE_COMMAND_EN
         bool "ENABLE: PROJECT_MINIFLY_TASK04_DISTRIBUTE_COMMAND_EN"
         default n

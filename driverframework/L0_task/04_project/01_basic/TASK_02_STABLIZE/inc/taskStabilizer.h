@@ -2,6 +2,8 @@
 #define __TASK_STABILIZER_H__
 
 #include "stabilizerTypes.h"
+#include "rtconfig.h"
+#include "debugPin.h"
 
 /**
  * @brief Get current setpoint

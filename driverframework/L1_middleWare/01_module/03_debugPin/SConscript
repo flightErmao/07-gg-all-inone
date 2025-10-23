@@ -10,6 +10,6 @@ path = [cwd]
 src  = Glob('./*.c')
 
 # 定义编译组
-group = DefineGroup('03_debugPin', src, depend = ['L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN'], CPPPATH = path)
+group = DefineGroup('03_debugPin', src, depend = [], CPPPATH = path)
 
 Return('group') 

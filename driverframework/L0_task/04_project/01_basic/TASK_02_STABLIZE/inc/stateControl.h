@@ -3,6 +3,8 @@
 #include "stabilizerTypes.h"
 #include "sensorsTypes.h"
 #include "pidMinifly.h"
+#include "rtconfig.h"
+#include "debugPin.h"
 
 /* Attitude/Rate PID interfaces (merged) */
 void attitudeControlInit(float rateDt, float angleDt);

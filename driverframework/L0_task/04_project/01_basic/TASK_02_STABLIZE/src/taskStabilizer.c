@@ -13,14 +13,7 @@
 #include "stateControl.h"
 #include "mixerControl.h"
 #include "taskStabilizer.h"
-#ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
-#include "debugPin.h"
-#endif
 
-#define STABILIZER_EVENT_FLAG (1u << 0)
-
-static rt_timer_t stabilizer_timer = RT_NULL;
-static rt_event_t stabilizer_event = RT_NULL;
 static state_t state_;
 static setpoint_t setpoint_;
 static control_t contorl_;
@@ -34,32 +27,7 @@ void commanderGetCurrentSetpoint(setpoint_t* setpoint) {
   *setpoint = setpoint_;
 }
 
-static bool sensorsAreCalibrated(void) { return outputGyroBiasFound(); }
-static void stabilizer_timer_callback(void* parameter) { rt_event_send(stabilizer_event, STABILIZER_EVENT_FLAG); }
-
-static int eventInit() {
-  stabilizer_event = rt_event_create("stabilizer_event", RT_IPC_FLAG_FIFO);
-  if (stabilizer_event == RT_NULL) {
-    rt_kprintf("Failed to create stabilizer event\n");
-    return -1;
-  }
-  return 0;
-}
-
-static int timerInit() {
-  stabilizer_timer =
-      rt_timer_create("stabilizer_timer", stabilizer_timer_callback, RT_NULL, MAIN_LOOP_DT, RT_TIMER_FLAG_PERIODIC);
-  if (stabilizer_timer == RT_NULL) {
-    rt_kprintf("Failed to create stabilizer timer\n");
-    rt_event_delete(stabilizer_event);
-    return -1;
-  }
-  return 0;
-}
-
 static void taskStabilizerInit(void) {
-  eventInit();
-  timerInit();
   stateControlInit();
   motorInit();
   mlogStabilizerInit();
@@ -77,18 +45,12 @@ static void rcAndCmdGenerate(setpoint_t* setpoint, uint32_t tick) {
 
 static void flyerStateUpdate(state_t* state, uint32_t tick) {
   if (RATE_DO_EXECUTE(ATTITUDE_ESTIMAT_RATE, tick)) {
-#ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
-      DEBUG_PIN_DEBUG3_HIGH();
-#endif
-      sensorData_t sensorData = {0};
-      mcnSensorImuAcquire(&sensorData);
-      imuUpdate(sensorData.acc_filter, sensorData.gyro_filter, state, ATTITUDE_ESTIMAT_DT);
-      state->attitude.timestamp = rt_tick_get();
-      state->armed = setpoint_.armed;
-      mcnStatePub(state);
-#ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
-      DEBUG_PIN_DEBUG3_LOW();
-#endif
+    sensorData_t sensorData = {0};
+    mcnSensorImuAcquire(&sensorData);
+    imuUpdate(sensorData.acc_filter, sensorData.gyro_filter, state, ATTITUDE_ESTIMAT_DT);
+    state->attitude.timestamp = rt_tick_get();
+    state->armed = setpoint_.armed;
+    mcnStatePub(state);
   }
 }
 
@@ -105,21 +67,20 @@ static void stabilizer_thread_entry(void* parameter) {
   uint32_t tick = 0;
   taskStabilizerInit();
 
-  while (!sensorsAreCalibrated()) {
+  /* Wait for gyro bias calibration */
+  while (!outputGyroBiasFound()) {
     rt_thread_mdelay(100);
   }
-  rt_timer_start(stabilizer_timer);
 
   while (1) {
-    // rt_event_recv(stabilizer_event, STABILIZER_EVENT_FLAG, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR,
-    // RT_WAITING_FOREVER,
-    //               RT_NULL);
     mcnWaitImuPub();
+    DEBUG_PIN_DEBUG1_HIGH();
     rcAndCmdGenerate(&setpoint_, tick);
     flyerStateUpdate(&state_, tick);
     stateControl(&state_, &setpoint_, &contorl_, tick);
     mixerControlExcute(&contorl_, tick);
     mlogStabilizerPush(tick);
+    DEBUG_PIN_DEBUG1_LOW();
     tick++;
   }
 }

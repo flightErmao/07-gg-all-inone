@@ -5,9 +5,6 @@
 #include <stdint.h>
 #include "stateControl.h"
 #include "pidMinifly.h"
-#ifdef PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
-#include "debugPin.h"
-#endif
 #include "taskParam.h"
 
 #define PID_ANGLE_ROLL_INTEGRATION_LIMIT 30.0

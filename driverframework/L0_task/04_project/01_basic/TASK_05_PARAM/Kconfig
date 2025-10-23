@@ -4,12 +4,6 @@ menuconfig PROJECT_MINIFLY_TASK05_PARAM_EN
     help
        open param config task
     if PROJECT_MINIFLY_TASK05_PARAM_EN
-        config PROJECT_MINIFLY_TASK05_PARAM_DEBUGPIN_EN
-        bool "ENABLE: PROJECT_MINIFLY_TASK05_PARAM_DEBUGPIN_EN"
-        default n
-        help
-            "enable param config debug output"
-        
         config PROJECT_MINIFLY_TASK05_PARAM_AUTO_SAVE_EN
         bool "ENABLE: PROJECT_MINIFLY_TASK05_PARAM_AUTO_SAVE_EN"
         default n

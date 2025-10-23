@@ -15,6 +15,7 @@ typedef struct {
 } debug_pin_config_t;
 
 /* 调试引脚配置数组 */
+#ifdef L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN
 static debug_pin_config_t debug_pins[4] = {0};
 
 /**
@@ -142,6 +143,5 @@ rt_base_t debug_pin_get_rt_pin(uint8_t pin_index) {
   return 0;
 }
 
-#ifdef L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN
 INIT_BOARD_EXPORT(debug_pin_init);
 #endif

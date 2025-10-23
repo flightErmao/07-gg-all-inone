@@ -169,13 +169,6 @@ menuconfig PROJECT_MINIFLY_TASK_STABLIZE_EN
                     Enable mlog (SD card logging) for RC data in the stabilize task.
         endif
 
-        # ======== DEBUG: PIN ========
-        menuconfig PROJECT_MINIFLY_TASK_STABLIZE_DEBUGPIN_EN
-            bool "DEBUG: PIN (Debug Pin)"
-            default n
-            help
-                Enable debug pin for the stabilize task.
-
         # ======== RC Input Smoothing Filter ========
         menuconfig PROJECT_MINIFLY_TASK_STABLIZE_RC_FILTER_EN
             bool "ENABLE: RC Input Smoothing Filter"

@@ -3,22 +3,7 @@
 #include "taskDshot.h"
 #include "aMcnStabilize.h"
 #include "maths.h"
-#include "rtconfig.h"
 #include "string.h"
-#include "aMlogDshot.h"
-#include "aMcnDshot.h"
-
-#ifdef PROJECT_MINIFLY_TASK_DSHOT_MOTOR_FILTER_EN
-#include "motorFilter.h"
-#endif
-
-#if defined(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN) && defined(PROJECT_MINIFLY_TASK_DSHOT_DEBUG_PIN_EN)
-#include "debugPin.h"
-#endif
-
-#ifdef PROJECT_MINIFLY_TASK_STABLIZE_EN
-#include "aMcnStabilize.h"
-#endif
 
 #ifndef DSHOT_DEVICE_NAME
 #define DSHOT_DEVICE_NAME "dshot"
@@ -26,8 +11,6 @@
 
 #define INVALID_RPM_MCN 2000.0f  // Invalid RPM value to indicate motor stopped
 
-static struct rt_event dshot_event_;
-static rt_timer_t dshot_timer_ = RT_NULL;
 static rt_device_t dshot_dev_ = RT_NULL;
 static uint16_t mixer_remap_dshot_speed_[4] = {0, 0, 0, 0};
 
@@ -46,11 +29,6 @@ static inline uint16_t map_motor_to_dshot(uint16_t motor_val) {
   float fv = (float)motor_val;
   float out = scaleRangef(fv, 0.0f, 65535.0f, 48.0f, 2047.0f);
   return (uint16_t)(out);
-}
-
-static void dshot_timer_cb(void* parameter) {
-  RT_UNUSED(parameter);
-  rt_event_send(&dshot_event_, 1u);
 }
 
 /* API to get mapped motor values for external access */
@@ -79,26 +57,7 @@ static void device_init(void) {
 #endif
 }
 
-static void rtos_init(void) {
-  rt_event_init(&dshot_event_, "dshot_evt", RT_IPC_FLAG_PRIO);
-
-  /* timer period from Kconfig: PROJECT_MINIFLY_TASK_DSHOT_TIMER_HZ */
-#ifdef PROJECT_MINIFLY_TASK_DSHOT_TIMER_HZ
-  int freq = PROJECT_MINIFLY_TASK_DSHOT_TIMER_HZ;
-#else
-  int freq = 500;
-#endif
-  if (freq <= 0) freq = 500;
-  rt_tick_t period_ticks = rt_tick_from_millisecond(1000 / freq);
-  if (period_ticks == 0) period_ticks = 1;
-  dshot_timer_ = rt_timer_create("dshot_tmr", dshot_timer_cb, RT_NULL, period_ticks,
-                                 RT_TIMER_FLAG_PERIODIC | RT_TIMER_FLAG_SOFT_TIMER);
-  if (dshot_timer_) {
-    rt_timer_start(dshot_timer_);
-  } else {
-    rt_kprintf("[taskDshot] create timer failed\n");
-  }
-}
+static void rtos_init(void) { /* DShot task now uses MCN message queue for synchronization */ }
 
 #ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
 static void dshotReadRpm(void) {
@@ -194,23 +153,17 @@ static void writeDshotCmdToDevice(void) {
   }
 }
 
-static void debugPin0(void) {
-#if defined(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN) && defined(PROJECT_MINIFLY_TASK_DSHOT_DEBUG_PIN_EN)
-  DEBUG_PIN_DEBUG0_TOGGLE();
-#endif
-}
-
 static void task_dshot_entry(void* parameter) {
   device_init();
   rtos_init();
   while (1) {
-    // rt_event_recv(&dshot_event_, 1u, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER, RT_NULL);
     mcnWaitMixerPub();
-    debugPin0();
+    DEBUG_PIN_DEBUG2_HIGH();
     mixterRemapToDshotSpeed();
     writeDshotCmdToDevice();
     readAndPubRpmData();
     getAndPushMlogData();
+    DEBUG_PIN_DEBUG2_LOW();
   }
 }
 

@@ -1,9 +1,6 @@
 #include <rtdevice.h>
 #include <rtthread.h>
 #include "taskNrfRec.h"
-#ifdef PROJECT_MINIFLY_TASK_NRF_DEBUGPIN_EN
-#include "debugPin.h"
-#endif
 #include "rtconfig.h"
 #include "uartConfig.h"
 
@@ -51,9 +48,6 @@ static rt_err_t nrf_rx_indicate(rt_device_t dev, rt_size_t size) {
   if (result == -RT_EFULL) {
     rt_kprintf("NRF rx message queue full!\n");
   }
-#ifdef PROJECT_MINIFLY_TASK_NRF_DEBUGPIN_EN
-  DEBUG_PIN_DEBUG0_HIGH();
-#endif
   return result;
 }
 
@@ -77,9 +71,6 @@ void radiolinkTask(void* param) {
     uart_rx_msg_t msg;
     rt_memset(&msg, 0, sizeof(msg));
     if (rt_mq_recv(&rx_mq, &msg, sizeof(msg), RT_WAITING_FOREVER) > 0) {
-#ifdef PROJECT_MINIFLY_TASK_NRF_DEBUGPIN_EN
-      DEBUG_PIN_DEBUG0_LOW();
-#endif
       rt_size_t read_len = rt_device_read(msg.dev, 0, rx_buffer, msg.size);
       if (read_len <= 0) {
         continue;
@@ -120,9 +111,6 @@ void radiolinkTask(void* param) {
             break;
           case waitForChksum1:
             if (cksum == c) {
-#ifdef PROJECT_MINIFLY_TASK_NRF_DEBUGPIN_EN
-              DEBUG_PIN_DEBUG1_TOGGLE();
-#endif
               rt_mq_send(&device_recv_mq_, &rxPacket, sizeof(atkp_t));
             } else {
               rt_kprintf("nrf checksum error\n");

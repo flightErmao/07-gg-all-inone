@@ -136,11 +136,6 @@ static void rc_minifly_thread_entry(void *parameter) {
       if (rc_failsafe_check(timestamp, rcRawData.timestamp)) {
         // Trigger failsafe
         rc_apply_failsafe(&rc_data);
-
-#ifdef PROJECT_MINIFLY_TASK06_RC_DEBUGPIN_EN
-        rt_kprintf("RC failsafe triggered! Time diff: %lu ms\n",
-                   (timestamp - rcRawData.timestamp) * (1000 / RT_TICK_PER_SECOND));
-#endif
       } else {
         // Normal case, update RC data
         rc_data.stick_yaw = rcRawData.yaw;

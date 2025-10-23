@@ -8,6 +8,7 @@
 #include "rtconfig.h"
 #include "aMlogSensorImu.h"
 #include "aMcnSensorImu.h"
+#include "debugPin.h"
 
 #define SENSORS_MPU6500_BUFF_LEN 14
 static rt_device_t dev_sensor_imu = RT_NULL;
@@ -103,6 +104,7 @@ static void sensor_imu_thread_entry(void* parameter) {
                   RT_NULL);
 #endif
     if (dev_sensor_imu) {
+      DEBUG_PIN_DEBUG0_HIGH();
       int rb = rt_device_read(dev_sensor_imu, 0, sensor_buffer, SENSORS_MPU6500_BUFF_LEN);
       if (rb == SENSORS_MPU6500_BUFF_LEN) {
         uint32_t timestamp = rt_tick_get();
@@ -110,6 +112,7 @@ static void sensor_imu_thread_entry(void* parameter) {
         sensors_data.timestamp = timestamp;
         mcnSensorImuPublish(&sensors_data);
         mlogImuPushData(timestamp);
+        DEBUG_PIN_DEBUG0_LOW();
       } else {
         static int err_cnt = 0;
         if (++err_cnt % 100 == 0) {

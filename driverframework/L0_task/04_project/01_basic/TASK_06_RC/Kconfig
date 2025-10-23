@@ -7,12 +7,6 @@ menuconfig PROJECT_MINIFLY_TASK06_RC_EN
         Enable RC control task that periodically publishes pilot command data via MCN.
         
 if PROJECT_MINIFLY_TASK06_RC_EN
-    config PROJECT_MINIFLY_TASK06_RC_DEBUGPIN_EN
-        bool "ENABLE: PROJECT_MINIFLY_TASK06_RC_DEBUGPIN_EN"
-        default n
-        help
-            Enable debug output for RC task.
-            
     config PROJECT_MINIFLY_TASK06_RC_FAILSAFE_TIMEOUT_MS
         int "RC failsafe timeout in milliseconds"
         default 1000

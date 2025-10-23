@@ -188,11 +188,4 @@ menuconfig PROJECT_MINIFLY_TASK_SENSOR_EN
                     Enable mlog (SD card logging) for IMU data in the sensor task.
         endif
 
-        # ======== DEBUG: PIN ========
-        menuconfig PROJECT_MINIFLY_TASK_SENSOR_DEBUGPIN_EN
-            bool "DEBUG: PIN (Debug Pin)"
-            default n
-            help
-                Enable debug pin for the sensor task.
-
     endif
