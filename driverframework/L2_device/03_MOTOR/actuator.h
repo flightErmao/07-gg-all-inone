@@ -41,7 +41,7 @@ enum {
 };
 
 struct pwm_drv_configure {
-    rt_uint16_t pwm_freq; /* pwm frequency in hz */
+  rt_uint32_t pwm_freq; /* pwm frequency in hz */
 };
 
 struct dshot_drv_configure {

@@ -13,41 +13,29 @@ config L2_DEVICE_03_MOTOR_03_PWM_EN
                 PWM device name used for motor control.
                 Available options: pwm1, pwm2, pwm3, etc.
 
-        config L2_DEVICE_03_MOTOR_03_PWM_CHANNEL_MAPPING
-            string "PWM channel mapping sequence"
+        config L2_DEVICE_03_MOTOR_03_PWM_PHYSICAL_CHANNELS
+            string "PWM physical channels selection"
             default "1234"
             help
-                PWM channel mapping sequence for 4 channels.
-                Default is "1234" (channel 1,2,3,4).
-                Examples: "2134", "4321", "1324", etc.
-                This maps logical channels (1-4) to physical PWM channels.
+                Select 4 physical PWM channels from available channels (1-16).
+                Format: 4 consecutive characters, each representing a channel number.
+                Examples: "1234" (channels 1,2,3,4), "5678" (channels 5,6,7,8), etc.
+                Note: Currently supports single-digit channels (1-9).
+                This selects which hardware PWM channels are used for motors.
 
         config L2_DEVICE_03_MOTOR_03_PWM_CHANNEL_REMAP
             string "Motor channel remap sequence"
-            default "4321"
+            default "1234"
             help
                 Motor channel remap sequence. Default is "1234" (no remap).
                 Examples: "2134", "4321", "1324", etc.
                 This maps logical motor IDs (1-4) to physical PWM channels.
 
-        config L2_DEVICE_03_MOTOR_03_PWM_DEFAULT_FREQUENCY
-            int "Default PWM frequency (Hz)"
-            default 50
+        config L2_DEVICE_03_MOTOR_03_PWM_FREQUENCY
+            int "PWM frequency (Hz)"
+            default 500
             help
-                Default PWM frequency in Hz for motor control.
-                Common values: 50, 125, 250, 400, 500, 1000.
-
-        config L2_DEVICE_03_MOTOR_03_PWM_MIN_FREQUENCY
-            int "Minimum PWM frequency (Hz)"
-            default 50
-            help
-                Minimum allowed PWM frequency in Hz.
-
-        config L2_DEVICE_03_MOTOR_03_PWM_MAX_FREQUENCY
-            int "Maximum PWM frequency (Hz)"
-            default 400
-            help
-                Maximum allowed PWM frequency in Hz.
+                PWM frequency in Hz for motor control.                
 
         config L2_DEVICE_03_MOTOR_03_PWM_CMD_EN
             bool "Enable PWM motor command interface"

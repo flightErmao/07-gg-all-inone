@@ -20,56 +20,34 @@
 #include <string.h>
 #include <stdlib.h>
 #include "actuator.h"
+#include "pwmReg.h"
 
-// #define rt_kprintf(...) console_printf(__VA_ARGS__)
-#define rt_kprintf(...)
-
-#ifndef L2_DEVICE_03_MOTOR_03_PWM_DEFAULT_FREQUENCY
-#define L2_DEVICE_03_MOTOR_03_PWM_DEFAULT_FREQUENCY 500
-#endif
-
-#ifndef L2_DEVICE_03_MOTOR_03_PWM_MIN_FREQUENCY
-#define L2_DEVICE_03_MOTOR_03_PWM_MIN_FREQUENCY 50
-#endif
-
-#ifndef L2_DEVICE_03_MOTOR_03_PWM_MAX_FREQUENCY
-#define L2_DEVICE_03_MOTOR_03_PWM_MAX_FREQUENCY 1000
-#endif
-
-#define MAX_PWM_OUT_CHAN 4                   // AUX Out has 4 pwm channel
-#define PWM_DEFAULT_FREQUENCY L2_DEVICE_03_MOTOR_03_PWM_DEFAULT_FREQUENCY
-#define PWM_MIN_FREQUENCY L2_DEVICE_03_MOTOR_03_PWM_MIN_FREQUENCY
-#define PWM_MAX_FREQUENCY L2_DEVICE_03_MOTOR_03_PWM_MAX_FREQUENCY
-
-#ifndef L2_DEVICE_03_MOTOR_03_PWM_DEVICE_NAME
-#define L2_DEVICE_03_MOTOR_03_PWM_DEVICE_NAME "pwm1"
-#endif
-
-#ifndef L2_DEVICE_03_MOTOR_03_PWM_CHANNEL_MAPPING
-#define L2_DEVICE_03_MOTOR_03_PWM_CHANNEL_MAPPING "1234"
-#endif
-
-#define PWM_DEVICE_NAME L2_DEVICE_03_MOTOR_03_PWM_DEVICE_NAME
-
-static int pwm_freq_ = PWM_DEFAULT_FREQUENCY;
+static int pwm_freq_ = L2_DEVICE_03_MOTOR_03_PWM_FREQUENCY;
 static rt_uint16_t pwm_fmu_duty_cyc_[MAX_PWM_OUT_CHAN] = {0, 0, 0, 0};
 static struct rt_device_pwm* pwm_device_ = RT_NULL;
 static rt_uint32_t pwm_period_ns_ = 0;
 static bool pwm_initialized_ = false;
-static bool pwm_test_mode_enabled_ = false;  /* Test mode flag */
+static bool pwm_cmd_mode_enabled_ = false; /* Test mode flag */
 
 /* Motor channel remap configuration */
-static rt_uint8_t motor_channel_remap_[MAX_PWM_OUT_CHAN] = {0, 1, 2, 3};  // Default: no remap
+static rt_uint8_t motor_channel_remap_[MAX_PWM_OUT_CHAN] = {0};  // Default: no remap
 static bool remap_parsed_ = false;
 
-/* PWM channel mapping configuration */
-static rt_uint8_t pwm_channel_mapping_[MAX_PWM_OUT_CHAN] = {1, 2, 3, 4};  // Default: 1,2,3,4
-static bool pwm_mapping_parsed_ = false;
+/* PWM physical channels configuration */
+static rt_uint8_t pwm_physical_channels_[MAX_PWM_OUT_CHAN] = {0};  // Default: 1,2,3,4
+static bool pwm_channels_parsed_ = false;
 
-rt_inline void setChanlValue(uint8_t chan_id, rt_uint16_t pwm_val);
+/* Forward declarations for static functions */
+static rt_err_t setMotorRemap(void);
+static rt_err_t setPwmPhysicalChannels(void);
+static rt_uint32_t getTimerClock(void);
+static rt_err_t initPwmHw(void);
+static rt_err_t setPwmFreq(uint16_t freq_to_set);
+static void setChanlValue(uint8_t chan_id, rt_uint16_t pwm_val);
+static void readPwmValue(uint8_t chan_id, rt_uint16_t* pwm_val);
 
 /* Parse motor channel remap configuration */
-static rt_err_t parse_motor_remap_config(void) {
+static rt_err_t setMotorRemap(void) {
   if (remap_parsed_) {
     return RT_EOK;  // Already parsed
   }
@@ -113,89 +91,91 @@ static rt_err_t parse_motor_remap_config(void) {
   return RT_EOK;
 }
 
-/* Parse PWM channel mapping configuration */
-static rt_err_t parse_pwm_mapping_config(void) {
-  if (pwm_mapping_parsed_) {
+/* Parse PWM physical channels configuration */
+static rt_err_t setPwmPhysicalChannels(void) {
+  if (pwm_channels_parsed_) {
     return RT_EOK;  // Already parsed
   }
 
-#ifdef L2_DEVICE_03_MOTOR_03_PWM_CHANNEL_MAPPING
-  const char* mapping_str = L2_DEVICE_03_MOTOR_03_PWM_CHANNEL_MAPPING;
-  int len = strlen(mapping_str);
+#ifdef L2_DEVICE_03_MOTOR_03_PWM_PHYSICAL_CHANNELS
+  const char* channels_str = L2_DEVICE_03_MOTOR_03_PWM_PHYSICAL_CHANNELS;
+  int len = strlen(channels_str);
 
   if (len != MAX_PWM_OUT_CHAN) {
-    rt_kprintf("[PWM] Invalid mapping string length: %d, expected: %d\n", len, MAX_PWM_OUT_CHAN);
+    rt_kprintf("[PWM] Invalid channels string length: %d, expected: %d\n", len, MAX_PWM_OUT_CHAN);
     return -RT_ERROR;
   }
 
-  // Parse each character in the mapping string
+  // Parse each character in the channels string
+  // Note: Currently supports single-digit channels (1-9), each character represents one channel
+  // Format example: "1234" means channels 1, 2, 3, 4
   for (int i = 0; i < MAX_PWM_OUT_CHAN; i++) {
-    char c = mapping_str[i];
-    if (c < '1' || c > '4') {
-      rt_kprintf("[PWM] Invalid mapping character: %c at position %d\n", c, i);
+    char c = channels_str[i];
+    int channel_num = c - '0';
+
+    // Validate channel number range (1-16)
+    if (channel_num < 1 || channel_num > 16) {
+      rt_kprintf("[PWM] Invalid channel number: %d at position %d (must be 1-16)\n", channel_num, i);
       return -RT_ERROR;
     }
 
-    // Convert '1'-'4' to 1-4 (1-based channel numbers)
-    pwm_channel_mapping_[i] = c - '0';
+    pwm_physical_channels_[i] = channel_num;
   }
 
-  rt_kprintf("[PWM] PWM channel mapping configured: %s\n", mapping_str);
+  rt_kprintf("[PWM] PWM physical channels configured: %s\n", channels_str);
   rt_kprintf("[PWM] Logical->Physical mapping: ");
   for (int i = 0; i < MAX_PWM_OUT_CHAN; i++) {
-    rt_kprintf("%d->%d ", i + 1, pwm_channel_mapping_[i]);
+    rt_kprintf("%d->%d ", i + 1, pwm_physical_channels_[i]);
   }
   rt_kprintf("\n");
 #else
   // Use default mapping if not configured
   for (int i = 0; i < MAX_PWM_OUT_CHAN; i++) {
-    pwm_channel_mapping_[i] = i + 1;
+    pwm_physical_channels_[i] = i + 1;
   }
-  rt_kprintf("[PWM] Using default PWM channel mapping (1,2,3,4)\n");
+  rt_kprintf("[PWM] Using default PWM physical channels (1,2,3,4)\n");
 #endif
 
-  pwm_mapping_parsed_ = true;
+  pwm_channels_parsed_ = true;
   return RT_EOK;
 }
 
-/* PWM channel mapping will be configured via Kconfig */
-
 /* Get timer clock frequency in Hz */
-static rt_uint32_t get_timer_clock_freq(void) { return 1000000000UL; }
+static rt_uint32_t getTimerClock(void) { return 1000000000UL; }
 
 /* Initialize PWM device */
-static rt_err_t pwm_hardware_init(void) {
+static rt_err_t initPwmHw(void) {
   if (pwm_initialized_) {
     return RT_EOK;
   }
 
   /* Parse motor remap configuration first */
-  if (parse_motor_remap_config() != RT_EOK) {
+  if (setMotorRemap() != RT_EOK) {
     rt_kprintf("[PWM] Failed to parse motor remap configuration\n");
     return -RT_ERROR;
   }
 
   /* Parse PWM channel mapping configuration */
-  if (parse_pwm_mapping_config() != RT_EOK) {
+  if (setPwmPhysicalChannels() != RT_EOK) {
     rt_kprintf("[PWM] Failed to parse PWM channel mapping configuration\n");
     return -RT_ERROR;
   }
 
   /* Find PWM device */
-  pwm_device_ = (struct rt_device_pwm*)rt_device_find(PWM_DEVICE_NAME);
+  pwm_device_ = (struct rt_device_pwm*)rt_device_find(L2_DEVICE_03_MOTOR_03_PWM_DEVICE_NAME);
   if (pwm_device_ == RT_NULL) {
-    rt_kprintf("[PWM] can't find device: %s\n", PWM_DEVICE_NAME);
+    rt_kprintf("[PWM] can't find device: %s\n", L2_DEVICE_03_MOTOR_03_PWM_DEVICE_NAME);
     return -RT_ERROR;
   }
   pwm_initialized_ = true;
 
   /* Calculate PWM period in nanoseconds using actual timer clock frequency */
-  rt_uint32_t timer_clock = get_timer_clock_freq();
+  rt_uint32_t timer_clock = getTimerClock();
   pwm_period_ns_ = timer_clock / pwm_freq_; /* period = clock_freq / pwm_freq */
 
   /* Initialize all PWM channels */
   for (int i = 0; i < MAX_PWM_OUT_CHAN; i++) {
-    rt_uint8_t channel = pwm_channel_mapping_[i];
+    rt_uint8_t channel = pwm_physical_channels_[i];
 
     /* Set PWM period and enable channel */
     setChanlValue(i, pwm_fmu_duty_cyc_[i]);
@@ -211,18 +191,11 @@ static rt_err_t pwm_hardware_init(void) {
   return RT_EOK;
 }
 
-static rt_err_t pwm_set_frequency(uint16_t freq_to_set) {
-  if (freq_to_set < PWM_MIN_FREQUENCY || freq_to_set > PWM_MAX_FREQUENCY) {
-    /* invalid frequency */
-    rt_kprintf("[PWM] Invalid frequency: %d Hz, valid range: %d-%d Hz\n", freq_to_set, PWM_MIN_FREQUENCY,
-               PWM_MAX_FREQUENCY);
-    return RT_EINVAL;
-  }
-
+static rt_err_t setPwmFreq(uint16_t freq_to_set) {
   pwm_freq_ = freq_to_set;
 
   /* Recalculate PWM period using actual timer clock frequency */
-  rt_uint32_t timer_clock = get_timer_clock_freq();
+  rt_uint32_t timer_clock = getTimerClock();
   pwm_period_ns_ = timer_clock / pwm_freq_;
 
   /* the timer compare value should be re-configured */
@@ -233,7 +206,7 @@ static rt_err_t pwm_set_frequency(uint16_t freq_to_set) {
   return RT_EOK;
 }
 
-rt_inline void setChanlValue(uint8_t chan_id, rt_uint16_t pwm_val) {
+static void setChanlValue(uint8_t chan_id, rt_uint16_t pwm_val) {
   /* Store PWM value for readback */
   pwm_fmu_duty_cyc_[chan_id] = pwm_val;
 
@@ -241,8 +214,8 @@ rt_inline void setChanlValue(uint8_t chan_id, rt_uint16_t pwm_val) {
   if (pwm_initialized_ && pwm_device_ != RT_NULL && chan_id < MAX_PWM_OUT_CHAN) {
     /* Use remap to get physical channel */
     rt_uint8_t physical_channel = motor_channel_remap_[chan_id];
-    rt_uint8_t channel = pwm_channel_mapping_[physical_channel];
-    
+    rt_uint8_t channel = pwm_physical_channels_[physical_channel];
+
     /* Convert 16-bit value (0-65535) to percentage (0.0-1.0) */
     float duty_cycle = (float)pwm_fmu_duty_cyc_[chan_id] / 65535.0f;
     
@@ -253,17 +226,17 @@ rt_inline void setChanlValue(uint8_t chan_id, rt_uint16_t pwm_val) {
   }
 }
 
-rt_inline void pwm_read_(uint8_t chan_id, rt_uint16_t* pwm_val) { *pwm_val = pwm_fmu_duty_cyc_[chan_id]; }
+static void readPwmValue(uint8_t chan_id, rt_uint16_t* pwm_val) { *pwm_val = pwm_fmu_duty_cyc_[chan_id]; }
 
 rt_err_t pwm_config(actuator_dev_t dev, const struct actuator_configure* cfg) {
   rt_kprintf("aux out configured: pwm frequency:%d\n", cfg->pwm_config.pwm_freq);
 
-  if (pwm_set_frequency(cfg->pwm_config.pwm_freq) != RT_EOK) {
+  if (setPwmFreq(cfg->pwm_config.pwm_freq) != RT_EOK) {
     return RT_ERROR;
   }
 
   /* Initialize PWM hardware */
-  if (pwm_hardware_init() != RT_EOK) {
+  if (initPwmHw() != RT_EOK) {
     return RT_ERROR;
   }
 
@@ -280,7 +253,7 @@ rt_err_t pwm_control(actuator_dev_t dev, int cmd, void* arg) {
     case ACT_CMD_CHANNEL_ENABLE:
       /* Initialize PWM hardware if not already done */
       if (!pwm_initialized_) {
-        if (pwm_hardware_init() != RT_EOK) {
+        if (initPwmHw() != RT_EOK) {
           return RT_ERROR;
         }
       }
@@ -289,7 +262,7 @@ rt_err_t pwm_control(actuator_dev_t dev, int cmd, void* arg) {
       if (pwm_initialized_ && pwm_device_ != RT_NULL) {
         for (int i = 0; i < MAX_PWM_OUT_CHAN; i++) {
           rt_uint8_t physical_channel = motor_channel_remap_[i];
-          rt_uint8_t channel = pwm_channel_mapping_[physical_channel];
+          rt_uint8_t channel = pwm_physical_channels_[physical_channel];
           setChanlValue(i, pwm_fmu_duty_cyc_[i]);
           rt_pwm_enable(pwm_device_, channel);
         }
@@ -302,18 +275,18 @@ rt_err_t pwm_control(actuator_dev_t dev, int cmd, void* arg) {
       if (pwm_initialized_ && pwm_device_ != RT_NULL) {
         for (int i = 0; i < MAX_PWM_OUT_CHAN; i++) {
           rt_uint8_t physical_channel = motor_channel_remap_[i];
-          rt_uint8_t channel = pwm_channel_mapping_[physical_channel];
+          rt_uint8_t channel = pwm_physical_channels_[physical_channel];
           rt_pwm_disable(pwm_device_, channel);
         }
       }
       rt_kprintf("aux out disabled\n");
       break;
     case ACT_CMD_TEST_ENABLE:
-      pwm_test_mode_enabled_ = true;
+      pwm_cmd_mode_enabled_ = true;
       rt_kprintf("[PWM] Test mode enabled\n");
       break;
     case ACT_CMD_TEST_DISABLE:
-      pwm_test_mode_enabled_ = false;
+      pwm_cmd_mode_enabled_ = false;
       rt_kprintf("[PWM] Test mode disabled\n");
       break;
     default:
@@ -330,7 +303,7 @@ rt_size_t pwm_read(actuator_dev_t dev, rt_uint16_t chan_sel, rt_uint16_t* chan_v
 
   for (uint8_t i = 0; i < MAX_PWM_OUT_CHAN; i++) {
     if (chan_sel & (1 << i)) {
-      pwm_read_(i, &pwm_val);
+      readPwmValue(i, &pwm_val);
       *index = pwm_val;
       index++;
     }
@@ -344,15 +317,15 @@ rt_size_t pwm_write(actuator_dev_t dev, rt_uint16_t chan_sel, const rt_uint16_t*
   /* When test mode is enabled: only process writes from CMD (size=1 for single channel) */
   /* When test mode is disabled: only process writes from CONTROL (size=MAX_PWM_OUT_CHAN) */
   bool should_process = false;
-  
-  if (pwm_test_mode_enabled_) {
+
+  if (pwm_cmd_mode_enabled_) {
     /* Test mode: only process single channel writes (from CMD) */
     should_process = (size == ACT_WRITE_FROM_CMD);
   } else {
     /* Normal mode: only process multi-channel writes (from CONTROL) */
     should_process = (size == ACT_WRITE_FROM_CONTROL);
   }
-  
+
   if (should_process) {
     const rt_uint16_t* index = chan_val;
     rt_uint16_t val;
@@ -378,29 +351,20 @@ static struct actuator_device act_dev = {.chan_mask = 0x0F, /* 4 channels: 0b000
                                          .range = {0, 65535},
                                          .config = {.protocol = ACT_PROTOCOL_PWM,
                                                     .chan_num = MAX_PWM_OUT_CHAN,
-                                                    .pwm_config = {.pwm_freq = PWM_DEFAULT_FREQUENCY},
+                                                    .pwm_config = {.pwm_freq = L2_DEVICE_03_MOTOR_03_PWM_FREQUENCY},
                                                     .dshot_config = {0}},
                                          .ops = &_act_ops};
 
-rt_err_t pwm_reg(void) {
-  rt_err_t ret;
-
-  /* register actuator hal device */
-  ret = hal_actuator_register(&act_dev, "aux_out", RT_DEVICE_FLAG_RDWR, NULL);
-
-  return ret;
-}
-
 #ifdef L2_DEVICE_03_MOTOR_03_PWM_EN
-static int pwm_auto_start(void) {
+static int pwmAutoStart(void) {
   rt_err_t ret;
-  ret = pwm_hardware_init();
+  ret = initPwmHw();
   if (ret != RT_EOK) {
     rt_kprintf("[PWM] hardware init failed\n");
     return ret;
   }
 
-  ret = pwm_reg();
+  ret = hal_actuator_register(&act_dev, "aux_out", RT_DEVICE_FLAG_RDWR, NULL);
   if (ret != RT_EOK) {
     rt_kprintf("[PWM] driver init failed\n");
     return ret;
@@ -410,5 +374,5 @@ static int pwm_auto_start(void) {
   return RT_EOK;
 }
 
-INIT_COMPONENT_EXPORT(pwm_auto_start);
+INIT_COMPONENT_EXPORT(pwmAutoStart);
 #endif
