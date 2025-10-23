@@ -186,6 +186,17 @@ menuconfig PROJECT_MINIFLY_TASK_SENSOR_EN
                 default n
                 help
                     Enable mlog (SD card logging) for IMU data in the sensor task.
+
+            if PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_EN
+                config PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_FREQ
+                    int "IMU Logging Frequency (Hz)"
+                    default 1000
+                    range 1 1000
+                    help
+                        Logging frequency for IMU data in Hz. This controls how often
+                        IMU data is written to the log file. Default is 100 Hz.
+                        Lower values reduce log file size but may miss important data.
+            endif
         endif
 
     endif

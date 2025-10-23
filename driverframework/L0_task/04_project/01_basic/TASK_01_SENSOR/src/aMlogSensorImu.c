@@ -28,6 +28,10 @@ MLOG_BUS_DEFINE(Sensor_IMU, Sensor_IMU_Elems);
 static mlogImuData_t mlog_imu_data = {0};
 static int Sensor_IMU_ID = -1;
 static uint8_t mlog_push_en = 0;
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_FREQ
+static rt_tick_t mlog_last_tick = 0;      // Last log timestamp in ticks
+static rt_tick_t mlog_min_interval = 0;   // Minimum interval in ticks
+#endif
 
 /**
  * @brief Initialize mlog IMU functionality
@@ -40,6 +44,14 @@ void mlogImuInit(void) {
     } else {
         rt_kprintf("Sensor_IMU mlog bus ID: %d\n", Sensor_IMU_ID);
     }
+    
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_FREQ
+    /* Calculate minimum interval in ticks for the configured frequency */
+    rt_tick_t ticks_per_second = RT_TICK_PER_SECOND;
+    mlog_min_interval = ticks_per_second / PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_FREQ;
+    rt_kprintf("Sensor_IMU mlog frequency: %d Hz, min interval: %d ticks\n", 
+               PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_FREQ, mlog_min_interval);
+#endif
     
     /* Register mlog start callback */
     mlog_register_callback(MLOG_CB_START, mlogImuStartCb);
@@ -106,7 +118,19 @@ void mlogImuPushData(uint32_t timestamp) {
     mlog_imu_data.timestamp = timestamp;
     
     if (Sensor_IMU_ID >= 0 && mlog_push_en) {
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_FREQ
+        /* Check if enough time has passed since last log */
+        rt_tick_t current_tick = rt_tick_get();
+        rt_tick_t elapsed = current_tick - mlog_last_tick;
+        
+        if (elapsed >= mlog_min_interval) {
+            mlog_push_msg((uint8_t*)&mlog_imu_data, Sensor_IMU_ID, sizeof(mlogImuData_t));
+            mlog_last_tick = current_tick;
+        }
+#else
+        /* No frequency control, push immediately */
         mlog_push_msg((uint8_t*)&mlog_imu_data, Sensor_IMU_ID, sizeof(mlogImuData_t));
+#endif
     }
 }
 
