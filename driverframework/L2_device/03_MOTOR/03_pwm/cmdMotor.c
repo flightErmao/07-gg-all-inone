@@ -75,10 +75,6 @@ static int motor_set_duty_cycle(int motor_id, float duty_cycle, int duration_ms)
 #if defined(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN) && defined(L2_DEVICE_03_MOTOR_03_PWM_DEBUGPIN_EN)
     DEBUG_PIN_DEBUG0_HIGH();
 #endif
-    // rt_device_control(motor_device, ACT_CMD_CHANNEL_ENABLE, NULL);
-    // uint16_t start = 0;
-    // rt_device_write(motor_device, chan_sel, &start, sizeof(chan_val));
-    // rt_thread_mdelay(2000);
 
     rt_size_t written = rt_device_write(motor_device, chan_sel, &chan_val, sizeof(chan_val));
     if (written != sizeof(chan_val)) {

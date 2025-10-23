@@ -65,7 +65,7 @@ static bool remap_parsed_ = false;
 static rt_uint8_t pwm_channel_mapping_[MAX_PWM_OUT_CHAN] = {1, 2, 3, 4};  // Default: 1,2,3,4
 static bool pwm_mapping_parsed_ = false;
 
-rt_inline void pwm_write_(uint8_t chan_id, rt_uint16_t pwm_val);
+rt_inline void setChanlValue(uint8_t chan_id, rt_uint16_t pwm_val);
 
 /* Parse motor channel remap configuration */
 static rt_err_t parse_motor_remap_config(void) {
@@ -197,7 +197,7 @@ static rt_err_t pwm_hardware_init(void) {
     rt_uint8_t channel = pwm_channel_mapping_[i];
 
     /* Set PWM period and enable channel */
-    pwm_write_(i, pwm_fmu_duty_cyc_[i]);
+    setChanlValue(i, pwm_fmu_duty_cyc_[i]);
 
     rt_err_t err = rt_pwm_enable(pwm_device_, channel);
     if (err != RT_EOK) {
@@ -226,13 +226,13 @@ static rt_err_t pwm_set_frequency(uint16_t freq_to_set) {
 
   /* the timer compare value should be re-configured */
   for (uint8_t i = 0; i < MAX_PWM_OUT_CHAN; i++) {
-    pwm_write_(i, pwm_fmu_duty_cyc_[i]);
+    setChanlValue(i, pwm_fmu_duty_cyc_[i]);
   }
 
   return RT_EOK;
 }
 
-rt_inline void pwm_write_(uint8_t chan_id, rt_uint16_t pwm_val) {
+rt_inline void setChanlValue(uint8_t chan_id, rt_uint16_t pwm_val) {
   /* Store PWM value for readback */
   pwm_fmu_duty_cyc_[chan_id] = pwm_val;
 
@@ -289,7 +289,7 @@ rt_err_t pwm_control(actuator_dev_t dev, int cmd, void* arg) {
         for (int i = 0; i < MAX_PWM_OUT_CHAN; i++) {
           rt_uint8_t physical_channel = motor_channel_remap_[i];
           rt_uint8_t channel = pwm_channel_mapping_[physical_channel];
-          pwm_write_(i, pwm_fmu_duty_cyc_[i]);
+          setChanlValue(i, pwm_fmu_duty_cyc_[i]);
           rt_pwm_enable(pwm_device_, channel);
         }
       }
@@ -338,7 +338,7 @@ rt_size_t pwm_write(actuator_dev_t dev, rt_uint16_t chan_sel, const rt_uint16_t*
     if (chan_sel & (1 << i)) {
       val = *index;
       /* update pwm signal */
-      pwm_write_(i, val);
+      setChanlValue(i, val);
 
       index++;
     }

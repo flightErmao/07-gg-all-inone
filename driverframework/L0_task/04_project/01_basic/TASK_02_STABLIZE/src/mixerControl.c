@@ -74,15 +74,15 @@ static int motor_set_raw_value(int motor_id, rt_uint16_t raw_value) {
   }
 
   /* Convert motor_id to channel index (0-based) */
-  int channel = motor_id - 1;
-  rt_uint16_t chan_sel = 1 << channel;
+  // int channel = motor_id - 1;
+  // rt_uint16_t chan_sel = 1 << channel;
 
-  /* Write raw 16-bit value directly to specific channel */
-  rt_size_t written = rt_device_write(motor_device, chan_sel, &raw_value, sizeof(raw_value));
-  if (written != sizeof(raw_value)) {
-    rt_kprintf("[mixerControl] write failed, written: %d\n", written);
-    return -1;
-  }
+  // /* Write raw 16-bit value directly to specific channel */
+  // rt_size_t written = rt_device_write(motor_device, chan_sel, &raw_value, sizeof(raw_value));
+  // if (written != sizeof(raw_value)) {
+  //   rt_kprintf("[mixerControl] write failed, written: %d\n", written);
+  //   return -1;
+  // }
 
   return 0;
 }

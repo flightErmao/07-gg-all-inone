@@ -7,19 +7,6 @@
 #include <stdlib.h>
 #endif
 
-/********************************************************************************
- * This program is for learning purposes only, unauthorized use is prohibited
- * ALIENTEK MiniFly
- * Motor driver code
- * ALIENTEK@ALIENTEK
- * Technical forum: www.openedv.com
- * Created: 2017/5/12
- * Version: V1.3
- * All rights reserved
- * Copyright(C) Guangzhou Xingyi Electronics Technology Co., Ltd. 2014-2024
- * All rights reserved
- ********************************************************************************/
-
 typedef struct {
   const char *device_name;
   int channel;
