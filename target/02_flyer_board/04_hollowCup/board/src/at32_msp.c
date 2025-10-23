@@ -283,10 +283,10 @@ void at32_msp_tmr_init(void *instance)
         gpio_init_struct.gpio_pins = GPIO_PINS_6 | GPIO_PINS_7 | GPIO_PINS_8 | GPIO_PINS_9;
         gpio_init(GPIOB, &gpio_init_struct);
 
-        gpio_pin_mux_config(GPIOB, GPIO_PINS_SOURCE6, GPIO_MUX_1);
-        gpio_pin_mux_config(GPIOB, GPIO_PINS_SOURCE7, GPIO_MUX_1);
-        gpio_pin_mux_config(GPIOB, GPIO_PINS_SOURCE8, GPIO_MUX_1);
-        gpio_pin_mux_config(GPIOB, GPIO_PINS_SOURCE9, GPIO_MUX_1);
+        gpio_pin_mux_config(GPIOB, GPIO_PINS_SOURCE6, GPIO_MUX_2);
+        gpio_pin_mux_config(GPIOB, GPIO_PINS_SOURCE7, GPIO_MUX_2);
+        gpio_pin_mux_config(GPIOB, GPIO_PINS_SOURCE8, GPIO_MUX_2);
+        gpio_pin_mux_config(GPIOB, GPIO_PINS_SOURCE9, GPIO_MUX_2);
     }
     /* add others */
 }
