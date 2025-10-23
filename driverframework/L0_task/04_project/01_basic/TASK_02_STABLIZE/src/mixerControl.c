@@ -32,8 +32,6 @@ static bool motorSetEnable = false;
 #ifdef L2_DEVICE_03_MOTOR_03_PWM_EN
 #define MOTOR_DEVICE_NAME "aux_out"
 #define MAX_MOTOR_CHANNELS 4
-#define DUTY_CYCLE_MIN 0.0f
-#define DUTY_CYCLE_MAX 1.0f
 static rt_device_t motor_device = RT_NULL;
 static bool motor_device_initialized = false;
 #endif
@@ -62,8 +60,8 @@ static int motor_device_init(void) {
   return 0;
 }
 
-/* Set motor duty cycle */
-static int motor_set_duty_cycle(int motor_id, float duty_cycle) {
+/* Set motor raw 16-bit value */
+static int motor_set_raw_value(int motor_id, rt_uint16_t raw_value) {
   if (!motor_device_initialized) {
     if (motor_device_init() != 0) {
       return -1;
@@ -75,21 +73,13 @@ static int motor_set_duty_cycle(int motor_id, float duty_cycle) {
     return -1;
   }
 
-  if (duty_cycle < DUTY_CYCLE_MIN || duty_cycle > DUTY_CYCLE_MAX) {
-    rt_kprintf("[mixerControl] Error: Duty cycle must be between %.1f-%.1f\n", DUTY_CYCLE_MIN, DUTY_CYCLE_MAX);
-    return -1;
-  }
-
   /* Convert motor_id to channel index (0-based) */
   int channel = motor_id - 1;
   rt_uint16_t chan_sel = 1 << channel;
 
-  /* Convert duty cycle to PWM value (1000-2000 range) */
-  rt_uint16_t chan_val = (rt_uint16_t)(1000.0f + duty_cycle * 1000.0f);
-
-  /* Write PWM value to specific channel */
-  rt_size_t written = rt_device_write(motor_device, chan_sel, &chan_val, sizeof(chan_val));
-  if (written != sizeof(chan_val)) {
+  /* Write raw 16-bit value directly to specific channel */
+  rt_size_t written = rt_device_write(motor_device, chan_sel, &raw_value, sizeof(raw_value));
+  if (written != sizeof(raw_value)) {
     rt_kprintf("[mixerControl] write failed, written: %d\n", written);
     return -1;
   }
@@ -152,20 +142,11 @@ void mixerControl(control_t *control) {
 
 #elif defined(L2_DEVICE_03_MOTOR_03_PWM_EN)
 
-  if (motorPWM.m1 > UINT16_MAX || motorPWM.m2 > UINT16_MAX || motorPWM.m3 > UINT16_MAX || motorPWM.m4 > UINT16_MAX) {
-    rt_kprintf("[mixerControl] Error: PWM value out of range\n");
-    return;
-  }
-
-  float duty_m1 = scaleRangef((float)motorPWM.m1, 0.0f, 65535.0f, 0.0f, 1.0f);
-  float duty_m2 = scaleRangef((float)motorPWM.m2, 0.0f, 65535.0f, 0.0f, 1.0f);
-  float duty_m3 = scaleRangef((float)motorPWM.m3, 0.0f, 65535.0f, 0.0f, 1.0f);
-  float duty_m4 = scaleRangef((float)motorPWM.m4, 0.0f, 65535.0f, 0.0f, 1.0f);
-
-  motor_set_duty_cycle(1, duty_m1);
-  motor_set_duty_cycle(2, duty_m2);
-  motor_set_duty_cycle(3, duty_m3);
-  motor_set_duty_cycle(4, duty_m4);
+  /* Write raw 16-bit values directly to motor channels */
+  motor_set_raw_value(1, (rt_uint16_t)motorPWM.m1);
+  motor_set_raw_value(2, (rt_uint16_t)motorPWM.m2);
+  motor_set_raw_value(3, (rt_uint16_t)motorPWM.m3);
+  motor_set_raw_value(4, (rt_uint16_t)motorPWM.m4);
 #endif
 }
 

@@ -68,8 +68,8 @@ static int motor_set_duty_cycle(int motor_id, float duty_cycle, int duration_ms)
     int channel = motor_id - 1;
     rt_uint16_t chan_sel = 1 << channel;
     
-    /* Convert duty cycle to PWM value (1000-2000 range) */
-    rt_uint16_t chan_val = (rt_uint16_t)(1000.0f + duty_cycle * 1000.0f);
+    /* Convert duty cycle to 16-bit PWM value (0-65535 range) */
+    rt_uint16_t chan_val = (rt_uint16_t)(duty_cycle * 65535.0f);
 
     /* Write PWM value to specific channel */
 #if defined(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN) && defined(L2_DEVICE_03_MOTOR_03_PWM_DEBUGPIN_EN)
@@ -86,7 +86,7 @@ static int motor_set_duty_cycle(int motor_id, float duty_cycle, int duration_ms)
         return -1;
     }
 
-    rt_kprintf("[cmdMotor] Motor %d set to duty cycle %.2f (PWM %d)\n", motor_id, duty_cycle, chan_val);
+    rt_kprintf("[cmdMotor] Motor %d set to duty cycle %.2f (16-bit PWM %d)\n", motor_id, duty_cycle, chan_val);
 
     /* Auto stop after duration if specified */
     if (duration_ms > 0) {
@@ -96,7 +96,7 @@ static int motor_set_duty_cycle(int motor_id, float duty_cycle, int duration_ms)
 #if defined(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN) && defined(L2_DEVICE_03_MOTOR_03_PWM_DEBUGPIN_EN)
         DEBUG_PIN_DEBUG0_LOW();
 #endif
-        /* Stop motor */
+        /* Stop motor (set to 0 PWM value) */
         chan_val = 0;
         written = rt_device_write(motor_device, chan_sel, &chan_val, sizeof(chan_val));
         // rt_device_control(motor_device, ACT_CMD_CHANNEL_DISABLE, NULL);
@@ -192,12 +192,12 @@ static void cmdMotorTest(int argc, char **argv) {
   if (argc < 4) {
     rt_kprintf("Usage: motor [motor_id] [duty_cycle] [duration_ms]\n");
     rt_kprintf("  motor_id: 1-%d (motor number)\n", MAX_MOTOR_CHANNELS);
-    rt_kprintf("  duty_cycle: %.1f-%.1f (duty cycle 0.0-1.0)\n", DUTY_CYCLE_MIN, DUTY_CYCLE_MAX);
+    rt_kprintf("  duty_cycle: %.1f-%.1f (duty cycle 0.0-1.0, converts to 16-bit PWM 0-65535)\n", DUTY_CYCLE_MIN, DUTY_CYCLE_MAX);
     rt_kprintf("  duration_ms: Duration (ms), 0=continuous\n");
     rt_kprintf("Examples:\n");
-    rt_kprintf("  motor 1 0.5 1000     # Motor 1, 50%% duty cycle, run 1s then stop\n");
-    rt_kprintf("  motor 2 0.2 0        # Motor 2, 20%% duty cycle, continuous\n");
-    rt_kprintf("  motor 3 0.0 0        # Motor 3 stop\n");
+    rt_kprintf("  motor 1 0.5 1000     # Motor 1, 50%% duty cycle (32767), run 1s then stop\n");
+    rt_kprintf("  motor 2 0.2 0        # Motor 2, 20%% duty cycle (13107), continuous\n");
+    rt_kprintf("  motor 3 0.0 0        # Motor 3 stop (0)\n");
     return;
   }
 
@@ -215,7 +215,9 @@ static void cmdMotorOrder(int argc, char **argv) {
   if (argc > 1) {
     rt_kprintf("Usage: motor_order\n");
     rt_kprintf("  Test all motors sequentially (1-4) for %d ms each\n", MOTOR_ORDER_TEST_DURATION_MS);
-    rt_kprintf("  Each motor runs at %.2f%% duty cycle\n", MOTOR_ORDER_TEST_DUTY_CYCLE * 100);
+    rt_kprintf("  Each motor runs at %.2f%% duty cycle (16-bit PWM %d)\n", 
+               MOTOR_ORDER_TEST_DUTY_CYCLE * 100, 
+               (int)(MOTOR_ORDER_TEST_DUTY_CYCLE * 65535.0f));
     return;
   }
 
@@ -228,10 +230,10 @@ static void cmdMotorCalib(int argc, char **argv) {
   if (argc > 1) {
     rt_kprintf("Usage: motor_calib\n");
     rt_kprintf("  Calibrate all motors (1-4) with the following sequence:\n");
-    rt_kprintf("  Step 1: Set all motors to %.1f%% duty cycle for %d ms\n", DUTY_CYCLE_MAX * 100,
-               MOTOR_CALIB_DURATION_MS);
-    rt_kprintf("  Step 2: Set all motors to %.1f%% duty cycle for %d ms\n", DUTY_CYCLE_MIN * 100,
-               MOTOR_CALIB_DURATION_MS);
+    rt_kprintf("  Step 1: Set all motors to %.1f%% duty cycle (16-bit PWM %d) for %d ms\n", 
+               DUTY_CYCLE_MAX * 100, (int)(DUTY_CYCLE_MAX * 65535.0f), MOTOR_CALIB_DURATION_MS);
+    rt_kprintf("  Step 2: Set all motors to %.1f%% duty cycle (16-bit PWM %d) for %d ms\n", 
+               DUTY_CYCLE_MIN * 100, (int)(DUTY_CYCLE_MIN * 65535.0f), MOTOR_CALIB_DURATION_MS);
     rt_kprintf("  Total calibration time: %d ms\n", MOTOR_CALIB_DURATION_MS * 2);
     return;
   }

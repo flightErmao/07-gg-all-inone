@@ -24,15 +24,22 @@
 // #define rt_kprintf(...) console_printf(__VA_ARGS__)
 #define rt_kprintf(...)
 
-#define PWM_FREQ_50HZ (50)
-#define PWM_FREQ_125HZ (125)
-#define PWM_FREQ_250HZ (250)
-#define PWM_FREQ_400HZ (400)
+#ifndef L2_DEVICE_03_MOTOR_03_PWM_DEFAULT_FREQUENCY
+#define L2_DEVICE_03_MOTOR_03_PWM_DEFAULT_FREQUENCY 500
+#endif
+
+#ifndef L2_DEVICE_03_MOTOR_03_PWM_MIN_FREQUENCY
+#define L2_DEVICE_03_MOTOR_03_PWM_MIN_FREQUENCY 50
+#endif
+
+#ifndef L2_DEVICE_03_MOTOR_03_PWM_MAX_FREQUENCY
+#define L2_DEVICE_03_MOTOR_03_PWM_MAX_FREQUENCY 1000
+#endif
 
 #define MAX_PWM_OUT_CHAN 4                   // AUX Out has 4 pwm channel
-#define PWM_DEFAULT_FREQUENCY PWM_FREQ_50HZ  // pwm default frequqncy
-#define PWM_MIN_VALUE 1000
-#define PWM_MAX_VALUE 2000
+#define PWM_DEFAULT_FREQUENCY L2_DEVICE_03_MOTOR_03_PWM_DEFAULT_FREQUENCY
+#define PWM_MIN_FREQUENCY L2_DEVICE_03_MOTOR_03_PWM_MIN_FREQUENCY
+#define PWM_MAX_FREQUENCY L2_DEVICE_03_MOTOR_03_PWM_MAX_FREQUENCY
 
 #ifndef L2_DEVICE_03_MOTOR_03_PWM_DEVICE_NAME
 #define L2_DEVICE_03_MOTOR_03_PWM_DEVICE_NAME "pwm1"
@@ -43,13 +50,9 @@
 #endif
 
 #define PWM_DEVICE_NAME L2_DEVICE_03_MOTOR_03_PWM_DEVICE_NAME
-#define PWM_CHANNEL_1 1
-#define PWM_CHANNEL_2 2
-#define PWM_CHANNEL_3 3
-#define PWM_CHANNEL_4 4
 
 static int pwm_freq_ = PWM_DEFAULT_FREQUENCY;
-static rt_uint16_t pwm_fmu_duty_cyc_[MAX_PWM_OUT_CHAN] = {1000, 1000, 1000, 1000};
+static rt_uint16_t pwm_fmu_duty_cyc_[MAX_PWM_OUT_CHAN] = {0, 0, 0, 0};
 static struct rt_device_pwm* pwm_device_ = RT_NULL;
 static rt_uint32_t pwm_period_ns_ = 0;
 static bool pwm_initialized_ = false;
@@ -154,22 +157,10 @@ static rt_err_t parse_pwm_mapping_config(void) {
   return RT_EOK;
 }
 
-/* Validate PWM value and return clamped value */
-static rt_uint16_t validate_pwm_value(rt_uint16_t val) {
-  if (val == 0) {
-    return 0;
-  }
-
-  if (val < PWM_MIN_VALUE || val > PWM_MAX_VALUE) {
-    return PWM_MIN_VALUE;
-  }
-  return val;
-}
-
 /* PWM channel mapping will be configured via Kconfig */
 
 /* Get timer clock frequency in Hz */
-static rt_uint32_t get_timer_clock_freq(void) { return 100000000UL; /* 100MHz */ }
+static rt_uint32_t get_timer_clock_freq(void) { return 1000000000UL; }
 
 /* Initialize PWM device */
 static rt_err_t pwm_hardware_init(void) {
@@ -220,8 +211,10 @@ static rt_err_t pwm_hardware_init(void) {
 }
 
 static rt_err_t pwm_set_frequency(uint16_t freq_to_set) {
-  if (freq_to_set < PWM_FREQ_50HZ || freq_to_set > PWM_FREQ_400HZ) {
+  if (freq_to_set < PWM_MIN_FREQUENCY || freq_to_set > PWM_MAX_FREQUENCY) {
     /* invalid frequency */
+    rt_kprintf("[PWM] Invalid frequency: %d Hz, valid range: %d-%d Hz\n", freq_to_set, PWM_MIN_FREQUENCY,
+               PWM_MAX_FREQUENCY);
     return RT_EINVAL;
   }
 
@@ -230,14 +223,6 @@ static rt_err_t pwm_set_frequency(uint16_t freq_to_set) {
   /* Recalculate PWM period using actual timer clock frequency */
   rt_uint32_t timer_clock = get_timer_clock_freq();
   pwm_period_ns_ = timer_clock / pwm_freq_;
-
-  //   /* Re-initialize PWM hardware with new frequency */
-  //   if (pwm_initialized_ && pwm_device_ != RT_NULL) {
-  //     for (int i = 0; i < MAX_PWM_OUT_CHAN; i++) {
-  //       rt_uint8_t channel = pwm_channel_map[i];
-  //       rt_pwm_set(pwm_device_, channel, pwm_period_ns_, pwm_fmu_duty_cyc_[i]);
-  //     }
-  //   }
 
   /* the timer compare value should be re-configured */
   for (uint8_t i = 0; i < MAX_PWM_OUT_CHAN; i++) {
@@ -248,15 +233,20 @@ static rt_err_t pwm_set_frequency(uint16_t freq_to_set) {
 }
 
 rt_inline void pwm_write_(uint8_t chan_id, rt_uint16_t pwm_val) {
-  /* Validate and store PWM value for readback */
-  pwm_fmu_duty_cyc_[chan_id] = validate_pwm_value(pwm_val);
+  /* Store PWM value for readback */
+  pwm_fmu_duty_cyc_[chan_id] = pwm_val;
 
   /* Control actual PWM hardware */
   if (pwm_initialized_ && pwm_device_ != RT_NULL && chan_id < MAX_PWM_OUT_CHAN) {
     /* Use remap to get physical channel */
     rt_uint8_t physical_channel = motor_channel_remap_[chan_id];
     rt_uint8_t channel = pwm_channel_mapping_[physical_channel];
-    rt_uint32_t pulse_ns = (rt_uint32_t)pwm_fmu_duty_cyc_[chan_id] * 1000; /* Convert us to ns */
+    
+    /* Convert 16-bit value (0-65535) to percentage (0.0-1.0) */
+    float duty_cycle = (float)pwm_fmu_duty_cyc_[chan_id] / 65535.0f;
+    
+    /* Calculate pulse width in nanoseconds */
+    rt_uint32_t pulse_ns = (rt_uint32_t)(duty_cycle * (float)pwm_period_ns_);
 
     rt_pwm_set(pwm_device_, channel, pwm_period_ns_, pulse_ns);
   }
@@ -361,10 +351,10 @@ const static struct actuator_ops _act_ops = {
     .act_config = pwm_config, .act_control = pwm_control, .act_read = pwm_read, .act_write = pwm_write};
 
 static struct actuator_device act_dev = {.chan_mask = 0x0F, /* 4 channels: 0b00001111 */
-                                         .range = {1000, 2000},
+                                         .range = {0, 65535},
                                          .config = {.protocol = ACT_PROTOCOL_PWM,
                                                     .chan_num = MAX_PWM_OUT_CHAN,
-                                                    .pwm_config = {.pwm_freq = 50},
+                                                    .pwm_config = {.pwm_freq = PWM_DEFAULT_FREQUENCY},
                                                     .dshot_config = {0}},
                                          .ops = &_act_ops};
 
