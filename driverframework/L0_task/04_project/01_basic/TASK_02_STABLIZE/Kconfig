@@ -128,6 +128,28 @@ menuconfig PROJECT_MINIFLY_TASK_STABLIZE_EN
                 Enable mlog (SD card logging) for the stabilize task.
 
         if PROJECT_MINIFLY_TASK_STABLIZE_MLOG_EN
+            # ----- PID Output logging (Angle and Rate) -----
+            menuconfig PROJECT_MINIFLY_TASK_STABLIZE_MLOG_PID_EN
+                bool "ENABLE: PID Output Logging"
+                default n
+                help
+                    Enable PID output logging for angle (outer loop) and rate (inner loop).
+
+            if PROJECT_MINIFLY_TASK_STABLIZE_MLOG_PID_EN
+                # Angle PID (outer loop)
+                config PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_PID_EN
+                    bool "ENABLE: Angle PID (Outer Loop) Logging"
+                    default n
+                    help
+                        Log angle PID (outer loop) P/I/D outputs for roll, pitch, yaw.
+
+                # Rate PID (inner loop)
+                config PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_PID_EN
+                    bool "ENABLE: Rate PID (Inner Loop) Logging"
+                    default n
+                    help
+                        Log rate PID (inner loop) P/I/D outputs for roll, pitch, yaw.
+            endif
             config PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_EN
                 bool "ENABLE: Rate Data Logging"
                 default n

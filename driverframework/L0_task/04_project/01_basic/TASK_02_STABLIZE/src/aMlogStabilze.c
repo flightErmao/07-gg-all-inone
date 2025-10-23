@@ -3,6 +3,7 @@
 #include "command.h"
 #include "taskStabilizer.h"
 #include "aMcnStabilize.h"
+#include "attitudePid.h"
 
 /* Mlog data structures */
 typedef struct {
@@ -25,6 +26,50 @@ typedef struct {
   float rc_throttle;
   uint8_t armed;
 } __packed mlogStabilizerRcData_t;
+
+#if defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_PID_EN) || defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_PID_EN)
+static void mlogStabilizerStartCb(void);
+#endif
+
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_PID_EN
+typedef struct {
+  uint32_t timestamp;
+  float roll[3];   // P, I, D
+  float pitch[3];  // P, I, D
+  float yaw[3];    // P, I, D
+} __packed mlogStabilizerAnglePidData_t;
+
+static mlog_elem_t StabilizeAnglePid_Elems[] __attribute__((used)) = {
+    MLOG_ELEMENT(timestamp, MLOG_UINT32),
+    MLOG_ELEMENT_VEC(roll, MLOG_FLOAT, 3),
+    MLOG_ELEMENT_VEC(pitch, MLOG_FLOAT, 3),
+    MLOG_ELEMENT_VEC(yaw, MLOG_FLOAT, 3),
+};
+MLOG_BUS_DEFINE(StabilizeAnglePid, StabilizeAnglePid_Elems);
+
+static int StabilizeAnglePid_ID = -1;
+static uint8_t mlog_stabilizer_angle_pid_push_en = 0;
+#endif
+
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_PID_EN
+typedef struct {
+  uint32_t timestamp;
+  float roll[3];   // P, I, D
+  float pitch[3];  // P, I, D
+  float yaw[3];    // P, I, D
+} __packed mlogStabilizerRatePidData_t;
+
+static mlog_elem_t StabilizeRatePid_Elems[] __attribute__((used)) = {
+    MLOG_ELEMENT(timestamp, MLOG_UINT32),
+    MLOG_ELEMENT_VEC(roll, MLOG_FLOAT, 3),
+    MLOG_ELEMENT_VEC(pitch, MLOG_FLOAT, 3),
+    MLOG_ELEMENT_VEC(yaw, MLOG_FLOAT, 3),
+};
+MLOG_BUS_DEFINE(StabilizeRatePid, StabilizeRatePid_Elems);
+
+static int StabilizeRatePid_ID = -1;
+static uint8_t mlog_stabilizer_rate_pid_push_en = 0;
+#endif
 
 #if defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_EN) || defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_EN) || \
     defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RC_EN)
@@ -103,15 +148,37 @@ void mlogStabilizerInit(void) {
   }
 #endif
 
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_PID_EN
+  /* Initialize mlog bus ID for angle PID outputs */
+  StabilizeAnglePid_ID = mlog_get_bus_id("StabilizeAnglePid");
+  if (StabilizeAnglePid_ID < 0) {
+    rt_kprintf("Failed to get mlog bus ID for StabilizeAnglePid\n");
+  } else {
+    rt_kprintf("StabilizeAnglePid mlog bus ID: %d\n", StabilizeAnglePid_ID);
+  }
+#endif
+
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_PID_EN
+  /* Initialize mlog bus ID for rate PID outputs */
+  StabilizeRatePid_ID = mlog_get_bus_id("StabilizeRatePid");
+  if (StabilizeRatePid_ID < 0) {
+    rt_kprintf("Failed to get mlog bus ID for StabilizeRatePid\n");
+  } else {
+    rt_kprintf("StabilizeRatePid mlog bus ID: %d\n", StabilizeRatePid_ID);
+  }
+#endif
+
 #if defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_EN) || defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_EN) || \
-    defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RC_EN)
+    defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RC_EN) || defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_PID_EN) || \
+    defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_PID_EN)
   /* Register mlog start callback */
   mlog_register_callback(MLOG_CB_START, mlogStabilizerStartCb);
 #endif
 }
 
 #if defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_EN) || defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_EN) || \
-    defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RC_EN)
+    defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RC_EN) || defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_PID_EN) || \
+    defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_PID_EN)
 /**
  * @brief Mlog start callback - internal function
  */
@@ -124,6 +191,12 @@ static void mlogStabilizerStartCb(void) {
 #endif
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RC_EN
   mlog_stabilizer_rc_push_en = 1;
+#endif
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_PID_EN
+  mlog_stabilizer_angle_pid_push_en = 1;
+#endif
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_PID_EN
+  mlog_stabilizer_rate_pid_push_en = 1;
 #endif
 }
 #endif
@@ -176,13 +249,15 @@ void mlogStabilizerPushRcData(const mlogStabilizerRcData_t* rc_data) {
  */
 void mlogStabilizerPush(uint32_t tick) {
 #if !defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_EN) && !defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_EN) && \
-    !defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RC_EN)
+    !defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RC_EN) && !defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_PID_EN) && \
+    !defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_PID_EN)
   RT_UNUSED(tick);
   return;
 #endif
 
 #if defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_EN) || defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_EN) || \
-    defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RC_EN)
+    defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RC_EN) || defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_PID_EN) || \
+    defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_PID_EN)
   uint32_t timestamp = rt_tick_get();
 #endif
 
@@ -256,5 +331,43 @@ void mlogStabilizerPush(uint32_t tick) {
 
     mlogStabilizerPushRcData(&rc_data);
   }
+#endif
+
+#if defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_PID_EN) || defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_PID_EN)
+  // Angle PID outputs at angle loop rate
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_PID_EN
+  if (RATE_DO_EXECUTE(ANGLE_PID_RATE, tick)) {
+    if (StabilizeAnglePid_ID >= 0 && mlog_stabilizer_angle_pid_push_en) {
+      mlogStabilizerAnglePidData_t ap = {0};
+      ap.timestamp = timestamp;
+      float p, i, d;
+      getAnglePidRollDebug(&p, &i, &d);
+      ap.roll[0] = p; ap.roll[1] = i; ap.roll[2] = d;
+      getAnglePidPitchDebug(&p, &i, &d);
+      ap.pitch[0] = p; ap.pitch[1] = i; ap.pitch[2] = d;
+      getAnglePidYawDebug(&p, &i, &d);
+      ap.yaw[0] = p; ap.yaw[1] = i; ap.yaw[2] = d;
+      mlog_push_msg((uint8_t*)&ap, StabilizeAnglePid_ID, sizeof(mlogStabilizerAnglePidData_t));
+    }
+  }
+#endif
+
+  // Rate PID outputs at rate loop rate
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_PID_EN
+  if (RATE_DO_EXECUTE(RATE_PID_RATE, tick)) {
+    if (StabilizeRatePid_ID >= 0 && mlog_stabilizer_rate_pid_push_en) {
+      mlogStabilizerRatePidData_t rp = {0};
+      rp.timestamp = timestamp;
+      float p, i, d;
+      getRatePidRollDebug(&p, &i, &d);
+      rp.roll[0] = p; rp.roll[1] = i; rp.roll[2] = d;
+      getRatePidPitchDebug(&p, &i, &d);
+      rp.pitch[0] = p; rp.pitch[1] = i; rp.pitch[2] = d;
+      getRatePidYawDebug(&p, &i, &d);
+      rp.yaw[0] = p; rp.yaw[1] = i; rp.yaw[2] = d;
+      mlog_push_msg((uint8_t*)&rp, StabilizeRatePid_ID, sizeof(mlogStabilizerRatePidData_t));
+    }
+  }
+#endif
 #endif
 }
