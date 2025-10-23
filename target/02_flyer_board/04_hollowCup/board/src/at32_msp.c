@@ -268,6 +268,26 @@ void at32_msp_tmr_init(void *instance)
         gpio_pin_mux_config(GPIOA, GPIO_PINS_SOURCE0, GPIO_MUX_1);
         gpio_pin_mux_config(GPIOA, GPIO_PINS_SOURCE1, GPIO_MUX_1);
     }
+
+    if(tmr_x == TMR4)
+    {
+        /* tmr4 clock enable */
+        crm_periph_clock_enable(CRM_TMR4_PERIPH_CLOCK, TRUE);
+        /* gpioa clock enable */
+        crm_periph_clock_enable(CRM_GPIOB_PERIPH_CLOCK, TRUE);
+
+        /* gpioa configuration: tmr1 channel1 and channel2 as alternate function push-pull */
+        gpio_init_struct.gpio_mode = GPIO_MODE_MUX;
+        gpio_init_struct.gpio_out_type = GPIO_OUTPUT_PUSH_PULL;
+        gpio_init_struct.gpio_pull = GPIO_PULL_NONE;
+        gpio_init_struct.gpio_pins = GPIO_PINS_6 | GPIO_PINS_7 | GPIO_PINS_8 | GPIO_PINS_9;
+        gpio_init(GPIOB, &gpio_init_struct);
+
+        gpio_pin_mux_config(GPIOB, GPIO_PINS_SOURCE6, GPIO_MUX_1);
+        gpio_pin_mux_config(GPIOB, GPIO_PINS_SOURCE7, GPIO_MUX_1);
+        gpio_pin_mux_config(GPIOB, GPIO_PINS_SOURCE8, GPIO_MUX_1);
+        gpio_pin_mux_config(GPIOB, GPIO_PINS_SOURCE9, GPIO_MUX_1);
+    }
     /* add others */
 }
 #endif /* BSP_USING_PWM */

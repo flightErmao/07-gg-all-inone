@@ -6,6 +6,22 @@ config L2_DEVICE_03_MOTOR_03_PWM_EN
 
     if L2_DEVICE_03_MOTOR_03_PWM_EN
 
+        config L2_DEVICE_03_MOTOR_03_PWM_DEVICE_NAME
+            string "PWM device name"
+            default "pwm1"
+            help
+                PWM device name used for motor control.
+                Available options: pwm1, pwm2, pwm3, etc.
+
+        config L2_DEVICE_03_MOTOR_03_PWM_CHANNEL_MAPPING
+            string "PWM channel mapping sequence"
+            default "1234"
+            help
+                PWM channel mapping sequence for 4 channels.
+                Default is "1234" (channel 1,2,3,4).
+                Examples: "2134", "4321", "1324", etc.
+                This maps logical channels (1-4) to physical PWM channels.
+
         config L2_DEVICE_03_MOTOR_03_PWM_CHANNEL_REMAP
             string "Motor channel remap sequence"
             default "4321"

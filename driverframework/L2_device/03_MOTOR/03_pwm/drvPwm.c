@@ -34,7 +34,15 @@
 #define PWM_MIN_VALUE 1000
 #define PWM_MAX_VALUE 2000
 
-#define PWM_DEVICE_NAME "pwm1"
+#ifndef L2_DEVICE_03_MOTOR_03_PWM_DEVICE_NAME
+#define L2_DEVICE_03_MOTOR_03_PWM_DEVICE_NAME "pwm1"
+#endif
+
+#ifndef L2_DEVICE_03_MOTOR_03_PWM_CHANNEL_MAPPING
+#define L2_DEVICE_03_MOTOR_03_PWM_CHANNEL_MAPPING "1234"
+#endif
+
+#define PWM_DEVICE_NAME L2_DEVICE_03_MOTOR_03_PWM_DEVICE_NAME
 #define PWM_CHANNEL_1 1
 #define PWM_CHANNEL_2 2
 #define PWM_CHANNEL_3 3
@@ -49,6 +57,10 @@ static bool pwm_initialized_ = false;
 /* Motor channel remap configuration */
 static rt_uint8_t motor_channel_remap_[MAX_PWM_OUT_CHAN] = {0, 1, 2, 3};  // Default: no remap
 static bool remap_parsed_ = false;
+
+/* PWM channel mapping configuration */
+static rt_uint8_t pwm_channel_mapping_[MAX_PWM_OUT_CHAN] = {1, 2, 3, 4};  // Default: 1,2,3,4
+static bool pwm_mapping_parsed_ = false;
 
 rt_inline void pwm_write_(uint8_t chan_id, rt_uint16_t pwm_val);
 
@@ -97,6 +109,51 @@ static rt_err_t parse_motor_remap_config(void) {
   return RT_EOK;
 }
 
+/* Parse PWM channel mapping configuration */
+static rt_err_t parse_pwm_mapping_config(void) {
+  if (pwm_mapping_parsed_) {
+    return RT_EOK;  // Already parsed
+  }
+
+#ifdef L2_DEVICE_03_MOTOR_03_PWM_CHANNEL_MAPPING
+  const char* mapping_str = L2_DEVICE_03_MOTOR_03_PWM_CHANNEL_MAPPING;
+  int len = strlen(mapping_str);
+
+  if (len != MAX_PWM_OUT_CHAN) {
+    rt_kprintf("[PWM] Invalid mapping string length: %d, expected: %d\n", len, MAX_PWM_OUT_CHAN);
+    return -RT_ERROR;
+  }
+
+  // Parse each character in the mapping string
+  for (int i = 0; i < MAX_PWM_OUT_CHAN; i++) {
+    char c = mapping_str[i];
+    if (c < '1' || c > '4') {
+      rt_kprintf("[PWM] Invalid mapping character: %c at position %d\n", c, i);
+      return -RT_ERROR;
+    }
+
+    // Convert '1'-'4' to 1-4 (1-based channel numbers)
+    pwm_channel_mapping_[i] = c - '0';
+  }
+
+  rt_kprintf("[PWM] PWM channel mapping configured: %s\n", mapping_str);
+  rt_kprintf("[PWM] Logical->Physical mapping: ");
+  for (int i = 0; i < MAX_PWM_OUT_CHAN; i++) {
+    rt_kprintf("%d->%d ", i + 1, pwm_channel_mapping_[i]);
+  }
+  rt_kprintf("\n");
+#else
+  // Use default mapping if not configured
+  for (int i = 0; i < MAX_PWM_OUT_CHAN; i++) {
+    pwm_channel_mapping_[i] = i + 1;
+  }
+  rt_kprintf("[PWM] Using default PWM channel mapping (1,2,3,4)\n");
+#endif
+
+  pwm_mapping_parsed_ = true;
+  return RT_EOK;
+}
+
 /* Validate PWM value and return clamped value */
 static rt_uint16_t validate_pwm_value(rt_uint16_t val) {
   if (val == 0) {
@@ -109,13 +166,7 @@ static rt_uint16_t validate_pwm_value(rt_uint16_t val) {
   return val;
 }
 
-/* PWM channel mapping - 1:1 mapping for 4 channels */
-static rt_uint8_t pwm_channel_map[MAX_PWM_OUT_CHAN] = {
-    PWM_CHANNEL_1,  // Channel 0 -> PWM1 CH1
-    PWM_CHANNEL_2,  // Channel 1 -> PWM1 CH2
-    PWM_CHANNEL_3,  // Channel 2 -> PWM1 CH3
-    PWM_CHANNEL_4   // Channel 3 -> PWM1 CH4
-};
+/* PWM channel mapping will be configured via Kconfig */
 
 /* Get timer clock frequency in Hz */
 static rt_uint32_t get_timer_clock_freq(void) { return 100000000UL; /* 100MHz */ }
@@ -129,6 +180,12 @@ static rt_err_t pwm_hardware_init(void) {
   /* Parse motor remap configuration first */
   if (parse_motor_remap_config() != RT_EOK) {
     rt_kprintf("[PWM] Failed to parse motor remap configuration\n");
+    return -RT_ERROR;
+  }
+
+  /* Parse PWM channel mapping configuration */
+  if (parse_pwm_mapping_config() != RT_EOK) {
+    rt_kprintf("[PWM] Failed to parse PWM channel mapping configuration\n");
     return -RT_ERROR;
   }
 
@@ -146,7 +203,7 @@ static rt_err_t pwm_hardware_init(void) {
 
   /* Initialize all PWM channels */
   for (int i = 0; i < MAX_PWM_OUT_CHAN; i++) {
-    rt_uint8_t channel = pwm_channel_map[i];
+    rt_uint8_t channel = pwm_channel_mapping_[i];
 
     /* Set PWM period and enable channel */
     pwm_write_(i, pwm_fmu_duty_cyc_[i]);
@@ -198,7 +255,7 @@ rt_inline void pwm_write_(uint8_t chan_id, rt_uint16_t pwm_val) {
   if (pwm_initialized_ && pwm_device_ != RT_NULL && chan_id < MAX_PWM_OUT_CHAN) {
     /* Use remap to get physical channel */
     rt_uint8_t physical_channel = motor_channel_remap_[chan_id];
-    rt_uint8_t channel = pwm_channel_map[physical_channel];
+    rt_uint8_t channel = pwm_channel_mapping_[physical_channel];
     rt_uint32_t pulse_ns = (rt_uint32_t)pwm_fmu_duty_cyc_[chan_id] * 1000; /* Convert us to ns */
 
     rt_pwm_set(pwm_device_, channel, pwm_period_ns_, pulse_ns);
@@ -241,7 +298,7 @@ rt_err_t pwm_control(actuator_dev_t dev, int cmd, void* arg) {
       if (pwm_initialized_ && pwm_device_ != RT_NULL) {
         for (int i = 0; i < MAX_PWM_OUT_CHAN; i++) {
           rt_uint8_t physical_channel = motor_channel_remap_[i];
-          rt_uint8_t channel = pwm_channel_map[physical_channel];
+          rt_uint8_t channel = pwm_channel_mapping_[physical_channel];
           pwm_write_(i, pwm_fmu_duty_cyc_[i]);
           rt_pwm_enable(pwm_device_, channel);
         }
@@ -254,7 +311,7 @@ rt_err_t pwm_control(actuator_dev_t dev, int cmd, void* arg) {
       if (pwm_initialized_ && pwm_device_ != RT_NULL) {
         for (int i = 0; i < MAX_PWM_OUT_CHAN; i++) {
           rt_uint8_t physical_channel = motor_channel_remap_[i];
-          rt_uint8_t channel = pwm_channel_map[physical_channel];
+          rt_uint8_t channel = pwm_channel_mapping_[physical_channel];
           rt_pwm_disable(pwm_device_, channel);
         }
       }
