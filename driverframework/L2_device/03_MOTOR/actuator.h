@@ -35,6 +35,9 @@ extern "C" {
 #define ACT_WRITE_FROM_CMD      1    /* From command line */
 #define ACT_WRITE_FROM_CONTROL  4    /* From control layer */
 
+/* Actuator channel selection */
+#define ACT_CHAN_SEL_ALL        0x0F /* Select all 4 channels (0b00001111) */
+
 enum {
     ACT_PROTOCOL_PWM = 1,
     ACT_PROTOCOL_DSHOT = 2
