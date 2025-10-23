@@ -31,6 +31,10 @@ extern "C" {
 #define ACT_CMD_TEST_DISABLE    0x24
 #define ACT_CMD_CHANGE_DIR      0x25
 
+/* Actuator write source */
+#define ACT_WRITE_FROM_CMD      1    /* From command line */
+#define ACT_WRITE_FROM_CONTROL  4    /* From control layer */
+
 enum {
     ACT_PROTOCOL_PWM = 1,
     ACT_PROTOCOL_DSHOT = 2

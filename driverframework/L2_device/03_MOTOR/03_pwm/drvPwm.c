@@ -56,6 +56,7 @@ static rt_uint16_t pwm_fmu_duty_cyc_[MAX_PWM_OUT_CHAN] = {0, 0, 0, 0};
 static struct rt_device_pwm* pwm_device_ = RT_NULL;
 static rt_uint32_t pwm_period_ns_ = 0;
 static bool pwm_initialized_ = false;
+static bool pwm_test_mode_enabled_ = false;  /* Test mode flag */
 
 /* Motor channel remap configuration */
 static rt_uint8_t motor_channel_remap_[MAX_PWM_OUT_CHAN] = {0, 1, 2, 3};  // Default: no remap
@@ -307,6 +308,14 @@ rt_err_t pwm_control(actuator_dev_t dev, int cmd, void* arg) {
       }
       rt_kprintf("aux out disabled\n");
       break;
+    case ACT_CMD_TEST_ENABLE:
+      pwm_test_mode_enabled_ = true;
+      rt_kprintf("[PWM] Test mode enabled\n");
+      break;
+    case ACT_CMD_TEST_DISABLE:
+      pwm_test_mode_enabled_ = false;
+      rt_kprintf("[PWM] Test mode disabled\n");
+      break;
     default:
       ret = RT_EINVAL;
       break;
@@ -331,16 +340,31 @@ rt_size_t pwm_read(actuator_dev_t dev, rt_uint16_t chan_sel, rt_uint16_t* chan_v
 }
 
 rt_size_t pwm_write(actuator_dev_t dev, rt_uint16_t chan_sel, const rt_uint16_t* chan_val, rt_size_t size) {
-  const rt_uint16_t* index = chan_val;
-  rt_uint16_t val;
+  /* Check if write should be processed based on test mode and source */
+  /* When test mode is enabled: only process writes from CMD (size=1 for single channel) */
+  /* When test mode is disabled: only process writes from CONTROL (size=MAX_PWM_OUT_CHAN) */
+  bool should_process = false;
+  
+  if (pwm_test_mode_enabled_) {
+    /* Test mode: only process single channel writes (from CMD) */
+    should_process = (size == ACT_WRITE_FROM_CMD);
+  } else {
+    /* Normal mode: only process multi-channel writes (from CONTROL) */
+    should_process = (size == ACT_WRITE_FROM_CONTROL);
+  }
+  
+  if (should_process) {
+    const rt_uint16_t* index = chan_val;
+    rt_uint16_t val;
 
-  for (uint8_t i = 0; i < MAX_PWM_OUT_CHAN; i++) {
-    if (chan_sel & (1 << i)) {
-      val = *index;
-      /* update pwm signal */
-      setChanlValue(i, val);
+    for (uint8_t i = 0; i < MAX_PWM_OUT_CHAN; i++) {
+      if (chan_sel & (1 << i)) {
+        val = *index;
+        /* update pwm signal */
+        setChanlValue(i, val);
 
-      index++;
+        index++;
+      }
     }
   }
 

@@ -15,11 +15,34 @@
 #define DUTY_CYCLE_MIN 0.0f
 #define DUTY_CYCLE_MAX 1.0f
 #define MOTOR_ORDER_TEST_DURATION_MS 2000
-#define MOTOR_ORDER_TEST_DUTY_CYCLE 0.1f
+#define MOTOR_ORDER_TEST_DUTY_CYCLE 1.0f
 #define MOTOR_CALIB_DURATION_MS 10000
 
 static rt_device_t motor_device = RT_NULL;
 static bool motor_device_initialized = false;
+
+/* Forward declaration */
+static int motor_device_init(void);
+
+/* Helper: enable test mode */
+static void pwm_test_mode_enable(void) {
+  if (!motor_device_initialized) {
+    if (motor_device_init() != 0) {
+      return;
+    }
+  }
+  rt_device_control(motor_device, ACT_CMD_TEST_ENABLE, NULL);
+}
+
+/* Helper: disable test mode */
+static void pwm_test_mode_disable(void) {
+  if (!motor_device_initialized) {
+    if (motor_device_init() != 0) {
+      return;
+    }
+  }
+  rt_device_control(motor_device, ACT_CMD_TEST_DISABLE, NULL);
+}
 
 /* Initialize motor device */
 static int motor_device_init(void)
@@ -71,15 +94,18 @@ static int motor_set_duty_cycle(int motor_id, float duty_cycle, int duration_ms)
     /* Convert duty cycle to 16-bit PWM value (0-65535 range) */
     rt_uint16_t chan_val = (rt_uint16_t)(duty_cycle * 65535.0f);
 
+    /* Enable test mode */
+    pwm_test_mode_enable();
+
     /* Write PWM value to specific channel */
 #if defined(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN) && defined(L2_DEVICE_03_MOTOR_03_PWM_DEBUGPIN_EN)
     DEBUG_PIN_DEBUG0_HIGH();
 #endif
 
-    rt_size_t written = rt_device_write(motor_device, chan_sel, &chan_val, sizeof(chan_val));
-    if (written != sizeof(chan_val)) {
-        rt_kprintf("[cmdMotor] write failed, written: %d\n", written);
-        return -1;
+    rt_size_t written = rt_device_write(motor_device, chan_sel, &chan_val, ACT_WRITE_FROM_CMD);
+    if (written != ACT_WRITE_FROM_CMD) {
+      rt_kprintf("[cmdMotor] write failed, written: %d\n", written);
+      return -1;
     }
 
     rt_kprintf("[cmdMotor] Motor %d set to duty cycle %.2f (16-bit PWM %d)\n", motor_id, duty_cycle, chan_val);
@@ -94,12 +120,15 @@ static int motor_set_duty_cycle(int motor_id, float duty_cycle, int duration_ms)
 #endif
         /* Stop motor (set to 0 PWM value) */
         chan_val = 0;
-        written = rt_device_write(motor_device, chan_sel, &chan_val, sizeof(chan_val));
+        written = rt_device_write(motor_device, chan_sel, &chan_val, ACT_WRITE_FROM_CMD);
         // rt_device_control(motor_device, ACT_CMD_CHANNEL_DISABLE, NULL);
-        if (written == sizeof(chan_val)) {
-            rt_kprintf("[cmdMotor] Motor %d auto stopped\n", motor_id);
+        if (written == ACT_WRITE_FROM_CMD) {
+          rt_kprintf("[cmdMotor] Motor %d auto stopped\n", motor_id);
         }
     }
+
+    /* Disable test mode */
+    pwm_test_mode_disable();
 
     return 0;
 }
