@@ -314,6 +314,7 @@ void at32_msp_adc_init(void *instance)
 void at32_msp_hwtmr_init(void *instance)
 {
     tmr_type *tmr_x = (tmr_type *)instance;
+    (void)tmr_x;
 
 #ifdef BSP_USING_HWTMR3
     if(tmr_x == TMR3)
@@ -336,6 +337,13 @@ void at32_msp_hwtmr_init(void *instance)
     {
         /* tmr5 clock enable */
         crm_periph_clock_enable(CRM_TMR5_PERIPH_CLOCK, TRUE);
+    }
+#endif
+
+#ifdef BSP_USING_HWTMR10
+    if (tmr_x == TMR10) {
+      /* tmr10 clock enable */
+      crm_periph_clock_enable(CRM_TMR10_PERIPH_CLOCK, TRUE);
     }
 #endif
 }

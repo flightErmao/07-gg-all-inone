@@ -1,0 +1,15 @@
+menuconfig L1_MIDDLEWARE_01_MODULE_06_HARDTIMESTAMP_EN
+    bool "ENABLE: L1_MIDDLEWARE_01_MODULE_06_HARDTIMESTAMP_EN"
+    default n
+    help
+        Enable hardware timestamp module that provides microsecond-level timestamp functionality.
+        When enabled:
+        - Automatically initializes hardware SysTick for precise timing
+        - Uses SysTick registers (SysTick->VAL, SysTick->LOAD) for microsecond precision
+        - Provides systime_now_us() for high-resolution timestamp
+        - Supports both STM32 and AT32 MCUs
+        
+        When disabled:
+        - Falls back to rt_tick_get() conversion for basic timing
+        - No hardware initialization required
+

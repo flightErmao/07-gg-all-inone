@@ -1,0 +1,25 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+src  = []
+group = []
+path = [cwd]
+
+# Add CMSIS include path
+cmsis_path = os.path.join(cwd, '../../03_package/CMSIS-Core-latest/Include')
+# Add STM32 CMSIS include path
+stm32_cmsis_path = os.path.join(cwd, '../../03_package/stm32f4_cmsis_driver-latest/Include')
+# Add AT32 CMSIS include path  
+at32_cmsis_path = os.path.join(cwd, '../../03_package/at32f435_437_cmsis_driver-latest')
+
+path = [cwd, cmsis_path, stm32_cmsis_path, at32_cmsis_path]
+
+# 获取当前目录下的所有 .c 文件
+src  = Glob('./*.c')
+
+# 定义编译组
+group = DefineGroup('06_hardTimestamp', src, depend = ['L1_MIDDLEWARE_01_MODULE_06_HARDTIMESTAMP_EN'], CPPPATH = path)
+
+Return('group')
+

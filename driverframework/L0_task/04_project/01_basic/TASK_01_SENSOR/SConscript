@@ -5,6 +5,10 @@ cwd = GetCurrentDir()
 src = Glob("./src/*.c")
 path = [cwd, os.path.join(cwd, "inc")]
 
+# Add hardware timer header path if enabled
+if GetDepend(['PROJECT_HARDWARE_TIMER_SENSOR_EN']):
+    path.append("../03_fpv/02_HARDWARE_TIMER/inc")
+
 group = DefineGroup(
     "PROJECT_MINIFLY_TASK_SENSOR_EN", src, depend=["PROJECT_MINIFLY_TASK_SENSOR_EN"], CPPPATH=path
 )

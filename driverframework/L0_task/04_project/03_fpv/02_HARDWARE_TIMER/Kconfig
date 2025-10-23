@@ -1,0 +1,24 @@
+menuconfig PROJECT_HARDWARE_TIMER_SENSOR_EN
+    bool "ENABLE: Hardware Timer for Sensor Triggering"
+    default n
+    help
+        Enable hardware timer to trigger sensor reading. This provides precise timing control for IMU data acquisition.
+
+    if PROJECT_HARDWARE_TIMER_SENSOR_EN
+        config PROJECT_HARDWARE_TIMER_SENSOR_DEV_NAME
+            string "Hardware timer device name"
+            default "timer10"
+            help
+                Hardware timer device name used for sensor triggering.
+                Default is timer10.
+
+        config PROJECT_HARDWARE_TIMER_SENSOR_FREQ
+            int "Hardware timer trigger frequency (Hz)"
+            default 3200
+            range 100 10000
+            help
+                Frequency at which the hardware timer triggers sensor reading in Hz.
+                Default is 3200 Hz (3.2kHz).
+                Typical values: 1000-8000 Hz for most applications.
+    endif
+

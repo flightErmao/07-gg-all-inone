@@ -11,11 +11,13 @@ menuconfig PROJECT_MINIFLY_TASK_SENSOR_EN
             help
                 IMU device name used by sensor_minifly task. Default is the MPU6500 MINIFLY device name.
         
-        config PROJECT_MINIFLY_TASK_SENSOR_TIMER_TRIGGER_EN
-            bool "ENABLE: Timer-Triggered Sampling"
+        config PROJECT_MINIFLY_TASK_SENSOR_HWTIMER_TRIGGER_EN
+            bool "ENABLE: Hardware Timer-Triggered Sampling"
             default n
+            depends on PROJECT_HARDWARE_TIMER_SENSOR_EN
             help
-                Enable timer-triggered sampling for the sensor task. When enabled, a software timer periodically releases an event, and the task blocks waiting for this event before reading IMU data.
+                Enable hardware timer-triggered sampling for the sensor task. When enabled, a hardware 
+                timer triggers events at 3.2kHz, and the task blocks waiting for this event before reading IMU data.
 
         config PROJECT_MINIFLY_TASK_SENSOR_ROTATION
             string "Rotation enum name (e.g. ROTATION_NEGATE_X)"

@@ -10,18 +10,12 @@
 #include "aMcnSensorImu.h"
 #include "debugPin.h"
 
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_HWTIMER_TRIGGER_EN
+#include "hardwareTimerSensor.h"
+#endif
+
 #define SENSORS_MPU6500_BUFF_LEN 14
 static rt_device_t dev_sensor_imu = RT_NULL;
-
-#ifdef PROJECT_MINIFLY_TASK_SENSOR_TIMER_TRIGGER_EN
-#define SENSOR_EVENT_FLAG_TRIGGER (1u << 0)
-static struct rt_event sensor_event;
-static rt_timer_t sensor_timer = RT_NULL;
-static void sensor_timer_cb(void *parameter) {
-  RT_UNUSED(parameter);
-  rt_event_send(&sensor_event, SENSOR_EVENT_FLAG_TRIGGER);
-}
-#endif
 
 static void deviceInit(void) {
   rt_device_t dev_temp = RT_NULL;
@@ -44,28 +38,9 @@ static void deviceInit(void) {
   }
 }
 
-static void rtosToolsInit(void) {
-
-#ifdef PROJECT_MINIFLY_TASK_SENSOR_TIMER_TRIGGER_EN
-  rt_event_init(&sensor_event, "sns_evt", RT_IPC_FLAG_PRIO);
-  if (sensor_timer == RT_NULL) {
-    /* Default 10ms period; adjust if needed */
-    rt_tick_t period_ticks = rt_tick_from_millisecond(1);
-    sensor_timer = rt_timer_create("sns_tmr", sensor_timer_cb, RT_NULL, period_ticks,
-                                   RT_TIMER_FLAG_PERIODIC | RT_TIMER_FLAG_SOFT_TIMER);
-    if (sensor_timer) {
-      rt_timer_start(sensor_timer);
-    } else {
-      rt_kprintf("Failed to create sensor timer\n");
-    }
-  }
-#endif
-}
-
 static void sensor_imu_thread_entry(void* parameter) {
   deviceInit();
-  rtosToolsInit();
-  
+
 #ifdef PROJECT_MINIFLY_TASK_SENSOR_FILTER_EN
   // Initialize notch filters with configured parameters
 #ifdef PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_1_EN
@@ -99,9 +74,9 @@ static void sensor_imu_thread_entry(void* parameter) {
   sensorData_t sensors_data = {0};
 
   while (1) {
-#ifdef PROJECT_MINIFLY_TASK_SENSOR_TIMER_TRIGGER_EN
-    rt_event_recv(&sensor_event, SENSOR_EVENT_FLAG_TRIGGER, RT_EVENT_FLAG_AND | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER,
-                  RT_NULL);
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_HWTIMER_TRIGGER_EN
+    /* Wait for hardware timer event to trigger sensor reading */
+    hardwareTimerSensorRecvEvent(RT_WAITING_FOREVER);
 #endif
     if (dev_sensor_imu) {
       DEBUG_PIN_DEBUG0_HIGH();

@@ -5,6 +5,7 @@ menu "L1_MIDDLEWARE_CONFIG"
     source "$(PROJECT_ROOT)/driverframework/L1_middleWare/01_module/03_debugPin/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L1_middleWare/01_module/04_pid_minifly/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L1_middleWare/01_module/05_filter/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L1_middleWare/01_module/06_hardTimestamp/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L1_middleWare/02_mode/01_led_blink/Kconfig"
     # source "$(PROJECT_ROOT)/driverframework/L1_middleWare/03_package/uMCN-latest/Kconfig"
 endmenu

@@ -1,0 +1,19 @@
+Import('rtconfig')
+
+# Import SDK environment
+from building import *
+
+# Get the current directory
+cwd = GetCurrentDir()
+
+# Source files
+src = Glob('src/*.c')
+
+# Header files path
+CPPPATH = [cwd + '/inc']
+
+# Add to group
+group = DefineGroup('PROJECT_HARDWARE_TIMER_SENSOR', src, depend = ['PROJECT_HARDWARE_TIMER_SENSOR_EN'], CPPPATH = CPPPATH)
+
+Return('group')
+

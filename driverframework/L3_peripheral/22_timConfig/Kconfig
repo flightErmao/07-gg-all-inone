@@ -1,14 +1,32 @@
-menuconfig BSP_USING_TIM
-    bool "Enable 22 TIM CONFIG"
-    default n
-    select RT_USING_HWTIMER
-    if BSP_USING_TIM
-        config BSP_USING_TIM10
-            bool "Enable TIM10"
-            default n
+if SOC_FAMILY_AT32
+    menuconfig BSP_USING_HWTIMER
+        bool "Enable 22 Hardware Timer"
+        default n
+        select RT_USING_HWTIMER
+        if BSP_USING_HWTIMER
+            config BSP_USING_HWTMR10
+                bool "Enable HWTMR10"
+                default n
 
-        config BSP_USING_TIM11
-            bool "Enable TIM11"
-            default n
-    endif
+            config BSP_USING_HWTMR11
+                bool "Enable HWTMR11"
+                default n
+        endif
+endif
+
+if SOC_FAMILY_STM32
+    menuconfig BSP_USING_TIM
+        bool "Enable 22 Hardware Timer"
+        default n
+        select RT_USING_HWTIMER
+        if BSP_USING_TIM
+            config BSP_USING_TIM10
+                bool "Enable TIM10"
+                default n
+
+            config BSP_USING_TIM11
+                bool "Enable TIM11"
+                default n
+        endif
+endif
 
