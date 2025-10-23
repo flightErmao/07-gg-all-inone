@@ -167,6 +167,22 @@
                 "adapter_khz 4000"
             ]
         },
+                {
+            "name": "2-04-hollowCup",
+            "type": "cortex-debug",
+            "request": "launch",
+            "cwd": "${workspaceRoot}",
+            "executable": "target/02_flyer_board/04_hollowCup/rt-thread.elf",
+            "serverpath": "${env:JLINK_SERVER}",
+            "servertype": "jlink",
+            "device": "AT32F437VMT7",
+            "interface": "swd",
+            "armToolchainPath": "${workspaceRoot}/tools/toolchain/arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi/bin",
+            "showDevDebugOutput": "raw",
+            "openOCDLaunchCommands": [
+                "adapter_khz 4000"
+            ]
+        },
         {
             "name": "3-01-tool_mag_check",
             "type": "cortex-debug",
