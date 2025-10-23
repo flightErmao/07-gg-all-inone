@@ -95,5 +95,14 @@ if L2_DEVICE_03_MOTOR_02_DSHOT_EN
             Enable DShot motor command interface for testing and control
             This adds 'motor' command to MSH shell
 
+    config DSHOT_RECEIVE_BUFFER_NUMBER
+        int "DShot Receive Buffer Size"
+        range 100 200
+        default 140
+        help
+            Number of samples to receive during DShot bidirectional communication
+            Smaller values reduce wait time but may affect reliability
+            Default: 140 samples
+
 endif
     

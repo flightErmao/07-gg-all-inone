@@ -55,10 +55,15 @@ static rt_err_t dshot_control(actuator_dev_t dev, int cmd, void *arg) {
 
 /* DShot read function */
 static rt_size_t dshot_read(actuator_dev_t dev, rt_uint16_t chan_sel, rt_uint16_t *chan_val, rt_size_t size) {
+  DEBUG_PIN_DEBUG0_HIGH();
   rt_event_recv(dshot_config_.event_dma, EVENT_DMA_SAMPLING_DONE, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR,
                 RT_WAITING_FOREVER, NULL);
-  /*about 81us*/
+  DEBUG_PIN_DEBUG0_LOW();
+  
+  /*about 36us in at32f437vm O1*/
+  DEBUG_PIN_DEBUG3_HIGH();
   decodeDShot();
+  DEBUG_PIN_DEBUG3_LOW();
 
   // Read all motors without channel selection mask
   for (uint8_t i = 0; i < DSHOT_MOTOR_NUMS; i++) {
@@ -68,8 +73,7 @@ static rt_size_t dshot_read(actuator_dev_t dev, rt_uint16_t chan_sel, rt_uint16_
 }
 
 /* DShot write function */
-static rt_size_t dshot_write(actuator_dev_t dev, rt_uint16_t chan_sel, const rt_uint16_t *chan_val, rt_size_t size) {
-  DEBUG_PIN_DEBUG3_HIGH();
+static rt_size_t dshot_write(actuator_dev_t dev, rt_uint16_t chan_sel, const rt_uint16_t* chan_val, rt_size_t size) {
   if ((dshot_config_.act_cmd_en == RT_TRUE && size == 1) ||
       (dshot_config_.act_cmd_en == RT_FALSE && size == DSHOT_MOTOR_NUMS)) {
     // Process each motor individually
@@ -84,7 +88,6 @@ static rt_size_t dshot_write(actuator_dev_t dev, rt_uint16_t chan_sel, const rt_
     }
   }
   setDshotValue();
-  DEBUG_PIN_DEBUG3_LOW();
   return size;
 }
 
