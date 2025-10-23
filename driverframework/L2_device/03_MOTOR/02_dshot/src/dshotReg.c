@@ -69,6 +69,7 @@ static rt_size_t dshot_read(actuator_dev_t dev, rt_uint16_t chan_sel, rt_uint16_
 
 /* DShot write function */
 static rt_size_t dshot_write(actuator_dev_t dev, rt_uint16_t chan_sel, const rt_uint16_t *chan_val, rt_size_t size) {
+  DEBUG_PIN_DEBUG3_HIGH();
   if ((dshot_config_.act_cmd_en == RT_TRUE && size == 1) ||
       (dshot_config_.act_cmd_en == RT_FALSE && size == DSHOT_MOTOR_NUMS)) {
     // Process each motor individually
@@ -83,6 +84,7 @@ static rt_size_t dshot_write(actuator_dev_t dev, rt_uint16_t chan_sel, const rt_
     }
   }
   setDshotValue();
+  DEBUG_PIN_DEBUG3_LOW();
   return size;
 }
 

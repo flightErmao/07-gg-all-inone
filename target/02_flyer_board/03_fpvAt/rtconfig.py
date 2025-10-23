@@ -41,7 +41,7 @@ CPATH = ''
 LPATH = ''
 
 if BUILD == 'debug':
-    CFLAGS += ' -O0 -gdwarf-2 -g'
+    CFLAGS += ' -O1 -gdwarf-2 -g'
     AFLAGS += ' -gdwarf-2'
 else:
     CFLAGS += ' -O2'
