@@ -15,7 +15,7 @@
 #define DUTY_CYCLE_MIN 0.0f
 #define DUTY_CYCLE_MAX 1.0f
 #define MOTOR_ORDER_TEST_DURATION_MS 2000
-#define MOTOR_ORDER_TEST_DUTY_CYCLE 1.0f
+#define MOTOR_ORDER_TEST_DUTY_CYCLE 0.1f
 #define MOTOR_CALIB_DURATION_MS 10000
 
 static rt_device_t motor_device = RT_NULL;
