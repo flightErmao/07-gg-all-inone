@@ -1,15 +1,26 @@
 #include <math.h>
 #include <stdlib.h>
 #include "filterNotch2p.h"
+#include "rtconfig.h"
 
 #ifndef M_PI_F
 #define M_PI_F (float)3.14159265
 #endif
 
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_NOTCH_EN
+
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_1_EN
 static notch2pData_t gyroNotch[3];
+#endif
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_2_EN
 static notch2pData_t gyroNotch2[3];
+#endif
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_3_EN
 static notch2pData_t gyroNotch3[3];
+#endif
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_NOTCH_ACC_EN
 static notch2pData_t accNotch[3];
+#endif
 
 static void notch2p_set_params(notch2pData_t* s, float sample_freq, float center_freq, float q) {
   if (s == NULL || sample_freq <= 0.0f || center_freq <= 0.0f || q <= 0.0f) {
@@ -48,42 +59,64 @@ static float notch2p_apply(notch2pData_t* s, float sample) {
   return out;
 }
 
+#endif // PROJECT_MINIFLY_TASK_SENSOR_NOTCH_EN
+
 void filterInitNotchGyro(float sample_freq, float center_freq, float q) {
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_1_EN
   for (uint8_t i = 0; i < 3; i++) {
     notch2p_set_params(&gyroNotch[i], sample_freq, center_freq, q);
   }
+#endif
 }
 
 void filterInitNotchGyro2(float sample_freq, float center_freq, float q) {
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_2_EN
   for (uint8_t i = 0; i < 3; i++) {
     notch2p_set_params(&gyroNotch2[i], sample_freq, center_freq, q);
   }
+#endif
 }
 
 void filterInitNotchGyro3(float sample_freq, float center_freq, float q) {
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_3_EN
   for (uint8_t i = 0; i < 3; i++) {
     notch2p_set_params(&gyroNotch3[i], sample_freq, center_freq, q);
   }
+#endif
 }
 
 void applyAxis3fNotchGyro(Axis3f* in) {
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_NOTCH_EN
   for (uint8_t i = 0; i < 3; i++) {
-    float v1 = notch2p_apply(&gyroNotch[i], in->axis[i]);
-    float v2 = notch2p_apply(&gyroNotch2[i], v1);
-    in->axis[i] = notch2p_apply(&gyroNotch3[i], v2);
+    float v = in->axis[i];
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_1_EN
+    v = notch2p_apply(&gyroNotch[i], v);
+#endif
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_2_EN
+    v = notch2p_apply(&gyroNotch2[i], v);
+#endif
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_3_EN
+    v = notch2p_apply(&gyroNotch3[i], v);
+#endif
+    in->axis[i] = v;
   }
+#endif
 }
 
 void filterInitNotchAcc(float sample_freq, float center_freq, float q) {
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_NOTCH_ACC_EN
   for (uint8_t i = 0; i < 3; i++) {
     notch2p_set_params(&accNotch[i], sample_freq, center_freq, q);
   }
+#endif
 }
 
 void applyAxis3fNotchAcc(Axis3f* in) {
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_NOTCH_ACC_EN
   for (uint8_t i = 0; i < 3; i++) {
     in->axis[i] = notch2p_apply(&accNotch[i], in->axis[i]);
   }
+#endif
 }
 
 

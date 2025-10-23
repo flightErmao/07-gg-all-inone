@@ -1,11 +1,22 @@
 #include <math.h>
 #include <stdlib.h>
 #include "filterLpf2p.h"
+#include "rtconfig.h"
 
 #define M_PI_F (float)3.14159265
 #define IIR_SHIFT 8
+
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_GYRO_LPF_CUTOFF_FREQ
+#define GYRO_LPF_CUTOFF_FREQ PROJECT_MINIFLY_TASK_SENSOR_GYRO_LPF_CUTOFF_FREQ
+#else
 #define GYRO_LPF_CUTOFF_FREQ 70
+#endif
+
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_ACC_LPF_CUTOFF_FREQ
+#define ACCEL_LPF_CUTOFF_FREQ PROJECT_MINIFLY_TASK_SENSOR_ACC_LPF_CUTOFF_FREQ
+#else
 #define ACCEL_LPF_CUTOFF_FREQ 30
+#endif
 
 typedef struct {
   float a1;
@@ -16,6 +27,8 @@ typedef struct {
   float delay_element_1;
   float delay_element_2;
 } lpf2pData;
+
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_LPF_EN
 
 static lpf2pData accLpf[3];
 static lpf2pData gyroLpf[3];
@@ -94,21 +107,29 @@ float lpf2pReset(lpf2pData* lpfData, float sample) {
   return lpf2pApply(lpfData, sample);
 }
 
+#endif // PROJECT_MINIFLY_TASK_SENSOR_LPF_EN
+
 void filterInitLpf2AccGyro(void) {
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_LPF_EN
   for (uint8_t i = 0; i < 3; i++) {
     lpf2pInit(&gyroLpf[i], 1000, GYRO_LPF_CUTOFF_FREQ);
     lpf2pInit(&accLpf[i], 1000, ACCEL_LPF_CUTOFF_FREQ);
   }
+#endif
 }
 
 void applyAxis3fLpfGyro(Axis3f* in) {
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_LPF_EN
   for (uint8_t i = 0; i < 3; i++) {
     in->axis[i] = lpf2pApply(&gyroLpf[i], in->axis[i]);
   }
+#endif
 }
 
 void applyAxis3fLpfAcc(Axis3f* in) {
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_LPF_EN
   for (uint8_t i = 0; i < 3; i++) {
     in->axis[i] = lpf2pApply(&accLpf[i], in->axis[i]);
   }
+#endif
 }

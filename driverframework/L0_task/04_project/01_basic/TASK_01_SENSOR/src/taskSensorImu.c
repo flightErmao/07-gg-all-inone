@@ -64,11 +64,32 @@ static void rtosToolsInit(void) {
 static void sensor_imu_thread_entry(void* parameter) {
   deviceInit();
   rtosToolsInit();
-  filterInitNotchGyro(1000.0f, 119.0f, 2.0f);
-  filterInitNotchGyro2(1000.0f, 183.0f, 2.0f);
-  filterInitNotchGyro3(1000.0f, 146.0f, 2.0f);
-  filterInitNotchAcc(1000.0f, 152.0f, 2.0f);
+  
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_FILTER_EN
+  // Initialize notch filters with configured parameters
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_1_EN
+  filterInitNotchGyro(1000.0f, 
+                      (float)PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_1_FREQ, 
+                      (float)PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_1_Q / 10.0f);
+#endif
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_2_EN
+  filterInitNotchGyro2(1000.0f, 
+                       (float)PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_2_FREQ, 
+                       (float)PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_2_Q / 10.0f);
+#endif
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_3_EN
+  filterInitNotchGyro3(1000.0f, 
+                       (float)PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_3_FREQ, 
+                       (float)PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_3_Q / 10.0f);
+#endif
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_NOTCH_ACC_EN
+  filterInitNotchAcc(1000.0f, 
+                     (float)PROJECT_MINIFLY_TASK_SENSOR_NOTCH_ACC_FREQ, 
+                     (float)PROJECT_MINIFLY_TASK_SENSOR_NOTCH_ACC_Q / 10.0f);
+#endif
   filterInitLpf2AccGyro();
+#endif
+  
   sensorsBiasObjInit();
   initImuRotationDir();
   mlogImuInit();

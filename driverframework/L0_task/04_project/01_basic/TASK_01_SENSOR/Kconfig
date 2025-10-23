@@ -30,6 +30,141 @@ menuconfig PROJECT_MINIFLY_TASK_SENSOR_EN
                 Static variance threshold for gyro bias detection. Used to decide
                 when the gyro is stable enough to take the mean as bias.
 
+        # ======== IMU Filter Configuration ========
+        menuconfig PROJECT_MINIFLY_TASK_SENSOR_FILTER_EN
+            bool "IMU Filter Configuration"
+            default y
+            help
+                Configure IMU filtering parameters including low-pass filters and notch filters.
+
+        if PROJECT_MINIFLY_TASK_SENSOR_FILTER_EN
+            # Low-Pass Filter Configuration
+            menuconfig PROJECT_MINIFLY_TASK_SENSOR_LPF_EN
+                bool "Low-Pass Filter (LPF)"
+                default y
+                help
+                    Enable and configure low-pass filter for IMU data.
+
+            if PROJECT_MINIFLY_TASK_SENSOR_LPF_EN
+                config PROJECT_MINIFLY_TASK_SENSOR_GYRO_LPF_CUTOFF_FREQ
+                    int "Gyro LPF cutoff frequency (Hz)"
+                    default 70
+                    range 1 500
+                    help
+                        Low-pass filter cutoff frequency for gyroscope data in Hz.
+                        Typical values: 50-150 Hz for racing drones, 200-300 Hz for high-speed applications.
+
+                config PROJECT_MINIFLY_TASK_SENSOR_ACC_LPF_CUTOFF_FREQ
+                    int "Accelerometer LPF cutoff frequency (Hz)"
+                    default 30
+                    range 1 500
+                    help
+                        Low-pass filter cutoff frequency for accelerometer data in Hz.
+                        Typical values: 20-50 Hz for most applications.
+            endif
+
+            # Notch Filter Configuration
+            menuconfig PROJECT_MINIFLY_TASK_SENSOR_NOTCH_EN
+                bool "Notch Filter"
+                default y
+                help
+                    Enable and configure notch filters to remove specific noise frequencies.
+
+            if PROJECT_MINIFLY_TASK_SENSOR_NOTCH_EN
+                config PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_1_EN
+                    bool "Enable Gyro Notch Filter 1"
+                    default y
+                    help
+                        Enable first notch filter for gyroscope data.
+
+                if PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_1_EN
+                    config PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_1_FREQ
+                        int "Gyro Notch 1 center frequency (Hz)"
+                        default 119
+                        range 1 1000
+                        help
+                            Center frequency of the first gyro notch filter in Hz.
+
+                    config PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_1_Q
+                        int "Gyro Notch 1 Q factor (x10)"
+                        default 20
+                        range 1 200
+                        help
+                            Quality factor of the first gyro notch filter (multiplied by 10).
+                            Typical values: 10-50 (represents Q=1.0-5.0).
+                endif
+
+                config PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_2_EN
+                    bool "Enable Gyro Notch Filter 2"
+                    default y
+                    help
+                        Enable second notch filter for gyroscope data.
+
+                if PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_2_EN
+                    config PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_2_FREQ
+                        int "Gyro Notch 2 center frequency (Hz)"
+                        default 183
+                        range 1 1000
+                        help
+                            Center frequency of the second gyro notch filter in Hz.
+
+                    config PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_2_Q
+                        int "Gyro Notch 2 Q factor (x10)"
+                        default 20
+                        range 1 200
+                        help
+                            Quality factor of the second gyro notch filter (multiplied by 10).
+                            Typical values: 10-50 (represents Q=1.0-5.0).
+                endif
+
+                config PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_3_EN
+                    bool "Enable Gyro Notch Filter 3"
+                    default y
+                    help
+                        Enable third notch filter for gyroscope data.
+
+                if PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_3_EN
+                    config PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_3_FREQ
+                        int "Gyro Notch 3 center frequency (Hz)"
+                        default 146
+                        range 1 1000
+                        help
+                            Center frequency of the third gyro notch filter in Hz.
+
+                    config PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_3_Q
+                        int "Gyro Notch 3 Q factor (x10)"
+                        default 20
+                        range 1 200
+                        help
+                            Quality factor of the third gyro notch filter (multiplied by 10).
+                            Typical values: 10-50 (represents Q=1.0-5.0).
+                endif
+
+                config PROJECT_MINIFLY_TASK_SENSOR_NOTCH_ACC_EN
+                    bool "Enable Accelerometer Notch Filter"
+                    default y
+                    help
+                        Enable notch filter for accelerometer data.
+
+                if PROJECT_MINIFLY_TASK_SENSOR_NOTCH_ACC_EN
+                    config PROJECT_MINIFLY_TASK_SENSOR_NOTCH_ACC_FREQ
+                        int "Acc Notch center frequency (Hz)"
+                        default 152
+                        range 1 1000
+                        help
+                            Center frequency of the accelerometer notch filter in Hz.
+
+                    config PROJECT_MINIFLY_TASK_SENSOR_NOTCH_ACC_Q
+                        int "Acc Notch Q factor (x10)"
+                        default 20
+                        range 1 200
+                        help
+                            Quality factor of the accelerometer notch filter (multiplied by 10).
+                            Typical values: 10-50 (represents Q=1.0-5.0).
+                endif
+            endif
+        endif
+
         # ======== DEBUG: ANOTC (ATKP) ========
         menuconfig PROJECT_MINIFLY_TASK_SENSOR_ATKP_LOG_EN
             bool "DEBUG: ANOTC (ATKP) Logging"
