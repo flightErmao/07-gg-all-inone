@@ -4,7 +4,7 @@
 #include <rtthread.h>
 
 #ifdef PROJECT_MINIFLY_TASK04_DISTRIBUTE_PID_EN
-#include "attitudePid.h"
+#include "stateControl.h"
 
 static void copyPidParam(PidObject src, pidInit_t *des) {
   des->kp = src.kp;

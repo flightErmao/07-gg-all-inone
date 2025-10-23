@@ -3,7 +3,6 @@
 #include "command.h"
 #include "taskStabilizer.h"
 #include "aMcnStabilize.h"
-#include "attitudePid.h"
 
 /* Mlog data structures */
 typedef struct {

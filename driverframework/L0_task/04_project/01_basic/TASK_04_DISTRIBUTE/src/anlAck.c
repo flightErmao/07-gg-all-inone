@@ -4,7 +4,7 @@
 #ifdef PROJECT_MINIFLY_TASK04_DISTRIBUTE_ACK_EN
 
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_EN
-#include "attitudePid.h"
+#include "stateControl.h"
 #endif
 
 #include "pidMinifly.h"
