@@ -89,7 +89,9 @@ void DSHOT_DMA_IRQHandler(void) {
 
 /* Set DShot value and start transmission */
 rt_err_t setDshotValue(void) {
+  DEBUG_PIN_DEBUG3_HIGH();
   encodeDshot();
+  DEBUG_PIN_DEBUG3_LOW();
   setGpioPinsToOutputMode();
   setTimerForDshotOutput();
   bbLoadDMARegs(dshot_config_.dma_cfg->dma_channel, dshot_config_.dmaRegOutput);

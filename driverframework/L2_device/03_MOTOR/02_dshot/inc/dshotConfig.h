@@ -16,6 +16,7 @@
 #include "at32f435_437.h"
 #include "dmaConfig.h"
 #include "rtconfig.h"
+#include "debugPin.h"
 
 #ifdef __cplusplus
 extern "C" {
