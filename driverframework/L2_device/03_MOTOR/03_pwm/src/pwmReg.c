@@ -42,7 +42,7 @@ static rt_err_t setMotorRemap(void);
 static rt_err_t setPwmPhysicalChannels(void);
 static rt_uint32_t getTimerClock(void);
 static rt_err_t initPwmHw(void);
-static rt_err_t setPwmFreq(uint16_t freq_to_set);
+static rt_err_t setPwmFreq(uint32_t freq_to_set);
 static void setChanlValue(uint8_t chan_id, rt_uint16_t pwm_val);
 static void readPwmValue(uint8_t chan_id, rt_uint16_t* pwm_val);
 
@@ -191,7 +191,7 @@ static rt_err_t initPwmHw(void) {
   return RT_EOK;
 }
 
-static rt_err_t setPwmFreq(uint16_t freq_to_set) {
+static rt_err_t setPwmFreq(uint32_t freq_to_set) {
   pwm_freq_ = freq_to_set;
 
   /* Recalculate PWM period using actual timer clock frequency */
