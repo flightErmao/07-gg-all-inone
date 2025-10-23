@@ -17,6 +17,8 @@
 #include "drv_common.h"
 #include "drv_gpio.h"
 
+#include "timerConfig.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif

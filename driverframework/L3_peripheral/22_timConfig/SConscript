@@ -1,0 +1,20 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+src  = []
+path = []
+
+# 包含源文件
+src += ['timerConfig.c']
+path += [cwd]
+
+# 定义编译组，并添加头文件目录到全局路径
+group = DefineGroup('TIMER_CONFIG', src, depend = ['RT_USING_HWTIMER'], CPPPATH = path)
+
+# 将头文件目录添加到全局包含路径
+env = DefaultEnvironment()
+env.Append(CPPPATH = [cwd])
+
+Return('group')
+

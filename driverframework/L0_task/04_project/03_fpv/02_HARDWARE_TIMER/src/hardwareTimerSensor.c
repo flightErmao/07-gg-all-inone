@@ -2,6 +2,7 @@
 #include <rtdevice.h>
 #include <rtthread.h>
 #include "rtconfig.h"
+#include "timerConfig.h"
 
 #ifdef PROJECT_HARDWARE_TIMER_SENSOR_EN
 
@@ -51,7 +52,15 @@ int hardwareTimerSensorInit(void) {
     
     /* Mark event as initialized */
     event_initialized = RT_TRUE;
-    
+
+    /* Initialize timer10 device for interrupt handler */
+    ret = timer10_device_init();
+    if (ret != RT_EOK) {
+      rt_kprintf("Timer10 device init failed!\n");
+      event_initialized = RT_FALSE;
+      return ret;
+    }
+
     /* Find hardware timer device */
     hw_dev = rt_device_find(HWTIMER_DEV_NAME);
     if (hw_dev == RT_NULL) {
