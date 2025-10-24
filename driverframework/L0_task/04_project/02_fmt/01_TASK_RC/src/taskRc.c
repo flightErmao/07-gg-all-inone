@@ -7,6 +7,7 @@
 #include "uMCN.h"
 #include "floatConvert.h"
 #include "rcDef.h"
+#include "timestamp.h"
 
 MCN_DECLARE(rc);
 MCN_DEFINE(rc, sizeof(pilot_cmd_bus_t));
@@ -84,7 +85,7 @@ static void rcThreadEntry(void* param) {
   while (1) {
     if (rc_test_dev_ != RT_NULL) {
       rt_size_t size = rt_device_read(rc_test_dev_, channel_mask, rc_channels_, 16);
-      rc_timestamp = rt_tick_get();
+      rc_timestamp = timestamp_micros();
       if (size > 0) {
         rc_loss_count = 0;
         is_rc_loss = RT_FALSE;

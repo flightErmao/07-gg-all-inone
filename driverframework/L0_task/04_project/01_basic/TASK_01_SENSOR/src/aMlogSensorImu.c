@@ -1,4 +1,5 @@
 #include "aMlogSensorImu.h"
+#include "timestamp.h"
 
 /* Mlog IMU data structure - redesigned */
 typedef struct {
@@ -29,8 +30,8 @@ static mlogImuData_t mlog_imu_data = {0};
 static int Sensor_IMU_ID = -1;
 static uint8_t mlog_push_en = 0;
 #ifdef PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_FREQ
-static rt_tick_t mlog_last_tick = 0;      // Last log timestamp in ticks
-static rt_tick_t mlog_min_interval = 0;   // Minimum interval in ticks
+static uint32_t mlog_last_tick = 0;        // Last log timestamp in microseconds
+static uint32_t mlog_min_interval_us = 0;  // Minimum interval in microseconds
 #endif
 
 /**
@@ -46,11 +47,10 @@ void mlogImuInit(void) {
     }
     
 #ifdef PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_FREQ
-    /* Calculate minimum interval in ticks for the configured frequency */
-    rt_tick_t ticks_per_second = RT_TICK_PER_SECOND;
-    mlog_min_interval = ticks_per_second / PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_FREQ;
-    rt_kprintf("Sensor_IMU mlog frequency: %d Hz, min interval: %d ticks\n", 
-               PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_FREQ, mlog_min_interval);
+    /* Calculate minimum interval in microseconds for the configured frequency */
+    mlog_min_interval_us = 1000000 / PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_FREQ;
+    rt_kprintf("Sensor_IMU mlog frequency: %d Hz, min interval: %d us\n", PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_FREQ,
+               mlog_min_interval_us);
 #endif
     
     /* Register mlog start callback */
@@ -120,12 +120,12 @@ void mlogImuPushData(uint32_t timestamp) {
     if (Sensor_IMU_ID >= 0 && mlog_push_en) {
 #ifdef PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_FREQ
         /* Check if enough time has passed since last log */
-        rt_tick_t current_tick = rt_tick_get();
-        rt_tick_t elapsed = current_tick - mlog_last_tick;
-        
-        if (elapsed >= mlog_min_interval) {
-            mlog_push_msg((uint8_t*)&mlog_imu_data, Sensor_IMU_ID, sizeof(mlogImuData_t));
-            mlog_last_tick = current_tick;
+        uint32_t current_tick = timestamp_micros();
+        uint32_t elapsed = current_tick - mlog_last_tick;
+
+        if (elapsed >= mlog_min_interval_us) {
+          mlog_push_msg((uint8_t*)&mlog_imu_data, Sensor_IMU_ID, sizeof(mlogImuData_t));
+          mlog_last_tick = current_tick;
         }
 #else
         /* No frequency control, push immediately */

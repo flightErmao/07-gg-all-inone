@@ -1,5 +1,6 @@
 #include "anlRemote.h"
 #include "rtthread.h"
+#include "timestamp.h"
 
 #ifdef PROJECT_MINIFLY_TASK04_DISTRIBUTE_REMOTE_EN
 
@@ -25,7 +26,7 @@ rcRawData_t rcRawData_;
 void anlRemote(atkp_t *anlPacket) {
   if (anlPacket->data[0] == REMOTER_DATA) {
     remoterSendData_t remoterSendData = *(remoterSendData_t *)(anlPacket->data + 1);
-    rcRawData_.timestamp = rt_tick_get();
+    rcRawData_.timestamp = timestamp_micros();
     rcRawData_.roll = remoterSendData.roll;
     rcRawData_.pitch = remoterSendData.pitch;
     rcRawData_.yaw = remoterSendData.yaw;

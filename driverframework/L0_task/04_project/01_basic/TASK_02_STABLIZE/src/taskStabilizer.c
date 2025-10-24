@@ -13,6 +13,7 @@
 #include "stateControl.h"
 #include "mixerControl.h"
 #include "taskStabilizer.h"
+#include "timestamp.h"
 
 static state_t state_;
 static setpoint_t setpoint_;
@@ -48,7 +49,7 @@ static void flyerStateUpdate(state_t* state, uint32_t tick) {
     sensorData_t sensorData = {0};
     mcnSensorImuAcquire(&sensorData);
     imuUpdate(sensorData.acc_filter, sensorData.gyro_filter, state, ATTITUDE_ESTIMAT_DT);
-    state->attitude.timestamp = rt_tick_get();
+    state->attitude.timestamp = timestamp_micros();
     state->armed = setpoint_.armed;
     mcnStatePub(state);
   }

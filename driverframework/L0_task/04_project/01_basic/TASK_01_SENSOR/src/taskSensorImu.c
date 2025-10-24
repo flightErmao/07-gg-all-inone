@@ -9,6 +9,7 @@
 #include "aMlogSensorImu.h"
 #include "aMcnSensorImu.h"
 #include "debugPin.h"
+#include "timestamp.h"
 
 #ifdef PROJECT_MINIFLY_TASK_SENSOR_HWTIMER_TRIGGER_EN
 #include "hardwareTimerSensor.h"
@@ -82,7 +83,7 @@ static void sensor_imu_thread_entry(void* parameter) {
       DEBUG_PIN_DEBUG0_HIGH();
       int rb = rt_device_read(dev_sensor_imu, 0, sensor_buffer, SENSORS_MPU6500_BUFF_LEN);
       if (rb == SENSORS_MPU6500_BUFF_LEN) {
-        uint32_t timestamp = rt_tick_get();
+        uint32_t timestamp = timestamp_micros();
         sensors_data = processAccGyroMeasurements(sensor_buffer);
         sensors_data.timestamp = timestamp;
         mcnSensorImuPublish(&sensors_data);

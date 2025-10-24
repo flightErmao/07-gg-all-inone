@@ -3,6 +3,7 @@
 #include "command.h"
 #include "taskStabilizer.h"
 #include "aMcnStabilize.h"
+#include "timestamp.h"
 
 /* Mlog data structures */
 typedef struct {
@@ -257,7 +258,7 @@ void mlogStabilizerPush(uint32_t tick) {
 #if defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_EN) || defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_EN) || \
     defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RC_EN) || defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_PID_EN) || \
     defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_PID_EN)
-  uint32_t timestamp = rt_tick_get();
+  uint32_t timestamp = timestamp_micros();
 #endif
 
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_EN

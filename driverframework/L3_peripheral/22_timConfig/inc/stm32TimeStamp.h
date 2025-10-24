@@ -4,15 +4,18 @@
 #include <rtthread.h>
 #include <stdint.h>
 
+/* System clock frequency macros */
+#define SYS_CLOCK_FREQ_HZ SystemCoreClock
+
+/* Time conversion macros */
+#define TICKS_PER_US (SYS_CLOCK_FREQ_HZ / 1000000)
+
+#define US_TO_CYCLES(us) ((us) * TICKS_PER_US)
+#define CYCLES_TO_US(cycles) ((cycles) / TICKS_PER_US)
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/**
- * @brief Initialize timestamp system
- * @note This function initializes the system tick and DWT for high precision timing
- */
-void stm32_timestamp_init(void);
 
 /**
  * @brief Get current time in microseconds
@@ -22,29 +25,10 @@ void stm32_timestamp_init(void);
 uint32_t stm32_timestamp_micros(void);
 
 /**
- * @brief Get current time in milliseconds
- * @return Current time in milliseconds
- */
-uint32_t stm32_timestamp_millis(void);
-
-/**
  * @brief Get current cycle count
  * @return Current DWT cycle count
  */
 uint32_t stm32_timestamp_cycles(void);
-
-/**
- * @brief Delay for specified microseconds
- * @param us Microseconds to delay
- * @note Uses DWT cycle counter for precise delay
- */
-void stm32_timestamp_delay_us(uint32_t us);
-
-/**
- * @brief Delay for specified milliseconds
- * @param ms Milliseconds to delay
- */
-void stm32_timestamp_delay_ms(uint32_t ms);
 
 /**
  * @brief Get system clock frequency

@@ -4,6 +4,7 @@
 #include "aMcnStabilize.h"
 #include "maths.h"
 #include "string.h"
+#include "timestamp.h"
 
 #ifndef DSHOT_DEVICE_NAME
 #define DSHOT_DEVICE_NAME "dshot"
@@ -128,7 +129,7 @@ static void mixterRemapToDshotSpeed(void) {
 static void getAndPushMlogData(void) {
   /* Prepare mlog data structure with proper alignment */
   mlogDshotData_t mlog_data __attribute__((aligned(4))) = {0};
-  mlog_data.timestamp = rt_tick_get();
+  mlog_data.timestamp = timestamp_micros();
   memcpy(mlog_data.dshot_mapped, mixer_remap_dshot_speed_, sizeof(mixer_remap_dshot_speed_));
 
 #ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
@@ -142,7 +143,7 @@ static void readAndPubRpmData(void) {
   dshotReadRpm();
   rpm_data_bus_t rpm_msg;
   memcpy(rpm_msg.rpm, rpm_freq_hz_, sizeof(rpm_freq_hz_));
-  rpm_msg.timestamp = rt_tick_get();
+  rpm_msg.timestamp = timestamp_micros();
   mcnRpmDataPublish(&rpm_msg);
 #endif
 }

@@ -3,6 +3,7 @@
 #include "uMCN.h"
 #include "taskRc.h"
 #include "anlRemote.h"
+#include "timestamp.h"
 
 /*task definition*/
 #define THREAD_PRIORITY 6
@@ -128,7 +129,7 @@ static void rc_minifly_thread_entry(void *parameter) {
   while (1) {
     if (rt_event_recv(rc_event, RC_EVENT_TIMER, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER,
                       &recv_event) == RT_EOK) {
-      uint32_t timestamp = rt_tick_get();
+      uint32_t timestamp = timestamp_micros();
       rc_data.timestamp = timestamp;
       rcRawData_t rcRawData = getRcRawData();
 

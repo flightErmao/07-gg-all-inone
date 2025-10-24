@@ -3,6 +3,7 @@
 #include <string.h>
 #include "maths.h"
 #include "aMcnStabilize.h"
+#include "timestamp.h"
 
 #ifdef L2_DEVICE_03_MOTOR_01_PWM_EN
 #include "motorsPwm.h"
@@ -108,7 +109,7 @@ void mixerControl(control_t *control) {
   mixer_data_pub.motor_val[1] = motor_pwm.m2;
   mixer_data_pub.motor_val[2] = motor_pwm.m3;
   mixer_data_pub.motor_val[3] = motor_pwm.m4;
-  mixer_data_pub.timestamp = rt_tick_get();
+  mixer_data_pub.timestamp = timestamp_micros();
   mcnMixerPublish(&mixer_data_pub);
 
 #elif defined(L2_DEVICE_03_MOTOR_01_PWM_EN)
