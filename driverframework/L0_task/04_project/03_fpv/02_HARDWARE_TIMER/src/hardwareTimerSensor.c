@@ -2,7 +2,10 @@
 #include <rtdevice.h>
 #include <rtthread.h>
 #include "rtconfig.h"
-#include "timerConfig.h"
+
+#ifdef SOC_FAMILY_AT32
+#include "at32TimerConfig.h"
+#endif
 
 #ifdef PROJECT_HARDWARE_TIMER_SENSOR_EN
 
@@ -53,13 +56,15 @@ int hardwareTimerSensorInit(void) {
     /* Mark event as initialized */
     event_initialized = RT_TRUE;
 
-    /* Initialize timer10 device for interrupt handler */
-    ret = timer10_device_init();
+    /* Initialize timer device for interrupt handler */
+#if defined(SOC_FAMILY_AT32) && defined(BSP_USING_HWTMR10)
+    ret = hwtimerDeviceInit(HWTIMER_DEV_NAME);
     if (ret != RT_EOK) {
-      rt_kprintf("Timer10 device init failed!\n");
+      rt_kprintf("Timer device init failed!\n");
       event_initialized = RT_FALSE;
       return ret;
     }
+#endif
 
     /* Find hardware timer device */
     hw_dev = rt_device_find(HWTIMER_DEV_NAME);

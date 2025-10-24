@@ -17,7 +17,7 @@
 #include "drv_common.h"
 #include "drv_gpio.h"
 
-#include "timerConfig.h"
+#include "at32TimerConfig.h"
 
 #ifdef __cplusplus
 extern "C" {
