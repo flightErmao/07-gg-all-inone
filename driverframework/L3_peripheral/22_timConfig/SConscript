@@ -5,14 +5,22 @@ cwd = GetCurrentDir()
 src  = []
 path = []
 
+# Add include path for timestamp headers
+path += [cwd + '/inc']
+
+# Timestamp functionality - always included based on platform
 if GetDepend('SOC_FAMILY_AT32'):
-    src += ['at32TimerConfig.c']
-    path += [cwd]
+    src += ['src/at32TimeStamp.c']
+elif GetDepend('SOC_FAMILY_STM32'):
+    src += ['src/stm32TimeStamp.c']
 
-group = DefineGroup('TIMER_CONFIG', src, depend = ['RT_USING_HWTIMER', 'SOC_FAMILY_AT32'], CPPPATH = path)
+# Hardware timer configuration - only included if RT_USING_HWTIMER is defined
+if GetDepend('RT_USING_HWTIMER'):
+    if GetDepend('SOC_FAMILY_AT32'):
+        src += ['src/at32TimerConfig.c']
 
-env = DefaultEnvironment()
-env.Append(CPPPATH = [cwd])
+# Create group with timestamp functionality always available
+group = DefineGroup('TIMER_CONFIG', src, depend = [], CPPPATH = path)
 
 Return('group')
 
