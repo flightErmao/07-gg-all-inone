@@ -1,4 +1,5 @@
 #include "pidMinifly.h"
+#include <math.h>
 
 void pidInit(PidObject* pid, const float desired, const pidInit_t pidParam, const float dt) {
   pid->error = 0;
@@ -11,6 +12,8 @@ void pidInit(PidObject* pid, const float desired, const pidInit_t pidParam, cons
   pid->kd = pidParam.kd;
   pid->iLimit = DEFAULT_PID_INTEGRATION_LIMIT;
   pid->outputLimit = DEFAULT_PID_OUTPUT_LIMIT;
+  pid->integralResetThreshold = DEFAULT_PID_INTEGRAL_RESET_THRESHOLD;
+  pid->integralDecayFactor = DEFAULT_PID_INTEGRAL_DECAY_FACTOR;
   pid->dt = dt;
 }
 
@@ -19,9 +22,16 @@ float pidUpdate(PidObject* pid, const float error) {
 
   pid->error = error;
 
-  pid->integ += pid->error * pid->dt;
+  // Integral decay logic: when error is smaller than threshold, decay integral instead of reset
+  if (fabsf(pid->error) < pid->integralResetThreshold) {
+    // Apply decay factor to gradually reduce integral
+    pid->integ *= pid->integralDecayFactor;
+  } else {
+    // Normal integral accumulation when error is significant
+    pid->integ += pid->error * pid->dt;
+  }
 
-  // 积分限幅
+  // Integral limit
   if (pid->integ > pid->iLimit) {
     pid->integ = pid->iLimit;
   } else if (pid->integ < -pid->iLimit) {
@@ -36,7 +46,7 @@ float pidUpdate(PidObject* pid, const float error) {
 
   output = pid->outP + pid->outI + pid->outD;
 
-  // 输出限幅
+  // Output limit
   if (pid->outputLimit != 0) {
     if (output > pid->outputLimit)
       output = pid->outputLimit;
@@ -67,6 +77,10 @@ void pidSetKi(PidObject* pid, const float ki) { pid->ki = ki; }
 void pidSetKd(PidObject* pid, const float kd) { pid->kd = kd; }
 
 void pidSetDt(PidObject* pid, const float dt) { pid->dt = dt; }
+
+void pidSetIntegralResetThreshold(PidObject* pid, const float threshold) { pid->integralResetThreshold = threshold; }
+
+void pidSetIntegralDecayFactor(PidObject* pid, const float decayFactor) { pid->integralDecayFactor = decayFactor; }
 
 void pidReset(PidObject* pid) {
   pid->error = 0;

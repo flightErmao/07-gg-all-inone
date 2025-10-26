@@ -4,6 +4,8 @@
 
 #define DEFAULT_PID_INTEGRATION_LIMIT 500.0  // 默认pid的积分限幅
 #define DEFAULT_PID_OUTPUT_LIMIT 0.0         // 默认pid输出限幅，0为不限幅
+#define DEFAULT_PID_INTEGRAL_RESET_THRESHOLD 0.1  // 默认积分清零阈值
+#define DEFAULT_PID_INTEGRAL_DECAY_FACTOR 0.95    // 默认积分泄放系数，0.95表示每次衰减5%
 
 typedef struct {
   float kp;
@@ -41,6 +43,9 @@ typedef struct {
   float outD;         //< derivative output (debugging)
   float iLimit;       //< integral limit
   float outputLimit;  //< total PID output limit, absolute value. '0' means no limit.
+  float integralResetThreshold;  //< integral reset threshold, when error is smaller than this, integral will be reset
+                                 // to 0
+  float integralDecayFactor;  //< integral decay factor, when error is small, integral will decay by this factor
   float dt;           //< delta-time dt
   float out;          //< out
 } PidObject;
@@ -59,5 +64,7 @@ void pidSetKp(PidObject* pid, const float kp);           /*pid Kp设置*/
 void pidSetKi(PidObject* pid, const float ki);           /*pid Ki设置*/
 void pidSetKd(PidObject* pid, const float kd);           /*pid Kd设置*/
 void pidSetDt(PidObject* pid, const float dt);           /*pid dt设置*/
+void pidSetIntegralResetThreshold(PidObject* pid, const float threshold); /*pid积分清零阈值设置*/
+void pidSetIntegralDecayFactor(PidObject* pid, const float decayFactor);  /*pid积分泄放系数设置*/
 
 #endif /* __PID_H */

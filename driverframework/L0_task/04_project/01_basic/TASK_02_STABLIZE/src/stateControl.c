@@ -15,6 +15,22 @@
 #define PID_RATE_PITCH_INTEGRATION_LIMIT 500.0
 #define PID_RATE_YAW_INTEGRATION_LIMIT 50.0
 
+#define PID_ANGLE_ROLL_INTEGRAL_RESET_THRESHOLD 0.5
+#define PID_ANGLE_PITCH_INTEGRAL_RESET_THRESHOLD 0.5
+#define PID_ANGLE_YAW_INTEGRAL_RESET_THRESHOLD 1.0
+
+#define PID_RATE_ROLL_INTEGRAL_RESET_THRESHOLD 5.0
+#define PID_RATE_PITCH_INTEGRAL_RESET_THRESHOLD 5.0
+#define PID_RATE_YAW_INTEGRAL_RESET_THRESHOLD 2.0
+
+#define PID_ANGLE_ROLL_INTEGRAL_DECAY_FACTOR 0.95
+#define PID_ANGLE_PITCH_INTEGRAL_DECAY_FACTOR 0.95
+#define PID_ANGLE_YAW_INTEGRAL_DECAY_FACTOR 0.90
+
+#define PID_RATE_ROLL_INTEGRAL_DECAY_FACTOR 0.90
+#define PID_RATE_PITCH_INTEGRAL_DECAY_FACTOR 0.90
+#define PID_RATE_YAW_INTEGRAL_DECAY_FACTOR 0.95
+
 static float actualThrust_;
 static attitude_t attitudeDesired_;
 static attitude_t rateDesired_;
@@ -46,6 +62,12 @@ void attitudeControlInit(float ratePidDt, float anglePidDt) {
   pidSetIntegralLimit(&pidAngleRoll, PID_ANGLE_ROLL_INTEGRATION_LIMIT);
   pidSetIntegralLimit(&pidAnglePitch, PID_ANGLE_PITCH_INTEGRATION_LIMIT);
   pidSetIntegralLimit(&pidAngleYaw, PID_ANGLE_YAW_INTEGRATION_LIMIT);
+  pidSetIntegralResetThreshold(&pidAngleRoll, PID_ANGLE_ROLL_INTEGRAL_RESET_THRESHOLD);
+  pidSetIntegralResetThreshold(&pidAnglePitch, PID_ANGLE_PITCH_INTEGRAL_RESET_THRESHOLD);
+  pidSetIntegralResetThreshold(&pidAngleYaw, PID_ANGLE_YAW_INTEGRAL_RESET_THRESHOLD);
+  pidSetIntegralDecayFactor(&pidAngleRoll, PID_ANGLE_ROLL_INTEGRAL_DECAY_FACTOR);
+  pidSetIntegralDecayFactor(&pidAnglePitch, PID_ANGLE_PITCH_INTEGRAL_DECAY_FACTOR);
+  pidSetIntegralDecayFactor(&pidAngleYaw, PID_ANGLE_YAW_INTEGRAL_DECAY_FACTOR);
 
   pidInit(&pidRateRoll, 0, configParam.pidRate.roll, ratePidDt);
   pidInit(&pidRatePitch, 0, configParam.pidRate.pitch, ratePidDt);
@@ -53,6 +75,12 @@ void attitudeControlInit(float ratePidDt, float anglePidDt) {
   pidSetIntegralLimit(&pidRateRoll, PID_RATE_ROLL_INTEGRATION_LIMIT);
   pidSetIntegralLimit(&pidRatePitch, PID_RATE_PITCH_INTEGRATION_LIMIT);
   pidSetIntegralLimit(&pidRateYaw, PID_RATE_YAW_INTEGRATION_LIMIT);
+  pidSetIntegralResetThreshold(&pidRateRoll, PID_RATE_ROLL_INTEGRAL_RESET_THRESHOLD);
+  pidSetIntegralResetThreshold(&pidRatePitch, PID_RATE_PITCH_INTEGRAL_RESET_THRESHOLD);
+  pidSetIntegralResetThreshold(&pidRateYaw, PID_RATE_YAW_INTEGRAL_RESET_THRESHOLD);
+  pidSetIntegralDecayFactor(&pidRateRoll, PID_RATE_ROLL_INTEGRAL_DECAY_FACTOR);
+  pidSetIntegralDecayFactor(&pidRatePitch, PID_RATE_PITCH_INTEGRAL_DECAY_FACTOR);
+  pidSetIntegralDecayFactor(&pidRateYaw, PID_RATE_YAW_INTEGRAL_DECAY_FACTOR);
 }
 
 bool attitudeControlTest() { return true; }
