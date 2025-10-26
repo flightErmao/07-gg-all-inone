@@ -30,7 +30,6 @@ static mlogImuData_t mlog_imu_data = {0};
 static int Sensor_IMU_ID = -1;
 static uint8_t mlog_push_en = 0;
 #ifdef PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_FREQ
-static uint32_t mlog_last_tick = 0;        // Last log timestamp in microseconds
 static uint32_t mlog_min_interval_us = 0;  // Minimum interval in microseconds
 #endif
 
@@ -115,23 +114,21 @@ void mlogImuCopyGyroData(const Axis3f* gyro_before, const Axis3f* gyro_after) {
  * @param timestamp timestamp
  */
 void mlogImuPushData(uint32_t timestamp) {
-    mlog_imu_data.timestamp = timestamp;
-    
-    if (Sensor_IMU_ID >= 0 && mlog_push_en) {
+  if (Sensor_IMU_ID >= 0 && mlog_push_en) {
 #ifdef PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_FREQ
-        /* Check if enough time has passed since last log */
-        uint32_t current_tick = timestamp_micros();
-        uint32_t elapsed = current_tick - mlog_last_tick;
-
-        if (elapsed >= mlog_min_interval_us) {
-          mlog_push_msg((uint8_t*)&mlog_imu_data, Sensor_IMU_ID, sizeof(mlogImuData_t));
-          mlog_last_tick = current_tick;
-        }
-#else
-        /* No frequency control, push immediately */
-        mlog_push_msg((uint8_t*)&mlog_imu_data, Sensor_IMU_ID, sizeof(mlogImuData_t));
-#endif
+    /* Check if enough time has passed since last log */
+    uint32_t timestamp_current = timestamp_micros();
+    uint32_t elapsed = timestamp_current - mlog_imu_data.timestamp;
+    mlog_imu_data.timestamp = timestamp;
+    if (elapsed >= mlog_min_interval_us) {
+      mlog_push_msg((uint8_t*)&mlog_imu_data, Sensor_IMU_ID, sizeof(mlogImuData_t));
     }
+#else
+    /* No frequency control, push immediately */
+    mlog_imu_data.timestamp = timestamp;
+    mlog_push_msg((uint8_t*)&mlog_imu_data, Sensor_IMU_ID, sizeof(mlogImuData_t));
+#endif
+  }
 }
 
 #else /* PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_EN not defined */
