@@ -45,7 +45,7 @@ static void rcAndCmdGenerate(setpoint_t* setpoint, uint32_t tick) {
 }
 
 static void flyerStateUpdate(state_t* state, uint32_t tick) {
-  if (RATE_DO_EXECUTE(ATTITUDE_ESTIMAT_RATE, tick)) {
+  if (RATE_DO_EXECUTE(RATE_250_HZ, tick)) {
     sensorData_t sensorData = {0};
     mcnSensorImuAcquire(&sensorData);
     imuUpdate(sensorData.acc_filter, sensorData.gyro_filter, state, ATTITUDE_ESTIMAT_DT);

@@ -261,34 +261,8 @@ void mlogStabilizerPush(uint32_t tick) {
   uint32_t timestamp = timestamp_micros();
 #endif
 
-#ifdef PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_EN
-  // Push rate data at 500Hz
-  if (RATE_DO_EXECUTE(RATE_PID_RATE, tick)) {
-    mlogStabilizerRateData_t rate_data = {0};
-    rate_data.timestamp = timestamp;
-
-    // Get rate desired and current data
-    attitude_t rate_desired = {0};
-    state_t current_state = {0};
-
-    getRateDesired(&rate_desired);
-    mcnStateAcquire(&current_state);
-
-    // Fill rate data
-    rate_data.rate_desired[0] = rate_desired.roll;
-    rate_data.rate_desired[1] = rate_desired.pitch;
-    rate_data.rate_desired[2] = rate_desired.yaw;
-
-    rate_data.rate_current[0] = current_state.gyro_filter.x;
-    rate_data.rate_current[1] = current_state.gyro_filter.y;
-    rate_data.rate_current[2] = current_state.gyro_filter.z;
-
-    mlogStabilizerPushRateData(&rate_data);
-  }
-#endif
-
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_EN
-  if (RATE_DO_EXECUTE(ANGLE_PID_RATE, tick)) {
+  if (RATE_DO_EXECUTE(RATE_250_HZ, tick)) {
     mlogStabilizerAngleData_t angle_data = {0};
     angle_data.timestamp = timestamp;
 
@@ -312,6 +286,70 @@ void mlogStabilizerPush(uint32_t tick) {
   }
 #endif
 
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_EN
+  // Push rate data at 500Hz
+  if (RATE_DO_EXECUTE(RATE_500_HZ, tick)) {
+    mlogStabilizerRateData_t rate_data = {0};
+    rate_data.timestamp = timestamp;
+
+    // Get rate desired and current data
+    attitude_t rate_desired = {0};
+    state_t current_state = {0};
+
+    getRateDesired(&rate_desired);
+    mcnStateAcquire(&current_state);
+
+    // Fill rate data
+    rate_data.rate_desired[0] = rate_desired.roll;
+    rate_data.rate_desired[1] = rate_desired.pitch;
+    rate_data.rate_desired[2] = rate_desired.yaw;
+
+    rate_data.rate_current[0] = current_state.gyro_filter.x;
+    rate_data.rate_current[1] = current_state.gyro_filter.y;
+    rate_data.rate_current[2] = current_state.gyro_filter.z;
+
+    mlogStabilizerPushRateData(&rate_data);
+  }
+#endif
+
+#if defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_PID_EN) || defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_PID_EN)
+  // Angle PID outputs at angle loop rate
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_PID_EN
+  if (RATE_DO_EXECUTE(RATE_250_HZ, tick)) {
+    if (StabilizeAnglePid_ID >= 0 && mlog_stabilizer_angle_pid_push_en) {
+      mlogStabilizerAnglePidData_t ap = {0};
+      ap.timestamp = timestamp;
+      float p, i, d;
+      getAnglePidRollDebug(&p, &i, &d);
+      ap.roll[0] = p; ap.roll[1] = i; ap.roll[2] = d;
+      getAnglePidPitchDebug(&p, &i, &d);
+      ap.pitch[0] = p; ap.pitch[1] = i; ap.pitch[2] = d;
+      getAnglePidYawDebug(&p, &i, &d);
+      ap.yaw[0] = p; ap.yaw[1] = i; ap.yaw[2] = d;
+      mlog_push_msg((uint8_t*)&ap, StabilizeAnglePid_ID, sizeof(mlogStabilizerAnglePidData_t));
+    }
+  }
+#endif
+
+  // Rate PID outputs at rate loop rate
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_PID_EN
+  if (RATE_DO_EXECUTE(RATE_500_HZ, tick)) {
+    if (StabilizeRatePid_ID >= 0 && mlog_stabilizer_rate_pid_push_en) {
+      mlogStabilizerRatePidData_t rp = {0};
+      rp.timestamp = timestamp;
+      float p, i, d;
+      getRatePidRollDebug(&p, &i, &d);
+      rp.roll[0] = p; rp.roll[1] = i; rp.roll[2] = d;
+      getRatePidPitchDebug(&p, &i, &d);
+      rp.pitch[0] = p; rp.pitch[1] = i; rp.pitch[2] = d;
+      getRatePidYawDebug(&p, &i, &d);
+      rp.yaw[0] = p; rp.yaw[1] = i; rp.yaw[2] = d;
+      mlog_push_msg((uint8_t*)&rp, StabilizeRatePid_ID, sizeof(mlogStabilizerRatePidData_t));
+    }
+  }
+#endif
+#endif
+
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RC_EN
   // Push RC data at 100Hz
   if (RATE_DO_EXECUTE(RATE_100_HZ, tick)) {
@@ -333,41 +371,4 @@ void mlogStabilizerPush(uint32_t tick) {
   }
 #endif
 
-#if defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_PID_EN) || defined(PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_PID_EN)
-  // Angle PID outputs at angle loop rate
-#ifdef PROJECT_MINIFLY_TASK_STABLIZE_MLOG_ANGLE_PID_EN
-  if (RATE_DO_EXECUTE(ANGLE_PID_RATE, tick)) {
-    if (StabilizeAnglePid_ID >= 0 && mlog_stabilizer_angle_pid_push_en) {
-      mlogStabilizerAnglePidData_t ap = {0};
-      ap.timestamp = timestamp;
-      float p, i, d;
-      getAnglePidRollDebug(&p, &i, &d);
-      ap.roll[0] = p; ap.roll[1] = i; ap.roll[2] = d;
-      getAnglePidPitchDebug(&p, &i, &d);
-      ap.pitch[0] = p; ap.pitch[1] = i; ap.pitch[2] = d;
-      getAnglePidYawDebug(&p, &i, &d);
-      ap.yaw[0] = p; ap.yaw[1] = i; ap.yaw[2] = d;
-      mlog_push_msg((uint8_t*)&ap, StabilizeAnglePid_ID, sizeof(mlogStabilizerAnglePidData_t));
-    }
-  }
-#endif
-
-  // Rate PID outputs at rate loop rate
-#ifdef PROJECT_MINIFLY_TASK_STABLIZE_MLOG_RATE_PID_EN
-  if (RATE_DO_EXECUTE(RATE_PID_RATE, tick)) {
-    if (StabilizeRatePid_ID >= 0 && mlog_stabilizer_rate_pid_push_en) {
-      mlogStabilizerRatePidData_t rp = {0};
-      rp.timestamp = timestamp;
-      float p, i, d;
-      getRatePidRollDebug(&p, &i, &d);
-      rp.roll[0] = p; rp.roll[1] = i; rp.roll[2] = d;
-      getRatePidPitchDebug(&p, &i, &d);
-      rp.pitch[0] = p; rp.pitch[1] = i; rp.pitch[2] = d;
-      getRatePidYawDebug(&p, &i, &d);
-      rp.yaw[0] = p; rp.yaw[1] = i; rp.yaw[2] = d;
-      mlog_push_msg((uint8_t*)&rp, StabilizeRatePid_ID, sizeof(mlogStabilizerRatePidData_t));
-    }
-  }
-#endif
-#endif
 }

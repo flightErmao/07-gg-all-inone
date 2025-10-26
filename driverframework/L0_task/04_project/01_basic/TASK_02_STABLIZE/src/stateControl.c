@@ -161,7 +161,7 @@ static void generateAttituedeDesierd(const setpoint_t* setpoint, const uint32_t 
     attitudeDesired_.pitch = setpoint->attitude.pitch;
   }
 
-  attitudeDesired_.yaw += setpoint->attitude.yaw / ANGLE_PID_RATE;
+  attitudeDesired_.yaw += setpoint->attitude.yaw / RATE_250_HZ;
   if (attitudeDesired_.yaw > 180.0f) attitudeDesired_.yaw -= 360.0f;
   if (attitudeDesired_.yaw < -180.0f) attitudeDesired_.yaw += 360.0f;
 }
@@ -171,12 +171,12 @@ void stateControl(const state_t* state, const setpoint_t* setpoint, control_t* c
     return;
   }
 
-  if (RATE_DO_EXECUTE(ANGLE_PID_RATE, tick)) {
+  if (RATE_DO_EXECUTE(RATE_250_HZ, tick)) {
     generateAttituedeDesierd(setpoint, tick);
     attitudeAnglePID(&state->attitude, &attitudeDesired_, &rateDesired_);
   }
 
-  if (RATE_DO_EXECUTE(RATE_PID_RATE, tick)) {
+  if (RATE_DO_EXECUTE(RATE_500_HZ, tick)) {
     attitudeRatePID(&state->gyro_filter, &rateDesired_, control);
   }
 
