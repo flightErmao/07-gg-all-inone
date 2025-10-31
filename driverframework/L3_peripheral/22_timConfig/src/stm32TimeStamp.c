@@ -1,6 +1,12 @@
 #include "stm32TimeStamp.h"
 #include "board.h"
+#if defined(SOC_SERIES_STM32F4)
 #include "stm32f4xx.h"
+#elif defined(SOC_SERIES_STM32H7)
+#include "stm32h7xx.h"
+#else
+#error "Unsupported STM32 series for timestamp module"
+#endif
 #include <rtthread.h>
 
 /* Static variables for timestamp system */
