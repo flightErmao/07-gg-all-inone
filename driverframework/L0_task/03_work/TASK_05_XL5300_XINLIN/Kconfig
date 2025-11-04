@@ -1,0 +1,24 @@
+menuconfig WORK_TASK_TOF_XL5300_XINLIN_EN
+    bool "ENABLE: WORK_TASK_TOF_XL5300_XINLIN_EN"
+    default n
+    help
+        使能鑫霖 XL5300（软I2C方案）ToF 任务。
+        启用后，会创建独立线程完成SDK初始化并持续读取测距数据。
+
+    if WORK_TASK_TOF_XL5300_XINLIN_EN
+
+        config WORK_TASK_TOF_XL5300_XINLIN_THREAD_STACK
+            int "Thread stack size"
+            default 3072
+            help
+                任务线程栈大小
+
+        config WORK_TASK_TOF_XL5300_XINLIN_THREAD_PRIO
+            int "Thread priority"
+            default 20
+            help
+                任务线程优先级
+
+    endif
+
+

@@ -1,0 +1,25 @@
+from building import *
+import os
+
+# 当前目录
+cwd = GetCurrentDir()
+
+# 自动收集 src 下所有 C 源码
+src = Glob("./src/*.c")
+
+# 如需静态库，请在上层 SConstruct 或此处根据工具链配置 LIBS/LIBPATH
+# 例如：ENV = DefaultEnvironment(); ENV.Append(LIBS=["XL5300_Firmware_8", "das"], LIBPATH=[cwd])
+
+# 头文件路径
+CPPPATH = [cwd, os.path.join(cwd, "inc")]
+
+group = DefineGroup(
+    "TASK_05_XL5300_XINLIN",
+    src,
+    depend=["WORK_TASK_TOF_XL5300_XINLIN_EN"],
+    CPPPATH=CPPPATH,
+)
+
+Return("group")
+
+

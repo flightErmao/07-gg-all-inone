@@ -10,6 +10,7 @@ menu "L0_TASK_CONFIG"
     source "$(PROJECT_ROOT)/driverframework/L0_task/03_work/TASK_02_BARO_SHOW/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L0_task/03_work/TASK_03_MAG_RTK/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L0_task/03_work/TASK_04_XL530X/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L0_task/03_work/TASK_05_XL5300_XINLIN/Kconfig"
 
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/01_basic/TASK_01_SENSOR/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/01_basic/TASK_02_STABLIZE/Kconfig"
