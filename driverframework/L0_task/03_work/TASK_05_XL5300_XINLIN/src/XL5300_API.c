@@ -5,10 +5,10 @@
 #include "stdlib.h"
 #include "math.h"
 #include "XL5300_UserPlatform.h"
-#include "flash.h"
-#include "function.h"
-#include "XL5300_API.h"
 #include "das.h"
+#include "XL5300_API.h"
+/* RT-Thread 延时封装（在 xl5300_port.c 实现） */
+extern void XL5300_Delay_Ms(uint16_t nMs);
 extern XL5300_Calibration_TypeDef XL5300_Cali_Data;
 
 uint8_t gSalve = XL5300_DEVICE_ADDR, chip_reg = 0, chip_reg38, chip_reg3a;

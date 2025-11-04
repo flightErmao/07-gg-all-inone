@@ -3,7 +3,23 @@
 #define _BSP_SW_I2C_H
 
 #include <inttypes.h>
+#if defined(STM32H7xx)
+#include "stm32h7xx_hal.h"
+#elif defined(STM32F4xx)
+#include "stm32f4xx_hal.h"
+#elif defined(PY32F0xx)
 #include "py32f0xx_hal.h"
+#else
+#include <rtthread.h>
+#endif
+
+#ifndef __NOP
+#if defined(__GNUC__)
+#define __NOP() __asm volatile ("nop")
+#else
+#define __NOP() do {} while (0)
+#endif
+#endif
 
 #define USE_SOFTWARE_IIC
 

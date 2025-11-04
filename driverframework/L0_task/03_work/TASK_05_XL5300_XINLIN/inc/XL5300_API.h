@@ -1,7 +1,15 @@
 #ifndef __XL5300_API_H__
 #define __XL5300_API_H__
 
+#if defined(STM32H7xx)
+#include "stm32h7xx_hal.h"
+#elif defined(STM32F4xx)
+#include "stm32f4xx_hal.h"
+#elif defined(PY32F0xx)
 #include "py32f0xx_hal.h"
+#else
+#include <rtthread.h>
+#endif
 #include "stdio.h"
 #include "XL5300_Config.h"
 #define API_VERSION  V10  
@@ -62,7 +70,7 @@ extern XL5300_Status XL5300_Integral_Counts_Write(uint32_t inte_counts);
 extern XL5300_Status XL5300_Set_Integralcounts_Frame(uint8_t fps, uint32_t intecoutns);
 extern uint8_t XL5300_Stop_Continuous_Measure(void);
 extern XL5300_Status XL5300_Get_Interrupt_State(uint8_t *status);
-extern XL5300_Status XL5300_Clear_Interrupt(void);//�?己写�?
+extern XL5300_Status XL5300_Clear_Interrupt(void);//�?己写�?
 uint8_t XL5300_Device_Check(void);
 extern XL5300_Status XL5300_Temp_Enable(uint8_t enable);//加的
 #endif

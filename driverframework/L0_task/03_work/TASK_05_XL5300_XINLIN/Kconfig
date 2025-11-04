@@ -19,6 +19,12 @@ menuconfig WORK_TASK_TOF_XL5300_XINLIN_EN
             help
                 任务线程优先级
 
+        config WORK_TASK_TOF_XL5300_XINLIN_I2C_NAME
+            string "I2C bus device name"
+            default "hwi2c1"
+            help
+                XL5300 所在 I2C 设备名（与 BSP 中一致）
+
     endif
 
 

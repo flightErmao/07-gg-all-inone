@@ -4,8 +4,14 @@ import os
 # 当前目录
 cwd = GetCurrentDir()
 
-# 自动收集 src 下所有 C 源码
-src = Glob("./src/*.c")
+# 仅编译必要源码，排除演示工程文件（main.c、uart.c、py32* 等）
+src = [
+    os.path.join(cwd, "src", "taskTofXl5300_xinlin.c"),
+    os.path.join(cwd, "src", "XL5300_API.c"),
+    os.path.join(cwd, "src", "XL5300_UserPlatform.c"),
+    os.path.join(cwd, "src", "xl5300_port.c"),
+    os.path.join(cwd, "src", "xl5300_fw_stub.c"),
+]
 
 # 如需静态库，请在上层 SConstruct 或此处根据工具链配置 LIBS/LIBPATH
 # 例如：ENV = DefaultEnvironment(); ENV.Append(LIBS=["XL5300_Firmware_8", "das"], LIBPATH=[cwd])
@@ -18,6 +24,7 @@ group = DefineGroup(
     src,
     depend=["WORK_TASK_TOF_XL5300_XINLIN_EN"],
     CPPPATH=CPPPATH,
+    CPPDEFINES=["USE_HAL_DRIVER", "STM32F4xx"],
 )
 
 Return("group")

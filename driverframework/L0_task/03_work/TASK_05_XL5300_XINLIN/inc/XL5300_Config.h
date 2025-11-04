@@ -1,7 +1,15 @@
 #ifndef __XL5300_CONFIG_H__
 #define __XL5300_CONFIG_H__
 
+#if defined(STM32H7xx)
+#include "stm32h7xx_hal.h"
+#elif defined(STM32F4xx)
+#include "stm32f4xx_hal.h"
+#elif defined(PY32F0xx)
 #include "py32f0xx_hal.h"
+#else
+#include <rtthread.h>
+#endif
 
 // typedef unsigned long long uint64_t;
 
@@ -20,7 +28,7 @@
 typedef uint32_t FixPoint1616_t;
 
 
-#define NULL 0
+/* 避免与标准库重复定义 */
 
 
 #define config_USE_CG_Correction     1

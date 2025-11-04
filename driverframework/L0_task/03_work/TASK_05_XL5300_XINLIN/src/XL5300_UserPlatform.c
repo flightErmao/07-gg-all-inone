@@ -1,72 +1,55 @@
 #include "XL5300_UserPlatform.h"
 #include "XL5300_API.h"
-#include "xl_sw_i2c.h"
+#include "I2cInterface.h"
 
-#define XL5300_ECO_2V1 1
+static I2cInterface_t g_xl5300_i2c;
+static rt_bool_t g_xl5300_i2c_inited = RT_FALSE;
 
-#ifdef XL5300_ECO_2V1
-
-XL5300_Status I2C_2V1_WriteOneReg(uint8_t addr, uint8_t value)
+static inline XL5300_Status i2c_lazy_init(void)
 {
-		XL5300_Status ret;
-		ret = (XL5300_Status)vi_sw_writereg(gSalve,addr,value);
-		if(ret == 1)
-		ret = XL5300_OK;
-		else if(ret == 0)
-		ret = XL5300_ERROR;
-		
-		return ret;
+    if (g_xl5300_i2c_inited)
+    {
+        return XL5300_OK;
+    }
+    /* 在任务启动阶段已通过 get_i2c_interface 完成，这里只做保护 */
+    if (g_xl5300_i2c.i2c_dev != RT_NULL)
+    {
+        g_xl5300_i2c_inited = RT_TRUE;
+        return XL5300_OK;
+    }
+    return XL5300_ERROR;
 }
 
-XL5300_Status I2C_2V1_ReadOneReg(uint8_t addr, uint8_t *value)
+/* 由任务在初始化时调用，传入 I2cInterface_t */
+void XL5300_Bind_I2C_Interface(I2cInterface_t *iface)
 {
-	XL5300_Status ret;
-	ret = (XL5300_Status)vi_sw_readreg(gSalve,addr,value,1);
-	if(ret == 1)
-	ret = XL5300_OK;
-	else if(ret == 0)
-	ret = XL5300_ERROR;
-
-	return ret;
+    if (iface)
+    {
+        g_xl5300_i2c = *iface;
+        g_xl5300_i2c_inited = RT_TRUE;
+    }
 }
 
-XL5300_Status I2C_WriteXByteWraper(uint8_t startaddr, uint8_t *buf, uint8_t len)
+static inline XL5300_Status i2c_write_reg(uint8_t reg, const uint8_t *buf, uint16_t len)
 {
-    XL5300_Status ret = XL5300_OK;
-		
-		ret = (XL5300_Status)vi_sw_writeRegs(gSalve,startaddr,buf,len);
-		if(ret == 1)
-		ret = XL5300_OK;
-		else if(ret == 0)
-		ret = XL5300_ERROR;
-
-    return ret;
+    if (i2c_lazy_init() != XL5300_OK) return XL5300_ERROR;
+    return i2c_write_reg8_mult_pack(g_xl5300_i2c, reg, (uint8_t *)buf, len) == 0 ? XL5300_OK : XL5300_ERROR;
 }
 
-XL5300_Status I2C_ReadXByteWraper(uint8_t startaddr, uint8_t *buf, uint8_t len)
+static inline XL5300_Status i2c_read_reg(uint8_t reg, uint8_t *buf, uint16_t len)
 {
-    XL5300_Status ret = XL5300_OK;
-	
-		ret = (XL5300_Status)vi_sw_readRegs(gSalve,startaddr,buf,len);
-		if(ret == 1)
-		ret = XL5300_OK;
-		else if(ret == 0)
-		ret = XL5300_ERROR;
-		
-    return ret;
+    if (i2c_lazy_init() != XL5300_OK) return XL5300_ERROR;
+    return i2c_read_reg8_mult_pack(g_xl5300_i2c, reg, buf, len) == 0 ? XL5300_OK : XL5300_ERROR;
 }
-
-#endif
 
 XL5300_Status WriteOneReg(uint8_t addr, uint8_t value)
 {
-		return I2C_2V1_WriteOneReg(addr, value);
+    return i2c_write_reg(addr, &value, 1);
 }
 
 XL5300_Status ReadOneReg(uint8_t addr, uint8_t *value)
 {
-	
-		return I2C_2V1_ReadOneReg(addr, value);
+    return i2c_read_reg(addr, value, 1);
 }
 
 XL5300_Status WriteCommand(uint8_t cmd)
@@ -76,12 +59,12 @@ XL5300_Status WriteCommand(uint8_t cmd)
 
 XL5300_Status I2C_WriteXBytes(uint8_t startaddr, uint8_t *buf, uint8_t len)
 {
-    return I2C_WriteXByteWraper(startaddr, buf, len);
+    return i2c_write_reg(startaddr, buf, len);
 }
 
 XL5300_Status I2C_ReadXBytes(uint8_t startaddr, uint8_t *buf, uint8_t len)
 {
-    return I2C_ReadXByteWraper(startaddr, buf, len);
+    return i2c_read_reg(startaddr, buf, len);
 }
 
 
