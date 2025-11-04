@@ -1,0 +1,19 @@
+menuconfig WORK_TASK_TOF_XL5300_ORINGE_EN
+    bool "ENABLE: WORK_TASK_TOF_XL5300_ORINGE_EN"
+    default n
+    help
+        Enable TOF XL5300_ORINGE sensor task that drives VI530x ToF sensor.
+        When enabled, the system creates an independent thread to initialize
+        and continuously read distance data from the sensor.
+
+    if WORK_TASK_TOF_XL5300_ORINGE_EN
+
+        config WORK_TASK_TOF_XL5300_ORINGE_I2C_NAME
+            string "I2C bus device name"
+            default "hwi2c1"
+            help
+                The I2C bus device name used to access XL5300_ORINGE sensor
+
+    endif
+
+

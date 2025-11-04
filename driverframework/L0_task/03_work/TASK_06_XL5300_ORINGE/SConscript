@@ -1,0 +1,25 @@
+from building import *
+import os
+
+# 获取当前目录
+cwd = GetCurrentDir()
+src = []
+group = []
+
+# 获取src目录下的所有源文件
+src = Glob("./src/*.c")
+
+# 包含路径
+path = [cwd, os.path.join(cwd, "inc")]
+
+# 定义编译组（受 Kconfig 开关控制）
+group = DefineGroup(
+    "TASK_06_XL5300_ORINGE",
+    src,
+    depend=["WORK_TASK_TOF_XL5300_ORINGE_EN"],
+    CPPPATH=path,
+)
+
+Return("group")
+
+
