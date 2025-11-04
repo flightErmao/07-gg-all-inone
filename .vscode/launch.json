@@ -249,6 +249,23 @@
             "openOCDLaunchCommands": [
                 "adapter_khz 4000"
             ]
-        }
+        },
+        {
+            "name": "3-04-tool_xl5301",
+            "type": "cortex-debug",
+            "request": "launch",
+            "cwd": "${workspaceRoot}",
+            "executable": "target/03_tools_work/04_tof_xl530x/rt-thread.elf",
+            "serverpath": "${env:JLINK_SERVER}",
+            "servertype": "jlink",
+            "device": "STM32F411CE",
+            "interface": "swd",
+            "armToolchainPath": "${workspaceRoot}/tools/toolchain/arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi/bin",
+            "serialNumber": "", //If you have more than one J-Link probe, add the serial number here.
+            "showDevDebugOutput": "raw",
+            "openOCDLaunchCommands": [
+                "adapter_khz 4000"
+            ]
+        },
     ]
 }
