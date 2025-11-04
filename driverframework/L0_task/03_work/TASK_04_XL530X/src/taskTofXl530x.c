@@ -26,16 +26,24 @@
 static I2cInterface_t g_i2c_interface;
 
 /* GPIO定义：复位引脚PB6，中断引脚PB7 */
-// 使用RT-Thread的pin编号：PB6 = 1*16 + 6 = 22, PB7 = 1*16 + 7 = 23
 #ifdef RT_USING_PIN
-#define XSHUT_PIN_NUM    22  // PB6
-#define INT_PIN_NUM      23  // PB7
+#define XSHUT_PIN_NUM GET_PIN(B, 6)
+#define INT_PIN_NUM GET_PIN(B, 7)
 #else
 // 使用HAL库定义
 #define XSHUT_GPIO_PORT  GPIOB
 #define XSHUT_GPIO_PIN   GPIO_PIN_6
 #define INT_GPIO_PORT    GPIOB
 #define INT_GPIO_PIN     GPIO_PIN_7
+#endif
+
+/* 中断事件（参照 mpu6500 方式） */
+#ifdef RT_USING_PIN
+#ifndef TOF_INT_EVENT_FLAG
+#define TOF_INT_EVENT_FLAG (1u << 0)
+#endif
+static struct rt_event g_tof_int_event;
+static rt_bool_t g_tof_event_inited = RT_FALSE;
 #endif
 
 /* VI530x设备地址 */
@@ -87,6 +95,11 @@ void VI530x_GPIO_Interrupt_Handle(void)
     if(VI530x_Cali_Data.VI530x_Interrupt_Mode_Status)
     {
         VI530x_GPIO_Interrupt_status = 1;
+#ifdef RT_USING_PIN
+        if (g_tof_event_inited) {
+          rt_event_send(&g_tof_int_event, TOF_INT_EVENT_FLAG);
+        }
+#endif
     }
 }
 
@@ -100,14 +113,22 @@ static void tof_int_callback(void *args)
 static rt_err_t tof_gpio_init(void)
 {
 #ifdef RT_USING_PIN
+  /* 初始化事件 */
+  if (!g_tof_event_inited) {
+    if (rt_event_init(&g_tof_int_event, "tof_ie", RT_IPC_FLAG_FIFO) != RT_EOK) {
+      return -RT_ERROR;
+    }
+    g_tof_event_inited = RT_TRUE;
+  }
+
     /* 配置XSHUT引脚（PB6）为输出，上拉 */
     rt_pin_mode(XSHUT_PIN_NUM, PIN_MODE_OUTPUT);
     /* 初始状态：XSHUT拉低（复位） */
     rt_pin_write(XSHUT_PIN_NUM, PIN_LOW);
-    
-    /* 配置中断引脚（PB7）为输入，下拉，下降沿中断 */
+
+    /* 配置中断引脚（PB7）为输入，下拉，改为上升沿中断（参考 mpu6500） */
     rt_pin_mode(INT_PIN_NUM, PIN_MODE_INPUT_PULLDOWN);
-    rt_pin_attach_irq(INT_PIN_NUM, PIN_IRQ_MODE_FALLING, tof_int_callback, RT_NULL);
+    rt_pin_attach_irq(INT_PIN_NUM, PIN_IRQ_MODE_RISING, tof_int_callback, RT_NULL);
     rt_pin_irq_enable(INT_PIN_NUM, PIN_IRQ_ENABLE);
 #else
     GPIO_InitTypeDef GPIO_InitStruct = {0};
@@ -188,10 +209,11 @@ static void vi530x_init_and_run(void)
     // 1、IIC 初始化（已在tof_i2c_init中完成）
     
     // 2、GPIO 初始化（已在tof_gpio_init中完成）
-    
+
     // 3、选择中断方式：0x88----GPIO硬件中断，0x00----寄存器查询
     VI530x_Cali_Data.VI530x_Interrupt_Mode_Status = 0x88;  // GPIO引脚启用，硬件中断
-    
+    // VI530x_Cali_Data.VI530x_Interrupt_Mode_Status = 0;  // GPIO引脚启用，硬件中断
+
     // 4、VI530x初始化，选择复位方式
     VI530x_Chip_PowerON();  // Xshut引脚启用，硬件复位/使能，**建议方式**
     ret |= VI530x_Chip_Init();
@@ -199,12 +221,8 @@ static void vi530x_init_and_run(void)
     // 5、VI530x固件写入，系统参数配置
     ret |= VI530x_Download_Firmware((uint8_t *)VI5301_M40_firmware_buff, FirmwareSize());
     ret |= VI530x_Set_Integralcounts_Frame(20, 321000);  // 帧率，积分次数
-    
-    // 6、标定配置（暂时跳过标定，使用默认值）
-    // 如果需要标定，可以在这里添加标定代码
-    
+
     // 7、其它配置
-    // 开启温度校准:0x00-关，0x01-开；建议开启
     ret |= VI530x_Set_Sys_Temperature_Enable(0x01);
     
     // 8、开启测距
@@ -218,20 +236,20 @@ static void vi530x_init_and_run(void)
     
     // 9、循环读取测距数据
     while (1) {
-        ret = VI530x_Get_Measure_Data(&result, 1);
-        // wait_mode:1-在一定时间内等待中断信号，0-没有中断信号则直接退出
-        if (!ret) {
-            // 建议confidence大于70，ToF值为可信
-            rt_kprintf("[TOF_XL530X] tof = %4d mm, confidence = %3d, peak = %4d, noise = %4d, intecounts = %4d\n",
-                       result.correction_tof, result.confidence, result.peak, result.noise, result.intecounts);
-            /* 参数说明：
-            result.correction_tof：距离值，毫米为单位；
-            result.confidence：表示当前 TOF 值的可信度，建议大于70可信，具体可以根据应用调整；
-            result.peak：表征接收到光信号强度；
-            result.intecounts：积分次数；
-            ******************/
-        }
-        rt_thread_mdelay(100);  // 100ms延时
+#ifdef RT_USING_PIN
+      // 采用事件方式等待中断到来（参考 mpu6500）
+      if (g_tof_event_inited) {
+        rt_event_recv(&g_tof_int_event, TOF_INT_EVENT_FLAG, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER,
+                      RT_NULL);
+      }
+#endif
+            ret = VI530x_Get_Measure_Data(&result, 1);
+            if (!ret) {
+              rt_kprintf("[TOF_XL530X] tof = %4d mm, confidence = %3d, peak = %4lu, noise = %4lu, intecounts = %4lu\n",
+                         result.correction_tof, result.confidence, (unsigned long)result.peak,
+                         (unsigned long)result.noise, (unsigned long)result.intecounts);
+            }
+      rt_thread_mdelay(5);
     }
 }
 
