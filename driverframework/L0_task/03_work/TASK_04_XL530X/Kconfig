@@ -2,7 +2,17 @@ menuconfig WORK_TASK_TOF_XL530X_EN
     bool "ENABLE: WORK_TASK_TOF_XL530X_EN"
     default n
     help
-        Enable GPS test task that periodically calls GPS test interface.
+        Enable TOF XL530X sensor task that drives XL530X ToF sensor.
         
-        When enabled, the system creates an independent thread to run the GPS test task,
-        with a timer triggering every 1000ms to call the GPS test step function.
+        When enabled, the system creates an independent thread to run the TOF sensor task,
+        which initializes and continuously reads distance data from XL530X sensor.
+
+    if WORK_TASK_TOF_XL530X_EN
+
+        config WORK_TASK_TOF_XL530X_I2C_NAME
+            string "I2C bus device name"
+            default "hwi2c1"
+            help
+                The I2C bus device name used to access XL530X sensor
+
+    endif

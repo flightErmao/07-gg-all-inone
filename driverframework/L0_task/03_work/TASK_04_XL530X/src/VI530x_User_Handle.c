@@ -25,14 +25,10 @@
 ***tlen：长度
 ***return：[uint8_t]0-操作成功（I2C读写无异常）;other-异常（I2C读写有异常）
 **/
-/*uint8_t IIC_Write_X_Bytes(uint8_t dev_addr, uint8_t addr, uint8_t *pValue, uint16_t tlen)
-{
-	
-}*/
-/*uint8_t IIC_Read_X_Bytes(uint8_t dev_addr, uint8_t addr, uint8_t *value, uint16_t tlen)
-{
+// 这些函数在taskTofXl530x.c中实现
+extern uint8_t IIC_Write_X_Bytes(uint8_t dev_addr, uint8_t addr, uint8_t *pValue, uint16_t tlen);
+extern uint8_t IIC_Read_X_Bytes(uint8_t dev_addr, uint8_t addr, uint8_t *value, uint16_t tlen);
 
-}*/
 /* End user code.  */
 
 /**
@@ -119,12 +115,8 @@ VI530x_Status VI530x_IIC_Write_X_Bytes(uint8_t addr, uint8_t *pValue, uint16_t t
  * @param 	[none]
  * @return 	[none]
  */
-void VI530x_Delay_Ms(uint16_t nMs)
-{
-	/* Start user code for adding. */
-		//必须满足大于等于1*nMS ms
-	/* End user code.  */
-}
+// VI530x_Delay_Ms 函数在 taskTofXl530x.c 中实现
+// 这里不再定义，避免重复定义错误
 
 //添加于输入中断函数内调用
 /**
@@ -132,36 +124,16 @@ void VI530x_Delay_Ms(uint16_t nMs)
  * @param 	[none]
  * @return 	[none]
  */
-void VI530x_GPIO_Interrupt_Handle(void)
-{
-	if(VI530x_Cali_Data.VI530x_Interrupt_Mode_Status)
-	{
-		VI530x_GPIO_Interrupt_status = 1;
-	}
-}
+// VI530x_GPIO_Interrupt_Handle 函数在 taskTofXl530x.c 中实现
+// 这里不再定义，避免重复定义错误
 
 /**
  * @brief 	VI530X XSHUS引脚控制
  * @param 	[uint8_t] state：0-拉低，1-拉高
  * @return 	[none]
  */
-void VI530x_XSHUT_Enable(uint8_t state)
-{
-	if(state)
-	{
-		//Xshut输出高电平
-		/* Start user code for adding. */
-
-		/* End user code.  */
-	}
-	else
-	{
-		//Xshut输出低电平
-		/* Start user code for adding. */
-
-		/* End user code.  */
-	}
-}
+// VI530x_XSHUT_Enable 函数在 taskTofXl530x.c 中实现
+// 这里不再定义，避免重复定义错误
 
 VI530x_MEASURE_TypeDef result;
 //移植流程
@@ -303,7 +275,7 @@ void VI530x_main(void)
 		if(!ret)
 		{
 			//！！建议confidece大于70，ToF值为可信
-			printf("tof = %4d, confidece = %3d, peak = %4d, noise = %4d, intecounts = %4d\r\n", result.correction_tof,result.confidence,result.peak,result.noise,result.intecounts);
+			printf("tof = %4d, confidece = %3u, peak = %4lu, noise = %4lu, intecounts = %4lu\r\n", result.correction_tof, (unsigned int)result.confidence, (unsigned long)result.peak, (unsigned long)result.noise, (unsigned long)result.intecounts);
 			/* 参数说明：
 			result.correction_tof：距离值，毫米为单位；
 			result.confidence：表示当前 TOF 值的可信度，建议大于70可信，具体可以根据应用调整；

@@ -71,6 +71,7 @@ VI530x_Status VI530x_Read_ChipID(void)
 
 	ret |= VI530x_IIC_Read_X_Bytes(VI530x_REG_CHIPID_BASE, chipid, 3);
 	ChipID = (chipid[1] << 16) + (chipid[0] << 8) + chipid[2];
+	(void)ChipID;  // 抑制未使用变量警告
 
 #ifdef Debug_Mode
 	printf("VI530x chip ID is %#x\r\n",ChipID);
@@ -313,6 +314,15 @@ VI530x_Status VI530x_Get_Measure_Data(VI530x_MEASURE_TypeDef *result, uint8_t wa
 	float confidence = 0;
 	uint32_t peak_r1 = 0;
 	
+	// 抑制未使用变量警告
+	(void)xtalk_tof;
+	(void)xtalk_threshold;
+	(void)ref_tof;
+	(void)tof1_bin;
+	(void)tof2_bin;
+	(void)reftof;
+	(void)peak_r1;
+	
 
 	while(time_out_cnt--)
 	{
@@ -330,7 +340,8 @@ VI530x_Status VI530x_Get_Measure_Data(VI530x_MEASURE_TypeDef *result, uint8_t wa
 			memcpy(&ac[1], &data_buff[19], 4);
 			memcpy(&ac[2], &data_buff[22], 4);
 			memcpy(&intecounts, &data_buff[26], 4);
-			memcpy(&noise, &data_buff[29], 4);
+			// 修复：从data_buff[29]读取3字节，因为数组只有32字节，索引29-31只有3字节
+			noise = (uint32_t)data_buff[29] | ((uint32_t)data_buff[30] << 8) | ((uint32_t)data_buff[31] << 16);
 			intecounts = intecounts & 0x00FFFFFF;
 			noise = noise & 0x00FFFFFF;
 			//reftof = (data_buff[25] << 8) + data_buff[0];
@@ -520,6 +531,11 @@ VI530x_Status VI530x_Offset_Calibration(float mili)
 	float confidence = 0;
 	float offset_mili = 0.0;
 	
+	// 抑制未使用变量警告
+	(void)tof1_bin;
+	(void)tof2_bin;
+	(void)reftof;
+	
 	ret |= VI530x_Stop_Continue_Ranging_Cmd();
 	//开启温度校准:0x00-关，0x01-开
 	//ret |= VI530x_Set_Sys_Temperature_Enable(0x00);
@@ -546,7 +562,8 @@ VI530x_Status VI530x_Offset_Calibration(float mili)
       memcpy(&ac[1], &data_buff[19], 4);
       memcpy(&ac[2], &data_buff[22], 4);
       memcpy(&intecounts, &data_buff[26], 4);
-      memcpy(&noise, &data_buff[29], 4);
+      // 修复：从data_buff[29]读取3字节，因为数组只有32字节，索引29-31只有3字节
+      noise = (uint32_t)data_buff[29] | ((uint32_t)data_buff[30] << 8) | ((uint32_t)data_buff[31] << 16);
       intecounts = intecounts & 0x00FFFFFF;
       noise = noise & 0x00FFFFFF;
 
@@ -666,6 +683,11 @@ VI530x_Status VI530x_GradientK_Calibration(float mili_offset, float mili_k)
 	uint32_t peak[3] = {0,0,0};
 	uint32_t ac[3] = {0,0,0};
 	
+	// 抑制未使用变量警告
+	(void)tof1_bin;
+	(void)tof2_bin;
+	(void)reftof;
+	
 	//计算参数
 	int16_t raw_tof = 0;
 	uint32_t raw_peak = 0;
@@ -712,7 +734,8 @@ VI530x_Status VI530x_GradientK_Calibration(float mili_offset, float mili_k)
       memcpy(&ac[1], &data_buff[19], 4);
       memcpy(&ac[2], &data_buff[22], 4);
       memcpy(&intecounts, &data_buff[26], 4);
-      memcpy(&noise, &data_buff[29], 4);
+      // 修复：从data_buff[29]读取3字节，因为数组只有32字节，索引29-31只有3字节
+      noise = (uint32_t)data_buff[29] | ((uint32_t)data_buff[30] << 8) | ((uint32_t)data_buff[31] << 16);
       intecounts = intecounts & 0x00FFFFFF;
       noise = noise & 0x00FFFFFF;
 
