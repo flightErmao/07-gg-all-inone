@@ -25,3 +25,6 @@
 [submodule "driverframework/L1_middleWare/03_package/at32f435_437_hal_driver-latest"]
 	path = driverframework/L1_middleWare/03_package/at32f435_437_hal_driver-latest
 	url = https://github.com/Tool-01-middleware/AT32F435_437_HAL_Driver.git
+[submodule "driverframework/L1_middleWare/03_package/uparam"]
+	path = driverframework/L1_middleWare/03_package/uparam
+	url = git@github.com:Tool-01-middleware/uparam.git
