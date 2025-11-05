@@ -1,0 +1,35 @@
+menuconfig PROJECT_PX4_TASK_RATE_CONTROL_EN
+    bool "ENABLE: PROJECT_PX4_TASK_RATE_CONTROL_EN"
+    default n
+    help
+        Enable rate control task that periodically calls MulticopterRateControl::Run().
+        
+    if PROJECT_PX4_TASK_RATE_CONTROL_EN
+        config PROJECT_PX4_TASK_RATE_CONTROL_PERIOD_MS
+            int "Rate Control Task Period (ms)"
+            range 1 100
+            default 4
+            help
+                Period (in milliseconds) for rate control task execution. Default: 4ms (250Hz).
+
+        config PROJECT_PX4_TASK_RATE_CONTROL_PRIORITY
+            int "Rate Control Task Priority"
+            range 1 32
+            default 5
+            help
+                RT-Thread task priority for rate control task. Higher number = higher priority.
+
+        config PROJECT_PX4_TASK_RATE_CONTROL_STACK_SIZE
+            int "Rate Control Task Stack Size (bytes)"
+            range 1024 16384
+            default 4096
+            help
+                Stack size for rate control task thread.
+
+        config PROJECT_PX4_TASK_RATE_CONTROL_DEBUGPIN_EN
+            bool "ENABLE: Debug Pin Support"
+            default n
+            help
+                Enable debug pin output for rate control task timing.
+    endif
+
