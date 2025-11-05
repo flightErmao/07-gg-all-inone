@@ -1,6 +1,8 @@
 #include <rtdevice.h>
 #include <rtthread.h>
 #include <drv_gpio.h>
+#include <string.h>
+#include <stdarg.h>
 
 #include "I2cInterface.h"
 #include "../inc/taskTofXl5300.h"
@@ -9,10 +11,20 @@
 #include "../inc/VI530x_Firmware.h"
 #include "../inc/VI530x_System_Data.h"
 
+#ifdef WORK_TASK_TOF_XL5300_ORINGE_UART_EN
+#include "../../../../L3_peripheral/11_uartConfig/uartConfig.h"
+#endif
+
 /* Static variables */
 static I2cInterface_t g_i2c_interface;
 static struct rt_event g_tof_int_event;
 static rt_bool_t g_tof_event_inited = RT_FALSE;
+
+#ifdef WORK_TASK_TOF_XL5300_ORINGE_UART_EN
+/* UART device for data output */
+static rt_device_t g_tof_uart = RT_NULL;
+static struct serial_configure g_uart_cfg;
+#endif
 
 /* I2C读写函数实现（供VI530x_User_Handle.c调用） */
 uint8_t IIC_Write_X_Bytes(uint8_t dev_addr, uint8_t addr, uint8_t *pValue, uint16_t tlen)
@@ -62,7 +74,7 @@ static void tof_int_callback(void *args)
 }
 
 /* GPIO初始化 */
-static rt_err_t tof_gpio_init(void)
+rt_err_t tof_gpio_init(void)
 {
 #ifdef WORK_TASK_TOF_XL5300_ORINGE_USE_INTERRUPT
     /* 初始化事件（仅在中断模式下需要） */
@@ -89,8 +101,65 @@ static rt_err_t tof_gpio_init(void)
     return RT_EOK;
 }
 
+/* UART初始化 */
+#ifdef WORK_TASK_TOF_XL5300_ORINGE_UART_EN
+static rt_err_t tof_uart_init(void)
+{
+    rt_err_t result;
+    const char* uart_name = WORK_TASK_TOF_XL5300_ORINGE_UART_NAME;
+    
+    /* 查找UART设备 */
+    g_tof_uart = rt_device_find(uart_name);
+    if (!g_tof_uart) {
+        rt_kprintf("[TOF_XL5300] find uart %s fail\n", uart_name);
+        return -RT_ERROR;
+    }
+    
+    /* 打开UART设备 */
+    result = rt_device_open(g_tof_uart, RT_DEVICE_FLAG_TX_BLOCKING);
+    if (result != RT_EOK) {
+        rt_kprintf("[TOF_XL5300] open uart %s fail\n", uart_name);
+        return result;
+    }
+    
+    /* 配置UART参数 */
+    result = uart_config_by_device_name(uart_name, WORK_TASK_TOF_XL5300_ORINGE_UART_BAUD, &g_uart_cfg);
+    if (result != RT_EOK) {
+        rt_kprintf("[TOF_XL5300] get uart cfg fail\n");
+        return result;
+    }
+    
+    result = rt_device_control(g_tof_uart, RT_DEVICE_CTRL_CONFIG, &g_uart_cfg);
+    if (result != RT_EOK) {
+        rt_kprintf("[TOF_XL5300] config uart fail\n");
+        return result;
+    }
+    
+    rt_kprintf("[TOF_XL5300] UART %s initialized, baud:%d\n", uart_name, WORK_TASK_TOF_XL5300_ORINGE_UART_BAUD);
+    return RT_EOK;
+}
+
+/* 通过UART发送数据 */
+static void tof_uart_printf(const char* format, ...)
+{
+    if (!g_tof_uart) {
+        return;
+    }
+    
+    char buffer[256];
+    va_list args;
+    va_start(args, format);
+    int len = rt_vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+    
+    if (len > 0 && len < (int)sizeof(buffer)) {
+        rt_device_write(g_tof_uart, 0, buffer, len);
+    }
+}
+#endif
+
 /* I2C初始化 */
-static rt_err_t tof_i2c_init(void)
+rt_err_t tof_i2c_init(void)
 {
     rt_err_t result = get_i2c_interface(WORK_TASK_TOF_XL5300_ORINGE_I2C_NAME, VI530x_I2C_ADDR, &g_i2c_interface);
     if (result != RT_EOK) {
@@ -105,7 +174,7 @@ static rt_err_t tof_i2c_init(void)
 }
 
 /* VI530x初始化主函数（移植自VI530x_main） */
-static void vi530x_init_and_run(void)
+void vi530x_init_and_run(void)
 {
     VI530x_Status ret = VI530x_OK;
     VI530x_MEASURE_TypeDef result;
@@ -154,9 +223,18 @@ static void vi530x_init_and_run(void)
 #endif
         ret = VI530x_Get_Measure_Data(&result, 1);
         if (!ret) {
+#ifdef WORK_TASK_TOF_XL5300_ORINGE_UART_EN
+            /* 通过UART输出数据 */
+            tof_uart_printf("TOF[%4d] C[%3d] P[%4lu] N[%4lu] I[%4lu]\r\n",
+                           result.correction_tof, result.confidence, 
+                           (unsigned long)result.peak, (unsigned long)result.noise,
+                           (unsigned long)result.intecounts);
+#else
+            /* 通过rt_kprintf输出数据 */
             rt_kprintf("[TOF_XL5300] tof = %4d mm, confidence = %3d, peak = %4lu, noise = %4lu, intecounts = %4lu\n",
                        result.correction_tof, result.confidence, (unsigned long)result.peak, (unsigned long)result.noise,
                        (unsigned long)result.intecounts);
+#endif
         }
 
 #ifdef WORK_TASK_TOF_XL5300_ORINGE_USE_INTERRUPT
@@ -169,7 +247,7 @@ static void vi530x_init_and_run(void)
 }
 
 /* 任务线程入口 */
-static void tof_thread_entry(void* parameter)
+void tof_thread_entry(void* parameter)
 {
     rt_err_t result;
     
@@ -187,6 +265,14 @@ static void tof_thread_entry(void* parameter)
         return;
     }
     
+#ifdef WORK_TASK_TOF_XL5300_ORINGE_UART_EN
+    /* 初始化UART */
+    result = tof_uart_init();
+    if (result != RT_EOK) {
+        rt_kprintf("[TOF_XL5300] UART init failed, will use rt_kprintf\n");
+    }
+#endif
+    
     /* 延时等待硬件稳定 */
     rt_thread_mdelay(10);
     
@@ -194,19 +280,29 @@ static void tof_thread_entry(void* parameter)
     vi530x_init_and_run();
 }
 
+/* Global thread handle for command control */
+rt_thread_t tof_task_thread = RT_NULL;
+
 /* 任务初始化 */
 static int tof_task_init(void)
 {
+#ifdef WORK_TASK_TOF_XL5300_ORINGE_AUTO_START
     rt_thread_t thread = rt_thread_create("tof_xl5300", tof_thread_entry, RT_NULL,
                                            THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
     if (thread != RT_NULL) {
+        tof_task_thread = thread;
         rt_thread_startup(thread);
-        rt_kprintf("[TOF_XL5300] thread started, i2c:%s, addr:0x%02X\n",
+        rt_kprintf("[TOF_XL5300] thread started automatically, i2c:%s, addr:0x%02X\n",
                    WORK_TASK_TOF_XL5300_ORINGE_I2C_NAME, VI530x_I2C_ADDR);
     } else {
         rt_kprintf("[TOF_XL5300] thread create fail\n");
         return -RT_ERROR;
     }
+#else
+    rt_kprintf("[TOF_XL5300] Task initialized (manual start via 'tof start')\n");
+    rt_kprintf("[TOF_XL5300] i2c:%s, addr:0x%02X\n",
+               WORK_TASK_TOF_XL5300_ORINGE_I2C_NAME, VI530x_I2C_ADDR);
+#endif
     
     return RT_EOK;
 }

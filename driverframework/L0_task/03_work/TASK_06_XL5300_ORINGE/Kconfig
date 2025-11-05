@@ -22,6 +22,63 @@ menuconfig WORK_TASK_TOF_XL5300_ORINGE_EN
                 If enabled (y), use GPIO hardware interrupt (0x88).
                 If disabled (n), use register polling mode (0x00).
 
+        config WORK_TASK_TOF_XL5300_ORINGE_AUTO_START
+            bool "Auto start task on init"
+            default y
+            help
+                If enabled (y), task will start automatically on system init.
+                If disabled (n), task must be started manually via command 'tof start'.
+
+        config WORK_TASK_TOF_XL5300_ORINGE_CMD_REFTOF_CALIB
+            bool "Enable RefToF calibration command"
+            default y
+            depends on RT_USING_FINSH
+            help
+                Enable 'tof reftof' command for RefToF calibration.
+
+        config WORK_TASK_TOF_XL5300_ORINGE_CMD_XTALK_CALIB
+            bool "Enable Xtalk calibration command"
+            default y
+            depends on RT_USING_FINSH
+            help
+                Enable 'tof xtalk' command for Xtalk calibration.
+
+        config WORK_TASK_TOF_XL5300_ORINGE_CMD_OFFSET_CALIB
+            bool "Enable Offset calibration command"
+            default y
+            depends on RT_USING_FINSH
+            help
+                Enable 'tof offset' command for Offset calibration.
+
+        config WORK_TASK_TOF_XL5300_ORINGE_CMD_GRADIENT_CALIB
+            bool "Enable Gradient calibration command"
+            default n
+            depends on RT_USING_FINSH
+            help
+                Enable 'tof gradient' command for Gradient calibration.
+                Requires VI530x_GRADIENTK_CALIBRATION to be defined.
+
+        config WORK_TASK_TOF_XL5300_ORINGE_UART_EN
+            bool "Enable UART output for TOF data"
+            default n
+            help
+                Enable UART output for TOF sensor data.
+                If enabled, data will be sent via UART instead of rt_kprintf.
+
+        if WORK_TASK_TOF_XL5300_ORINGE_UART_EN
+            config WORK_TASK_TOF_XL5300_ORINGE_UART_NAME
+                string "UART device name for TOF data output"
+                default "uart1"
+                help
+                    UART device name for sending TOF sensor data.
+
+            config WORK_TASK_TOF_XL5300_ORINGE_UART_BAUD
+                int "UART baud rate for TOF data output"
+                default 115200
+                help
+                    UART baud rate for TOF data transmission.
+        endif
+
     endif
 
 

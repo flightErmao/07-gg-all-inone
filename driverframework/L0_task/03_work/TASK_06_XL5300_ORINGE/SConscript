@@ -11,6 +11,9 @@ src = Glob("./src/*.c")
 
 # 包含路径
 path = [cwd, os.path.join(cwd, "inc")]
+# 添加 uartConfig 路径（如果启用 UART 输出）
+uart_config_path = os.path.join("$(PROJECT_ROOT)", "driverframework", "L3_peripheral", "11_uartConfig")
+path.append(uart_config_path)
 
 # 定义编译组（受 Kconfig 开关控制）
 group = DefineGroup(
