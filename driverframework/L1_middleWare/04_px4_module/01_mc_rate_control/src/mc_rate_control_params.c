@@ -35,9 +35,16 @@
  * @file mc_rate_control_params.c
  *
  * Parameters for multicopter rate controller
+ * 
+ * NOTE: This file is kept for reference but parameters are now defined in
+ * mc_rate_control_params.h as compile-time constants. The // PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h
+ * macros are PX4-specific and not used in this project.
  */
 
-/**
+// Parameters are now defined in mc_rate_control_params.h
+// The following code is commented out as it uses PX4-specific parameter system
+
+/*
  * Roll rate P gain
  *
  * Roll rate proportional gain, i.e. control output for angular speed error 1 rad/s.
@@ -48,7 +55,7 @@
  * @increment 0.01
  * @group Multicopter Rate Control
  */
-PARAM_DEFINE_FLOAT(MC_ROLLRATE_P, 0.15f);
+// // // PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_ROLLRATE_P, 0.15f);  // Now defined in mc_rate_control_params.h
 
 /**
  * Roll rate I gain
@@ -60,7 +67,7 @@ PARAM_DEFINE_FLOAT(MC_ROLLRATE_P, 0.15f);
  * @increment 0.01
  * @group Multicopter Rate Control
  */
-PARAM_DEFINE_FLOAT(MC_ROLLRATE_I, 0.2f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_ROLLRATE_I, 0.2f);
 
 /**
  * Roll rate integrator limit
@@ -72,7 +79,7 @@ PARAM_DEFINE_FLOAT(MC_ROLLRATE_I, 0.2f);
  * @increment 0.01
  * @group Multicopter Rate Control
  */
-PARAM_DEFINE_FLOAT(MC_RR_INT_LIM, 0.30f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_RR_INT_LIM, 0.30f);
 
 /**
  * Roll rate D gain
@@ -85,7 +92,7 @@ PARAM_DEFINE_FLOAT(MC_RR_INT_LIM, 0.30f);
  * @increment 0.0005
  * @group Multicopter Rate Control
  */
-PARAM_DEFINE_FLOAT(MC_ROLLRATE_D, 0.003f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_ROLLRATE_D, 0.003f);
 
 /**
  * Roll rate feedforward
@@ -96,7 +103,7 @@ PARAM_DEFINE_FLOAT(MC_ROLLRATE_D, 0.003f);
  * @decimal 4
  * @group Multicopter Rate Control
  */
-PARAM_DEFINE_FLOAT(MC_ROLLRATE_FF, 0.0f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_ROLLRATE_FF, 0.0f);
 
 /**
  * Roll rate controller gain
@@ -116,7 +123,7 @@ PARAM_DEFINE_FLOAT(MC_ROLLRATE_FF, 0.0f);
  * @increment 0.0005
  * @group Multicopter Rate Control
  */
-PARAM_DEFINE_FLOAT(MC_ROLLRATE_K, 1.0f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_ROLLRATE_K, 1.0f);
 
 /**
  * Pitch rate P gain
@@ -129,7 +136,7 @@ PARAM_DEFINE_FLOAT(MC_ROLLRATE_K, 1.0f);
  * @increment 0.01
  * @group Multicopter Rate Control
  */
-PARAM_DEFINE_FLOAT(MC_PITCHRATE_P, 0.15f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_PITCHRATE_P, 0.15f);
 
 /**
  * Pitch rate I gain
@@ -141,7 +148,7 @@ PARAM_DEFINE_FLOAT(MC_PITCHRATE_P, 0.15f);
  * @increment 0.01
  * @group Multicopter Rate Control
  */
-PARAM_DEFINE_FLOAT(MC_PITCHRATE_I, 0.2f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_PITCHRATE_I, 0.2f);
 
 /**
  * Pitch rate integrator limit
@@ -153,7 +160,7 @@ PARAM_DEFINE_FLOAT(MC_PITCHRATE_I, 0.2f);
  * @increment 0.01
  * @group Multicopter Rate Control
  */
-PARAM_DEFINE_FLOAT(MC_PR_INT_LIM, 0.30f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_PR_INT_LIM, 0.30f);
 
 /**
  * Pitch rate D gain
@@ -165,7 +172,7 @@ PARAM_DEFINE_FLOAT(MC_PR_INT_LIM, 0.30f);
  * @increment 0.0005
  * @group Multicopter Rate Control
  */
-PARAM_DEFINE_FLOAT(MC_PITCHRATE_D, 0.003f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_PITCHRATE_D, 0.003f);
 
 /**
  * Pitch rate feedforward
@@ -176,7 +183,7 @@ PARAM_DEFINE_FLOAT(MC_PITCHRATE_D, 0.003f);
  * @decimal 4
  * @group Multicopter Rate Control
  */
-PARAM_DEFINE_FLOAT(MC_PITCHRATE_FF, 0.0f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_PITCHRATE_FF, 0.0f);
 
 /**
  * Pitch rate controller gain
@@ -196,7 +203,7 @@ PARAM_DEFINE_FLOAT(MC_PITCHRATE_FF, 0.0f);
  * @increment 0.0005
  * @group Multicopter Rate Control
  */
-PARAM_DEFINE_FLOAT(MC_PITCHRATE_K, 1.0f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_PITCHRATE_K, 1.0f);
 
 /**
  * Yaw rate P gain
@@ -209,7 +216,7 @@ PARAM_DEFINE_FLOAT(MC_PITCHRATE_K, 1.0f);
  * @increment 0.01
  * @group Multicopter Rate Control
  */
-PARAM_DEFINE_FLOAT(MC_YAWRATE_P, 0.2f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_YAWRATE_P, 0.2f);
 
 /**
  * Yaw rate I gain
@@ -221,7 +228,7 @@ PARAM_DEFINE_FLOAT(MC_YAWRATE_P, 0.2f);
  * @increment 0.01
  * @group Multicopter Rate Control
  */
-PARAM_DEFINE_FLOAT(MC_YAWRATE_I, 0.1f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_YAWRATE_I, 0.1f);
 
 /**
  * Yaw rate integrator limit
@@ -233,7 +240,7 @@ PARAM_DEFINE_FLOAT(MC_YAWRATE_I, 0.1f);
  * @increment 0.01
  * @group Multicopter Rate Control
  */
-PARAM_DEFINE_FLOAT(MC_YR_INT_LIM, 0.30f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_YR_INT_LIM, 0.30f);
 
 /**
  * Yaw rate D gain
@@ -245,7 +252,7 @@ PARAM_DEFINE_FLOAT(MC_YR_INT_LIM, 0.30f);
  * @increment 0.0005
  * @group Multicopter Rate Control
  */
-PARAM_DEFINE_FLOAT(MC_YAWRATE_D, 0.0f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_YAWRATE_D, 0.0f);
 
 /**
  * Yaw rate feedforward
@@ -256,7 +263,7 @@ PARAM_DEFINE_FLOAT(MC_YAWRATE_D, 0.0f);
  * @decimal 4
  * @group Multicopter Rate Control
  */
-PARAM_DEFINE_FLOAT(MC_YAWRATE_FF, 0.0f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_YAWRATE_FF, 0.0f);
 
 /**
  * Yaw rate controller gain
@@ -276,7 +283,7 @@ PARAM_DEFINE_FLOAT(MC_YAWRATE_FF, 0.0f);
  * @increment 0.0005
  * @group Multicopter Rate Control
  */
-PARAM_DEFINE_FLOAT(MC_YAWRATE_K, 1.0f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_YAWRATE_K, 1.0f);
 
 /**
  * Battery power level scaler
@@ -290,7 +297,7 @@ PARAM_DEFINE_FLOAT(MC_YAWRATE_K, 1.0f);
  * @boolean
  * @group Multicopter Rate Control
  */
-PARAM_DEFINE_INT32(MC_BAT_SCALE_EN, 0);
+// PARAM_DEFINE_INT32  // PX4 specific, parameters now in mc_rate_control_params.h(MC_BAT_SCALE_EN, 0);
 
 /**
  * Low pass filter cutoff frequency for yaw torque setpoint
@@ -304,4 +311,4 @@ PARAM_DEFINE_INT32(MC_BAT_SCALE_EN, 0);
  * @decimal 3
  * @group Multicopter Rate Control
  */
-PARAM_DEFINE_FLOAT(MC_YAW_TQ_CUTOFF, 2.f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_YAW_TQ_CUTOFF, 2.f);

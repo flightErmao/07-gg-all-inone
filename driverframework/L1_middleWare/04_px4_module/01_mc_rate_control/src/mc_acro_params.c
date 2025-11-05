@@ -35,9 +35,16 @@
  * @file mc_acro_params.c
  *
  * Parameters for Acro mode behavior
+ * 
+ * NOTE: This file is kept for reference but parameters are now defined in
+ * mc_rate_control_params.h as compile-time constants. The // PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h
+ * macros are PX4-specific and not used in this project.
  */
 
-/**
+// Parameters are now defined in mc_rate_control_params.h
+// The following code is commented out as it uses PX4-specific parameter system
+
+/*
  * Acro mode maximum roll rate
  *
  * Full stick deflection leads to this rate.
@@ -49,7 +56,7 @@
  * @increment 5
  * @group Multicopter Acro Mode
  */
-PARAM_DEFINE_FLOAT(MC_ACRO_R_MAX, 100.f);
+// // PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_ACRO_R_MAX, 100.f);
 
 /**
  * Acro mode maximum pitch rate
@@ -63,7 +70,7 @@ PARAM_DEFINE_FLOAT(MC_ACRO_R_MAX, 100.f);
  * @increment 5
  * @group Multicopter Acro Mode
  */
-PARAM_DEFINE_FLOAT(MC_ACRO_P_MAX, 100.f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_ACRO_P_MAX, 100.f);
 
 /**
  * Acro mode maximum yaw rate
@@ -77,7 +84,7 @@ PARAM_DEFINE_FLOAT(MC_ACRO_P_MAX, 100.f);
  * @increment 5
  * @group Multicopter Acro Mode
  */
-PARAM_DEFINE_FLOAT(MC_ACRO_Y_MAX, 100.f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_ACRO_Y_MAX, 100.f);
 
 /**
  * Acro mode roll, pitch expo factor
@@ -92,7 +99,7 @@ PARAM_DEFINE_FLOAT(MC_ACRO_Y_MAX, 100.f);
  * @decimal 2
  * @group Multicopter Acro Mode
  */
-PARAM_DEFINE_FLOAT(MC_ACRO_EXPO, 0.f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_ACRO_EXPO, 0.f);
 
 /**
  * Acro mode yaw expo factor
@@ -107,7 +114,7 @@ PARAM_DEFINE_FLOAT(MC_ACRO_EXPO, 0.f);
  * @decimal 2
  * @group Multicopter Acro Mode
  */
-PARAM_DEFINE_FLOAT(MC_ACRO_EXPO_Y, 0.f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_ACRO_EXPO_Y, 0.f);
 
 /**
  * Acro mode roll, pitch super expo factor
@@ -123,7 +130,7 @@ PARAM_DEFINE_FLOAT(MC_ACRO_EXPO_Y, 0.f);
  * @decimal 2
  * @group Multicopter Acro Mode
  */
-PARAM_DEFINE_FLOAT(MC_ACRO_SUPEXPO, 0.f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_ACRO_SUPEXPO, 0.f);
 
 /**
  * Acro mode yaw super expo factor
@@ -139,4 +146,4 @@ PARAM_DEFINE_FLOAT(MC_ACRO_SUPEXPO, 0.f);
  * @decimal 2
  * @group Multicopter Acro Mode
  */
-PARAM_DEFINE_FLOAT(MC_ACRO_SUPEXPOY, 0.f);
+// PARAM_DEFINE_FLOAT  // PX4 specific, parameters now in mc_rate_control_params.h(MC_ACRO_SUPEXPOY, 0.f);
