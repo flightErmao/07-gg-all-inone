@@ -38,6 +38,10 @@ typedef enum
 
 #define VI530x_OFFSET_DISTANCE	300.0 //30cm Offset
 
+#ifdef VI530x_GRADIENTK_CALIBRATION
+	#define VI530x_GRADIENT_DISTANCE	200 //20cm Gradient K，不可以等于VI530x_OFFSET_DISTANCE
+#endif
+
 //i2c读写函数
 /**
  * @brief 	VI530X I2C 1Byte 读

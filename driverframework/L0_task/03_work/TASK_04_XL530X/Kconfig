@@ -3,9 +3,8 @@ menuconfig WORK_TASK_TOF_XL530X_EN
     default n
     help
         Enable TOF XL530X sensor task that drives XL530X ToF sensor.
-        
-        When enabled, the system creates an independent thread to run the TOF sensor task,
-        which initializes and continuously reads distance data from XL530X sensor.
+        When enabled, the system creates an independent thread to initialize
+        and continuously read distance data from the sensor.
 
     if WORK_TASK_TOF_XL530X_EN
 
@@ -14,5 +13,58 @@ menuconfig WORK_TASK_TOF_XL530X_EN
             default "hwi2c1"
             help
                 The I2C bus device name used to access XL530X sensor
+
+        config WORK_TASK_TOF_XL530X_USE_INTERRUPT
+            bool "Use hardware interrupt mode"
+            default n
+            help
+                Enable hardware interrupt mode for data reading.
+                If enabled (y), use GPIO hardware interrupt (0x88).
+                If disabled (n), use register polling mode (0x00).
+
+        config WORK_TASK_TOF_XL530X_AUTO_START
+            bool "Auto start task on init"
+            default y
+            help
+                If enabled (y), task will start automatically on system init.
+                If disabled (n), task must be started manually via command 'tof start'.
+
+        config WORK_TASK_TOF_XL530X_CMD_REFTOF_CALIB
+            bool "Enable RefToF calibration command"
+            default y
+            depends on RT_USING_FINSH
+            help
+                Enable 'tof reftof' command for RefToF calibration.
+
+        config WORK_TASK_TOF_XL530X_CMD_XTALK_CALIB
+            bool "Enable Xtalk calibration command"
+            default y
+            depends on RT_USING_FINSH
+            help
+                Enable 'tof xtalk' command for Xtalk calibration.
+
+        config WORK_TASK_TOF_XL530X_CMD_OFFSET_CALIB
+            bool "Enable Offset calibration command"
+            default y
+            depends on RT_USING_FINSH
+            help
+                Enable 'tof offset' command for Offset calibration.
+
+        config WORK_TASK_TOF_XL530X_CMD_GRADIENT_CALIB
+            bool "Enable Gradient calibration command"
+            default n
+            depends on RT_USING_FINSH
+            help
+                Enable 'tof gradient' command for Gradient calibration.
+                Requires VI530x_GRADIENTK_CALIBRATION to be defined.
+
+        config WORK_TASK_TOF_XL530X_ANOTC_TELEM_EN
+            bool "Enable ANOTC_TELEM output for TOF data"
+            default y
+            depends on TASK_TOOL_01_ANOTC_TELEM_EN
+            help
+                Enable ANOTC_TELEM output for TOF sensor data.
+                If enabled, data will be sent via ANOTC_TELEM protocol.
+                If disabled, data will be sent via rt_kprintf.
 
     endif

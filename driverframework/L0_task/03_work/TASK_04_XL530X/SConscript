@@ -11,6 +11,10 @@ src = Glob("./src/*.c")
 
 # 包含路径
 path = [cwd, os.path.join(cwd, "inc")]
+# 添加 ANOTC_TELEM 路径（如果启用 ANOTC_TELEM 输出）
+if GetDepend(['TASK_TOOL_01_ANOTC_TELEM_EN']):
+    anotc_telem_inc_path = os.path.join("$(PROJECT_ROOT)", "driverframework", "L0_task", "02_tools", "TASK_01_ANOTC_TELEM", "inc")
+    path.append(anotc_telem_inc_path)
 
 # 定义编译组（受 Kconfig 开关控制）
 group = DefineGroup(

@@ -6,4 +6,6 @@ sdk已经上传git@github.com:project-06-02-zz-tof/xl5301-sdk.git
 
 上述问题可能是xl5300和xl5301的固件是不同的
 
+下面的状态是芯晶图寄送的vl5301的模块和sdk驱动的debug截图
+
 ![1762241126035](images/readme/1762241126035.png)

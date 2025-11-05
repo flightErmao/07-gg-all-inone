@@ -17,8 +17,8 @@ void sendDshotMotorData(uint16_t count_ms) {
 #else
     uint8_t group = 1;
 #endif
-    
-    sendUserDatauint16_4(group, m1, m2, m3, m4);
+
+    sendUserDataUint16_4(group, m1, m2, m3, m4);
   }
 }
 
