@@ -154,21 +154,27 @@ typedef struct {
   dir_e flipDir; /*翻滚方向*/
 } control_t;
 
-typedef struct {
-  mode_e x;
-  mode_e y;
-  mode_e z;
-  mode_e roll;
-  mode_e pitch;
-  mode_e yaw;
-} stabilizer_mode_t;
+// typedef struct {
+//   mode_e x;
+//   mode_e y;
+//   mode_e z;
+//   mode_e roll;
+//   mode_e pitch;
+//   mode_e yaw;
+// } stabilizer_mode_t;
+
+typedef enum {
+  FLYER_MODE_MANUAL = 0,
+  FLYER_MODE_STABLIZE,
+} flyer_mode_e;
 
 typedef struct {
   attitude_t attitude;      // deg
   attitude_t attitudeRate;  // deg/s
   point_t position;         // m
   velocity_t velocity;      // m/s
-  stabilizer_mode_t mode;
+  // stabilizer_mode_t mode;
+  flyer_mode_e fly_mode;
   float thrust;
   bool armed;  // 解锁标志
 } setpoint_t;

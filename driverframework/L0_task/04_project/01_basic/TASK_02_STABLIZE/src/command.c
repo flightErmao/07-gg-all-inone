@@ -131,13 +131,14 @@ void commanderGetSetpoint(const pilot_cmd_bus_t* rc_data, setpoint_t* setpoint) 
 #else
   setpoint->thrust = rc_data->stick_throttle;
 #endif
-  setpoint->mode.x = modeDisable;
-  setpoint->mode.y = modeDisable;
-  setpoint->mode.z = modeDisable;
-  setpoint->mode.roll = modeDisable;
-  setpoint->mode.pitch = modeDisable;
-  setpoint->mode.yaw = modeDisable;
+  // setpoint->mode.x = modeDisable;
+  // setpoint->mode.y = modeDisable;
+  // setpoint->mode.z = modeDisable;
+  // setpoint->mode.roll = modeDisable;
+  // setpoint->mode.pitch = modeDisable;
+  // setpoint->mode.yaw = modeDisable;
   setpoint->armed = rc_data->ram_status;
+  setpoint->fly_mode = rc_data->ctrl_mode == CTRL_MODE_ANGLE ? FLYER_MODE_STABLIZE : FLYER_MODE_MANUAL;
   commanderHandleArmLogging(setpoint);
   return;
 }
