@@ -1,0 +1,6 @@
+menuconfig L1_MIDDLEWARE_04_PX4_MODULE_01_MC_RATE_CONTROL_EN
+    bool "ENABLE: L1_MIDDLEWARE_04_PX4_MODULE_01_MC_RATE_CONTROL_EN"
+    default n
+    help
+        Enable multicopter rate control module.
+

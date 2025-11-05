@@ -1,0 +1,13 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+src = Glob("./src/*.c") + Glob("./src/*.cpp")
+path = [cwd, os.path.join(cwd, "inc")]
+
+group = DefineGroup(
+    "L1_MIDDLEWARE_04_PX4_MODULE_01_MC_RATE_CONTROL_EN", src, depend=["L1_MIDDLEWARE_04_PX4_MODULE_01_MC_RATE_CONTROL_EN"], CPPPATH=path
+)
+
+Return("group")
+
