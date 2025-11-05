@@ -12,15 +12,15 @@ void sendRcData(uint16_t count_ms) {
     rt_uint16_t* rc_channels = getRcChannels();
     
     if (rc_channels != RT_NULL) {
-      sendUserDatauint16_8(2, 
-                          rc_channels[0],   // CH1
-                          rc_channels[1],   // CH2
-                          rc_channels[2],   // CH3
-                          rc_channels[3],   // CH4
-                          rc_channels[4],   // CH5
-                          rc_channels[5],   // CH6
-                          rc_channels[6],   // CH7
-                          rc_channels[7]);  // CH8
+      sendUserDataUint16_8(2,
+                           rc_channels[0],   // CH1
+                           rc_channels[1],   // CH2
+                           rc_channels[2],   // CH3
+                           rc_channels[3],   // CH4
+                           rc_channels[4],   // CH5
+                           rc_channels[5],   // CH6
+                           rc_channels[6],   // CH7
+                           rc_channels[7]);  // CH8
     }
   }
 
