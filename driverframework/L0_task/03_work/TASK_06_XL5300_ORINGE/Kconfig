@@ -14,6 +14,14 @@ menuconfig WORK_TASK_TOF_XL5300_ORINGE_EN
             help
                 The I2C bus device name used to access XL5300_ORINGE sensor
 
+        config WORK_TASK_TOF_XL5300_ORINGE_USE_INTERRUPT
+            bool "Use hardware interrupt mode"
+            default n
+            help
+                Enable hardware interrupt mode for data reading.
+                If enabled (y), use GPIO hardware interrupt (0x88).
+                If disabled (n), use register polling mode (0x00).
+
     endif
 
 

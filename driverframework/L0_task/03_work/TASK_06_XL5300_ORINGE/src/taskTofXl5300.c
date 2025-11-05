@@ -114,23 +114,27 @@ static void tof_int_callback(void *args)
 static rt_err_t tof_gpio_init(void)
 {
 #ifdef RT_USING_PIN
-  /* 初始化事件 */
+#ifdef WORK_TASK_TOF_XL5300_ORINGE_USE_INTERRUPT
+  /* 初始化事件（仅在中断模式下需要） */
   if (!g_tof_event_inited) {
     if (rt_event_init(&g_tof_int_event, "tof_ie", RT_IPC_FLAG_FIFO) != RT_EOK) {
       return -RT_ERROR;
     }
     g_tof_event_inited = RT_TRUE;
   }
+#endif
 
-    /* 配置XSHUT引脚（PB6）为输出，上拉 */
-    rt_pin_mode(XSHUT_PIN_NUM, PIN_MODE_OUTPUT);
-    /* 初始状态：XSHUT拉低（复位） */
-    rt_pin_write(XSHUT_PIN_NUM, PIN_LOW);
+  /* 配置XSHUT引脚（PB6）为输出，上拉 */
+  rt_pin_mode(XSHUT_PIN_NUM, PIN_MODE_OUTPUT);
+  /* 初始状态：XSHUT拉低（复位） */
+  rt_pin_write(XSHUT_PIN_NUM, PIN_LOW);
 
+#ifdef WORK_TASK_TOF_XL5300_ORINGE_USE_INTERRUPT
     /* 配置中断引脚（PB7）为输入，下拉，改为上升沿中断（参考 mpu6500） */
     rt_pin_mode(INT_PIN_NUM, PIN_MODE_INPUT_PULLDOWN);
     rt_pin_attach_irq(INT_PIN_NUM, PIN_IRQ_MODE_RISING, tof_int_callback, RT_NULL);
     rt_pin_irq_enable(INT_PIN_NUM, PIN_IRQ_ENABLE);
+#endif
 #else
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     
@@ -146,7 +150,8 @@ static rt_err_t tof_gpio_init(void)
     
     /* 初始状态：XSHUT拉低（复位） */
     HAL_GPIO_WritePin(XSHUT_GPIO_PORT, XSHUT_GPIO_PIN, GPIO_PIN_RESET);
-    
+
+#ifdef WORK_TASK_TOF_XL5300_ORINGE_USE_INTERRUPT
     /* 配置中断引脚（PB7）为输入，下拉，下降沿中断 */
     GPIO_InitStruct.Pin = INT_GPIO_PIN;
     GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
@@ -162,7 +167,8 @@ static rt_err_t tof_gpio_init(void)
     nvic_irq_enable(EXTI9_5_IRQn, 5, 0);
 #endif
 #endif
-    
+#endif
+
     return RT_EOK;
 }
 
@@ -212,8 +218,11 @@ static void vi530x_init_and_run(void)
     // 2、GPIO 初始化（已在tof_gpio_init中完成）
 
     // 3、选择中断方式：0x88----GPIO硬件中断，0x00----寄存器查询
+#ifdef WORK_TASK_TOF_XL5300_ORINGE_USE_INTERRUPT
     VI530x_Cali_Data.VI530x_Interrupt_Mode_Status = 0x88;  // GPIO引脚启用，硬件中断
-    // VI530x_Cali_Data.VI530x_Interrupt_Mode_Status = 0;  // GPIO引脚启用，硬件中断
+#else
+    VI530x_Cali_Data.VI530x_Interrupt_Mode_Status = 0x00;  // 寄存器查询模式
+#endif
 
     // 4、VI530x初始化，选择复位方式
     VI530x_Chip_PowerON();  // Xshut引脚启用，硬件复位/使能，**建议方式**
@@ -237,20 +246,28 @@ static void vi530x_init_and_run(void)
     
     // 9、循环读取测距数据
     while (1) {
-#ifdef RT_USING_PIN
+#ifdef WORK_TASK_TOF_XL5300_ORINGE_USE_INTERRUPT
       // 采用事件方式等待中断到来（参考 mpu6500）
-      if (g_tof_event_inited) {
-        rt_event_recv(&g_tof_int_event, TOF_INT_EVENT_FLAG, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR, RT_WAITING_FOREVER,
-                      RT_NULL);
-      }
+#ifdef RT_USING_PIN
+        if (g_tof_event_inited) {
+          rt_event_recv(&g_tof_int_event, TOF_INT_EVENT_FLAG, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR,
+                        RT_WAITING_FOREVER, RT_NULL);
+        }
 #endif
-            ret = VI530x_Get_Measure_Data(&result, 1);
-            if (!ret) {
-              rt_kprintf("[TOF_XL5300] tof = %4d mm, confidence = %3d, peak = %4lu, noise = %4lu, intecounts = %4lu\n",
-                         result.correction_tof, result.confidence, (unsigned long)result.peak,
-                         (unsigned long)result.noise, (unsigned long)result.intecounts);
-            }
+#endif
+        ret = VI530x_Get_Measure_Data(&result, 1);
+        if (!ret) {
+          rt_kprintf("[TOF_XL5300] tof = %4d mm, confidence = %3d, peak = %4lu, noise = %4lu, intecounts = %4lu\n",
+                     result.correction_tof, result.confidence, (unsigned long)result.peak, (unsigned long)result.noise,
+                     (unsigned long)result.intecounts);
+        }
+
+#ifdef WORK_TASK_TOF_XL5300_ORINGE_USE_INTERRUPT
+        // 中断模式下不需要延时，等待中断即可
+#else
+      // 软件查询模式下需要延时
       rt_thread_mdelay(5);
+#endif
     }
 }
 

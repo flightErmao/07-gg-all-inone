@@ -154,9 +154,9 @@ void VI530x_main(void)
 	/* End user code.  */
 
 	//3、选择中断方式：0x00----寄存器0x03查询，其他值----GPIO硬件中断
-#if 1
+#ifdef WORK_TASK_TOF_XL5300_ORINGE_USE_INTERRUPT
 	VI530x_Cali_Data.VI530x_Interrupt_Mode_Status = 0x88;		//GPIO引脚启用，硬件中断
-#else	
+#else
 	VI530x_Cali_Data.VI530x_Interrupt_Mode_Status = 0x00;		//GPIO引脚不启用，软件中断
 #endif
 
