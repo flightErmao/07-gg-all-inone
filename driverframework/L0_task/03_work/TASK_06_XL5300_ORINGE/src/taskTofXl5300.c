@@ -1,55 +1,18 @@
 #include <rtdevice.h>
 #include <rtthread.h>
+#include <drv_gpio.h>
 
 #include "I2cInterface.h"
+#include "../inc/taskTofXl5300.h"
 #include "../inc/VI530x_User_Handle.h"
 #include "../inc/VI530x_API.h"
 #include "../inc/VI530x_Firmware.h"
 #include "../inc/VI530x_System_Data.h"
 
-// 使用RT-Thread的pin API或者直接使用HAL库
-#ifdef RT_USING_PIN
-#include <drv_gpio.h>
-#include <rtdevice.h>
-#else
-// 如果使用HAL库，需要确保正确包含
-#ifdef RT_USING_STM32_HAL
-#include "stm32f4xx_hal.h"
-#elif defined(RT_USING_AT32_HAL)
-#include "at32f435_437.h"
-#endif
-#endif
-
-#define THREAD_PRIORITY 20
-#define THREAD_STACK_SIZE 4096
-#define THREAD_TIMESLICE 5
-
+/* Static variables */
 static I2cInterface_t g_i2c_interface;
-
-/* GPIO定义：复位引脚PB6，中断引脚PB7 */
-#ifdef RT_USING_PIN
-#define XSHUT_PIN_NUM GET_PIN(B, 6)
-#define INT_PIN_NUM GET_PIN(B, 7)
-#else
-// 使用HAL库定义
-#define XSHUT_GPIO_PORT  GPIOB
-#define XSHUT_GPIO_PIN   GPIO_PIN_6
-#define INT_GPIO_PORT    GPIOB
-#define INT_GPIO_PIN     GPIO_PIN_7
-#endif
-
-/* 中断事件（参照 mpu6500 方式） */
-#ifdef RT_USING_PIN
-#ifndef TOF_INT_EVENT_FLAG
-#define TOF_INT_EVENT_FLAG (1u << 0)
-#endif
 static struct rt_event g_tof_int_event;
 static rt_bool_t g_tof_event_inited = RT_FALSE;
-#endif
-
-/* VI530x设备地址 */
-// VI530x默认8位地址是0xD8，get_i2c_interface需要7位地址，所以是0xD8 >> 1 = 0x6C
-#define VI530x_I2C_ADDR  0x6C  // 7位地址，对应8位地址0xD8
 
 /* I2C读写函数实现（供VI530x_User_Handle.c调用） */
 uint8_t IIC_Write_X_Bytes(uint8_t dev_addr, uint8_t addr, uint8_t *pValue, uint16_t tlen)
@@ -73,21 +36,11 @@ void VI530x_Delay_Ms(uint16_t nMs)
 /* XSHUT引脚控制实现 */
 void VI530x_XSHUT_Enable(uint8_t state)
 {
-#ifdef RT_USING_PIN
     if (state) {
         rt_pin_write(XSHUT_PIN_NUM, PIN_HIGH);
     } else {
         rt_pin_write(XSHUT_PIN_NUM, PIN_LOW);
     }
-#else
-    if (state) {
-        // Xshut输出高电平
-        HAL_GPIO_WritePin(XSHUT_GPIO_PORT, XSHUT_GPIO_PIN, GPIO_PIN_SET);
-    } else {
-        // Xshut输出低电平
-        HAL_GPIO_WritePin(XSHUT_GPIO_PORT, XSHUT_GPIO_PIN, GPIO_PIN_RESET);
-    }
-#endif
 }
 
 /* GPIO中断处理函数（供VI530x_User_Handle.c调用） */
@@ -96,11 +49,9 @@ void VI530x_GPIO_Interrupt_Handle(void)
     if(VI530x_Cali_Data.VI530x_Interrupt_Mode_Status)
     {
         VI530x_GPIO_Interrupt_status = 1;
-#ifdef RT_USING_PIN
         if (g_tof_event_inited) {
-          rt_event_send(&g_tof_int_event, TOF_INT_EVENT_FLAG);
+            rt_event_send(&g_tof_int_event, TOF_INT_EVENT_FLAG);
         }
-#endif
     }
 }
 
@@ -113,21 +64,20 @@ static void tof_int_callback(void *args)
 /* GPIO初始化 */
 static rt_err_t tof_gpio_init(void)
 {
-#ifdef RT_USING_PIN
 #ifdef WORK_TASK_TOF_XL5300_ORINGE_USE_INTERRUPT
-  /* 初始化事件（仅在中断模式下需要） */
-  if (!g_tof_event_inited) {
-    if (rt_event_init(&g_tof_int_event, "tof_ie", RT_IPC_FLAG_FIFO) != RT_EOK) {
-      return -RT_ERROR;
+    /* 初始化事件（仅在中断模式下需要） */
+    if (!g_tof_event_inited) {
+        if (rt_event_init(&g_tof_int_event, "tof_ie", RT_IPC_FLAG_FIFO) != RT_EOK) {
+            return -RT_ERROR;
+        }
+        g_tof_event_inited = RT_TRUE;
     }
-    g_tof_event_inited = RT_TRUE;
-  }
 #endif
 
-  /* 配置XSHUT引脚（PB6）为输出，上拉 */
-  rt_pin_mode(XSHUT_PIN_NUM, PIN_MODE_OUTPUT);
-  /* 初始状态：XSHUT拉低（复位） */
-  rt_pin_write(XSHUT_PIN_NUM, PIN_LOW);
+    /* 配置XSHUT引脚（PB6）为输出，上拉 */
+    rt_pin_mode(XSHUT_PIN_NUM, PIN_MODE_OUTPUT);
+    /* 初始状态：XSHUT拉低（复位） */
+    rt_pin_write(XSHUT_PIN_NUM, PIN_LOW);
 
 #ifdef WORK_TASK_TOF_XL5300_ORINGE_USE_INTERRUPT
     /* 配置中断引脚（PB7）为输入，下拉，改为上升沿中断（参考 mpu6500） */
@@ -135,60 +85,9 @@ static rt_err_t tof_gpio_init(void)
     rt_pin_attach_irq(INT_PIN_NUM, PIN_IRQ_MODE_RISING, tof_int_callback, RT_NULL);
     rt_pin_irq_enable(INT_PIN_NUM, PIN_IRQ_ENABLE);
 #endif
-#else
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
     
-    /* 使能GPIOB时钟 */
-    __HAL_RCC_GPIOB_CLK_ENABLE();
-    
-    /* 配置XSHUT引脚（PB6）为输出，上拉 */
-    GPIO_InitStruct.Pin = XSHUT_GPIO_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_PULLUP;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(XSHUT_GPIO_PORT, &GPIO_InitStruct);
-    
-    /* 初始状态：XSHUT拉低（复位） */
-    HAL_GPIO_WritePin(XSHUT_GPIO_PORT, XSHUT_GPIO_PIN, GPIO_PIN_RESET);
-
-#ifdef WORK_TASK_TOF_XL5300_ORINGE_USE_INTERRUPT
-    /* 配置中断引脚（PB7）为输入，下拉，下降沿中断 */
-    GPIO_InitStruct.Pin = INT_GPIO_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-    GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(INT_GPIO_PORT, &GPIO_InitStruct);
-    
-    /* 配置NVIC中断 */
-#ifdef RT_USING_STM32_HAL
-    HAL_NVIC_SetPriority(EXTI9_5_IRQn, 5, 0);
-    HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
-#elif defined(RT_USING_AT32_HAL)
-    nvic_irq_enable(EXTI9_5_IRQn, 5, 0);
-#endif
-#endif
-#endif
-
     return RT_EOK;
 }
-
-#ifndef RT_USING_PIN
-#ifdef RT_USING_STM32_HAL
-/* EXTI中断回调函数 */
-void EXTI9_5_IRQHandler(void)
-{
-    HAL_GPIO_EXTI_IRQHandler(INT_GPIO_PIN);
-}
-
-/* HAL GPIO EXTI回调 */
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-    if (GPIO_Pin == INT_GPIO_PIN) {
-        VI530x_GPIO_Interrupt_Handle();
-    }
-}
-#endif
-#endif
 
 /* I2C初始化 */
 static rt_err_t tof_i2c_init(void)
@@ -219,9 +118,9 @@ static void vi530x_init_and_run(void)
 
     // 3、选择中断方式：0x88----GPIO硬件中断，0x00----寄存器查询
 #ifdef WORK_TASK_TOF_XL5300_ORINGE_USE_INTERRUPT
-    VI530x_Cali_Data.VI530x_Interrupt_Mode_Status = 0x88;  // GPIO引脚启用，硬件中断
+    VI530x_Cali_Data.VI530x_Interrupt_Mode_Status = VI530x_INTERRUPT_MODE_HW;  // GPIO引脚启用，硬件中断
 #else
-    VI530x_Cali_Data.VI530x_Interrupt_Mode_Status = 0x00;  // 寄存器查询模式
+    VI530x_Cali_Data.VI530x_Interrupt_Mode_Status = VI530x_INTERRUPT_MODE_SW;  // 寄存器查询模式
 #endif
 
     // 4、VI530x初始化，选择复位方式
@@ -247,26 +146,24 @@ static void vi530x_init_and_run(void)
     // 9、循环读取测距数据
     while (1) {
 #ifdef WORK_TASK_TOF_XL5300_ORINGE_USE_INTERRUPT
-      // 采用事件方式等待中断到来（参考 mpu6500）
-#ifdef RT_USING_PIN
+        // 采用事件方式等待中断到来（参考 mpu6500）
         if (g_tof_event_inited) {
-          rt_event_recv(&g_tof_int_event, TOF_INT_EVENT_FLAG, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR,
-                        RT_WAITING_FOREVER, RT_NULL);
+            rt_event_recv(&g_tof_int_event, TOF_INT_EVENT_FLAG, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR,
+                          RT_WAITING_FOREVER, RT_NULL);
         }
-#endif
 #endif
         ret = VI530x_Get_Measure_Data(&result, 1);
         if (!ret) {
-          rt_kprintf("[TOF_XL5300] tof = %4d mm, confidence = %3d, peak = %4lu, noise = %4lu, intecounts = %4lu\n",
-                     result.correction_tof, result.confidence, (unsigned long)result.peak, (unsigned long)result.noise,
-                     (unsigned long)result.intecounts);
+            rt_kprintf("[TOF_XL5300] tof = %4d mm, confidence = %3d, peak = %4lu, noise = %4lu, intecounts = %4lu\n",
+                       result.correction_tof, result.confidence, (unsigned long)result.peak, (unsigned long)result.noise,
+                       (unsigned long)result.intecounts);
         }
 
 #ifdef WORK_TASK_TOF_XL5300_ORINGE_USE_INTERRUPT
         // 中断模式下不需要延时，等待中断即可
 #else
-      // 软件查询模式下需要延时
-      rt_thread_mdelay(5);
+        // 软件查询模式下需要延时
+        rt_thread_mdelay(5);
 #endif
     }
 }
