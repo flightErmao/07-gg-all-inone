@@ -9,7 +9,8 @@
 /* Attitude/Rate PID interfaces (merged) */
 void attitudeControlInit(float rateDt, float angleDt);
 bool attitudeControlTest(void);
-void attitudeRatePID(const Axis3f *actualRate, const attitude_t *desiredRate, control_t *output);
+void attitudeRatePID(const Axis3f *actualRate, const attitude_t *desiredRate, const Axis3f *angularAccel,
+                     control_t *output);
 void attitudeAnglePID(const attitude_t *actualAngle, const attitude_t *desiredAngle, attitude_t *outDesiredRate);
 void attitudeAnglePidFpv(const setpoint_t *setpoint, const attitude_t *actualAngle, attitude_t *desiredAngle, attitude_t *outDesiredRate);
 void attitudeControllerResetRollAttitudePID(void);

@@ -138,6 +138,7 @@ typedef struct flowMeasurement_s {
 
 typedef struct {
   Axis3f gyro_filter;
+  Axis3f angular_accel;
   attitude_t attitude;
   quaternion_t attitudeQuaternion;
   point_t position;
@@ -147,9 +148,9 @@ typedef struct {
 } state_t;
 
 typedef struct {
-  int16_t roll;
-  int16_t pitch;
-  int16_t yaw;
+  float roll;
+  float pitch;
+  float yaw;
   float thrust;
   dir_e flipDir; /*翻滚方向*/
 } control_t;

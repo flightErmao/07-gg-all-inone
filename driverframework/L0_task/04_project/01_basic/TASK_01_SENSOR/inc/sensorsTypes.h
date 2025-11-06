@@ -51,6 +51,7 @@ typedef struct {
   Axis3i16 gyro_raw;
   Axis3f acc_filter;
   Axis3f gyro_filter;
+  Axis3f angular_accel;
 } sensorData_t;
 
 // 恢复GCC诊断设置

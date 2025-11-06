@@ -8,6 +8,7 @@
 #include <math.h>
 #include <string.h>
 #include "aMlogSensorImu.h"
+#include "timestamp.h"
 #ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
 #include "rpmFilter.h"
 #include "aMcnDshot.h"
@@ -113,6 +114,22 @@ void initImuRotationDir(void) {
 #endif
 }
 
+static void generateAngularAccel(void) {
+  static uint32_t last_timestamp = 0;
+  static Axis3f last_gyro_filter = {0};
+  uint32_t timestamp = timestamp_micros();
+
+  if (last_timestamp != 0) {
+    float dt = (timestamp - last_timestamp) / 1000000.0f;
+    dt = fmaxf(fminf(dt, 0.1f), 0.0005f);  // 限制dt范围在0.5ms到100ms之间，防止异常值影响计算
+    sensors.angular_accel.x = (sensors.gyro_filter.x - last_gyro_filter.x) / dt;
+    sensors.angular_accel.y = (sensors.gyro_filter.y - last_gyro_filter.y) / dt;
+    sensors.angular_accel.z = (sensors.gyro_filter.z - last_gyro_filter.z) / dt;
+  }
+  last_gyro_filter = sensors.gyro_filter;
+  last_timestamp = timestamp;
+}
+
 static void dealWithGyroData(void) {
   gyroBiasFound = getGyroBias(sensors.gyro_raw, &gyroBias);
   gyroRemoveBiasRaw(&sensors.gyro_filter, &sensors.gyro_raw, &gyroBias);
@@ -127,6 +144,7 @@ static void dealWithGyroData(void) {
   applyAxis3fNotchGyro(&sensors.gyro_filter);
   applyAxis3fLpfGyro(&sensors.gyro_filter);
   mlogImuCopyGyroData(RT_NULL, &sensors.gyro_filter);
+  generateAngularAccel();
 }
 
 static void dealWithAccData(void) {

@@ -51,6 +51,7 @@ static void flyerStateUpdate(state_t* state, uint32_t tick) {
     imuUpdate(sensorData.acc_filter, sensorData.gyro_filter, state, ATTITUDE_ESTIMAT_DT);
     state->attitude.timestamp = timestamp_micros();
     state->armed = setpoint_.armed;
+    state->angular_accel = sensorData.angular_accel;
     mcnStatePub(state);
   }
 }
