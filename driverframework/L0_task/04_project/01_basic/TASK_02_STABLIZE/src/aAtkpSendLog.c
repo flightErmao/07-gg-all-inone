@@ -11,8 +11,10 @@
 #include "protocolAtkpInterface.h"
 #include "taskAnotcTelem.h"
 
-void sendFlyerStates(uint16_t count_ms) {
+// Extracted static helpers
+
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_FLYER_ANGLE
+static void logFlyerAngle(uint16_t count_ms) {
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_FLYER_ANGLE_PERIOD_MS
 #define ATKP_LOG_FLYER_ANGLE_PERIOD PROJECT_MINIFLY_TASK_STABLIZE_LOG_FLYER_ANGLE_PERIOD_MS
 #else
@@ -24,9 +26,11 @@ void sendFlyerStates(uint16_t count_ms) {
     packStatus(state_flyer.attitude.roll, -state_flyer.attitude.pitch, -state_flyer.attitude.yaw,
                (int32_t)(state_flyer.position.z * 1000), state_flyer.fly_mode, state_flyer.armed);
   }
+}
 #endif
 
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_DEBUG
+static void logAngleDebug(uint16_t count_ms) {
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_PERIOD_MS
 #define ATKP_LOG_ANGLE_PERIOD PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_PERIOD_MS
 #else
@@ -47,9 +51,11 @@ void sendFlyerStates(uint16_t count_ms) {
     sendUserDatafloat6(PROJECT_MINIFLY_TASK_STABLIZE_LOG_GROUP_ANGLE, attitude_current.roll, attitude_current.pitch,
                        attitude_current.yaw, attitude_desired.roll, attitude_desired.pitch, attitude_desired.yaw);
   }
+}
 #endif
 
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_DEBUG
+static void logRateDebug(uint16_t count_ms) {
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_PERIOD_MS
 #define ATKP_LOG_RATE_PERIOD PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_PERIOD_MS
 #else
@@ -70,9 +76,11 @@ void sendFlyerStates(uint16_t count_ms) {
     sendUserDatafloat6(PROJECT_MINIFLY_TASK_STABLIZE_LOG_GROUP_RATE, rate_current.roll, rate_current.pitch,
                        rate_current.yaw, rate_desired.roll, rate_desired.pitch, rate_desired.yaw);
   }
+}
 #endif
 
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_PID_DEBUG
+static void logAnglePidDebug(uint16_t count_ms) {
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_PID_PERIOD_MS
 #define ATKP_LOG_ANGLE_PID_PERIOD PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_PID_PERIOD_MS
 #else
@@ -92,18 +100,20 @@ void sendFlyerStates(uint16_t count_ms) {
                        angle_pitch_p, angle_pitch_i, angle_pitch_d,
                        angle_yaw_p, angle_yaw_i, angle_yaw_d);
   }
+}
 #endif
 
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_PID_DEBUG
+static void logRatePidDebug(uint16_t count_ms) {
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_PID_PERIOD_MS
 #define ATKP_LOG_RATE_PID_PERIOD PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_PID_PERIOD_MS
 #else
 #define ATKP_LOG_RATE_PID_PERIOD 20
 #endif
   if (!(count_ms % ATKP_LOG_RATE_PID_PERIOD)) {
-    float rate_roll_p, rate_roll_i, rate_roll_d;
-    float rate_pitch_p, rate_pitch_i, rate_pitch_d;
-    float rate_yaw_p, rate_yaw_i, rate_yaw_d;
+    float rate_roll_p, rate_pitch_p, rate_yaw_p;
+    float rate_roll_i, rate_pitch_i, rate_yaw_i;
+    float rate_roll_d, rate_pitch_d, rate_yaw_d;
 
     getRatePidRollDebug(&rate_roll_p, &rate_roll_i, &rate_roll_d);
     getRatePidPitchDebug(&rate_pitch_p, &rate_pitch_i, &rate_pitch_d);
@@ -114,9 +124,11 @@ void sendFlyerStates(uint16_t count_ms) {
                        rate_pitch_p, rate_pitch_i, rate_pitch_d,
                        rate_yaw_p, rate_yaw_i, rate_yaw_d);
   }
+}
 #endif
 
 #ifdef PROJECT_MINIFLY_TASK_RATEPX4_LOG_EN
+static void logRatePx4(uint16_t count_ms) {
 #ifdef PROJECT_MINIFLY_TASK_RATEPX4_LOG_PERIOD_MS
 #define ATKP_LOG_RATEPX4_PERIOD PROJECT_MINIFLY_TASK_RATEPX4_LOG_PERIOD_MS
 #else
@@ -128,6 +140,32 @@ void sendFlyerStates(uint16_t count_ms) {
     sendUserDatafloat3(PROJECT_MINIFLY_TASK_STABLIZE_LOG_GROUP_RATEPX4, rc_pid_int_roll, rc_pid_int_pitch,
                        rc_pid_int_yaw);
   }
+}
+#endif
+
+void sendFlyerStates(uint16_t count_ms) {
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_FLYER_ANGLE
+  logFlyerAngle(count_ms);
+#endif
+
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_DEBUG
+  logAngleDebug(count_ms);
+#endif
+
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_DEBUG
+  logRateDebug(count_ms);
+#endif
+
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_PID_DEBUG
+  logAnglePidDebug(count_ms);
+#endif
+
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_PID_DEBUG
+  logRatePidDebug(count_ms);
+#endif
+
+#ifdef PROJECT_MINIFLY_TASK_RATEPX4_LOG_EN
+  logRatePx4(count_ms);
 #endif
 }
 
