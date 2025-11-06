@@ -145,7 +145,14 @@ void attitudeControlInit(float ratePidDt, float anglePidDt) {
   rcpx4_set_ff(&g_rate_ctrl_px4, FF);
 }
 
-bool attitudeControlTest(void) { return true; }
+static float getDtForRatePid() {
+  uint32_t now_time_us = rt_tick_get_millisecond();
+  static uint32_t last_time_us = 0;
+  float dt_s = (now_time_us - last_time_us) / 1000000.0f;
+  dt_s = fmaxf(fminf(dt_s, 0.01f), 0.0005f);
+  last_time_us = now_time_us;
+  return dt_s;
+}
 
 void attitudeRatePID(const Axis3f* actualRate, const attitude_t* desiredRate, const Axis3f* angularAccel,
                      control_t* output) {
@@ -161,8 +168,8 @@ void attitudeRatePID(const Axis3f* actualRate, const attitude_t* desiredRate, co
 
   /* 以油门近似是否离地，未解锁或极低油门时可视为落地，避免积分 */
   bool landed = (actualThrust_ < 5.0f);
-
-  rcpx4_update(&g_rate_ctrl_px4, rate, rate_sp, angular_accel_vec, RATE_PID_DT, landed, torque);
+  float dt = getDtForRatePid();
+  rcpx4_update(&g_rate_ctrl_px4, rate, rate_sp, angular_accel_vec, dt, landed, torque);
 
   output->roll = pidOutLimit(torque[0]);
   output->pitch = pidOutLimit(torque[1]);
