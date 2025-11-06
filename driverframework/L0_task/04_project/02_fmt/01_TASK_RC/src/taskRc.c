@@ -57,8 +57,15 @@ static void generateCmd(pilot_cmd_bus_t* pilot_cmd_bus, const rt_uint16_t* rc_ch
   } else if (!armStick) {
     pilot_cmd_bus->ram_status = ARM_STATUS_DISARM;
   }
-  // TODO: need use joystick control crtl_mode
-  pilot_cmd_bus->ctrl_mode = CTRL_MODE_ANGLE;
+
+  if (rc_channels_temp[4] < RC_KEY_3WAY_DOWN_THRESHOLD) {
+    pilot_cmd_bus->ctrl_mode = CTRL_MODE_RATE;
+  } else if (rc_channels_temp[4] < RC_KEY_3WAY_UP_THRESHOLD) {
+    pilot_cmd_bus->ctrl_mode = CTRL_MODE_ANGLE;
+  } else {
+    // TODO : add height mode
+    pilot_cmd_bus->ctrl_mode = CTRL_MODE_ANGLE;
+  }
 }
 
 static void rcLossHandler(pilot_cmd_bus_t* pilot_cmd_bus, const rt_uint32_t rc_timestamp) {

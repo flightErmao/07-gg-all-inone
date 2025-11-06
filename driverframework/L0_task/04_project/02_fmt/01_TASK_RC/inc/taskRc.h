@@ -9,8 +9,10 @@ typedef enum {
 } ARM_STATUS_e;
 
 typedef enum {
-  CTRL_MODE_ANGLERATE = 0,
+  CTRL_MODE_RATE = 0,
   CTRL_MODE_ANGLE = 1,
+  CTRL_MODE_HEIGHT = 2,
+  CTRL_MODE_POSITION = 3,
 } CTRL_MODE_e;
 
 typedef struct {

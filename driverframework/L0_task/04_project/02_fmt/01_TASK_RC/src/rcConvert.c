@@ -135,20 +135,20 @@ void normalizationRcChannels(joystickPercent *percent,uint16_t *channels)
 
 void remapRcThrottlePitchRoll(const joystickPercent percent, const flightLimit_t limit_temp, rcValue_t *flydata_temp)
 {
-	//THRUST
-	flydata_temp->thrust = percent.thrust * (limit_temp.max_thrust - MIN_THRUST);
-	flydata_temp->thrust += MIN_THRUST;
-	flydata_temp->thrust = limit(flydata_temp->thrust, MIN_THRUST, limit_temp.max_thrust);
-	
-	//ROLL
-	flydata_temp->roll = percent.roll * limit_temp.max_roll;
-	flydata_temp->roll = limit(flydata_temp->roll, -limit_temp.max_roll, limit_temp.max_roll);
+  flydata_temp->roll = percent.roll;
+  flydata_temp->pitch = percent.pitch;
+  flydata_temp->yaw = percent.yaw;
 
-	//PITCH
-	flydata_temp->pitch = percent.pitch * limit_temp.max_pitch;
-	flydata_temp->pitch = limit(flydata_temp->pitch, -limit_temp.max_pitch, limit_temp.max_pitch);
+  flydata_temp->thrust = percent.thrust * (limit_temp.max_thrust - MIN_THRUST);
+  flydata_temp->thrust += MIN_THRUST;
+  flydata_temp->thrust = limit(flydata_temp->thrust, MIN_THRUST, limit_temp.max_thrust);
 
-	//YAW
-	flydata_temp->yaw = percent.yaw * MAX_YAW;
-	flydata_temp->yaw = limit(flydata_temp->yaw, -MAX_YAW, MAX_YAW);
+  // flydata_temp->roll = percent.roll * limit_temp.max_roll;
+  // flydata_temp->roll = limit(flydata_temp->roll, -limit_temp.max_roll, limit_temp.max_roll);
+
+  // flydata_temp->pitch = percent.pitch * limit_temp.max_pitch;
+  // flydata_temp->pitch = limit(flydata_temp->pitch, -limit_temp.max_pitch, limit_temp.max_pitch);
+
+  // flydata_temp->yaw = percent.yaw * MAX_YAW;
+  // flydata_temp->yaw = limit(flydata_temp->yaw, -MAX_YAW, MAX_YAW);
 }
