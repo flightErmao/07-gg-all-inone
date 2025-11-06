@@ -75,6 +75,27 @@ menuconfig PROJECT_MINIFLY_TASK_STABLIZE_EN
                             help
                                 Period (in milliseconds) for rate debug logging. Default: 20ms.
                     endif
+                
+                config PROJECT_MINIFLY_TASK_RATEPX4_LOG_EN
+                    bool "ENABLE: RatePX4 Debug Logging"
+                    default n
+                    help
+                        Enable RatePX4 debug logging for the stabilize task.
+
+                    if PROJECT_MINIFLY_TASK_RATEPX4_LOG_EN
+                        config PROJECT_MINIFLY_TASK_STABLIZE_LOG_GROUP_RATEPX4
+                            int "Log Group ID for RatePX4 Debug"
+                            range 1 99
+                            default 5
+                            help
+                                Set the group ID for RatePX4 debug logging (1-99).
+                        config PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATEPX4_PERIOD_MS
+                            int "RatePX4 Debug Log Period (ms)"
+                            range 1 1000
+                            default 20
+                            help
+                                Period (in milliseconds) for RatePX4 debug logging. Default: 20ms.
+                    endif
 
                 config PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_PID_DEBUG
                     bool "ENABLE: Angle PID Debug Logging"

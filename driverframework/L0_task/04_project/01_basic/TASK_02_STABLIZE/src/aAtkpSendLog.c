@@ -115,6 +115,20 @@ void sendFlyerStates(uint16_t count_ms) {
                        rate_yaw_p, rate_yaw_i, rate_yaw_d);
   }
 #endif
+
+#ifdef PROJECT_MINIFLY_TASK_RATEPX4_LOG_EN
+#ifdef PROJECT_MINIFLY_TASK_RATEPX4_LOG_PERIOD_MS
+#define ATKP_LOG_RATEPX4_PERIOD PROJECT_MINIFLY_TASK_RATEPX4_LOG_PERIOD_MS
+#else
+#define ATKP_LOG_RATEPX4_PERIOD 20
+#endif
+  if (!(count_ms % ATKP_LOG_RATEPX4_PERIOD)) {
+    float rc_pid_int_roll, rc_pid_int_pitch, rc_pid_int_yaw;
+    getPx4RatePidInt(&rc_pid_int_roll, &rc_pid_int_pitch, &rc_pid_int_yaw);
+    sendUserDatafloat3(PROJECT_MINIFLY_TASK_STABLIZE_LOG_GROUP_RATEPX4, rc_pid_int_roll, rc_pid_int_pitch,
+                       rc_pid_int_yaw);
+  }
+#endif
 }
 
 int addPeriodFunStablize(void) {

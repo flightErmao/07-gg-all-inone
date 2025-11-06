@@ -23,6 +23,7 @@ void getAnglePidYawDebug(float* outP, float* outI, float* outD);
 void getRatePidRollDebug(float* outP, float* outI, float* outD);
 void getRatePidPitchDebug(float* outP, float* outI, float* outD);
 void getRatePidYawDebug(float* outP, float* outI, float* outD);
+void getPx4RatePidInt(float* rollOutInt, float* pitchOutInt, float* yawOutInt);
 
 /* Expose PID objects for modules that tune or read them */
 extern PidObject pidAngleRoll;

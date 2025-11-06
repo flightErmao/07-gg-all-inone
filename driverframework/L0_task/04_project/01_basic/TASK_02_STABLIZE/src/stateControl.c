@@ -242,6 +242,12 @@ void getRatePidYawDebug(float* outP, float* outI, float* outD) {
   if (outD) *outD = pidRateYaw.outD;
 }
 
+void getPx4RatePidInt(float* rollOutInt, float* pitchOutInt, float* yawOutInt) {
+  if (rollOutInt) *rollOutInt = g_rate_ctrl_px4.rate_int[0];
+  if (pitchOutInt) *pitchOutInt = g_rate_ctrl_px4.rate_int[1];
+  if (yawOutInt) *yawOutInt = g_rate_ctrl_px4.rate_int[2];
+}
+
 void stateControlInit(void) { attitudeControlInit(RATE_PID_DT, ANGLE_PID_DT); /*初始化姿态PID*/ }
 
 static bool resetControl(const state_t *state, const setpoint_t *setpoint, control_t *control) {
@@ -254,6 +260,7 @@ static bool resetControl(const state_t *state, const setpoint_t *setpoint, contr
     control->thrust = 0;
     attitudeResetAllPID();
     attitudeDesired_.yaw = state->attitude.yaw;
+    rcpx4_reset_integral(&g_rate_ctrl_px4);
     if (cnt++ > 1500) {
       cnt = 0;
       // configParamGiveSemaphore();
