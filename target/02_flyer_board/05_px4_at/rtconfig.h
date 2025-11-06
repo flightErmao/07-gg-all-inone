@@ -257,6 +257,7 @@
 #define ULOG_OUTPUT_TIME
 #define ULOG_OUTPUT_LEVEL
 #define ULOG_OUTPUT_TAG
+#define ULOG_OUTPUT_THREAD_NAME
 /* end of log format */
 #define ULOG_BACKEND_USING_CONSOLE
 /* end of Utilities */

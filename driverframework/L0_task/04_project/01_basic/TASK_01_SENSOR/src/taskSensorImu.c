@@ -80,7 +80,6 @@ static void sensor_imu_thread_entry(void* parameter) {
     hardwareTimerSensorRecvEvent(RT_WAITING_FOREVER);
 #endif
     if (dev_sensor_imu) {
-      DEBUG_PIN_DEBUG0_HIGH();
       int rb = rt_device_read(dev_sensor_imu, 0, sensor_buffer, SENSORS_MPU6500_BUFF_LEN);
       if (rb == SENSORS_MPU6500_BUFF_LEN) {
         uint32_t timestamp = timestamp_micros();
@@ -88,7 +87,6 @@ static void sensor_imu_thread_entry(void* parameter) {
         sensors_data.timestamp = timestamp;
         mcnSensorImuPublish(&sensors_data);
         mlogImuPushData(timestamp);
-        DEBUG_PIN_DEBUG0_LOW();
       } else {
         static int err_cnt = 0;
         if (++err_cnt % 100 == 0) {

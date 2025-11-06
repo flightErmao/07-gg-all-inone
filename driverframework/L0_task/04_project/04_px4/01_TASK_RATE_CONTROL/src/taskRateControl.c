@@ -35,24 +35,15 @@ static void rateControlThreadEntry(void* parameter) {
     
     // Wait a bit for initialization to complete
     rt_thread_mdelay(100);
-    
+
     while (1) {
-#ifdef PROJECT_PX4_TASK_RATE_CONTROL_DEBUGPIN_EN
-        DEBUG_PIN_DEBUG1_HIGH();
-#endif
-        
-        // Call the rate control run function
-        multicopter_rate_control_run();
-        
-#ifdef PROJECT_PX4_TASK_RATE_CONTROL_DEBUGPIN_EN
-        DEBUG_PIN_DEBUG1_LOW();
-#endif
-        
-        // Sleep for the task period
-        // Default period is 4ms (250Hz), configurable via Kconfig
-        rt_thread_mdelay(PROJECT_PX4_TASK_RATE_CONTROL_PERIOD_MS);
-        
-        tick++;
+      // Call the rate control run function
+      multicopter_rate_control_run();
+      // Sleep for the task period
+      // Default period is 4ms (250Hz), configurable via Kconfig
+      rt_thread_mdelay(PROJECT_PX4_TASK_RATE_CONTROL_PERIOD_MS);
+
+      tick++;
     }
 }
 

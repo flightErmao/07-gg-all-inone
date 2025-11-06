@@ -76,13 +76,11 @@ static void stabilizer_thread_entry(void* parameter) {
 
   while (1) {
     mcnWaitImuPub();
-    DEBUG_PIN_DEBUG1_HIGH();
     rcAndCmdGenerate(&setpoint_, tick);
     flyerStateUpdate(&state_, tick);
     stateControl(&state_, &setpoint_, &contorl_, tick);
     mixerControlExcute(&contorl_, tick);
     mlogStabilizerPush(tick);
-    DEBUG_PIN_DEBUG1_LOW();
     tick++;
   }
 }

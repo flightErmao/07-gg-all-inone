@@ -13,11 +13,21 @@
 #include "rpmFilter.h"
 #include "aMcnDshot.h"
 #endif
-
+#include "debugPin.h"
 #ifndef DSHOT_DEVICE_NAME
 #define DSHOT_DEVICE_NAME "dshot"
 #endif
 #define SENSORS_ACC_SCALE_SAMPLES 200
+
+// #define IMUPROCESS_DEBUG
+
+#define LOG_TAG "imu_process"
+#ifdef IMUPROCESS_DEBUG
+#define LOG_LVL LOG_LVL_DBG
+#else
+#define LOG_LVL LOG_LVL_WARNING
+#endif
+#include <ulog.h>
 
 static sensorData_t sensors;
 
@@ -117,15 +127,27 @@ void initImuRotationDir(void) {
 static void generateAngularAccel(void) {
   static uint32_t last_timestamp = 0;
   static Axis3f last_gyro_filter = {0};
+  float dt = 0.0f;
   uint32_t timestamp = timestamp_micros();
-
+  DEBUG_PIN_DEBUG0_TOGGLE();
   if (last_timestamp != 0) {
-    float dt = (timestamp - last_timestamp) / 1000000.0f;
+    dt = (timestamp - last_timestamp) / 1000000.0f;
     dt = fmaxf(fminf(dt, 0.1f), 0.0005f);  // 限制dt范围在0.5ms到100ms之间，防止异常值影响计算
     sensors.angular_accel.x = (sensors.gyro_filter.x - last_gyro_filter.x) / dt;
     sensors.angular_accel.y = (sensors.gyro_filter.y - last_gyro_filter.y) / dt;
     sensors.angular_accel.z = (sensors.gyro_filter.z - last_gyro_filter.z) / dt;
   }
+
+  static uint16_t count = 0;
+  count++;
+  if (count == 1000) {
+    LOG_D("%d", timestamp - last_timestamp);
+    LOG_D("dt: %.6f", dt);
+    LOG_D("Gyro: %.2f %.2f %.2f | Acc: %.2f %.2f %.2f", sensors.gyro_filter.x, sensors.gyro_filter.y,
+          sensors.gyro_filter.z, sensors.acc_filter.x, sensors.acc_filter.y, sensors.acc_filter.z);
+    count = 0;
+  }
+
   last_gyro_filter = sensors.gyro_filter;
   last_timestamp = timestamp;
 }

@@ -31,9 +31,6 @@ static rt_err_t uart_test_input(rt_device_t dev, rt_size_t size) {
   if (result == -RT_EFULL) {
     rt_kprintf("UART test message queue full!\n");
   }
-#ifdef TASK_DEMO_02_UART_TEST_DEBUGPIN_EN
-  DEBUG_PIN_DEBUG1_HIGH();
-#endif
   return result;
 }
 
@@ -48,9 +45,6 @@ void uartTestTask(void *param) {
     rt_memset(&msg, 0, sizeof(msg));
     rt_memset(rx_buffer, 0, config.rx_bufsz + 1);
     result = rt_mq_recv(&rx_mq, &msg, sizeof(msg), RT_WAITING_FOREVER);
-#ifdef TASK_DEMO_02_UART_TEST_DEBUGPIN_EN
-    DEBUG_PIN_DEBUG1_LOW();
-#endif
     if (result > 0) {
       rx_length = rt_device_read(msg.dev, 0, rx_buffer, msg.size);
       if (rx_length > 0) {

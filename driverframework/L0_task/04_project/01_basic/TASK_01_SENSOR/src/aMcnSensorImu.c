@@ -2,6 +2,16 @@
 #include "floatConvert.h"
 #include <rtthread.h>
 
+#define IMU_MCN_DEBUG
+
+#define LOG_TAG "imu_mcn"
+#ifdef IMU_MCN_DEBUG
+#define LOG_LVL LOG_LVL_DBG
+#else
+#define LOG_LVL LOG_LVL_WARNING
+#endif
+#include <ulog.h>
+
 /* MCN topic declaration */
 MCN_DECLARE(imu);
 /* MCN topic definition */
@@ -17,18 +27,12 @@ static int sensor_imu_echo(void* parameter) {
   if (mcn_copy_from_hub((McnHub*)parameter, &sensor_data) != RT_EOK) {
     return -1;
   }
-  
-  char ax[16], ay[16], az[16], gx[16], gy[16], gz[16];
-  float_to_string(sensor_data.acc_filter.x, ax, sizeof(ax));
-  float_to_string(sensor_data.acc_filter.y, ay, sizeof(ay));
-  float_to_string(sensor_data.acc_filter.z, az, sizeof(az));
-  float_to_string(sensor_data.gyro_filter.x, gx, sizeof(gx));
-  float_to_string(sensor_data.gyro_filter.y, gy, sizeof(gy));
-  float_to_string(sensor_data.gyro_filter.z, gz, sizeof(gz));
-  
-  rt_kprintf("[aMcnSensorImu] acc: %s, %s, %s, gyro: %s, %s, %s, ts: %lu\n", 
-             ax, ay, az, gx, gy, gz, sensor_data.timestamp);
-  
+
+  LOG_I("acc: %.2f, %.2f, %.2f, gyro: %.2f, %.2f, %.2f, ts: %lu", sensor_data.acc_filter.x, sensor_data.acc_filter.y,
+        sensor_data.acc_filter.z, sensor_data.gyro_filter.x, sensor_data.gyro_filter.y, sensor_data.gyro_filter.z,
+        sensor_data.timestamp);
+  LOG_I("angular_accel: %.2f, %.2f, %.2f", sensor_data.angular_accel.x, sensor_data.angular_accel.y,
+        sensor_data.angular_accel.z);
   return 0;
 }
 

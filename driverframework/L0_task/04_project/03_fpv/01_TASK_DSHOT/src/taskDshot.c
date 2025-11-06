@@ -159,12 +159,10 @@ static void task_dshot_entry(void* parameter) {
   rtos_init();
   while (1) {
     mcnWaitMixerPub();
-    DEBUG_PIN_DEBUG2_HIGH();
     mixterRemapToDshotSpeed();
     writeDshotCmdToDevice();
     readAndPubRpmData();
     getAndPushMlogData();
-    DEBUG_PIN_DEBUG2_LOW();
   }
 }
 

@@ -54,16 +54,12 @@ static rt_err_t dshot_control(actuator_dev_t dev, int cmd, void *arg) {
 }
 
 /* DShot read function */
-static rt_size_t dshot_read(actuator_dev_t dev, rt_uint16_t chan_sel, rt_uint16_t *chan_val, rt_size_t size) {
-  DEBUG_PIN_DEBUG0_HIGH();
+static rt_size_t dshot_read(actuator_dev_t dev, rt_uint16_t chan_sel, rt_uint16_t* chan_val, rt_size_t size) {
   rt_event_recv(dshot_config_.event_dma, EVENT_DMA_SAMPLING_DONE, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR,
                 RT_WAITING_FOREVER, NULL);
-  DEBUG_PIN_DEBUG0_LOW();
-  
+
   /*about 36us in at32f437vm O1*/
-  DEBUG_PIN_DEBUG3_HIGH();
   decodeDShot();
-  DEBUG_PIN_DEBUG3_LOW();
 
   // Read all motors without channel selection mask
   for (uint8_t i = 0; i < DSHOT_MOTOR_NUMS; i++) {
