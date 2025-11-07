@@ -25,6 +25,8 @@ class SpiInterface {
   int readMultiReg16(uint8_t reg, uint8_t *buff, uint8_t len);
   int writeMultiReg8(uint8_t reg, uint8_t *buff, uint16_t len);
 
+  int transfer(uint8_t *send_buf, uint8_t *recv_buf, uint16_t len);
+
  private:
   int spi_read_reg_wrapper(uint8_t *cmd, uint8_t cmd_length, uint8_t *data, uint16_t data_len);
   int spi_write_reg_wrapper(uint8_t *cmd, uint8_t cmd_length, uint8_t *data, uint16_t data_len);

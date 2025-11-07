@@ -1,0 +1,29 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+
+src = (
+    Glob("./*.c")
+    + Glob("./*.cpp")
+    + Glob("./filter/*.c")
+    + Glob("./filter/*.cpp")
+)
+
+include_paths = [cwd]
+
+for subdir in ("filter", "inc", "math"):
+    candidate = os.path.join(cwd, subdir)
+    if os.path.isdir(candidate) and candidate not in include_paths:
+        include_paths.append(candidate)
+
+group = DefineGroup(
+    "L1_MIDDLEWARE_05_PX4_LIB_02_MATHLIB_EN",
+    src,
+    depend=["L1_MIDDLEWARE_05_PX4_LIB_02_MATHLIB_EN"],
+    CPPPATH=include_paths,
+)
+
+Return("group")
+
+

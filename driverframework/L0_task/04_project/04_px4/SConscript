@@ -1,0 +1,14 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+group = []
+
+for item in os.listdir(cwd):
+    item_path = os.path.join(cwd, item)
+    if os.path.isdir(item_path) and os.path.isfile(os.path.join(item_path, 'SConscript')):
+        sub_group = SConscript(os.path.join(cwd, item, 'SConscript'), variant_dir=item, duplicate=0)
+        group.extend(sub_group)
+
+Return('group')
+

@@ -26,6 +26,8 @@ extern "C" {
 #define PROJECT_PX4_TASK_RATE_CONTROL_STACK_SIZE 4096
 #endif
 
+void taskRateControlSubmitImuSample(const float gyro[3], const float accel[3], float dt);
+
 #ifdef __cplusplus
 }
 #endif

@@ -3,7 +3,11 @@ import os
 
 cwd = GetCurrentDir()
 src = Glob("./src/*.c") + Glob("./src/*.cpp")
-path = [cwd, os.path.join(cwd, "inc")]
+path = [
+    cwd,
+    os.path.join(cwd, "inc"),
+    os.path.join(cwd, "../../../L1_middleWare/04_px4_module/04_sensor_vehicleAngularVelocity"),
+]
 
 group = DefineGroup("PROJECT_PX4_TASK_RATE_CONTROL_EN", src, depend=["PROJECT_PX4_TASK_RATE_CONTROL_EN"], CPPPATH=path)
 

@@ -1,0 +1,22 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+src = Glob("./*.c") + Glob("./*.cpp")
+
+include_paths = [
+    cwd,
+    os.path.join(cwd, "../../05_px4_lib/02_mathlib"),
+    os.path.join(cwd, "../../05_px4_lib/02_mathlib/filter"),
+]
+
+group = DefineGroup(
+    "L1_MIDDLEWARE_04_PX4_MODULE_04_SENSOR_VEHICLE_ANGULAR_VELOCITY_EN",
+    src,
+    depend=["L1_MIDDLEWARE_04_PX4_MODULE_04_SENSOR_VEHICLE_ANGULAR_VELOCITY_EN"],
+    CPPPATH=include_paths,
+)
+
+Return("group")
+
+

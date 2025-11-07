@@ -42,6 +42,8 @@ int multicopter_rate_control_update(
     float torque_setpoint[3],
     float thrust_setpoint_out[3]);
 
+void multicopter_rate_control_step(const float angular_velocity[3], const float angular_accel[3], float dt);
+
 /**
  * @brief Reset integrator (call when disarming)
  */

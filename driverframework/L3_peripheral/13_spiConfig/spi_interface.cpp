@@ -130,3 +130,12 @@ int SpiInterface::writeMultiReg8(uint8_t reg, uint8_t *buff, uint16_t len) {
   uint8_t cmd = reg;
   return spi_write_reg_wrapper(&cmd, 1, buff, len);
 }
+
+int SpiInterface::transfer(uint8_t *send_buf, uint8_t *recv_buf, uint16_t len) {
+  if (spi_device_ == RT_NULL || len == 0) {
+    return -RT_ERROR;
+  }
+
+  rt_size_t transferred = rt_spi_transfer(spi_device_, send_buf, recv_buf, len);
+  return (transferred == len) ? RT_EOK : -RT_ERROR;
+}

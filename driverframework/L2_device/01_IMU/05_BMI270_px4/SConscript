@@ -1,0 +1,19 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+
+src = Glob('src/*.cpp')
+src += Glob('src/*.c')
+
+inc_path = [
+    os.path.join(cwd, 'inc'),
+    os.path.join(cwd, '../../..', 'L0_task', '04_project', '01_basic', 'TASK_01_SENSOR', 'inc'),
+    os.path.join(cwd, '../../../L3_peripheral/10_gpioConfig'),
+    os.path.join(cwd, '../../../L3_peripheral/13_spiConfig'),
+]
+
+group = DefineGroup('bmi270_px4', src, depend=['BSP_USING_BMI270_PX4'], CPPPATH=inc_path)
+
+Return('group')
+

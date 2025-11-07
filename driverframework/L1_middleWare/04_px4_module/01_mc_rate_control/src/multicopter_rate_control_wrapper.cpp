@@ -99,6 +99,48 @@ extern "C" {
         return result ? 1 : 0;
     }
 
+    void multicopter_rate_control_step(const float angular_velocity[3], const float angular_accel[3], float dt)
+    {
+        if (g_rate_control_instance == nullptr) {
+            return;
+        }
+
+        float rates_setpoint[3] = {0.0f, 0.0f, 0.0f};
+        float thrust_setpoint[3] = {0.0f, 0.0f, 0.0f};
+        float torque_output[3] = {0.0f, 0.0f, 0.0f};
+        float thrust_output[3] = {0.0f, 0.0f, 0.0f};
+
+        VehicleAngularVelocity ang_vel{};
+        if (angular_velocity != nullptr) {
+            memcpy(ang_vel.xyz, angular_velocity, sizeof(float) * 3);
+        }
+        if (angular_accel != nullptr) {
+            memcpy(ang_vel.xyz_derivative, angular_accel, sizeof(float) * 3);
+        }
+        ang_vel.timestamp_sample = rt_tick_get();
+
+        VehicleRatesSetpoint rates_sp{};
+        rates_sp.roll = rates_setpoint[0];
+        rates_sp.pitch = rates_setpoint[1];
+        rates_sp.yaw = rates_setpoint[2];
+        memcpy(rates_sp.thrust_body, thrust_setpoint, sizeof(float) * 3);
+        rates_sp.timestamp = rt_tick_get();
+
+        VehicleControlMode ctrl_mode{};
+        ctrl_mode.flag_control_rates_enabled = true;
+        ctrl_mode.flag_armed = true;
+
+        g_rate_control_instance->update(
+            ang_vel,
+            rates_sp,
+            thrust_setpoint,
+            ctrl_mode,
+            false,
+            dt,
+            torque_output,
+            thrust_output);
+    }
+
     /**
      * @brief Reset integrator (call when disarming)
      */
