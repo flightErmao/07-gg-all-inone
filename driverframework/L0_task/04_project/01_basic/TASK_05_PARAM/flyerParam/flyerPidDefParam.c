@@ -56,9 +56,9 @@ static float mc_acro_supexpo;
 static float mc_acro_supexpo_y;
 
 /* 默认值 */
-static const float angle_pid_roll_default[3] = {6.0f, 3.0f, 0.0f};
-static const float angle_pid_pitch_default[3] = {6.0f, 3.0f, 0.0f};
-static const float angle_pid_yaw_default[3] = {6.0f, 3.0f, 0.0f};
+static const float angle_pid_roll_default[3] = {0.0f, 0.0f, 0.0f};
+static const float angle_pid_pitch_default[3] = {0.0f, 0.0f, 0.0f};
+static const float angle_pid_yaw_default[3] = {0.0f, 0.0f, 0.0f};
 static const float angle_pid_roll_i_limit_default = 30.0f;
 static const float angle_pid_pitch_i_limit_default = 30.0f;
 static const float angle_pid_yaw_i_limit_default = 180.0f;
@@ -67,10 +67,10 @@ static const float rate_pid_roll_default[3] = {42.0f, 65.0f, 29.0f};
 static const float rate_pid_pitch_default[3] = {45.0f, 62.0f, 31.0f};
 static const float rate_pid_yaw_default[3] = {30.0f, 50.0f, 0.0f};
 
-static const float mc_rollrate_p_default = 42.0f;
-static const float mc_rollrate_i_default = 65.0f;
+static const float mc_rollrate_p_default = 0.0f;
+static const float mc_rollrate_i_default = 0.0f;
 static const float mc_rr_int_lim_default = 500.0f;
-static const float mc_rollrate_d_default = 29.0f;
+static const float mc_rollrate_d_default = 0.0f;
 static const float mc_rollrate_ff_default = 0.0f;
 static const float mc_rollrate_k_default = 0.0f;
 
@@ -81,8 +81,8 @@ static const float mc_pitchrate_d_default = 31.0f;
 static const float mc_pitchrate_ff_default = 0.0f;
 static const float mc_pitchrate_k_default = 0.0f;
 
-static const float mc_yawrate_p_default = 30.0f;
-static const float mc_yawrate_i_default = 50.0f;
+static const float mc_yawrate_p_default = 0.0f;
+static const float mc_yawrate_i_default = 0.0f;
 static const float mc_yr_int_lim_default = 50.0f;
 static const float mc_yawrate_d_default = 0.0f;
 static const float mc_yawrate_ff_default = 0.0f;

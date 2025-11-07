@@ -87,7 +87,6 @@ void rcpx4_update(RateControlPX4 *rc,
 
   if (!landed) {
     for (int i = 0; i < 3; i++) {
-      /* 防止饱和方向继续积分 */
       if (rc->sat_pos[i]) {
         rate_error[i] = rcpx4_minf(rate_error[i], 0.f);
       }
@@ -95,14 +94,11 @@ void rcpx4_update(RateControlPX4 *rc,
         rate_error[i] = rcpx4_maxf(rate_error[i], 0.f);
       }
 
-      /* I 因子随误差二次衰减，参考 PX4 i_factor 实现。
-         400 deg 的比例：i_factor = max(0, 1 - (err / rad(400))^2) */
       const float rad400 = (400.0f * (float)M_PI) / 180.0f;
       float i_factor = rate_error[i] / rad400;
       i_factor = rcpx4_maxf(0.0f, 1.0f - i_factor * i_factor);
-
       float rate_i = rc->rate_int[i] + i_factor * rc->gain_i[i] * rate_error[i] * dt;
-      /* 约束积分 */
+
       rc->rate_int[i] = rcpx4_constrain(rate_i, -rc->lim_int[i], rc->lim_int[i]);
     }
   }

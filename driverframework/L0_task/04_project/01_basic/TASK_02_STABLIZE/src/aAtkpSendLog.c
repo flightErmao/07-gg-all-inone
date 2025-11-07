@@ -30,7 +30,7 @@ static void logFlyerAngle(uint16_t count_ms) {
 #endif
 
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_DEBUG
-static void logAngleDebug(uint16_t count_ms) {
+static void logAngleNowSpDate(uint16_t count_ms) {
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_PERIOD_MS
 #define ATKP_LOG_ANGLE_PERIOD PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_PERIOD_MS
 #else
@@ -55,7 +55,7 @@ static void logAngleDebug(uint16_t count_ms) {
 #endif
 
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_DEBUG
-static void logRateDebug(uint16_t count_ms) {
+static void logRateNowSpDate(uint16_t count_ms) {
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_PERIOD_MS
 #define ATKP_LOG_RATE_PERIOD PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_PERIOD_MS
 #else
@@ -144,7 +144,7 @@ static void logControlOutput(uint16_t count_ms) {
 #endif
 
 #ifdef PROJECT_MINIFLY_TASK_RATEPX4_LOG_EN
-static void logRatePx4(uint16_t count_ms) {
+static void logRatePx4IntDebug(uint16_t count_ms) {
 #ifdef PROJECT_MINIFLY_TASK_RATEPX4_LOG_PERIOD_MS
 #define ATKP_LOG_RATEPX4_PERIOD PROJECT_MINIFLY_TASK_RATEPX4_LOG_PERIOD_MS
 #else
@@ -165,11 +165,11 @@ void sendFlyerStates(uint16_t count_ms) {
 #endif
 
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_DEBUG
-  logAngleDebug(count_ms);
+  logAngleNowSpDate(count_ms);
 #endif
 
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_DEBUG
-  logRateDebug(count_ms);
+  logRateNowSpDate(count_ms);
 #endif
 
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_ANGLE_PID_DEBUG
@@ -180,12 +180,12 @@ void sendFlyerStates(uint16_t count_ms) {
   logRatePidDebug(count_ms);
 #endif
 
-#ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_CONTROL_OUTPUT
-  logControlOutput(count_ms);
+#ifdef PROJECT_MINIFLY_TASK_RATEPX4_LOG_EN
+  logRatePx4IntDebug(count_ms);
 #endif
 
-#ifdef PROJECT_MINIFLY_TASK_RATEPX4_LOG_EN
-  logRatePx4(count_ms);
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_CONTROL_OUTPUT
+  logControlOutput(count_ms);
 #endif
 }
 

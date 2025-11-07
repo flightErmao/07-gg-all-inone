@@ -7,8 +7,18 @@
 #include "pidMinifly.h"
 #include "pidpx4.h"
 #include "taskParam.h"
-// 新参数接口
+#include "timestamp.h"
 #include "param.h"
+
+#define UPARAM_DEBUG
+
+#define LOG_TAG "stateCtrl"
+#ifdef UPARAM_DEBUG
+#define LOG_LVL LOG_LVL_DBG
+#else
+#define LOG_LVL LOG_LVL_WARNING
+#endif
+#include <ulog.h>
 
 static float actualThrust_;
 static attitude_t attitudeDesired_;
@@ -85,6 +95,13 @@ static inline void manualRateFromRc(const setpoint_t* setpoint, attitude_t* rate
   rate_sp_out->roll = roll_cmd * g_manual_rate_cfg.acro_r_max;
   rate_sp_out->pitch = pitch_cmd * g_manual_rate_cfg.acro_p_max;
   rate_sp_out->yaw = yaw_cmd * g_manual_rate_cfg.acro_y_max;
+
+  // static int cnt = 0;
+  // cnt++;
+  // if (cnt > 10) {
+  //   LOG_D("RC->Rate: [%.2f, %.2f, %.2f]", rate_sp_out->roll, rate_sp_out->pitch, rate_sp_out->yaw);
+  //   cnt = 0;
+  // }
 }
 
 void attitudeControlInit(float ratePidDt, float anglePidDt) {
@@ -173,7 +190,7 @@ void attitudeControlInit(float ratePidDt, float anglePidDt) {
 }
 
 static float getDtForRatePid() {
-  uint32_t now_time_us = rt_tick_get_millisecond();
+  uint32_t now_time_us = timestamp_micros();
   static uint32_t last_time_us = 0;
   float dt_s = (now_time_us - last_time_us) / 1000000.0f;
   dt_s = fmaxf(fminf(dt_s, 0.01f), 0.0005f);
@@ -192,10 +209,17 @@ void ratePid(const Axis3f* actualRate, const attitude_t* desiredRate, const Axis
   }
   float torque[3] = {0.f, 0.f, 0.f};
 
-  /* 以油门近似是否离地，未解锁或极低油门时可视为落地，避免积分 */
   bool landed = (actualThrust_ < 5.0f);
   float dt = getDtForRatePid();
   rcpx4_update(&g_rate_ctrl_px4, rate, rate_sp, angular_accel_vec, dt, landed, torque);
+
+  // static uint16_t cnt = 0;
+  // cnt++;
+  // if (cnt > 10) {
+  //   LOG_D("dt = %.6f int = [%.2f, %.2f, %.2f]", dt, g_rate_ctrl_px4.rate_int[0], g_rate_ctrl_px4.rate_int[1],
+  //         g_rate_ctrl_px4.rate_int[2]);
+  //   cnt = 0;
+  // }
 
   torque[0] += g_rate_extra_gain[0] * rate_sp[0];
   torque[1] += g_rate_extra_gain[1] * rate_sp[1];
@@ -314,7 +338,6 @@ static bool resetControl(const state_t *state, const setpoint_t *setpoint, contr
 
 static void generateAttitudeDesired(const setpoint_t* setpoint, const uint32_t tick) {
   if (setpoint->fly_mode == FLYER_MODE_STABLIZE) {
-    actualThrust_ = setpoint->thrust;
     attitudeDesired_.roll = setpoint->attitude.roll;
     attitudeDesired_.pitch = setpoint->attitude.pitch;
   }
@@ -327,15 +350,15 @@ static void generateAttitudeDesired(const setpoint_t* setpoint, const uint32_t t
 void stateControl(const state_t* state, const setpoint_t* setpoint, control_t* control, const uint32_t tick) {
   if (resetControl(state, setpoint, control)) {
     return;
+  } else {
+    actualThrust_ = setpoint->thrust;
   }
 
   if (RATE_DO_EXECUTE(RATE_250_HZ, tick)) {
     generateAttitudeDesired(setpoint, tick);
     if (setpoint->fly_mode == FLYER_MODE_STABLIZE) {
-      /* 角度模式：由角度外环生成角速率期望 */
       anglePid(&state->attitude, &attitudeDesired_, &rateDesired_);
     } else {
-      /* 手动速率模式：由 RC 直接生成角速率期望 */
       manualRateFromRc(setpoint, &rateDesired_);
     }
   }
