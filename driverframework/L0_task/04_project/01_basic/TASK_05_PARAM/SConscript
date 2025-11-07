@@ -5,6 +5,9 @@ cwd = GetCurrentDir()
 src = Glob("./src/*.c")
 path = [cwd, os.path.join(cwd, "inc")]
 
+if GetDepend("PROJECT_MINIFLY_TASK05_PARAM_FLYER_DEFAULT_EN"):
+    src += Glob("./flyerParam/*.c")
+
 group = DefineGroup(
     "PROJECT_MINIFLY_TASK05_PARAM_EN", src, depend=["PROJECT_MINIFLY_TASK05_PARAM_EN"], CPPPATH=path
 )

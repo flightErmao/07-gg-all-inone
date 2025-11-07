@@ -127,6 +127,22 @@ static void logRatePidDebug(uint16_t count_ms) {
 }
 #endif
 
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_CONTROL_OUTPUT
+static void logControlOutput(uint16_t count_ms) {
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_CONTROL_OUTPUT_PERIOD_MS
+#define ATKP_LOG_CONTROL_OUTPUT_PERIOD PROJECT_MINIFLY_TASK_STABLIZE_LOG_CONTROL_OUTPUT_PERIOD_MS
+#else
+#define ATKP_LOG_CONTROL_OUTPUT_PERIOD 20
+#endif
+  if (!(count_ms % ATKP_LOG_CONTROL_OUTPUT_PERIOD)) {
+    control_t control_output = {0};
+    getControlOutput(&control_output);
+    sendUserDatafloat6(PROJECT_MINIFLY_TASK_STABLIZE_LOG_GROUP_CONTROL_OUTPUT, control_output.roll,
+                       control_output.pitch, control_output.yaw, control_output.thrust, 0.f, 0.f);
+  }
+}
+#endif
+
 #ifdef PROJECT_MINIFLY_TASK_RATEPX4_LOG_EN
 static void logRatePx4(uint16_t count_ms) {
 #ifdef PROJECT_MINIFLY_TASK_RATEPX4_LOG_PERIOD_MS
@@ -162,6 +178,10 @@ void sendFlyerStates(uint16_t count_ms) {
 
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_RATE_PID_DEBUG
   logRatePidDebug(count_ms);
+#endif
+
+#ifdef PROJECT_MINIFLY_TASK_STABLIZE_LOG_CONTROL_OUTPUT
+  logControlOutput(count_ms);
 #endif
 
 #ifdef PROJECT_MINIFLY_TASK_RATEPX4_LOG_EN

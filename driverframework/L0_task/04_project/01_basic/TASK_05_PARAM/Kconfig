@@ -4,6 +4,12 @@ menuconfig PROJECT_MINIFLY_TASK05_PARAM_EN
     help
        open param config task
     if PROJECT_MINIFLY_TASK05_PARAM_EN
+        config PROJECT_MINIFLY_TASK05_PARAM_FLYER_DEFAULT_EN
+            bool "ENABLE: PROJECT_MINIFLY_TASK05_PARAM_FLYER_DEFAULT_EN"
+            default n
+            help
+                "enable flyer default parameters"
+
         config PROJECT_MINIFLY_TASK05_PARAM_AUTO_SAVE_EN
         bool "ENABLE: PROJECT_MINIFLY_TASK05_PARAM_AUTO_SAVE_EN"
         default n

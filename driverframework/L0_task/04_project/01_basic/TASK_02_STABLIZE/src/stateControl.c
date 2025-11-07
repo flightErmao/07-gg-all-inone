@@ -9,40 +9,11 @@
 #include "taskParam.h"
 // 新参数接口
 #include "param.h"
-/* 若未提供 PX4 acro 参数头文件，则提供本地默认值 */
-#ifndef MC_ACRO_R_MAX
-#define MC_ACRO_R_MAX      100.0f
-#endif
-#ifndef MC_ACRO_P_MAX
-#define MC_ACRO_P_MAX      100.0f
-#endif
-#ifndef MC_ACRO_Y_MAX
-#define MC_ACRO_Y_MAX      100.0f
-#endif
-#ifndef MC_ACRO_EXPO
-#define MC_ACRO_EXPO       0.0f
-#endif
-#ifndef MC_ACRO_EXPO_Y
-#define MC_ACRO_EXPO_Y     0.0f
-#endif
-#ifndef MC_ACRO_SUPEXPO
-#define MC_ACRO_SUPEXPO    0.0f
-#endif
-#ifndef MC_ACRO_SUPEXPOY
-#define MC_ACRO_SUPEXPOY   0.0f
-#endif
-
-#define PID_ANGLE_ROLL_INTEGRATION_LIMIT 30.0
-#define PID_ANGLE_PITCH_INTEGRATION_LIMIT 30.0
-#define PID_ANGLE_YAW_INTEGRATION_LIMIT 180.0
-
-#define PID_RATE_ROLL_INTEGRATION_LIMIT 500.0
-#define PID_RATE_PITCH_INTEGRATION_LIMIT 500.0
-#define PID_RATE_YAW_INTEGRATION_LIMIT 50.0
 
 static float actualThrust_;
 static attitude_t attitudeDesired_;
 static attitude_t rateDesired_;
+static control_t controlOutputLogged_;
 
 /* PX4 风格速率控制器 */
 static RateControlPX4 g_rate_ctrl_px4;
@@ -54,6 +25,28 @@ PidObject pidAngleYaw;
 PidObject pidRateRoll;
 PidObject pidRatePitch;
 PidObject pidRateYaw;
+
+typedef struct {
+  float acro_r_max;
+  float acro_p_max;
+  float acro_y_max;
+  float acro_expo;
+  float acro_expo_y;
+  float acro_supexpo;
+  float acro_supexpo_y;
+} manual_rate_cfg_t;
+
+static manual_rate_cfg_t g_manual_rate_cfg = {0};
+static float g_rate_integral_limit[3] = {0.f, 0.f, 0.f};
+static float g_rate_ff_gain[3] = {0.f, 0.f, 0.f};
+static float g_rate_extra_gain[3] = {0.f, 0.f, 0.f};
+static float g_yaw_tq_cutoff = 0.f;
+
+static float load_param_float(const char *name) {
+  float value = 0.f;
+  RT_ASSERT(getParam(name, &value, sizeof(value)) == RT_EOK);
+  return value;
+}
 
 static inline int16_t pidOutLimit(float in) {
   if (in > INT16_MAX)
@@ -84,65 +77,99 @@ static inline void manualRateFromRc(const setpoint_t* setpoint, attitude_t* rate
   float stick_yaw = setpoint->attitude.yaw;     /* [-1, 1] */
 
   /* expo/superexpo 映射（与 PX4 一致，yaw 可使用独立 expo）*/
-  float roll_cmd = superexpo_map(stick_roll, MC_ACRO_EXPO, MC_ACRO_SUPEXPO);
-  float pitch_cmd = superexpo_map(stick_pitch, MC_ACRO_EXPO, MC_ACRO_SUPEXPO);
-  float yaw_cmd = superexpo_map(stick_yaw, MC_ACRO_EXPO_Y, MC_ACRO_SUPEXPOY);
+  float roll_cmd = superexpo_map(stick_roll, g_manual_rate_cfg.acro_expo, g_manual_rate_cfg.acro_supexpo);
+  float pitch_cmd = superexpo_map(stick_pitch, g_manual_rate_cfg.acro_expo, g_manual_rate_cfg.acro_supexpo);
+  float yaw_cmd = superexpo_map(stick_yaw, g_manual_rate_cfg.acro_expo_y, g_manual_rate_cfg.acro_supexpo_y);
 
   /* 最大角速率（deg/s）*/
-  rate_sp_out->roll = roll_cmd * MC_ACRO_R_MAX;
-  rate_sp_out->pitch = pitch_cmd * MC_ACRO_P_MAX;
-  rate_sp_out->yaw = yaw_cmd * MC_ACRO_Y_MAX;
+  rate_sp_out->roll = roll_cmd * g_manual_rate_cfg.acro_r_max;
+  rate_sp_out->pitch = pitch_cmd * g_manual_rate_cfg.acro_p_max;
+  rate_sp_out->yaw = yaw_cmd * g_manual_rate_cfg.acro_y_max;
 }
 
 void attitudeControlInit(float ratePidDt, float anglePidDt) {
-  /* 默认 PID 参数（与 param.c 中保持一致） */
-  float angle_pid_roll_cfg[3] = {6.0f, 3.0f, 0.0f};
-  float angle_pid_pitch_cfg[3] = {6.0f, 3.0f, 0.0f};
-  float angle_pid_yaw_cfg[3] = {6.0f, 3.0f, 0.0f};
-  float rate_pid_roll_cfg[3] = {42.0f, 65.0f, 29.0f};
-  float rate_pid_pitch_cfg[3] = {45.0f, 62.0f, 31.0f};
-  float rate_pid_yaw_cfg[3] = {30.0f, 50.0f, 0.0f};
+  float angle_pid_roll_cfg[3];
+  float angle_pid_pitch_cfg[3];
+  float angle_pid_yaw_cfg[3];
+  RT_ASSERT(getParam("angle_pid_roll", angle_pid_roll_cfg, sizeof(angle_pid_roll_cfg)) == RT_EOK);
+  RT_ASSERT(getParam("angle_pid_pitch", angle_pid_pitch_cfg, sizeof(angle_pid_pitch_cfg)) == RT_EOK);
+  RT_ASSERT(getParam("angle_pid_yaw", angle_pid_yaw_cfg, sizeof(angle_pid_yaw_cfg)) == RT_EOK);
+  float angle_pid_roll_i_limit = load_param_float("angle_pid_roll_i_limit");
+  float angle_pid_pitch_i_limit = load_param_float("angle_pid_pitch_i_limit");
+  float angle_pid_yaw_i_limit = load_param_float("angle_pid_yaw_i_limit");
 
-  /* 优先从参数表读取，失败则保留默认值 */
-  (void)getParam("angle_pid_roll", angle_pid_roll_cfg, sizeof(angle_pid_roll_cfg));
-  (void)getParam("angle_pid_pitch", angle_pid_pitch_cfg, sizeof(angle_pid_pitch_cfg));
-  (void)getParam("angle_pid_yaw", angle_pid_yaw_cfg, sizeof(angle_pid_yaw_cfg));
-  (void)getParam("rate_pid_roll", rate_pid_roll_cfg, sizeof(rate_pid_roll_cfg));
-  (void)getParam("rate_pid_pitch", rate_pid_pitch_cfg, sizeof(rate_pid_pitch_cfg));
-  (void)getParam("rate_pid_yaw", rate_pid_yaw_cfg, sizeof(rate_pid_yaw_cfg));
+  float mc_rollrate_p = load_param_float("mc_rollrate_p");
+  float mc_rollrate_i = load_param_float("mc_rollrate_i");
+  float mc_rr_int_lim = load_param_float("mc_rr_int_lim");
+  float mc_rollrate_d = load_param_float("mc_rollrate_d");
+  float mc_rollrate_ff = load_param_float("mc_rollrate_ff");
+  float mc_rollrate_k = load_param_float("mc_rollrate_k");
+
+  float mc_pitchrate_p = load_param_float("mc_pitchrate_p");
+  float mc_pitchrate_i = load_param_float("mc_pitchrate_i");
+  float mc_pr_int_lim = load_param_float("mc_pr_int_lim");
+  float mc_pitchrate_d = load_param_float("mc_pitchrate_d");
+  float mc_pitchrate_ff = load_param_float("mc_pitchrate_ff");
+  float mc_pitchrate_k = load_param_float("mc_pitchrate_k");
+
+  float mc_yawrate_p = load_param_float("mc_yawrate_p");
+  float mc_yawrate_i = load_param_float("mc_yawrate_i");
+  float mc_yr_int_lim = load_param_float("mc_yr_int_lim");
+  float mc_yawrate_d = load_param_float("mc_yawrate_d");
+  float mc_yawrate_ff = load_param_float("mc_yawrate_ff");
+  float mc_yawrate_k = load_param_float("mc_yawrate_k");
+  g_yaw_tq_cutoff = load_param_float("mc_yaw_tq_cutoff");
+
+  g_manual_rate_cfg.acro_r_max = load_param_float("mc_acro_r_max");
+  g_manual_rate_cfg.acro_p_max = load_param_float("mc_acro_p_max");
+  g_manual_rate_cfg.acro_y_max = load_param_float("mc_acro_y_max");
+  g_manual_rate_cfg.acro_expo = load_param_float("mc_acro_expo");
+  g_manual_rate_cfg.acro_expo_y = load_param_float("mc_acro_expo_y");
+  g_manual_rate_cfg.acro_supexpo = load_param_float("mc_acro_supexpo");
+  g_manual_rate_cfg.acro_supexpo_y = load_param_float("mc_acro_supexpo_y");
+
+  g_rate_integral_limit[0] = mc_rr_int_lim;
+  g_rate_integral_limit[1] = mc_pr_int_lim;
+  g_rate_integral_limit[2] = mc_yr_int_lim;
+
+  g_rate_ff_gain[0] = mc_rollrate_ff;
+  g_rate_ff_gain[1] = mc_pitchrate_ff;
+  g_rate_ff_gain[2] = mc_yawrate_ff;
+
+  g_rate_extra_gain[0] = mc_rollrate_k;
+  g_rate_extra_gain[1] = mc_pitchrate_k;
+  g_rate_extra_gain[2] = mc_yawrate_k;
 
   pidInit_t pid_angle_roll = {.kp = angle_pid_roll_cfg[0], .ki = angle_pid_roll_cfg[1], .kd = angle_pid_roll_cfg[2]};
   pidInit_t pid_angle_pitch = {
       .kp = angle_pid_pitch_cfg[0], .ki = angle_pid_pitch_cfg[1], .kd = angle_pid_pitch_cfg[2]};
   pidInit_t pid_angle_yaw = {.kp = angle_pid_yaw_cfg[0], .ki = angle_pid_yaw_cfg[1], .kd = angle_pid_yaw_cfg[2]};
-  pidInit_t pid_rate_roll = {.kp = rate_pid_roll_cfg[0], .ki = rate_pid_roll_cfg[1], .kd = rate_pid_roll_cfg[2]};
-  pidInit_t pid_rate_pitch = {.kp = rate_pid_pitch_cfg[0], .ki = rate_pid_pitch_cfg[1], .kd = rate_pid_pitch_cfg[2]};
-  pidInit_t pid_rate_yaw = {.kp = rate_pid_yaw_cfg[0], .ki = rate_pid_yaw_cfg[1], .kd = rate_pid_yaw_cfg[2]};
+  pidInit_t pid_rate_roll = {.kp = mc_rollrate_p, .ki = mc_rollrate_i, .kd = mc_rollrate_d};
+  pidInit_t pid_rate_pitch = {.kp = mc_pitchrate_p, .ki = mc_pitchrate_i, .kd = mc_pitchrate_d};
+  pidInit_t pid_rate_yaw = {.kp = mc_yawrate_p, .ki = mc_yawrate_i, .kd = mc_yawrate_d};
 
   pidInit(&pidAngleRoll, 0, pid_angle_roll, anglePidDt);
   pidInit(&pidAnglePitch, 0, pid_angle_pitch, anglePidDt);
   pidInit(&pidAngleYaw, 0, pid_angle_yaw, anglePidDt);
-  pidSetIntegralLimit(&pidAngleRoll, PID_ANGLE_ROLL_INTEGRATION_LIMIT);
-  pidSetIntegralLimit(&pidAnglePitch, PID_ANGLE_PITCH_INTEGRATION_LIMIT);
-  pidSetIntegralLimit(&pidAngleYaw, PID_ANGLE_YAW_INTEGRATION_LIMIT);
+  pidSetIntegralLimit(&pidAngleRoll, angle_pid_roll_i_limit);
+  pidSetIntegralLimit(&pidAnglePitch, angle_pid_pitch_i_limit);
+  pidSetIntegralLimit(&pidAngleYaw, angle_pid_yaw_i_limit);
 
   pidInit(&pidRateRoll, 0, pid_rate_roll, ratePidDt);
   pidInit(&pidRatePitch, 0, pid_rate_pitch, ratePidDt);
   pidInit(&pidRateYaw, 0, pid_rate_yaw, ratePidDt);
-  pidSetIntegralLimit(&pidRateRoll, PID_RATE_ROLL_INTEGRATION_LIMIT);
-  pidSetIntegralLimit(&pidRatePitch, PID_RATE_PITCH_INTEGRATION_LIMIT);
-  pidSetIntegralLimit(&pidRateYaw, PID_RATE_YAW_INTEGRATION_LIMIT);
+  pidSetIntegralLimit(&pidRateRoll, g_rate_integral_limit[0]);
+  pidSetIntegralLimit(&pidRatePitch, g_rate_integral_limit[1]);
+  pidSetIntegralLimit(&pidRateYaw, g_rate_integral_limit[2]);
 
   /* 初始化 PX4 速率控制器参数（沿用现有 Rate PID 的 P/I/D 配置） */
   rcpx4_init(&g_rate_ctrl_px4);
   float P[3] = {pid_rate_roll.kp, pid_rate_pitch.kp, pid_rate_yaw.kp};
   float I[3] = {pid_rate_roll.ki, pid_rate_pitch.ki, pid_rate_yaw.ki};
   float D[3] = {pid_rate_roll.kd, pid_rate_pitch.kd, pid_rate_yaw.kd};
-  float LIM[3] = {PID_RATE_ROLL_INTEGRATION_LIMIT, PID_RATE_PITCH_INTEGRATION_LIMIT, PID_RATE_YAW_INTEGRATION_LIMIT};
-  float FF[3] = {0.f, 0.f, 0.f};
   rcpx4_set_pid(&g_rate_ctrl_px4, P, I, D);
-  rcpx4_set_integrator_limit(&g_rate_ctrl_px4, LIM);
-  rcpx4_set_ff(&g_rate_ctrl_px4, FF);
+  rcpx4_set_integrator_limit(&g_rate_ctrl_px4, g_rate_integral_limit);
+  rcpx4_set_ff(&g_rate_ctrl_px4, g_rate_ff_gain);
 }
 
 static float getDtForRatePid() {
@@ -154,8 +181,7 @@ static float getDtForRatePid() {
   return dt_s;
 }
 
-void attitudeRatePID(const Axis3f* actualRate, const attitude_t* desiredRate, const Axis3f* angularAccel,
-                     control_t* output) {
+void ratePid(const Axis3f* actualRate, const attitude_t* desiredRate, const Axis3f* angularAccel, control_t* output) {
   float rate[3] = {actualRate->x, actualRate->y, actualRate->z};
   float rate_sp[3] = {desiredRate->roll, desiredRate->pitch, desiredRate->yaw};
   float angular_accel_vec[3] = {0.f, 0.f, 0.f};
@@ -171,12 +197,24 @@ void attitudeRatePID(const Axis3f* actualRate, const attitude_t* desiredRate, co
   float dt = getDtForRatePid();
   rcpx4_update(&g_rate_ctrl_px4, rate, rate_sp, angular_accel_vec, dt, landed, torque);
 
+  torque[0] += g_rate_extra_gain[0] * rate_sp[0];
+  torque[1] += g_rate_extra_gain[1] * rate_sp[1];
+  torque[2] += g_rate_extra_gain[2] * rate_sp[2];
+
+  if (fabsf(torque[2]) < g_yaw_tq_cutoff) {
+    torque[2] = 0.f;
+  }
+
   output->roll = pidOutLimit(torque[0]);
   output->pitch = pidOutLimit(torque[1]);
   output->yaw = pidOutLimit(torque[2]);
+
+  controlOutputLogged_.roll = output->roll;
+  controlOutputLogged_.pitch = output->pitch;
+  controlOutputLogged_.yaw = output->yaw;
 }
 
-void attitudeAnglePID(const attitude_t *actualAngle, const attitude_t *desiredAngle, attitude_t *outDesiredRate) {
+void anglePid(const attitude_t* actualAngle, const attitude_t* desiredAngle, attitude_t* outDesiredRate) {
   outDesiredRate->roll = pidUpdate(&pidAngleRoll, desiredAngle->roll - actualAngle->roll);
   outDesiredRate->pitch = pidUpdate(&pidAnglePitch, desiredAngle->pitch - actualAngle->pitch);
 
@@ -258,6 +296,7 @@ static bool resetControl(const state_t *state, const setpoint_t *setpoint, contr
     control->pitch = 0;
     control->yaw = 0;
     control->thrust = 0;
+    controlOutputLogged_ = *control;
     attitudeResetAllPID();
     attitudeDesired_.yaw = state->attitude.yaw;
     rcpx4_reset_integral(&g_rate_ctrl_px4);
@@ -294,7 +333,7 @@ void stateControl(const state_t* state, const setpoint_t* setpoint, control_t* c
     generateAttitudeDesired(setpoint, tick);
     if (setpoint->fly_mode == FLYER_MODE_STABLIZE) {
       /* 角度模式：由角度外环生成角速率期望 */
-      attitudeAnglePID(&state->attitude, &attitudeDesired_, &rateDesired_);
+      anglePid(&state->attitude, &attitudeDesired_, &rateDesired_);
     } else {
       /* 手动速率模式：由 RC 直接生成角速率期望 */
       manualRateFromRc(setpoint, &rateDesired_);
@@ -302,10 +341,11 @@ void stateControl(const state_t* state, const setpoint_t* setpoint, control_t* c
   }
 
   if (RATE_DO_EXECUTE(RATE_500_HZ, tick)) {
-    attitudeRatePID(&state->gyro_filter, &rateDesired_, &state->angular_accel, control);
+    ratePid(&state->gyro_filter, &rateDesired_, &state->angular_accel, control);
   }
 
   control->thrust = actualThrust_;
+  controlOutputLogged_.thrust = control->thrust;
 }
 
 void getAngleDesired(attitude_t* get) {
@@ -318,4 +358,11 @@ void getRateDesired(attitude_t *get) {
   get->pitch = rateDesired_.pitch;
   get->roll = rateDesired_.roll;
   get->yaw = rateDesired_.yaw;
+}
+
+void getControlOutput(control_t* out) {
+  if (!out) {
+    return;
+  }
+  *out = controlOutputLogged_;
 }

@@ -138,6 +138,27 @@ menuconfig PROJECT_MINIFLY_TASK_STABLIZE_EN
                             help
                                 Period (in milliseconds) for rate PID debug logging. Default: 20ms.
                     endif
+
+                config PROJECT_MINIFLY_TASK_STABLIZE_LOG_CONTROL_OUTPUT
+                    bool "ENABLE: Control PID Output Logging"
+                    default n
+                    help
+                        Enable control PID output logging for the stabilize task.
+
+                    if PROJECT_MINIFLY_TASK_STABLIZE_LOG_CONTROL_OUTPUT
+                        config PROJECT_MINIFLY_TASK_STABLIZE_LOG_GROUP_CONTROL_OUTPUT
+                            int "Log Group ID for Control Output"
+                            range 1 99
+                            default 6
+                            help
+                                Set the group ID for control output logging (1-99).
+                        config PROJECT_MINIFLY_TASK_STABLIZE_LOG_CONTROL_OUTPUT_PERIOD_MS
+                            int "Control Output Log Period (ms)"
+                            range 1 1000
+                            default 20
+                            help
+                                Period (in milliseconds) for control output logging. Default: 20ms.
+                    endif
             endif
 
         # ======== DEBUG: MLOG (SD Card) ========
