@@ -30,39 +30,12 @@ config SENSOR_BMI270_PX4_SPI_CS_PIN
 
 config SENSOR_BMI270_PX4_INT_PIN
     string "BMI270 PX4 interrupt pin"
-    default "PB0"
+    default "PA15"
 
 config SENSOR_BMI270_PX4_FIFO_WM
     int "BMI270 PX4 FIFO watermark samples"
-    default 8
+    default 2
     range 2 32
-
-config PROJECT_PX4_TASK_IMU_PUB_EN
-    bool "Enable BMI270 publish worker"
-    default y
-
-if PROJECT_PX4_TASK_IMU_PUB_EN
-
-config PROJECT_PX4_TASK_IMU_PUB_STACK_SIZE
-    int "BMI270 worker thread stack size"
-    default 4096
-    range 1024 16384
-
-config PROJECT_PX4_TASK_IMU_PUB_PRIORITY
-    int "BMI270 worker thread priority"
-    default 6
-    range 1 32
-
-config PROJECT_PX4_TASK_IMU_PUB_TIMESLICE
-    int "BMI270 worker thread time slice"
-    default 5
-    range 1 20
-
-config PROJECT_PX4_TASK_IMU_PUB_DEBUG
-    bool "Enable BMI270 publish debug log"
-    default n
-
-endif # PROJECT_PX4_TASK_IMU_PUB_EN
 
 endif
 

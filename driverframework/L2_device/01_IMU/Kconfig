@@ -14,4 +14,8 @@ menu "01 IMU CONFIG"
             menu "04 BMI270 CONFIG"
                 source "$(PROJECT_ROOT)/driverframework/L2_device/01_IMU/04_BMI270/Kconfig"
             endmenu
+
+            menu "05 BMI270_PX4 CONFIG"
+                source "$(PROJECT_ROOT)/driverframework/L2_device/01_IMU/05_BMI270_px4/Kconfig"
+            endmenu
 endmenu   

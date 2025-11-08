@@ -14,7 +14,6 @@ extern "C" {
 #include <rtthread.h>
 
 #include "taskImuPub_mcn.h"
-#include "imu.h"
 #include "sensorsTypes.h"
 #include "timestamp.h"
 }
@@ -31,7 +30,6 @@ struct RuntimeConfig {
   const char *cs_pin_name;
   const char *int_pin_name;
   uint32_t spi_max_hz;
-  const char *imu_device_name;
   uint8_t fifo_watermark_samples;  // 默认 6~12 之间即可
 };
 
@@ -41,6 +39,10 @@ class BMI270 {
 
   rt_err_t init(const RuntimeConfig &cfg);
   void RunImpl();
+
+  static constexpr rt_uint16_t THREAD_STACK_SIZE = 3072;
+  static constexpr rt_uint8_t THREAD_PRIORITY = 10;
+  static constexpr rt_uint8_t THREAD_TIMESLICE = 5;
 
   int readRaw(uint8_t *buffer, rt_size_t size);
   bool initialized() const { return init_ok_; }
@@ -93,12 +95,16 @@ class BMI270 {
   SpiInterface spi_;
 
   rt_thread_t worker_thread_;
+  struct rt_thread worker_thread_obj_;
+  rt_uint8_t worker_thread_stack_[THREAD_STACK_SIZE];
   rt_timer_t watchdog_timer_;
   rt_event event_;
-  rt_sem sample_sem_;
+  struct rt_semaphore sample_sem_;
   rt_mutex sample_mutex_;
 
   State state_;
+  bool worker_thread_inited_;
+  bool init_started_;
   bool init_ok_;
   bool use_interrupt_;
   bool event_inited_;

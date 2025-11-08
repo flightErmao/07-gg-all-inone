@@ -3,19 +3,14 @@
 #include "Bosch_BMI270_registers.hpp"
 #include "pinInterface.h"
 
-#ifndef DBG_TAG
-#define DBG_TAG "bmi270"
-#endif
-#ifndef DBG_LVL
-#define DBG_LVL DBG_INFO
-#endif
-
 extern "C" {
 #include <rtdef.h>
 #include <rtdevice.h>
 #include <rtdbg.h>
 #include <rtthread.h>
+#include <drivers/dev_pin.h>
 #include "rtconfig.h"
+#include "timestamp.h"
 
 #include <string.h>
 }
@@ -23,6 +18,18 @@ extern "C" {
 #ifndef RT_UNUSED
 #define RT_UNUSED(x) ((void)(x))
 #endif
+
+#include <climits>
+
+#define BMI270_DEBUG
+
+#define LOG_TAG "bmi270"
+#ifdef BMI270_DEBUG
+#define LOG_LVL LOG_LVL_DBG
+#else
+#define LOG_LVL LOG_LVL_WARNING
+#endif
+#include <ulog.h>
 
 namespace bmi270_px4 {
 
@@ -35,11 +42,7 @@ static constexpr uint32_t kSampleDtUs = 1000000UL / kRateHz;
 static constexpr uint8_t kMaxIdRetry = 5;
 static constexpr uint8_t kMaxFailures = 5;
 static constexpr uint32_t kResetTimeoutUs = 1000ULL * 1000ULL;
-static constexpr uint8_t kDefaultWatermarkSamples = 8;
-static constexpr rt_uint16_t kThreadStackSize = 3072;
-static constexpr rt_uint8_t kThreadPriority = 10;
-static constexpr rt_uint8_t kThreadTimeslice = 5;
-
+static constexpr uint8_t kDefaultWatermarkSamples = 2;
 static inline rt_tick_t us_to_ticks(uint32_t us) {
   const uint32_t min_us = 1000;
   if (us < min_us) {
@@ -55,6 +58,8 @@ static inline rt_tick_t us_to_ticks(uint32_t us) {
 static inline int16_t combine(uint8_t msb, uint8_t lsb) {
   return (int16_t)(((uint16_t)msb << 8) | lsb);
 }
+
+static inline int16_t safe_negate(int16_t value) { return (value == INT16_MIN) ? INT16_MAX : (int16_t)(-value); }
 
 static uint8_t maximum_fifo_config_file[] = {
     0x5E, 0xC8, 0x2E, 0x00, 0x2E, 0x80, 0x2E, 0x1A, 0x00, 0xC8, 0x2E, 0x00, 0x2E, 0xC8, 0x2E,
@@ -91,6 +96,8 @@ BMI270::BMI270()
     : worker_thread_(RT_NULL),
       watchdog_timer_(RT_NULL),
       state_(State::RESET),
+      worker_thread_inited_(false),
+      init_started_(false),
       init_ok_(false),
       use_interrupt_(false),
       event_inited_(false),
@@ -103,6 +110,8 @@ BMI270::BMI270()
       failure_count_(0) {
   memset(&config_, 0, sizeof(config_));
   memset(&latest_, 0, sizeof(latest_));
+  memset(&worker_thread_obj_, 0, sizeof(worker_thread_obj_));
+  memset(worker_thread_stack_, 0, sizeof(worker_thread_stack_));
 }
 
 BMI270::~BMI270() {
@@ -128,12 +137,23 @@ BMI270::~BMI270() {
     rt_mutex_detach(&sample_mutex_);
     sample_mutex_inited_ = false;
   }
+
+  if (worker_thread_inited_) {
+    rt_thread_detach(&worker_thread_obj_);
+    worker_thread_inited_ = false;
+    worker_thread_ = RT_NULL;
+  }
+  init_started_ = false;
 }
 
 rt_err_t BMI270::init(const RuntimeConfig &cfg) {
   config_ = cfg;
 
-  if (!config_.spi_bus_name || !config_.spi_device_name || !config_.imu_device_name) {
+  if (init_started_) {
+    return RT_EOK;
+  }
+
+  if (!config_.spi_bus_name || !config_.spi_device_name) {
     LOG_E("BMI270 config invalid");
     return -RT_EINVAL;
   }
@@ -193,16 +213,19 @@ rt_err_t BMI270::init(const RuntimeConfig &cfg) {
   reset_timestamp_us_ = 0;
   latest_.valid = false;
 
-  if (!worker_thread_) {
-    worker_thread_ = rt_thread_create("b270", &BMI270::workerEntry, this, kThreadStackSize, kThreadPriority,
-                                      kThreadTimeslice);
-    if (!worker_thread_) {
-      LOG_E("BMI270 thread create failed");
-      return -RT_ERROR;
+  if (!worker_thread_inited_) {
+    rt_err_t err = rt_thread_init(&worker_thread_obj_, "b270", &BMI270::workerEntry, this, worker_thread_stack_,
+                                  THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
+    if (err != RT_EOK) {
+      LOG_E("BMI270 thread init failed: %d", err);
+      return err;
     }
+    worker_thread_inited_ = true;
+    worker_thread_ = &worker_thread_obj_;
     rt_thread_startup(worker_thread_);
   }
 
+  init_started_ = true;
   return RT_EOK;
 }
 
@@ -266,7 +289,7 @@ void BMI270::RunImpl() {
       } else {
         if (++failure_count_ >= kMaxFailures) {
           LOG_E("BMI270 configure failed");
-          state_ = State::ERROR;
+          state_ = State::RESET;
         } else {
           rt_thread_mdelay(20);
         }
@@ -323,16 +346,25 @@ bool BMI270::waitResetAndCheckId() {
 }
 
 bool BMI270::loadMicrocode() {
+  if (!regWrite(Register::PWR_CONF, 0x00)) {
+    return false;
+  }
+
   if (!regWrite(Register::CONFIG1, 0x00)) {
     return false;
   }
 
-  const uint16_t transfer_len = sizeof(maximum_fifo_config_file);
-  if (spi_.transfer(maximum_fifo_config_file, nullptr, transfer_len) != RT_EOK) {
+  const uint16_t config_len = sizeof(maximum_fifo_config_file);
+  if (config_len <= 1) {
     return false;
   }
 
-  rt_thread_mdelay(2);
+  if (spi_.writeMultiReg8(static_cast<uint8_t>(Register::CONFIG2), &maximum_fifo_config_file[1], config_len - 1) !=
+      RT_EOK) {
+    return false;
+  }
+
+  rt_thread_mdelay(10);
   if (!regWrite(Register::CONFIG1, 0x01)) {
     return false;
   }
@@ -342,10 +374,10 @@ bool BMI270::loadMicrocode() {
 }
 
 bool BMI270::configureSensor() {
-  uint8_t internal_status = regRead(Register::INTERNAL_STATUS);
-  if ((internal_status & 0x01) == 0) {
-    return false;
-  }
+  // uint8_t internal_status = regRead(Register::INTERNAL_STATUS);
+  // if ((internal_status & 0x01) == 0) {
+  //   return false;
+  // }
 
   const uint16_t watermark_bytes = config_.fifo_watermark_samples * sizeof(FIFO::Data);
 
@@ -414,7 +446,7 @@ bool BMI270::configureInterrupt() {
 
 void BMI270::disableInterrupt() {
   if (int_pin_ >= 0) {
-    rt_pin_irq_disable(int_pin_);
+    rt_pin_irq_enable(int_pin_, PIN_IRQ_DISABLE);
     rt_pin_detach_irq(int_pin_);
     int_pin_ = -1;
   }
@@ -424,25 +456,32 @@ void BMI270::disableInterrupt() {
 bool BMI270::fifoCycle() {
   uint16_t fifo_bytes = fifoLevel();
   if (fifo_bytes == 0) {
+    LOG_D("BMI270 fifo empty");
     return false;
+  } else {
+    LOG_D("BMI270 fifo bytes: %u", fifo_bytes);
   }
 
-  static uint8_t tx_buffer[2 + FIFO::SIZE];
-  static uint8_t rx_buffer[2 + FIFO::SIZE];
+  static uint8_t fifo_buffer[FIFO::SIZE];
 
   if (fifo_bytes > FIFO::SIZE) {
     fifo_bytes = FIFO::SIZE;
   }
 
-  memset(tx_buffer, 0, fifo_bytes + 2);
-  tx_buffer[0] = static_cast<uint8_t>(Register::FIFO_DATA) | DIR_READ;
-
-  if (spi_.transfer(tx_buffer, rx_buffer, fifo_bytes + 2) != RT_EOK) {
-    fifoReset();
-    return false;
+  uint16_t remaining = fifo_bytes;
+  uint16_t offset = 0;
+  while (remaining > 0) {
+    uint16_t chunk = remaining > 0xFFu ? 0xFFu : remaining;
+    if (spi_.readMultiReg16(static_cast<uint8_t>(Register::FIFO_DATA), &fifo_buffer[offset],
+                            static_cast<uint8_t>(chunk)) != RT_EOK) {
+      fifoReset();
+      return false;
+    }
+    remaining -= chunk;
+    offset += chunk;
   }
 
-  uint8_t *buffer = &rx_buffer[2];
+  uint8_t* buffer = fifo_buffer;
   uint16_t index = 0;
   bool has_sample = false;
   int16_t accel[3] = {0};
@@ -513,14 +552,14 @@ bool BMI270::fifoCycle() {
 
   int16_t rotated_accel[3] = {
       accel[0],
-      (accel[1] == INT16_MIN) ? INT16_MAX : (int16_t)(-accel[1]),
-      (accel[2] == INT16_MIN) ? INT16_MAX : (int16_t)(-accel[2]),
+      safe_negate(accel[1]),
+      safe_negate(accel[2]),
   };
 
   int16_t rotated_gyro[3] = {
       gyro[0],
-      (gyro[1] == INT16_MIN) ? INT16_MAX : (int16_t)(-gyro[1]),
-      (gyro[2] == INT16_MIN) ? INT16_MAX : (int16_t)(-gyro[2]),
+      safe_negate(gyro[1]),
+      safe_negate(gyro[2]),
   };
 
   const uint32_t timestamp_us = timestamp_micros();
@@ -575,11 +614,11 @@ void BMI270::updateSampleBuffer(const int16_t accel[3], const int16_t gyro[3], u
 }
 
 uint8_t BMI270::regRead(Register reg) {
-  uint8_t value = 0;
-  if (spi_.readMultiReg16(static_cast<uint8_t>(reg), &value, 1) != RT_EOK) {
+  uint8_t value[2] = {0};
+  if (spi_.readMultiReg16(static_cast<uint8_t>(reg), value, 1) != RT_EOK) {
     return 0;
   }
-  return value;
+  return value[0];
 }
 
 bool BMI270::regWrite(Register reg, uint8_t value) {
@@ -587,12 +626,11 @@ bool BMI270::regWrite(Register reg, uint8_t value) {
 }
 
 uint16_t BMI270::fifoLevel() {
-  uint8_t tx[4] = {static_cast<uint8_t>(Register::FIFO_LENGTH_0) | DIR_READ, 0x00, 0x00, 0x00};
-  uint8_t rx[4] = {0};
-  if (spi_.transfer(tx, rx, sizeof(tx)) != RT_EOK) {
+  uint8_t buffer[2] = {0};
+  if (spi_.readMultiReg16(static_cast<uint8_t>(Register::FIFO_LENGTH_0), buffer, 2) != RT_EOK) {
     return 0;
   }
-  uint16_t length = ((rx[3] & 0x3F) << 8) | rx[2];
+  uint16_t length = ((buffer[1] & 0x3F) << 8) | buffer[0];
   return length;
 }
 
@@ -636,31 +674,6 @@ int BMI270::readRaw(uint8_t *buffer, rt_size_t size) {
 
 static BMI270 &g_driver = BMI270::instance();
 
-static int8_t bmi270_read_data(imu_dev_t dev, rt_off_t pos, void *data, rt_size_t size) {
-  RT_UNUSED(dev);
-  RT_UNUSED(pos);
-  return (int8_t)g_driver.readRaw(reinterpret_cast<uint8_t *>(data), size);
-}
-
-static rt_err_t bmi270_control(imu_dev_t dev, int cmd, void *arg) {
-  RT_UNUSED(dev);
-  RT_UNUSED(cmd);
-  RT_UNUSED(arg);
-  return -RT_ENOSYS;
-}
-
-static const struct imu_ops bmi270_ops = {
-    .imu_config = RT_NULL,
-    .imu_control = bmi270_control,
-    .imu_read = bmi270_read_data,
-};
-
-static struct imu_device bmi270_device = {
-    .ops = &bmi270_ops,
-    .config = {kRateHz, kRateHz / 2, kRateHz, kRateHz / 2, GYRO_SCALE_2000DPS, ACC_SCALE_16G, IMU_TEMP_SCALE,
-               IMU_TEMP_OFFSET},
-};
-
 rt_err_t bmi270_px4_init_default() {
   RuntimeConfig cfg{};
   cfg.spi_bus_name = SENSOR_SPI_NAME_BMI270_PX4;
@@ -668,7 +681,6 @@ rt_err_t bmi270_px4_init_default() {
   cfg.cs_pin_name = SENSOR_BMI270_PX4_SPI_CS_PIN;
   cfg.int_pin_name = SENSOR_BMI270_PX4_INT_PIN;
   cfg.spi_max_hz = SENSOR_BMI270_PX4_SPI_MAX_HZ;
-  cfg.imu_device_name = SENSOR_NAME_BMI270_PX4;
   int wm = SENSOR_BMI270_PX4_FIFO_WM;
   if (wm <= 0) {
     wm = kDefaultWatermarkSamples;
@@ -677,6 +689,12 @@ rt_err_t bmi270_px4_init_default() {
     wm = 32;
   }
   cfg.fifo_watermark_samples = static_cast<uint8_t>(wm);
+
+  int mcn_ret = px4ImuMcnInit();
+  if (mcn_ret != RT_EOK) {
+    LOG_E("BMI270 mcn init failed: %d", mcn_ret);
+    return (rt_err_t)mcn_ret;
+  }
 
   if (cfg.spi_max_hz == 0) {
     cfg.spi_max_hz = 10000000;
@@ -688,12 +706,6 @@ rt_err_t bmi270_px4_init_default() {
     return ret;
   }
 
-  ret = hal_imu_register(&bmi270_device, cfg.imu_device_name, RT_DEVICE_FLAG_RDWR, RT_NULL);
-  if (ret != RT_EOK) {
-    LOG_E("BMI270 register imu failed: %d", ret);
-    return ret;
-  }
-
   return RT_EOK;
 }
 
@@ -702,7 +714,8 @@ rt_err_t bmi270_px4_init_default() {
 extern "C" {
 
 #ifdef BSP_USING_BMI270_PX4
-INIT_COMPONENT_EXPORT(bmi270_px4_init_default);
+static int bmi270_px4_init_default_wrapper(void) { return (int)bmi270_px4::bmi270_px4_init_default(); }
+INIT_APP_EXPORT(bmi270_px4_init_default_wrapper);
 #endif
 
 }
