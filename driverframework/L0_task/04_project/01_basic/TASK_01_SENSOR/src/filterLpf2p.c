@@ -32,31 +32,7 @@ typedef struct {
 
 static lpf2pData accLpf[3];
 static lpf2pData gyroLpf[3];
-
-/**
- * IIR滤波.
- */
-// int16_t iirLPFilterSingle(int32_t in, int32_t attenuation, int32_t* filt) {
-//   int32_t inScaled;
-//   int32_t filttmp = *filt;
-//   int16_t out;
-
-//   if (attenuation > (1 << IIR_SHIFT)) {
-//     attenuation = (1 << IIR_SHIFT);
-//   } else if (attenuation < 1) {
-//     attenuation = 1;
-//   }
-
-//   // Shift to keep accuracy
-//   inScaled = in << IIR_SHIFT;
-//   // Calculate IIR filter
-//   filttmp = filttmp + (((inScaled - filttmp) >> IIR_SHIFT) * attenuation);
-//   // Scale and round
-//   out = (filttmp >> 8) + ((filttmp & (1 << (IIR_SHIFT - 1))) >> (IIR_SHIFT - 1));
-//   *filt = filttmp;
-
-//   return out;
-// }
+static lpf2pData angularAccelLpf[3];
 
 /**
  * 设置二阶低通滤波截至频率
@@ -118,6 +94,20 @@ void filterInitLpf2AccGyro(void) {
 #endif
 }
 
+void filterInitLpfAngularAccel(float sample_freq, float cutoff_freq) {
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_LPF_EN
+  if (cutoff_freq <= 0.0f) {
+    return;
+  }
+  for (uint8_t i = 0; i < 3; i++) {
+    lpf2pInit(&angularAccelLpf[i], sample_freq, cutoff_freq);
+  }
+#else
+  (void)sample_freq;
+  (void)cutoff_freq;
+#endif
+}
+
 void applyAxis3fLpfGyro(Axis3f* in) {
 #ifdef PROJECT_MINIFLY_TASK_SENSOR_LPF_EN
   for (uint8_t i = 0; i < 3; i++) {
@@ -131,5 +121,15 @@ void applyAxis3fLpfAcc(Axis3f* in) {
   for (uint8_t i = 0; i < 3; i++) {
     in->axis[i] = lpf2pApply(&accLpf[i], in->axis[i]);
   }
+#endif
+}
+
+void applyAxis3fLpfAngularAccel(Axis3f* in) {
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_LPF_EN
+  for (uint8_t i = 0; i < 3; i++) {
+    in->axis[i] = lpf2pApply(&angularAccelLpf[i], in->axis[i]);
+  }
+#else
+  (void)in;
 #endif
 }

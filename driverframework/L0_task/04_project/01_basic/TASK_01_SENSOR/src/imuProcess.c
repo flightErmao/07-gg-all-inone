@@ -132,10 +132,16 @@ static void generateAngularAccel(void) {
   DEBUG_PIN_DEBUG0_TOGGLE();
   if (last_timestamp != 0) {
     dt = (timestamp - last_timestamp) / 1000000.0f;
-    dt = fmaxf(fminf(dt, 0.1f), 0.0005f);  // 限制dt范围在0.5ms到100ms之间，防止异常值影响计算
-    sensors.angular_accel.x = (sensors.gyro_filter.x - last_gyro_filter.x) / dt;
-    sensors.angular_accel.y = (sensors.gyro_filter.y - last_gyro_filter.y) / dt;
-    sensors.angular_accel.z = (sensors.gyro_filter.z - last_gyro_filter.z) / dt;
+    dt = fmaxf(fminf(dt, 0.1f), 0.0005f);
+
+    Axis3f angular_accel = {0};
+    angular_accel.x = (sensors.gyro_filter.x - last_gyro_filter.x) / dt;
+    angular_accel.y = (sensors.gyro_filter.y - last_gyro_filter.y) / dt;
+    angular_accel.z = (sensors.gyro_filter.z - last_gyro_filter.z) / dt;
+
+    applyAxis3fLpfAngularAccel(&angular_accel);
+
+    sensors.angular_accel = angular_accel;
   }
 
   static uint16_t count = 0;

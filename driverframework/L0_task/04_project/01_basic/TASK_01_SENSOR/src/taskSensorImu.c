@@ -5,6 +5,7 @@
 #include "filterLpf2p.h"
 #include "filterNotch2p.h"
 #include "imuProcess.h"
+#include "param.h"
 #include "rtconfig.h"
 #include "aMlogSensorImu.h"
 #include "aMcnSensorImu.h"
@@ -49,22 +50,34 @@ static void sensor_imu_thread_entry(void* parameter) {
                       (float)PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_1_FREQ, 
                       (float)PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_1_Q / 10.0f);
 #endif
+
 #ifdef PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_2_EN
   filterInitNotchGyro2(1000.0f, 
                        (float)PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_2_FREQ, 
                        (float)PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_2_Q / 10.0f);
 #endif
+
 #ifdef PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_3_EN
   filterInitNotchGyro3(1000.0f, 
                        (float)PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_3_FREQ, 
                        (float)PROJECT_MINIFLY_TASK_SENSOR_NOTCH_GYRO_3_Q / 10.0f);
 #endif
+
 #ifdef PROJECT_MINIFLY_TASK_SENSOR_NOTCH_ACC_EN
   filterInitNotchAcc(1000.0f, 
                      (float)PROJECT_MINIFLY_TASK_SENSOR_NOTCH_ACC_FREQ, 
                      (float)PROJECT_MINIFLY_TASK_SENSOR_NOTCH_ACC_Q / 10.0f);
 #endif
+
   filterInitLpf2AccGyro();
+
+  float imu_angular_accel_cutoff_hz = 0.0f;
+  if (getParam("imu_filter_accel_cutoff_hz", &imu_angular_accel_cutoff_hz,
+               sizeof(imu_angular_accel_cutoff_hz)) != RT_EOK
+      || imu_angular_accel_cutoff_hz <= 0.0f) {
+    imu_angular_accel_cutoff_hz = 30.0f;
+  }
+  filterInitLpfAngularAccel(1000.0f, imu_angular_accel_cutoff_hz);
 #endif
   
   sensorsBiasObjInit();
