@@ -4,18 +4,32 @@
 #include <stddef.h>
 #include <stdint.h>
 
+typedef enum {
+  AXIS_ROLL = 0,
+  AXIS_PITCH = 1,
+  AXIS_YAW = 2,
+} AXIS_E;
+
 typedef struct {
   float gain_p[3];
   float gain_i[3];
   float gain_d[3];
   float gain_ff[3];
   float lim_int[3];
-
   float rate_int[3];
-
   uint8_t sat_pos[3];
   uint8_t sat_neg[3];
 } RateControlPX4;
+
+typedef struct {
+  float acro_r_max;
+  float acro_p_max;
+  float acro_y_max;
+  float acro_expo;
+  float acro_expo_y;
+  float acro_supexpo;
+  float acro_supexpo_y;
+} manual_rate_cfg_t;
 
 void rcpx4_init(RateControlPX4 *rc);
 void rcpx4_set_pid(RateControlPX4 *rc, const float P[3], const float I[3], const float D[3]);

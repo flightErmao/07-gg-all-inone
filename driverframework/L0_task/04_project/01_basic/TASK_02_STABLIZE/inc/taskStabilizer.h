@@ -11,5 +11,11 @@
  */
 void commanderGetCurrentSetpoint(setpoint_t* setpoint);
 
+/**
+ * @brief Get control output
+ * @param get Pointer to control structure to be filled with current control output
+ */
+void getControlOutput(control_t* get);
+
 #endif /* __TASK_STABILIZER_H__ */
 

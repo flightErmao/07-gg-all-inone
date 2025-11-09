@@ -145,3 +145,9 @@ const param_list *getParamByIndex(size_t index) {
   }
   return RT_NULL;
 }
+
+float load_param_float(const char* name) {
+  float value = 0.f;
+  RT_ASSERT(getParam(name, &value, sizeof(value)) == RT_EOK);
+  return value;
+}

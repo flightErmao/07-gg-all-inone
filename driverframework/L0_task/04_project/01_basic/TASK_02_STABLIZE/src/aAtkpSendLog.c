@@ -4,7 +4,7 @@
 #include "stabilizerTypes.h"
 #include "stateControl.h"
 #include "aMcnStabilize.h"
-#include "stateControl.h"
+#include "taskStabilizer.h"
 
 #ifdef TASK_TOOL_01_ANOTC_TELEM_EN
 

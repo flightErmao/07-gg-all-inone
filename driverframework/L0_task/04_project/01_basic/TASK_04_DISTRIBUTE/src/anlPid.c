@@ -5,6 +5,12 @@
 
 #ifdef PROJECT_MINIFLY_TASK04_DISTRIBUTE_PID_EN
 #include "stateControl.h"
+#include "pidMinifly.h"
+
+// Temporary PidObject variables for parsing PID parameters from packets
+// These are also used by anlAck.c to read current PID values
+PidObject pidRateRoll, pidRatePitch, pidRateYaw;
+PidObject pidAngleRoll, pidAnglePitch, pidAngleYaw;
 
 static void copyPidParam(PidObject src, pidInit_t *des) {
   des->kp = src.kp;

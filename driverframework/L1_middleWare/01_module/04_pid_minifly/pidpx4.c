@@ -94,8 +94,8 @@ void rcpx4_update(RateControlPX4 *rc,
         rate_error[i] = rcpx4_maxf(rate_error[i], 0.f);
       }
 
-      const float rad400 = (400.0f * (float)M_PI) / 180.0f;
-      float i_factor = rate_error[i] / rad400;
+      const float rad1000 = (1000.0f * (float)M_PI) / 180.0f;
+      float i_factor = rate_error[i] / rad1000;
       i_factor = rcpx4_maxf(0.0f, 1.0f - i_factor * i_factor);
       float rate_i = rc->rate_int[i] + i_factor * rc->gain_i[i] * rate_error[i] * dt;
 

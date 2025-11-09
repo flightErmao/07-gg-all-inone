@@ -99,6 +99,13 @@ static int taskStabilizerThreadAutoStart(void) {
   return RT_EOK;
 }
 
+void getControlOutput(control_t* get) {
+  if (!get) {
+    return;
+  }
+  *get = contorl_;
+}
+
 #ifdef PROJECT_MINIFLY_TASK_STABLIZE_EN
 INIT_APP_EXPORT(taskStabilizerThreadAutoStart);
 #endif
