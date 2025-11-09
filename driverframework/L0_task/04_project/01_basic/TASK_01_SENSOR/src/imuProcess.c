@@ -46,7 +46,7 @@ static inline void gyroRemoveBiasRaw(Axis3f* out, Axis3i16* raw, const Axis3f* b
 
 static inline void gyroApplyScale(Axis3f* raw) {
   raw->x = raw->x * g_gyro_deg_per_lsb;
-  raw->y = raw->y * g_gyro_deg_per_lsb;
+  raw->y = -raw->y * g_gyro_deg_per_lsb;
   raw->z = raw->z * g_gyro_deg_per_lsb;
 }
 

@@ -47,22 +47,6 @@ menuconfig PROJECT_MINIFLY_TASK_SENSOR_EN
                 help
                     Enable and configure low-pass filter for IMU data.
 
-            if PROJECT_MINIFLY_TASK_SENSOR_LPF_EN
-                config PROJECT_MINIFLY_TASK_SENSOR_GYRO_LPF_CUTOFF_FREQ
-                    int "Gyro LPF cutoff frequency (Hz)"
-                    default 70
-                    range 1 500
-                    help
-                        Low-pass filter cutoff frequency for gyroscope data in Hz.
-                        Typical values: 50-150 Hz for racing drones, 200-300 Hz for high-speed applications.
-
-                config PROJECT_MINIFLY_TASK_SENSOR_ACC_LPF_CUTOFF_FREQ
-                    int "Accelerometer LPF cutoff frequency (Hz)"
-                    default 30
-                    range 1 500
-                    help
-                        Low-pass filter cutoff frequency for accelerometer data in Hz.
-                        Typical values: 20-50 Hz for most applications.
             endif
 
             # Notch Filter Configuration

@@ -2,21 +2,20 @@
 #include <stdlib.h>
 #include "filterLpf2p.h"
 #include "rtconfig.h"
+#include "param.h"
+
+#define IMU_FILTER_LPF2P_DEBUG
+
+#define LOG_TAG "imu_filter_lpf2p"
+#ifdef IMU_FILTER_LPF2P_DEBUG
+#define LOG_LVL LOG_LVL_DBG
+#else
+#define LOG_LVL LOG_LVL_WARNING
+#endif
+#include <ulog.h>
 
 #define M_PI_F (float)3.14159265
 #define IIR_SHIFT 8
-
-#ifdef PROJECT_MINIFLY_TASK_SENSOR_GYRO_LPF_CUTOFF_FREQ
-#define GYRO_LPF_CUTOFF_FREQ PROJECT_MINIFLY_TASK_SENSOR_GYRO_LPF_CUTOFF_FREQ
-#else
-#define GYRO_LPF_CUTOFF_FREQ 70
-#endif
-
-#ifdef PROJECT_MINIFLY_TASK_SENSOR_ACC_LPF_CUTOFF_FREQ
-#define ACCEL_LPF_CUTOFF_FREQ PROJECT_MINIFLY_TASK_SENSOR_ACC_LPF_CUTOFF_FREQ
-#else
-#define ACCEL_LPF_CUTOFF_FREQ 30
-#endif
 
 typedef struct {
   float a1;
@@ -87,9 +86,30 @@ float lpf2pReset(lpf2pData* lpfData, float sample) {
 
 void filterInitLpf2AccGyro(void) {
 #ifdef PROJECT_MINIFLY_TASK_SENSOR_LPF_EN
+  float gyro_lpf_cutoff_hz = 70.0f;
+  float acc_lpf_cutoff_hz = 30.0f;
+  float sample_rate_hz = 1000.0f;
+
+  if (getParam("imu_filter_gyro_lpf_cutoff_hz", &gyro_lpf_cutoff_hz, sizeof(gyro_lpf_cutoff_hz)) != RT_EOK ||
+      gyro_lpf_cutoff_hz <= 0.0f) {
+    LOG_W("Failed to get gyro LPF cutoff frequency, using default: %f", gyro_lpf_cutoff_hz);
+    gyro_lpf_cutoff_hz = 70.0f;
+  }
+
+  if (getParam("imu_filter_acc_lpf_cutoff_hz", &acc_lpf_cutoff_hz, sizeof(acc_lpf_cutoff_hz)) != RT_EOK ||
+      acc_lpf_cutoff_hz <= 0.0f) {
+    acc_lpf_cutoff_hz = 30.0f;
+    LOG_W("Failed to get acc LPF cutoff frequency, using default: %f", acc_lpf_cutoff_hz);
+  }
+
+  if (getParam("imu_filter_sample_rate_hz", &sample_rate_hz, sizeof(sample_rate_hz)) != RT_EOK) {
+    LOG_W("Failed to get IMU sample rate, using default: 1000Hz");
+    sample_rate_hz = 1000.0f;
+  }
+
   for (uint8_t i = 0; i < 3; i++) {
-    lpf2pInit(&gyroLpf[i], 1000, GYRO_LPF_CUTOFF_FREQ);
-    lpf2pInit(&accLpf[i], 1000, ACCEL_LPF_CUTOFF_FREQ);
+    lpf2pInit(&gyroLpf[i], sample_rate_hz, gyro_lpf_cutoff_hz);
+    lpf2pInit(&accLpf[i], sample_rate_hz, acc_lpf_cutoff_hz);
   }
 #endif
 }
