@@ -47,8 +47,6 @@ menuconfig PROJECT_MINIFLY_TASK_SENSOR_EN
                 help
                     Enable and configure low-pass filter for IMU data.
 
-            endif
-
             # Notch Filter Configuration
             menuconfig PROJECT_MINIFLY_TASK_SENSOR_NOTCH_EN
                 bool "Notch Filter"

@@ -73,6 +73,18 @@ static void pidParamInit(void) {
   g_manual_rate_cfg.acro_supexpo_y = load_param_float("mc_acro_supexpo_y");
 
   g_yaw_tq_cutoff = load_param_float("mc_yaw_tq_cutoff");
+
+  // 设置积分清零阈值：当误差绝对值小于此值时，清零积分（单位：deg/s）
+  // 如果参数为0或未设置，则禁用此功能（阈值<=0时不启用）
+  // float int_threshold[3] = {
+  //     load_param_float("mc_rr_int_threshold"),  // roll轴积分清零阈值
+  //     load_param_float("mc_pr_int_threshold"),  // pitch轴积分清零阈值
+  //     load_param_float("mc_yr_int_threshold")   // yaw轴积分清零阈值
+  // };
+
+  float int_threshold[3] = {5.0f, 5.0f, 5.0f};
+
+  rcpx4_set_integral_threshold(&g_rate_ctrl_px4, int_threshold);
 }
 
 static inline float superexpo_map(float stick_input, float expo, float supexpo) {
@@ -115,9 +127,41 @@ void ratePid(const Axis3f* actualRate, const attitude_t* desiredRate, const Axis
   float torque[3] = {0.f, 0.f, 0.f};
   bool landed = (actualThrust_ < 5.0f);
   float dt = getDtForRatePid();
+
+  // 计算误差，用于判断饱和方向
+  float rate_error[3];
+  rate_error[0] = rate_sp[0] - rate[0];
+  rate_error[1] = rate_sp[1] - rate[1];
+  rate_error[2] = rate_sp[2] - rate[2];
+
   rcpx4_update(&g_rate_ctrl_px4, rate, rate_sp, angularAccel->axis, dt, landed, torque);
   if (fabsf(torque[2]) < g_yaw_tq_cutoff) {
     torque[2] = 0.f;
+  }
+
+  // 检测输出饱和并设置饱和标志（用于下一次调用的积分抗饱和）
+  // 这是PX4标准的积分抗饱和机制：当输出达到限制且误差方向与饱和方向一致时，
+  // 停止该方向的积分累积，防止积分windup
+  for (int i = 0; i < 3; i++) {
+    // 检查原始输出是否超过限制（饱和）
+    bool is_saturated_pos = (torque[i] > (float)INT16_MAX);
+    bool is_saturated_neg = (torque[i] < (float)(-INT16_MAX));
+
+    // 当输出正饱和且误差为正时，设置正饱和标志（下一次调用时误差会被限制为<=0）
+    // 这样可以防止积分在输出已经达到上限时继续累积
+    if (is_saturated_pos && rate_error[i] > 0.f) {
+      rcpx4_set_pos_sat_axis(&g_rate_ctrl_px4, i, 1);
+    } else {
+      rcpx4_set_pos_sat_axis(&g_rate_ctrl_px4, i, 0);
+    }
+
+    // 当输出负饱和且误差为负时，设置负饱和标志（下一次调用时误差会被限制为>=0）
+    // 这样可以防止积分在输出已经达到下限时继续累积
+    if (is_saturated_neg && rate_error[i] < 0.f) {
+      rcpx4_set_neg_sat_axis(&g_rate_ctrl_px4, i, 1);
+    } else {
+      rcpx4_set_neg_sat_axis(&g_rate_ctrl_px4, i, 0);
+    }
   }
 
   output->roll = pidOutLimit(torque[0]);

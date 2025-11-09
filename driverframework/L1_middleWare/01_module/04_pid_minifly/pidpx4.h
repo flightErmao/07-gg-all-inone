@@ -19,6 +19,7 @@ typedef struct {
   float rate_int[3];
   uint8_t sat_pos[3];
   uint8_t sat_neg[3];
+  float int_threshold[3];  // 积分清零阈值：当误差绝对值小于此值时，清零积分 (deg/s)
 } RateControlPX4;
 
 typedef struct {
@@ -38,6 +39,7 @@ void rcpx4_set_ff(RateControlPX4 *rc, const float FF[3]);
 void rcpx4_set_saturation(RateControlPX4 *rc, const uint8_t sat_pos[3], const uint8_t sat_neg[3]);
 void rcpx4_set_pos_sat_axis(RateControlPX4 *rc, size_t axis, uint8_t is_saturated);
 void rcpx4_set_neg_sat_axis(RateControlPX4 *rc, size_t axis, uint8_t is_saturated);
+void rcpx4_set_integral_threshold(RateControlPX4 *rc, const float threshold[3]);
 void rcpx4_reset_integral(RateControlPX4 *rc);
 void rcpx4_reset_integral_axis(RateControlPX4 *rc, size_t axis);
 

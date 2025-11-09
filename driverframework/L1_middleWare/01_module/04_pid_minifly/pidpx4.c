@@ -54,6 +54,11 @@ void rcpx4_set_neg_sat_axis(RateControlPX4 *rc, size_t axis, uint8_t is_saturate
   if (axis < 3) rc->sat_neg[axis] = is_saturated;
 }
 
+void rcpx4_set_integral_threshold(RateControlPX4 *rc, const float threshold[3]) {
+  if (!rc || !threshold) return;
+  memcpy(rc->int_threshold, threshold, sizeof(rc->int_threshold));
+}
+
 void rcpx4_reset_integral(RateControlPX4 *rc) {
   if (!rc) return;
   rc->rate_int[0] = 0.f;
@@ -87,6 +92,12 @@ void rcpx4_update(RateControlPX4 *rc,
 
   if (!landed) {
     for (int i = 0; i < 3; i++) {
+      // 如果误差绝对值小于阈值，清零积分（防止小误差导致积分持续累积）
+      if (rc->int_threshold[i] > 0.f && fabsf(rate_error[i]) < rc->int_threshold[i]) {
+        rc->rate_int[i] = 0.f;
+        continue;  // 跳过积分更新
+      }
+
       if (rc->sat_pos[i]) {
         rate_error[i] = rcpx4_minf(rate_error[i], 0.f);
       }
