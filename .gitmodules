@@ -28,3 +28,12 @@
 [submodule "driverframework/L1_middleWare/03_package/uparam"]
 	path = driverframework/L1_middleWare/03_package/uparam
 	url = git@github.com:Tool-01-middleware/uparam.git
+[submodule "driverframework/L1_middleWare/03_package/modbus"]
+	path = driverframework/L1_middleWare/03_package/modbus
+	url = https://github.com/Tool-01-middleware/freemodbus.git
+[submodule "driverframework/L1_middleWare/03_package/sample_kernel"]
+	path = driverframework/L1_middleWare/03_package/sample_kernel
+	url = https://github.com/Tool-01-middleware/kernel-sample.git
+[submodule "driverframework/L1_middleWare/03_package/sample_peripheral"]
+	path = driverframework/L1_middleWare/03_package/sample_peripheral
+	url = https://github.com/Tool-01-middleware/peripheral-sample.git
