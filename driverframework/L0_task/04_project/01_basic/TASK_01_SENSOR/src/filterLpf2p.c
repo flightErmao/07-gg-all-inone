@@ -90,13 +90,13 @@ void filterInitLpf2AccGyro(void) {
   float acc_lpf_cutoff_hz = 30.0f;
   float sample_rate_hz = 1000.0f;
 
-  if (getParam("imu_filter_gyro_lpf_cutoff_hz", &gyro_lpf_cutoff_hz, sizeof(gyro_lpf_cutoff_hz)) != RT_EOK ||
+  if (getParam("imu_filter_lpf_gyro_cutoff_hz", &gyro_lpf_cutoff_hz, sizeof(gyro_lpf_cutoff_hz)) != RT_EOK ||
       gyro_lpf_cutoff_hz <= 0.0f) {
     LOG_W("Failed to get gyro LPF cutoff frequency, using default: %f", gyro_lpf_cutoff_hz);
     gyro_lpf_cutoff_hz = 70.0f;
   }
 
-  if (getParam("imu_filter_acc_lpf_cutoff_hz", &acc_lpf_cutoff_hz, sizeof(acc_lpf_cutoff_hz)) != RT_EOK ||
+  if (getParam("imu_filter_lpf_acc_cutoff_hz", &acc_lpf_cutoff_hz, sizeof(acc_lpf_cutoff_hz)) != RT_EOK ||
       acc_lpf_cutoff_hz <= 0.0f) {
     acc_lpf_cutoff_hz = 30.0f;
     LOG_W("Failed to get acc LPF cutoff frequency, using default: %f", acc_lpf_cutoff_hz);

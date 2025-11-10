@@ -74,10 +74,10 @@ static const float mc_rollrate_d_default = 0.0f;
 static const float mc_rollrate_ff_default = 0.0f;
 static const float mc_rollrate_k_default = 0.0f;
 
-static const float mc_pitchrate_p_default = 45.0f;
-static const float mc_pitchrate_i_default = 62.0f;
-static const float mc_pr_int_lim_default = 500.0f;
-static const float mc_pitchrate_d_default = 0.0f;
+static const float mc_pitchrate_p_default = 150.0f;
+static const float mc_pitchrate_i_default = 300.0f;
+static const float mc_pr_int_lim_default = 10000.0f;
+static const float mc_pitchrate_d_default = 4.0f;
 static const float mc_pitchrate_ff_default = 0.0f;
 static const float mc_pitchrate_k_default = 0.0f;
 

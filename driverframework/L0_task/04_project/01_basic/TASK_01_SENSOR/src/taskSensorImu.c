@@ -72,9 +72,9 @@ static void sensor_imu_thread_entry(void* parameter) {
   filterInitLpf2AccGyro();
 
   float imu_angular_accel_cutoff_hz = 0.0f;
-  if (getParam("imu_filter_accel_cutoff_hz", &imu_angular_accel_cutoff_hz,
-               sizeof(imu_angular_accel_cutoff_hz)) != RT_EOK
-      || imu_angular_accel_cutoff_hz <= 0.0f) {
+  if (getParam("imu_filter_lpf_angular_acc_cutoff_hz", &imu_angular_accel_cutoff_hz,
+               sizeof(imu_angular_accel_cutoff_hz)) != RT_EOK ||
+      imu_angular_accel_cutoff_hz <= 0.0f) {
     imu_angular_accel_cutoff_hz = 30.0f;
   }
   filterInitLpfAngularAccel(1000.0f, imu_angular_accel_cutoff_hz);
