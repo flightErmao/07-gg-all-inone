@@ -1,0 +1,28 @@
+menuconfig WORK_TASK_ESC_MONITOR_EN
+    bool "ENABLE: WORK_TASK_ESC_MONITOR_EN"
+    default n
+    help
+        Enable ESC monitor task with I2C support
+
+    if WORK_TASK_ESC_MONITOR_EN
+
+        config WORK_TASK_ESC_MONITOR_I2C_NAME
+            string "I2C bus device name"
+            default "i2c1"
+            help
+                The I2C bus device name used by ESC monitor
+
+        config WORK_TASK_ESC_MONITOR_I2C_ADDR
+            hex "I2C device address"
+            default 0x00
+            help
+                7-bit I2C device address used by ESC monitor
+
+        config WORK_TASK_ESC_MONITOR_MODBUS_REG_INDEX
+            int "Modbus holding register index"
+            default 0
+            help
+                Holding register index used to report ESC monitor result
+
+    endif
+

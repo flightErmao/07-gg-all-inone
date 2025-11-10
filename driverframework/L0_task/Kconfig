@@ -12,6 +12,7 @@ menu "L0_TASK_CONFIG"
     source "$(PROJECT_ROOT)/driverframework/L0_task/03_work/TASK_04_XL530X/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L0_task/03_work/TASK_05_XL5300_XINLIN/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L0_task/03_work/TASK_06_XL5300_ORINGE/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L0_task/03_work/TASK_07_esc_monitor/Kconfig"
 
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/01_basic/TASK_01_SENSOR/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/01_basic/TASK_02_STABLIZE/Kconfig"

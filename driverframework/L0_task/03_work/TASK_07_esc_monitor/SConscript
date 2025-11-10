@@ -1,0 +1,20 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+path = []
+src = []
+group = []
+
+src = Glob("./src/*.c")
+path = [cwd, os.path.join(cwd, "inc")]
+
+group = DefineGroup(
+    "TASK_07_ESC_MONITOR",
+    src,
+    depend=["WORK_TASK_ESC_MONITOR_EN"],
+    CPPPATH=path,
+)
+
+Return("group")
+
