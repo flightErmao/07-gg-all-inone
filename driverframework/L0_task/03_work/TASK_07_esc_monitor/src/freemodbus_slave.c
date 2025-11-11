@@ -17,7 +17,7 @@
 
 #define SLAVE_ADDR      0x01   // 从机地址
 #define PORT_NUM        1      // 串口号
-#define PORT_BAUDRATE   115200 // 波特率
+#define PORT_BAUDRATE 9600     // 波特率
 
 #define PORT_PARITY     MB_PAR_EVEN
 
