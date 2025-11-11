@@ -4,7 +4,7 @@
 #include "esc_monitor_i2c.h"
 
 #define ESC_MONITOR_THREAD_PRIORITY 7
-#define ESC_MONITOR_THREAD_STACK_SIZE 1024
+#define ESC_MONITOR_THREAD_STACK_SIZE 2048
 #define ESC_MONITOR_THREAD_TIMESLICE 5
 
 #define ESC_MONITOR_PIN_OUTPUT_NAME "PB.14"
@@ -20,11 +20,16 @@ static rt_base_t pinNameDroneOnOff_ = -1;
 static rt_base_t pinNamePhoneOnV1P8_ = -1;
 static rt_bool_t escMonitorResult_ = RT_FALSE;
 
-static rt_bool_t esc_monitor_check_pb15_low(void) {
+typedef enum {
+  PHONE_ON_V1P8_LOW_LEVEL = 0,
+  PHONE_ON_V1P8_HIGH_LEVEL = 1,
+} esc_monitor_state_e;
+
+static esc_monitor_state_e esc_monitor_phone_v1p8(uint16_t times_span) {
   rt_uint32_t elapsed = 0;
   uint16_t low_count = 0;
   uint16_t high_count = 0;
-  while (elapsed < 1200) {
+  while (elapsed < times_span) {
     if (rt_pin_read(pinNamePhoneOnV1P8_) != PIN_LOW) {
       high_count++;
     } else {
@@ -34,23 +39,36 @@ static rt_bool_t esc_monitor_check_pb15_low(void) {
     elapsed += ESC_MONITOR_INPUT_SAMPLE_MS;
   }
 
-  rt_kprintf("[ESC_MON] PB15 low_count: %d, high_count: %d\n", low_count, high_count);
+  rt_kprintf("[ESC_MON] times_span %d, PB15 low_count: %d, high_count: %d\n", times_span, low_count, high_count);
   if (low_count > high_count) {
-    return RT_TRUE;
+    return PHONE_ON_V1P8_LOW_LEVEL;
   }
-  return RT_FALSE;
+  return PHONE_ON_V1P8_HIGH_LEVEL;
+}
+static void cmdEscMonitor(int argc, char** argv) {
+  rt_kprintf("ESC Phone_V1P8 monitor begin \n");
+  rt_pin_write(pinNameDroneOnOff_, PIN_LOW);
+  esc_monitor_state_e state_1 = esc_monitor_phone_v1p8(1000);
+  rt_thread_mdelay(500);
+  rt_pin_write(pinNameDroneOnOff_, PIN_HIGH);
+  esc_monitor_state_e state_2 = esc_monitor_phone_v1p8(1200);
+  rt_thread_mdelay(1000);
+  esc_monitor_state_e state_3 = esc_monitor_phone_v1p8(1000);
+
+  if (state_1 == PHONE_ON_V1P8_HIGH_LEVEL && state_2 == PHONE_ON_V1P8_LOW_LEVEL &&
+      state_3 == PHONE_ON_V1P8_HIGH_LEVEL) {
+    rt_kprintf("ESC Phone_V1P8 monitor result: DETECTED \n");
+    escMonitorResult_ = RT_TRUE;
+  } else {
+    rt_kprintf("ESC Phone_V1P8 monitor result: NOT DETECTED \n");
+    escMonitorResult_ = RT_FALSE;
+  }
+  rt_kprintf("ESC Phone_V1P8 monitor over \n");
 }
 
 static void esc_monitor_thread_entry(void* parameter) {
   RT_UNUSED(parameter);
-
-  rt_thread_mdelay(1000);
-  rt_pin_write(pinNameDroneOnOff_, PIN_LOW);
-  rt_thread_mdelay(1500);
-  rt_pin_write(pinNameDroneOnOff_, PIN_HIGH);
-
-  escMonitorResult_ = esc_monitor_check_pb15_low();
-
+  cmdEscMonitor(0, RT_NULL);
   g_esc_monitor_thread = RT_NULL;
   return;
 }
@@ -102,14 +120,6 @@ static int esc_monitor_init(void) {
 INIT_APP_EXPORT(esc_monitor_init);
 #endif
 
-static void cmdEscMonitor(int argc, char** argv) {
-  rt_kprintf("DRONE ON/OFF LOW LEVEL %d begin \n", ESC_MONITOR_OUTPUT_LOW_DURATION_MS);
-  rt_pin_write(pinNameDroneOnOff_, PIN_LOW);
-  rt_thread_mdelay(ESC_MONITOR_OUTPUT_LOW_DURATION_MS);
-  rt_pin_write(pinNameDroneOnOff_, PIN_HIGH);
-  rt_kprintf("DRONE ON/OFF LOW LEVEL %d end \n", ESC_MONITOR_OUTPUT_LOW_DURATION_MS);
-  escMonitorResult_ = esc_monitor_check_pb15_low();
-}
 MSH_CMD_EXPORT_ALIAS(cmdEscMonitor, cmdEscMonitor, ESC monitor command);
 
 rt_bool_t esc_monitor_get_detection_result(rt_bool_t* result) {
