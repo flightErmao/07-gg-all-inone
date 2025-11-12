@@ -8,6 +8,10 @@ path = [cwd, os.path.join(cwd, "inc")]
 if GetDepend("PROJECT_MINIFLY_TASK05_PARAM_FLYER_DEFAULT_EN"):
     src += Glob("./flyerParam/*.c")
 
+if GetDepend("PROJECT_MINIFLY_TASK05_PARAM_OPT3101_EN"):
+    src += Glob("./opt3101Param/*.c")
+    path.append(os.path.join(cwd, "opt3101Param"))
+
 group = DefineGroup(
     "PROJECT_MINIFLY_TASK05_PARAM_EN", src, depend=["PROJECT_MINIFLY_TASK05_PARAM_EN"], CPPPATH=path
 )

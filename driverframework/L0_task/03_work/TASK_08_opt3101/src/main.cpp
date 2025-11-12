@@ -58,7 +58,7 @@ int main() {
 	host.printf("-------------------------------\r\n");
 #endif
 
-	OPT3101::device dev; ///* Declared variable dev of class OPT3101::device
+	OPT3101::device dev; /// Declared variable dev of class OPT3101::device
 #ifdef HOST_PC
 	host.initialize();
 #endif
@@ -103,3 +103,4 @@ int main() {
 	host.pause();
  	return 0;
 }
+

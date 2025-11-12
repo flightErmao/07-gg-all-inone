@@ -2365,3 +2365,4 @@ EN_CALIB_CLK(1) ///< EN_CALIB_CLK; Register Address 122[1:1]
 
 }
 
+

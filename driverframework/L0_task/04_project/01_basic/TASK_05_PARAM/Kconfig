@@ -15,4 +15,10 @@ menuconfig PROJECT_MINIFLY_TASK05_PARAM_EN
         default n
         help
             "enable auto save param to flash"
+
+        config PROJECT_MINIFLY_TASK05_PARAM_OPT3101_EN
+            bool "ENABLE: PROJECT_MINIFLY_TASK05_PARAM_OPT3101_EN"
+            default y if WORK_TASK_OPT3101_PARAM_SAVE_EN
+            help
+                "enable OPT3101 calibration parameter set"
     endif

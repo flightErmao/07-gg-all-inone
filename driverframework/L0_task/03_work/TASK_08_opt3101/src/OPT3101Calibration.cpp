@@ -71,18 +71,18 @@ void OPT3101::calibrationC::findPhaseTempRegisterValues(OPT3101::phaseTempCoffC*
 	for (c0 = 0; c0 < 3; c0++) {
 		for (c1 = 0; c1 < 2; c1++) {
 			if(txActiveList[c0] && registerSetActiveList[c1])
-				maxCoff = abs(phaseTempCoff[(c0<<1)+c1].coff) > maxCoff ? abs(phaseTempCoff[(c0<<1)+c1].coff) : maxCoff; ///* Identifies max of absolute of OPT3101::phaseTempCoffC::coff values
+				maxCoff = abs(phaseTempCoff[(c0<<1)+c1].coff) > maxCoff ? abs(phaseTempCoff[(c0<<1)+c1].coff) : maxCoff; /// Identifies max of absolute of OPT3101::phaseTempCoffC::coff values
 		}
 	}
-	maxCoff *= 16384.0 / freqCount; ///* scales the max coefficient with input frequencyCount
+	maxCoff *= 16384.0 / freqCount; /// scales the max coefficient with input frequencyCount
 								  // 3200 
 	scaleCoff = 0;
 	for (c0 = 7; c0 >= 0; c0--)
-		scaleCoff = (maxCoff*(1 << (10 - c0))) < (1 << 11) ? c0 : scaleCoff; ///* Finds a OPT3101::phaseTempCoffC::commonScale which can fit the OPT3101::phaseTempCoffC::coff to 12 bit registers
+		scaleCoff = (maxCoff*(1 << (10 - c0))) < (1 << 11) ? c0 : scaleCoff; /// Finds a OPT3101::phaseTempCoffC::commonScale which can fit the OPT3101::phaseTempCoffC::coff to 12 bit registers
 	for (c0 = 0; c0 < 3; c0++) {
 		for (c1 = 0; c1 < 2; c1++) {
 			if(txActiveList[c0] && registerSetActiveList[c1]){
-				phaseTempCoff[(c0<<1)+c1].coffReg = ((int16_t)(16384.0 / freqCount * phaseTempCoff[(c0<<1)+c1].coff*(1 << (10 - scaleCoff)))) & 0xFFF;///* Finds OPT3101::phaseTempCoffC::coffReg values (12 bit register values) based on OPT3101::phaseTempCoffC::coff and OPT3101::phaseTempCoffC::commonScale
+				phaseTempCoff[(c0<<1)+c1].coffReg = ((int16_t)(16384.0 / freqCount * phaseTempCoff[(c0<<1)+c1].coff*(1 << (10 - scaleCoff)))) & 0xFFF;/// Finds OPT3101::phaseTempCoffC::coffReg values (12 bit register values) based on OPT3101::phaseTempCoffC::coff and OPT3101::phaseTempCoffC::commonScale
 				phaseTempCoff[(c0<<1)+c1].commonScale = scaleCoff;
 			}
 		}
@@ -94,9 +94,10 @@ void OPT3101::calibrationC::report()
 	/// <b>Algorithm of the method is as follows</b>
 	host.printf("------------------------\r\n");
 	host.printf("Calibration Class Report\r\n");
-	host.printf("------------------------\r\n"); ///* Prints all the members and values of members on screen.
+	host.printf("------------------------\r\n"); /// Prints all the members and values of members on screen.
 	this->internalCrosstalk[0].report();
 	host.printf("EEPROM_connected=%d\r\n", this->EEPROM_connected);
 	host.printf("extTempSensor_connected=%d\r\n", this->extTempSensor_connected);
 	host.printf("------------------------\r\n");
 }
+

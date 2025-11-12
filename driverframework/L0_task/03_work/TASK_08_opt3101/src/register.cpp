@@ -171,3 +171,4 @@ void OPT3101::deviceRegister2::writeI2C(uint8_t address,uint32_t data){
 
 //printf("Dummy I2C read  from OPT3101 register addr:0x%02x data:0x%06x\n",address,i2cReadValue);
 //printf("Dummy I2C write to   OPT3101 register addr:0x%02x data:0x%06x\n",address,data);
+

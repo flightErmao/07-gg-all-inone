@@ -32,7 +32,7 @@
 OPT3101::phaseOffsetC::phaseOffsetC()
 {
 	/// <b>Algorithm of the method is as follows</b>
-	this->phaseOffset = 0; ///* Initializes all members to 0
+	this->phaseOffset = 0; /// Initializes all members to 0
 	this->referenceDistanceInCodes = 0; 
 	this->illumScale = 0; 
 	this->illumDac=0; 
@@ -45,7 +45,7 @@ void OPT3101::phaseOffsetC::report()
 {
 	host.printf("-------------------------\r\n");
 	host.printf("Phase Offset Class Report\r\n");
-	host.printf("-------------------------\r\n"); ///* Prints all the members and values of members on screen.
+	host.printf("-------------------------\r\n"); /// Prints all the members and values of members on screen.
 	host.printf("phaseOffset=%d\r\n", this->phaseOffset);
 	host.printf("referenceDistanceInCodes=%d\r\n", this->referenceDistanceInCodes);
 	host.printf("illumScale=%d\r\n", this->illumScale);
@@ -55,7 +55,7 @@ void OPT3101::phaseOffsetC::report()
 	host.printf("shiftIllumPhase=%d\r\n", this->shiftIllumPhase);
 	host.printf("data=\r\n");
 	this->data.report();
-	host.printf("-------------------------\r\n"); ///* Prints all the members and values of members on screen.
+	host.printf("-------------------------\r\n"); /// Prints all the members and values of members on screen.
 }
 
 void OPT3101::phaseOffsetC::printHeader()
@@ -89,7 +89,7 @@ void OPT3101::phaseOffsetC::storeToFile(char * fileName)
 	/// <b>Algorithm of the method is as follows</b>
 	std::ofstream ofs(fileName);
 	ofs << this;
-	ofs.close(); ///* User needs to implement file storage based on host. 
+	ofs.close(); /// User needs to implement file storage based on host. 
 #endif
 }
 #endif
@@ -101,7 +101,7 @@ void OPT3101::phaseOffsetC::loadFromFile(char * fileName)
 	/// <b>Algorithm of the method is as follows</b>
 	std::ifstream ifs(fileName);
 	ifs >> this;
-	ifs.close(); ///* User needs to implement file load/restore based on host. 
+	ifs.close(); /// User needs to implement file load/restore based on host. 
 #endif
 }
 #endif
@@ -110,7 +110,7 @@ void OPT3101::phaseOffsetC::loadFromFile(char * fileName)
 std::ostream & OPT3101::operator<<(std::ostream & os, const phaseOffsetC * data)
 {
 	/// <b>Algorithm of the method is as follows</b>
-	os << data->phaseOffset<<'\n'; ///* Serializes all the members and returns to the stream 
+	os << data->phaseOffset<<'\n'; /// Serializes all the members and returns to the stream 
 	os << data->referenceDistanceInCodes << '\n';
 	os << data->illumScale << '\n';
 	os << data->illumDac << '\n';
@@ -126,7 +126,7 @@ std::ostream & OPT3101::operator<<(std::ostream & os, const phaseOffsetC * data)
 std::istream & OPT3101::operator>>(std::istream & is, phaseOffsetC * data)
 {
 	/// <b>Algorithm of the method is as follows</b>
-	is >> data->phaseOffset; ///* Reads from stream and de-serializes all the members 
+	is >> data->phaseOffset; /// Reads from stream and de-serializes all the members 
 	is >> data->referenceDistanceInCodes;
 	is >> data->illumScale;
 	is >> data->illumDac;
@@ -137,3 +137,4 @@ std::istream & OPT3101::operator>>(std::istream & is, phaseOffsetC * data)
 	return is;
 }
 #endif
+

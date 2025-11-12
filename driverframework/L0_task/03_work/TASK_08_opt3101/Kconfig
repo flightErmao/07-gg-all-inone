@@ -1,0 +1,71 @@
+menuconfig WORK_TASK_OPT3101_EN
+    bool "ENABLE: WORK_TASK_OPT3101"
+    default n
+    help
+        Enable OPT3101 calibration and runtime support.
+
+    if WORK_TASK_OPT3101_EN
+
+        config WORK_TASK_OPT3101_I2C_NAME
+            string "I2C bus device name"
+            default "i2c1"
+            help
+                RT-Thread I2C bus device used to communicate with OPT3101.
+
+        config WORK_TASK_OPT3101_I2C_ADDR
+            hex "I2C device address"
+            default 0x58
+            help
+                7-bit I2C address of OPT3101.
+
+        config WORK_TASK_OPT3101_I2C_SPEED
+            int "I2C bus speed (Hz)"
+            range 100000 3400000
+            default 400000
+            help
+                Target bus speed applied after the device is opened. Set to 0 to keep current driver configuration.
+
+        config WORK_TASK_OPT3101_RESET_PIN
+            string "Reset pin name (optional)"
+            default ""
+            help
+                Optional RT-Thread pin name that drives OPT3101 reset (active low). Leave empty if not wired.
+
+        config WORK_TASK_OPT3101_RESET_PULSE_MS
+            int "Reset pulse width (ms)"
+            default 5
+            help
+                Duration to hold reset pin low during resetDevice().
+
+        config WORK_TASK_OPT3101_RESET_RELEASE_MS
+            int "Reset release delay (ms)"
+            default 10
+            help
+                Delay after releasing reset pin before next transaction.
+
+        config WORK_TASK_OPT3101_FRAME_TIME_MS
+            int "Frame interval estimate (ms)"
+            default 30
+            help
+                Estimated frame period used to translate data ready counts to delay.
+
+        config WORK_TASK_OPT3101_PAUSE_DELAY_MS
+            int "Pause delay (ms)"
+            default 10
+            help
+                Delay inserted by hostController::pause() in lieu of blocking for user input.
+
+        config WORK_TASK_OPT3101_VERBOSE
+            bool "Enable verbose logging"
+            default y
+            help
+                Enable host.printf outputs for diagnostics.
+
+        config WORK_TASK_OPT3101_PARAM_SAVE_EN
+            bool "Enable saving calibration registers to parameter storage"
+            default y
+            help
+                Capture calibration register snapshots into TASK_05_PARAM opt3101 parameter.
+
+    endif
+

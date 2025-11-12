@@ -1,0 +1,24 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+
+src = Glob("./src/*.c")
+src += Glob("./src/*.cpp")
+src = [item for item in src if not str(item).endswith("main.cpp")]
+
+path = [
+    cwd,
+    os.path.join(cwd, "inc"),
+    os.path.join(cwd, "..", "..", "..", "L3_peripheral", "12_i2cConfig"),
+]
+
+group = DefineGroup(
+    "WORK_TASK_OPT3101",
+    src,
+    depend=["WORK_TASK_OPT3101_EN"],
+    CPPPATH=path,
+)
+
+Return("group")
+

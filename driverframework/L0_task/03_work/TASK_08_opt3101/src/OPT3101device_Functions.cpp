@@ -30,7 +30,7 @@
 void OPT3101::device::reset() {
 	/// <b>Algorithm of the method is as follows</b>
 	host.printf("INFO::Resetting Host\r\n");
-	host.resetDevice(); ///* Invokes the hostController::reset method
+	host.resetDevice(); /// Invokes the hostController::reset method
 	host.sleep(100);
 
 }
@@ -77,9 +77,9 @@ void OPT3101::device::resetInitAndViewData(uint32_t nFrames,bool loadCalibration
 	this->reset();
 	host.sleep(5000);
 	this->initialize();
-    this->measureAndCorrectInternalCrosstalk(&this->calibration->internalCrosstalk[0]); ///* Calls method OPT3101::device::measureAndCorrectInternalCrosstalk with argument OPT3101::calibrationC::internalCrosstalk
-    this->calibration->internalCrosstalk[0].printHeader(); ///* Calls the method OPT3101::crosstalkC::report for debug and data analysis
-    this->calibration->internalCrosstalk[0].print(); ///* Calls the method OPT3101::crosstalkC::report for debug and data analysis
+    this->measureAndCorrectInternalCrosstalk(&this->calibration->internalCrosstalk[0]); /// Calls method OPT3101::device::measureAndCorrectInternalCrosstalk with argument OPT3101::calibrationC::internalCrosstalk
+    this->calibration->internalCrosstalk[0].printHeader(); /// Calls the method OPT3101::crosstalkC::report for debug and data analysis
+    this->calibration->internalCrosstalk[0].print(); /// Calls the method OPT3101::crosstalkC::report for debug and data analysis
     host.printf("\r\n");
 	if(loadCalibration){
 		this->manuallySetIllumCrosstalkTempCoffs();
@@ -99,7 +99,9 @@ void OPT3101::device::resetInitAndViewData(uint32_t nFrames,bool loadCalibration
 
 bool OPT3101::device::validateI2C() {
 	/// <b>Algorithm of the method is as follows</b>
+#ifdef TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
 	uint32_t data;
+#endif
 	bool status;
 	//0x8001A0
 	//data=0xA001802E
@@ -164,8 +166,8 @@ void OPT3101::device::measureAndCorrectInternalCrosstalk(OPT3101::crosstalkC *in
 	uint8_t regStore[5];
 	regStore[0]=this->reg.en_adaptive_hdr.read();
 	regStore[1]=this->reg.hdr_mode.read();
-	regStore[2]=this->reg.en_sequencer.read(); ///* Critical registers which are modified in this method are read from the h/w and temporarily buffered to local variables.
-	regStore[3]=this->reg.en_processor_values.read(); ///* Temporarily buffered register states are restored to the h/w with register writes while exiting this method.
+	regStore[2]=this->reg.en_sequencer.read(); /// Critical registers which are modified in this method are read from the h/w and temporarily buffered to local variables.
+	regStore[3]=this->reg.en_processor_values.read(); /// Temporarily buffered register states are restored to the h/w with register writes while exiting this method.
 	
 	this->reg.tg_en=0;
 	this->reg.en_adaptive_hdr=0;
@@ -175,24 +177,24 @@ void OPT3101::device::measureAndCorrectInternalCrosstalk(OPT3101::crosstalkC *in
 	this->reg.tg_en=1;
 
 	this->reg.use_xtalk_reg_int=0;
-	this->reg.int_xtalk_calib=1; ///* Enables internal crosstalk measure and correct register OPT3101::registers::int_xtalk_calib
+	this->reg.int_xtalk_calib=1; /// Enables internal crosstalk measure and correct register OPT3101::registers::int_xtalk_calib
 	host.printf("INFO::Performing Internal Cross talk Measurement...\r\n");
-	host.sleep(this->configurationFlags_xtalkSettlingOneTauInMilliSeconds<<3); ///* Sleeps the host for 8 times the OPT3101::device::configurationFlags_xtalkSettlingOneTauInMilliSeconds so that device settles
+	host.sleep(this->configurationFlags_xtalkSettlingOneTauInMilliSeconds<<3); /// Sleeps the host for 8 times the OPT3101::device::configurationFlags_xtalkSettlingOneTauInMilliSeconds so that device settles
 	/* host.sleepDataReadyCounts(this->configurationFlags_xtalkSettlingOneTauInDataReadyCounts<<3);  */
-	///* Sleep delay can be replaced with wait for 8 times the OPT3101::device::configurationFlags_xtalkSettlingOneTauInDataReadyCounts data ready pulses.User needs to implement based on host configuration
+	/// Sleep delay can be replaced with wait for 8 times the OPT3101::device::configurationFlags_xtalkSettlingOneTauInDataReadyCounts data ready pulses.User needs to implement based on host configuration
 
-	this->reg.int_xtalk_calib=0;  ///* Disables internal crosstalk measure register OPT3101::registers::int_xtalk_calib to complete internal crosstalk measurement
+	this->reg.int_xtalk_calib=0;  /// Disables internal crosstalk measure register OPT3101::registers::int_xtalk_calib to complete internal crosstalk measurement
 
 	regStore[4]=this->reg.iq_read_data_sel.read(); 
 	this->reg.iq_read_data_sel=0;
-	internalXtalk->readCrosstalkRegisters(this); ///* Reads the internal crosstalk registers OPT3101::registers::iphase_xtalk and OPT3101::registers::qphase_xtalk and assigns to internalXtalk input instance pointer of type OPT3101::crosstalkC class
+	internalXtalk->readCrosstalkRegisters(this); /// Reads the internal crosstalk registers OPT3101::registers::iphase_xtalk and OPT3101::registers::qphase_xtalk and assigns to internalXtalk input instance pointer of type OPT3101::crosstalkC class
 	this->reg.iq_read_data_sel=regStore[4];
 
 	this->reg.tg_en=0;
 	this->reg.en_adaptive_hdr=regStore[0];
 	this->reg.hdr_mode=regStore[1];
 	this->reg.en_sequencer=regStore[2];
-	this->reg.en_processor_values=regStore[3]; ///* Restores the device state to the same state as before entering this method from the buffered local variables
+	this->reg.en_processor_values=regStore[3]; /// Restores the device state to the same state as before entering this method from the buffered local variables
 	this->reg.tg_en=1;
 	host.printf("INFO::Internal Cross talk Measurement Completed\r\n");
 
@@ -203,16 +205,16 @@ void OPT3101::device::measureIllumCrosstalk(OPT3101::crosstalkC *illumXtalk) {
 	/// <b>Algorithm of the method is as follows</b>
 	regStore[0] = this->reg.use_xtalk_reg_illum.read(); 
 	this->reg.use_xtalk_reg_illum = 0;
-	this->reg.illum_xtalk_calib = 1; ///* Enables illum crosstalk measure register OPT3101::registers::illum_xtalk_calib
-	host.sleep(this->configurationFlags_xtalkSettlingOneTauInMilliSeconds << 3); ///* Sleeps the host for 8 times the OPT3101::device::configurationFlags_xtalkSettlingOneTauInMilliSeconds so that device settles
+	this->reg.illum_xtalk_calib = 1; /// Enables illum crosstalk measure register OPT3101::registers::illum_xtalk_calib
+	host.sleep(this->configurationFlags_xtalkSettlingOneTauInMilliSeconds << 3); /// Sleeps the host for 8 times the OPT3101::device::configurationFlags_xtalkSettlingOneTauInMilliSeconds so that device settles
 	// The same can be replated with 
 	// host.sleepDataReadyCounts(this->configurationFlags_xtalkSettlingOneTauInDataReadyCounts<<3); // This is for 8 Tau settings
-	///* Sleep delay can be replaced with wait for 8 times the OPT3101::device::configurationFlags_xtalkSettlingOneTauInDataReadyCounts data ready pulses.User needs to implement based on host configuration
+	/// Sleep delay can be replaced with wait for 8 times the OPT3101::device::configurationFlags_xtalkSettlingOneTauInDataReadyCounts data ready pulses.User needs to implement based on host configuration
 	
 	this->reg.illum_xtalk_calib = 0;
 	//Wait Time
 
-	regStore[1] = this->reg.iq_read_data_sel.read(); ///* Reads the internal crosstalk registers OPT3101::registers::iphase_xtalk and OPT3101::registers::qphase_xtalk and assigns to illumXtalk input instance pointer of type OPT3101::crosstalkC class
+	regStore[1] = this->reg.iq_read_data_sel.read(); /// Reads the internal crosstalk registers OPT3101::registers::iphase_xtalk and OPT3101::registers::qphase_xtalk and assigns to illumXtalk input instance pointer of type OPT3101::crosstalkC class
 	this->reg.iq_read_data_sel = 1;
 	illumXtalk->readCrosstalkRegisters(this);
 	illumXtalk->illumXtalk = true;
@@ -220,35 +222,37 @@ void OPT3101::device::measureIllumCrosstalk(OPT3101::crosstalkC *illumXtalk) {
 	this->reg.iq_read_data_sel = regStore[1];
 	this->reg.use_xtalk_reg_illum = regStore[0];
 	
-	illumXtalk->readTemperatureMain(this); ///* Reads main temp sensor and captures the same to input argument illumXtalk's OPT3101::crosstalkC::tmain
-	illumXtalk->readTemperatureIllum(this); ///* Reads external temp sensor and captures the same to input argument illumXtalk's OPT3101::crosstalkC::tillum
+	illumXtalk->readTemperatureMain(this); /// Reads main temp sensor and captures the same to input argument illumXtalk's OPT3101::crosstalkC::tmain
+	illumXtalk->readTemperatureIllum(this); /// Reads external temp sensor and captures the same to input argument illumXtalk's OPT3101::crosstalkC::tillum
 
 }
 
 void OPT3101::device::measureIllumCrosstalkSet(bool saveToFile) {
 	uint8_t c0, c1;
+#ifdef TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
 	uint16_t flashLocation;
+#endif
 #ifdef OPT3101_USE_STDIOLIB
 	char fileName[FILENAME_LENGTH];
 #endif
 
-	envController.setTargetToInfinity_OR_coverPhotodiode(); ///* Calls the method environmentalController::setTargetToInfinity_OR_coverPhotodiode , which is expected to set the environment so as to be able to measure illumination crosstalk
+	envController.setTargetToInfinity_OR_coverPhotodiode(); /// Calls the method environmentalController::setTargetToInfinity_OR_coverPhotodiode , which is expected to set the environment so as to be able to measure illumination crosstalk
 	// Loop to iterate over all TX channels
-	for (c0 = 0; c0 < 3; c0++) {  ///* Loops though all the valid TX channel and register set configurations
+	for (c0 = 0; c0 < 3; c0++) {  /// Loops though all the valid TX channel and register set configurations
 		if (this->configurationFlags_isTXChannelActive[c0]) { // Checking is TX channel is active for this profile
 			for (c1 = 0; c1 < 2; c1++) { // Loop to iterate over the H/L registers
 				if (this->configurationFlags_isRegisterSetActive[c1]) { // Checking if registers are active for this profile
 					host.printf("INFO:Performing Illum Crosstalk for TX%d HDR %d\r\n",c0,c1);
-					this->measureIllumCrosstalk(&this->calibration->illumCrosstalk[c0][c1], c0, c1 ? 'h' : 'l');  ///* Calls method OPT3101::device::measureIllumCrosstalk with argument OPT3101::calibrationC::illumCrosstalk
-					this->calibration->illumCrosstalk[c0][c1].printHeader(); ///* Calls the method OPT3101::crosstalkC::report for debug and data analysis
-					this->calibration->illumCrosstalk[c0][c1].print(); ///* Calls the method OPT3101::crosstalkC::report for debug and data analysis
+					this->measureIllumCrosstalk(&this->calibration->illumCrosstalk[c0][c1], c0, c1 ? 'h' : 'l');  /// Calls method OPT3101::device::measureIllumCrosstalk with argument OPT3101::calibrationC::illumCrosstalk
+					this->calibration->illumCrosstalk[c0][c1].printHeader(); /// Calls the method OPT3101::crosstalkC::report for debug and data analysis
+					this->calibration->illumCrosstalk[c0][c1].print(); /// Calls the method OPT3101::crosstalkC::report for debug and data analysis
 					host.printf("\r\n");
 
 																	  // Provide file name if save to File is implemented eg: illumCrosstalkTX{txChannel}Reg{regSet}_roomTemp
 				   if(saveToFile){
 #ifdef OPT3101_USE_STDIOLIB
-						sprintf(fileName, "%s/illumCrosstalk_TX%d_%c.txt", filePath, c0, c1 ? 'h' : 'l'); ///* Creates filename  illumCrosstalk_TX{channel}_{h/l}.txt in path filePath
-						this->calibration->illumCrosstalk[c0][c1].storeToFile(fileName);  ///* Calls method OPT3101::crosstalkC::storeToFile to store the data
+						sprintf(fileName, "%s/illumCrosstalk_TX%d_%c.txt", filePath, c0, c1 ? 'h' : 'l'); /// Creates filename  illumCrosstalk_TX{channel}_{h/l}.txt in path filePath
+						this->calibration->illumCrosstalk[c0][c1].storeToFile(fileName);  /// Calls method OPT3101::crosstalkC::storeToFile to store the data
 #endif
 #ifdef TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
 						flashLocation=(c1+(c0<<1))<<4;
@@ -271,7 +275,7 @@ void OPT3101::device::measureIllumCrosstalkSet(bool saveToFile) {
 void OPT3101::device::measureIllumCrosstalk( OPT3101::crosstalkC *illumXtalk, uint8_t txChannel, char registerSet,uint8_t shiftIllumPhase) {
 	uint8_t regStore[8];
 	/// <b>Algorithm of the method is as follows</b>
-	regStore[0] = this->reg.en_sequencer.read(); ///* Critical registers which are modified in this method are read from the h/w and temporarily buffered to local variables.
+	regStore[0] = this->reg.en_sequencer.read(); /// Critical registers which are modified in this method are read from the h/w and temporarily buffered to local variables.
 	regStore[1] = this->reg.en_processor_values.read();
 	regStore[2] = this->reg.sel_hdr_mode.read();
 	regStore[3] = this->reg.sel_tx_ch.read();
@@ -284,18 +288,18 @@ void OPT3101::device::measureIllumCrosstalk( OPT3101::crosstalkC *illumXtalk, ui
 	this->reg.en_sequencer = 0;
 	this->reg.en_processor_values = 0;
 	if (registerSet == 'h')
-		this->reg.sel_hdr_mode = 1; ///* Register set is chosen based on registerSet input to this method by setting OPT3101::registers::sel_hdr_mode
+		this->reg.sel_hdr_mode = 1; /// Register set is chosen based on registerSet input to this method by setting OPT3101::registers::sel_hdr_mode
 	if (registerSet == 'l')
 		this->reg.sel_hdr_mode = 0;
-	this->reg.sel_tx_ch = txChannel; ///* TX channel is chosen based on txChannel input to this method by setting OPT3101::registers::sel_tx_ch
+	this->reg.sel_tx_ch = txChannel; /// TX channel is chosen based on txChannel input to this method by setting OPT3101::registers::sel_tx_ch
 	this->reg.en_tx_switch = 0;
 	this->reg.en_adaptive_hdr = 0;
-	this->reg.shift_illum_phase = shiftIllumPhase; ///* Sets up the OPT3101::registers::shift_illum_phase based on the input to this method shiftIllumPhase
+	this->reg.shift_illum_phase = shiftIllumPhase; /// Sets up the OPT3101::registers::shift_illum_phase based on the input to this method shiftIllumPhase
 	this->reg.tg_en = 1;
 	
-	this->measureIllumCrosstalk(illumXtalk); ///* Measures illum crosstalk from registers OPT3101::registers::iphase_xtalk , and OPT3101::registers::qphase_xtalk and assigns to illumXtalk instance pointer of type OPT3101::crosstalkC class
+	this->measureIllumCrosstalk(illumXtalk); /// Measures illum crosstalk from registers OPT3101::registers::iphase_xtalk , and OPT3101::registers::qphase_xtalk and assigns to illumXtalk instance pointer of type OPT3101::crosstalkC class
 	illumXtalk->illumDCdac = this->reg.ILLUM_DC_CURR_DAC.read();
-	illumXtalk->shiftIllumPhase = shiftIllumPhase; ///* Takes snapshot of device TX register configuration and assign them to illumXtalk instance pointer of type OPT3101::crosstalkC class
+	illumXtalk->shiftIllumPhase = shiftIllumPhase; /// Takes snapshot of device TX register configuration and assign them to illumXtalk instance pointer of type OPT3101::crosstalkC class
 	switch (txChannel) {
 		case 0:
 			if (registerSet == 'h') {
@@ -340,7 +344,7 @@ void OPT3101::device::measureIllumCrosstalk( OPT3101::crosstalkC *illumXtalk, ui
 	this->reg.en_adaptive_hdr = regStore[4];
 	this->reg.en_tx_switch = regStore[5];
 	this->reg.shift_illum_phase = regStore[6];
-	this->reg.en_temp_xtalk_corr = regStore[7]; ///* Restores the device state to the same state as before entering this method from the buffered local variables
+	this->reg.en_temp_xtalk_corr = regStore[7]; /// Restores the device state to the same state as before entering this method from the buffered local variables
 
 	this->reg.tg_en = 1;
 }
@@ -349,13 +353,13 @@ void OPT3101::device::loadIllumCrosstalk(OPT3101::crosstalkC *illumXtalk, uint8_
 	uint8_t maxIllumXtalkScale;
 	
 	/// <b>Algorithm of the method is as follows</b>
-	maxIllumXtalkScale = illumXtalk->commonScale; ///* Load the common to all TX channels/register set registers (like for eg OPT3101::registers::illum_xtalk_reg_scale) to the h/w from the method input argument illumXtalk
+	maxIllumXtalkScale = illumXtalk->commonScale; /// Load the common to all TX channels/register set registers (like for eg OPT3101::registers::illum_xtalk_reg_scale) to the h/w from the method input argument illumXtalk
 	this->reg.illum_xtalk_reg_scale = illumXtalk->commonScale;
 	this->reg.shift_illum_phase = illumXtalk->shiftIllumPhase;
 	
 	//printf("Scale reduction is [%d] [%d] [%d] \n", illumXtalk->I, maxIllumXtalkScale - illumXtalk->xtalkScale, illumXtalk->I >>(maxIllumXtalkScale - illumXtalk->xtalkScale));
-	switch (txChannel) { ///* Based on txChannel and registerSet argument the the method loads the OPT3101::crosstalkC::I, OPT3101::crosstalkC::Q, OPT3101::crosstalkC::tmain and OPT3101::crosstalkC::tillum to device h/w specified TX channels and register set  
-	case 0: ///* for eg: then txChannel=1 and registerSet='l' then the method loads the argument illumXtalk's OPT3101::crosstalkC::I to OPT3101::registers::iphase_xtalk_reg_hdr0_tx1 . Similarly the qphase_reg* registers, OPT3101::registers::tmain_calib_hdr0_tx1 and OPT3101::registers::tillum_calib_hdr0_tx1 are loaded from the input argument illumXtalk's  OPT3101::crosstalkC::tmain and OPT3101::crosstalkC::tillum
+	switch (txChannel) { /// Based on txChannel and registerSet argument the the method loads the OPT3101::crosstalkC::I, OPT3101::crosstalkC::Q, OPT3101::crosstalkC::tmain and OPT3101::crosstalkC::tillum to device h/w specified TX channels and register set  
+	case 0: /// for eg: then txChannel=1 and registerSet='l' then the method loads the argument illumXtalk's OPT3101::crosstalkC::I to OPT3101::registers::iphase_xtalk_reg_hdr0_tx1 . Similarly the qphase_reg* registers, OPT3101::registers::tmain_calib_hdr0_tx1 and OPT3101::registers::tillum_calib_hdr0_tx1 are loaded from the input argument illumXtalk's  OPT3101::crosstalkC::tmain and OPT3101::crosstalkC::tillum
 		if (registerSet == 'h') {
 			this->reg.iphase_xtalk_reg_hdr1_tx0 = (uint16_t) (illumXtalk->I >> (maxIllumXtalkScale - illumXtalk->xtalkScale));
 			this->reg.qphase_xtalk_reg_hdr1_tx0 = (uint16_t) (illumXtalk->Q >> (maxIllumXtalkScale - illumXtalk->xtalkScale));
@@ -408,9 +412,9 @@ void OPT3101::device::loadPhaseOffset(OPT3101::phaseOffsetC *phaseOffset, uint8_
 	/// <b>Algorithm of the method is as follows</b>
 
 	//printf("Scale reduction is [%d] [%d] [%d] \n", illumXtalk->I, maxIllumXtalkScale - illumXtalk->xtalkScale, illumXtalk->I >>(maxIllumXtalkScale - illumXtalk->xtalkScale));
-	this->reg.en_phase_corr = 1; ///* Enables the phase offset correction register OPT3101::registers::en_phase_corr
-	switch (txChannel) {  ///* Based on txChannel and registerSet argument the the method loads the OPT3101::phaseOffsetC::phaseOffset, OPT3101::phaseOffsetC::frameData::tmain and OPT3101::phaseOffsetC::frameData::tillum to device h/w specified TX channels and register set  
-	case 0: ///* for eg: then txChannel=1 and registerSet='l' then the method loads the argument phaseOffset's OPT3101::phaseOffsetC::phaseOffset to OPT3101::registers::phase_offset_hdr0_tx1 OPT3101::registers::tmain_calib_hdr0_tx1 and OPT3101::registers::tillum_calib_hdr0_tx1 are loaded from the input argument phaseOffset's  OPT3101::phaseOffsetC::frameData::tmain and OPT3101::phaseOffsetC::frameData::tillum
+	this->reg.en_phase_corr = 1; /// Enables the phase offset correction register OPT3101::registers::en_phase_corr
+	switch (txChannel) {  /// Based on txChannel and registerSet argument the the method loads the OPT3101::phaseOffsetC::phaseOffset, OPT3101::phaseOffsetC::frameData::tmain and OPT3101::phaseOffsetC::frameData::tillum to device h/w specified TX channels and register set  
+	case 0: /// for eg: then txChannel=1 and registerSet='l' then the method loads the argument phaseOffset's OPT3101::phaseOffsetC::phaseOffset to OPT3101::registers::phase_offset_hdr0_tx1 OPT3101::registers::tmain_calib_hdr0_tx1 and OPT3101::registers::tillum_calib_hdr0_tx1 are loaded from the input argument phaseOffset's  OPT3101::phaseOffsetC::frameData::tmain and OPT3101::phaseOffsetC::frameData::tillum
 		if (registerSet == 'h') {
 			this->reg.phase_offset_hdr1_tx0 = phaseOffset->phaseOffset;
 			this->reg.tmain_calib_hdr1_tx0 = phaseOffset->data.tmain;
@@ -455,9 +459,9 @@ void OPT3101::device::loadIllumCrosstalkTempCoff(OPT3101::crosstalkTempCoffC *il
 {
 	/// <b>Algorithm of the method is as follows</b>
 
-	this->reg.scale_temp_coeff_xtalk = illumXtalkTempCoff->commonScale; ///* loads common scale OPT3101::crosstalkTempCoffC::commonScale from input argument illumXtalkTempCoff to device register OPT3101::registers::scale_temp_coeff_xtalk
-	switch (txChannel) { ///* Based on txChannel and registerSet argument the  method loads the OPT3101::crosstalkTempCoffC::coffIReg and OPT3101::crosstalkTempCoffC::coffQReg  to respective register set and channel registers 
-	case 0: ///* for eg: then txChannel=1 and registerSet='l' then the method loads the argument illumXtalkTempCoff's OPT3101::crosstalkTempCoffC::coffIReg to OPT3101::registers::temp_coeff_xtalk_iphase_hdr0_tx1 and similarly for the qphase register as well
+	this->reg.scale_temp_coeff_xtalk = illumXtalkTempCoff->commonScale; /// loads common scale OPT3101::crosstalkTempCoffC::commonScale from input argument illumXtalkTempCoff to device register OPT3101::registers::scale_temp_coeff_xtalk
+	switch (txChannel) { /// Based on txChannel and registerSet argument the  method loads the OPT3101::crosstalkTempCoffC::coffIReg and OPT3101::crosstalkTempCoffC::coffQReg  to respective register set and channel registers 
+	case 0: /// for eg: then txChannel=1 and registerSet='l' then the method loads the argument illumXtalkTempCoff's OPT3101::crosstalkTempCoffC::coffIReg to OPT3101::registers::temp_coeff_xtalk_iphase_hdr0_tx1 and similarly for the qphase register as well
 		if (registerSet == 'h') {
 			this->reg.temp_coeff_xtalk_iphase_hdr1_tx0 = illumXtalkTempCoff->coffIReg;
 			this->reg.temp_coeff_xtalk_qphase_hdr1_tx0 = illumXtalkTempCoff->coffQReg;
@@ -497,10 +501,10 @@ void OPT3101::device::loadPhaseOffsetTempCoff(OPT3101::phaseTempCoffC *phaseTemp
 {
 	/// <b>Algorithm of the method is as follows</b>
 
-	this->reg.en_temp_corr = 1; ///* Enables the phase temp coefficient register OPT3101::registers::en_temp_corr
-	this->reg.scale_phase_temp_coeff = phaseTempCoff->commonScale; ///* Sets the common scale register OPT3101::registers::scale_phase_temp_coeff with value from input argument phaseTempCoff's OPT3101::phaseTempCoffC::commonScale
-	switch (txChannel) { ///* Based on txChannel and registerSet argument the  method loads the OPT3101::phaseTempCoffC::coffReg to respective register set and channel registers 
-	case 0: ///* for eg: then txChannel=1 and registerSet='l' then the method loads the argument phaseTempCoff's OPT3101::phaseTempCoffC::coffReg to OPT3101::registers::temp_coeff_illum_hdr0_tx1 or OPT3101::registers::temp_coeff_main_hdr0_tx1 depending on if phaseTempCoff's OPT3101::phaseTempCoffC::istMainCoff is True or False
+	this->reg.en_temp_corr = 1; /// Enables the phase temp coefficient register OPT3101::registers::en_temp_corr
+	this->reg.scale_phase_temp_coeff = phaseTempCoff->commonScale; /// Sets the common scale register OPT3101::registers::scale_phase_temp_coeff with value from input argument phaseTempCoff's OPT3101::phaseTempCoffC::commonScale
+	switch (txChannel) { /// Based on txChannel and registerSet argument the  method loads the OPT3101::phaseTempCoffC::coffReg to respective register set and channel registers 
+	case 0: /// for eg: then txChannel=1 and registerSet='l' then the method loads the argument phaseTempCoff's OPT3101::phaseTempCoffC::coffReg to OPT3101::registers::temp_coeff_illum_hdr0_tx1 or OPT3101::registers::temp_coeff_main_hdr0_tx1 depending on if phaseTempCoff's OPT3101::phaseTempCoffC::istMainCoff is True or False
 		if (registerSet == 'h') {
 			if (phaseTempCoff->istMainCoff)
 				this->reg.temp_coeff_main_hdr1_tx0 = phaseTempCoff->coffReg;
@@ -551,8 +555,8 @@ void OPT3101::device::loadPhaseAmbientCoff(OPT3101::phaseAmbientCoffC *phaseAmbi
 {
 	/// <b>Algorithm of the method is as follows</b>
 
-	this->reg.scale_amb_phase_corr_coeff = phaseAmbientCoff->commonScale; ///* Assigns all the register entries from phaseAmbientCoff OPT3101::phaseAmbientCoffC to h/w registers 
-	this->reg.amb_phase_corr_pwl_coeff0 = phaseAmbientCoff->coffReg[0]; ///* for eg:  input argument phaseAmbientCoff's  OPT3101::phaseAmbientCoffC::coffReg is loaded to OPT3101::registers::amb_phase_corr_pwl_coeff0 and other related registers
+	this->reg.scale_amb_phase_corr_coeff = phaseAmbientCoff->commonScale; /// Assigns all the register entries from phaseAmbientCoff OPT3101::phaseAmbientCoffC to h/w registers 
+	this->reg.amb_phase_corr_pwl_coeff0 = phaseAmbientCoff->coffReg[0]; /// for eg:  input argument phaseAmbientCoff's  OPT3101::phaseAmbientCoffC::coffReg is loaded to OPT3101::registers::amb_phase_corr_pwl_coeff0 and other related registers
 	this->reg.amb_phase_corr_pwl_coeff1 = phaseAmbientCoff->coffReg[1];
 	this->reg.amb_phase_corr_pwl_coeff2 = phaseAmbientCoff->coffReg[2];
 	this->reg.amb_phase_corr_pwl_coeff3 = phaseAmbientCoff->coffReg[3];
@@ -565,7 +569,7 @@ OPT3101::frameData::frameData()
 {
 	/// <b>Algorithm of the method is as follows</b>
 
-	this->phase = 0; ///* Initializes all members to 0
+	this->phase = 0; /// Initializes all members to 0
 	this->phaseovl = false;
 	this->phaseovlf2 = false;
 	this->ambovl = false;
@@ -588,11 +592,11 @@ void OPT3101::frameData::capture(hostController *host, OPT3101::device *dev,bool
 	uint8_t c0;
 	uint32_t data32[3];
 	/// <b>Algorithm of the method is as follows</b>
-	//host->sleep((dev->configurationFlags_frameTimeInMilliSeconds)<<1); ///* Sleep host for a specified time depending on device configuration to OPT3101 AFE can update measurements to the registers.
-	for (c0 = 8; c0 < 11; c0++) ///* Performs a direct read of I2C registers 0x08 0x09 and 0x0A directly though hostController::readI2C method 
+	//host->sleep((dev->configurationFlags_frameTimeInMilliSeconds)<<1); /// Sleep host for a specified time depending on device configuration to OPT3101 AFE can update measurements to the registers.
+	for (c0 = 8; c0 < 11; c0++) /// Performs a direct read of I2C registers 0x08 0x09 and 0x0A directly though hostController::readI2C method 
 		data32[c0-8] = (host->readI2C(c0));
 
-	this->phase = data32[0] & 0xFFFF; ///* Maps the I2C read values to the class members like OPT3101::frameData::phase, OPT3101::frameData::amplitude etc 
+	this->phase = data32[0] & 0xFFFF; /// Maps the I2C read values to the class members like OPT3101::frameData::phase, OPT3101::frameData::amplitude etc 
 	this->phaseovl = (data32[0] >> 16) & 0x1;
 
 	this->phase |= (((uint32_t) this->phaseovl) << 16);
@@ -615,7 +619,7 @@ void OPT3101::frameData::capture(hostController *host, OPT3101::device *dev,bool
 	this->temp = (data32[2] >> 12) & 0xFFF;
 	this->tmain = this->temp;
 	if (readTillum)
-		this->tillum = dev->reg.tillum.read(); ///* Based on readIllum flag reads the OPT3101::registers::tillum and assigns to OPT3101::frameData::tillum
+		this->tillum = dev->reg.tillum.read(); /// Based on readIllum flag reads the OPT3101::registers::tillum and assigns to OPT3101::frameData::tillum
 
 }
 
@@ -624,7 +628,7 @@ void OPT3101::frameData::report()
 	/// <b>Algorithm of the method is as follows</b>
 	host.printf("-----------------------\r\n");
 	host.printf("Frame data Class Report\r\n");
-	host.printf("-----------------------\r\n"); ///* Prints all the members and values of members on screen.
+	host.printf("-----------------------\r\n"); /// Prints all the members and values of members on screen.
 	host.printf("phase=%d\r\n", this->phase);
 	host.printf("phaseovl=%d\r\n", this->phaseovl);
 	host.printf("phaseovlf2=%d\r\n", this->phaseovlf2);
@@ -641,7 +645,7 @@ void OPT3101::frameData::report()
 	host.printf("temp=%d\r\n", this->temp);
 	host.printf("tmain=%d\r\n", this->tmain);
 	host.printf("tillum=%d\r\n", this->tillum);
-	host.printf("-----------------------\r\n"); ///* Prints all the members and values of members on screen.
+	host.printf("-----------------------\r\n"); /// Prints all the members and values of members on screen.
 }
 void OPT3101::frameData::printHeader()
 {
@@ -684,9 +688,9 @@ void OPT3101::frameData::populateWithMean(OPT3101::frameData *inputData, uint16_
 	uint32_t accum;
 	/// <b>Algorithm of the method is as follows</b>
 	shiftBits = 0;
-	nFrames = nFrames == 0 ? 1 : nFrames; ///* Sets nFrames to 1 when nFrames is 0
+	nFrames = nFrames == 0 ? 1 : nFrames; /// Sets nFrames to 1 when nFrames is 0
 	if(nFrames>1)
-		while (((nFrames-1) >> ++shiftBits) > 0); ///* Finds the smallest 2^N number higher than the nFrames provided in the argument of this method
+		while (((nFrames-1) >> ++shiftBits) > 0); /// Finds the smallest 2^N number higher than the nFrames provided in the argument of this method
 	else
 
 
@@ -712,7 +716,7 @@ void OPT3101::frameData::populateWithMean(OPT3101::frameData *inputData, uint16_
 	
 	
 	// Mean of phase if found
-	accum = 0; ///* Accumulates and measures mean for all the input class instance members and assigns them to the method's class members 
+	accum = 0; /// Accumulates and measures mean for all the input class instance members and assigns them to the method's class members 
 	for (c0 = 0; c0 < nFrames; c0++)
 		accum += inputData[c0].phase;
 	this->phase = accum >> shiftBits;
@@ -747,7 +751,7 @@ void OPT3101::frameData::populateWithMean(OPT3101::frameData *inputData, uint16_
 	for (c0 = 0; c0 < nFrames; c0++)
 		accum += inputData[c0].tillum;
 	this->tillum = accum >> shiftBits;
-	///* <b>Warning:</b> When nFrames is a non 2^N number the mean results are expected to be lower than actual measurements
+	/// <b>Warning:</b> When nFrames is a non 2^N number the mean results are expected to be lower than actual measurements
 
 }
 
@@ -755,7 +759,7 @@ void OPT3101::frameData::populateWithMean(OPT3101::frameData *inputData, uint16_
 std::ostream & OPT3101::operator<<(std::ostream & os, const OPT3101::frameData * data)
 {
 	/// <b>Algorithm of the method is as follows</b>
-	os << data->phase << '\n'; ///* Serializes all the members and returns to the stream 
+	os << data->phase << '\n'; /// Serializes all the members and returns to the stream 
 	os << data->phaseovl << '\n';
 	os << data->phaseovlf2 << '\n';
 	os << data->ambovl << '\n';
@@ -778,7 +782,7 @@ std::ostream & OPT3101::operator<<(std::ostream & os, const OPT3101::frameData *
 std::istream & OPT3101::operator>>(std::istream & is, OPT3101::frameData * data)
 {
 	/// <b>Algorithm of the method is as follows</b>
-	is >> data->phase; ///* Serializes all the members and returns to the stream 
+	is >> data->phase; /// Serializes all the members and returns to the stream 
 	is >> data->phaseovl;
 	is >> data->phaseovlf2;
 	is >> data->ambovl;
@@ -806,7 +810,7 @@ void OPT3101::frameData::storeToFile(char * fileName)
 	/// <b>Algorithm of the method is as follows</b>
 	std::ofstream ofs(fileName);
 	ofs << this;
-	ofs.close(); ///* User needs to implement file storage based on host. 
+	ofs.close(); /// User needs to implement file storage based on host. 
 #endif
 }
 #endif
@@ -818,14 +822,16 @@ void OPT3101::frameData::loadFromFile(char * fileName)
 	/// <b>Algorithm of the method is as follows</b>
 	std::ifstream ifs(fileName);
 	ifs >> this;
-	ifs.close(); ///* User needs to implement file load/restore based on host. 
+	ifs.close(); /// User needs to implement file load/restore based on host. 
 #endif
 }
 #endif
 
 void OPT3101::device::measurePhaseOffsetSet(bool saveToFile) {
 	uint8_t c0, c1;
+#ifdef TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
 	uint16_t flashLocation;
+#endif
 	uint16_t refDistanceInCodes;
 	uint32_t refDistanceInMM;
 
@@ -836,23 +842,23 @@ void OPT3101::device::measurePhaseOffsetSet(bool saveToFile) {
 	envController.manuallySetReferenceDistances();
 
 	// Loop to iterate over all TX channels
-	for (c0 = 0; c0 < 3; c0++) { ///* Loops though all the valid TX channel and register set configurations
+	for (c0 = 0; c0 < 3; c0++) { /// Loops though all the valid TX channel and register set configurations
 		if (this->configurationFlags_isTXChannelActive[c0]) { // Checking is TX channel is active for this profile
 			for (c1 = 0; c1 < 2; c1++) { // Loop to iterate over the H/L registers
 				if (this->configurationFlags_isRegisterSetActive[c1]) { // Checking if registers are active for this profile
 					refDistanceInMM=envController.refDistancesInMM[c0][c1];
-					envController.setTargetDistance(refDistanceInMM); ///* Calls environmentalController::setTargetDistance method with the specified distance
-					refDistanceInCodes = (refDistanceInMM * 4477) >> 10; ///* Converts the reference distance specified in codes related to OPT3101::frameData::phase ADC codes
+					envController.setTargetDistance(refDistanceInMM); /// Calls environmentalController::setTargetDistance method with the specified distance
+					refDistanceInCodes = (refDistanceInMM * 4477) >> 10; /// Converts the reference distance specified in codes related to OPT3101::frameData::phase ADC codes
 					host.printf("INFO:Performing Phase Offset for TX%d HDR %d @ ref Distance %dmm\r\n",c0,c1,refDistanceInMM);
-					this->measurePhaseOffset(&this->calibration->phaseOffset[c0][c1], c0, c1 ? 'h' : 'l', refDistanceInCodes); ///* Measures phase offset by calling method OPT3101::device::measurePhaseOffset with specified reference distance and OPT3101::calibrationC::phaseOffset as argument to store the phase offset values
+					this->measurePhaseOffset(&this->calibration->phaseOffset[c0][c1], c0, c1 ? 'h' : 'l', refDistanceInCodes); /// Measures phase offset by calling method OPT3101::device::measurePhaseOffset with specified reference distance and OPT3101::calibrationC::phaseOffset as argument to store the phase offset values
 					this->calibration->phaseOffset[c0][c1].printHeader();
 					this->calibration->phaseOffset[c0][c1].print();
 					host.printf("\r\n");
 
 					if(saveToFile){
 #ifdef OPT3101_USE_STDIOLIB
-						sprintf(fileName, "%s/phaseOffset_TX%d_%c.txt", filePath, c0, c1 ? 'h' : 'l'); ///* Creates filename  illumCrosstalk_TX{channel}_{h/l}.txt in path filePath
-						this->calibration->phaseOffset[c0][c1].storeToFile(fileName);  ///* Calls method OPT3101::crosstalkC::storeToFile to store the data
+						sprintf(fileName, "%s/phaseOffset_TX%d_%c.txt", filePath, c0, c1 ? 'h' : 'l'); /// Creates filename  illumCrosstalk_TX{channel}_{h/l}.txt in path filePath
+						this->calibration->phaseOffset[c0][c1].storeToFile(fileName);  /// Calls method OPT3101::crosstalkC::storeToFile to store the data
 #endif
 #ifdef TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
 						flashLocation=96+36*((c0<<1)+c1);
@@ -874,28 +880,27 @@ void OPT3101::device::measurePhaseOffset(OPT3101::phaseOffsetC *phaseOffset,uint
 	int32_t phaseOffsetRegister;
 	uint16_t c0;
 	/// <b>Algorithm of the method is as follows</b>
-	nFrames = 1 << (this->configurationFlags_avgFrameCountExponentOfTwo <= 5 ? 5 - this->configurationFlags_avgFrameCountExponentOfTwo : 0); ///* Calculates number of frames to average the data. Based on the OPT3101::device::configurationFlags_avgFrameCountExponentOfTwo number of average is decided. More frames are captured and averaged if device configuration has low average frames and vice versa
+	nFrames = 1 << (this->configurationFlags_avgFrameCountExponentOfTwo <= 5 ? 5 - this->configurationFlags_avgFrameCountExponentOfTwo : 0); /// Calculates number of frames to average the data. Based on the OPT3101::device::configurationFlags_avgFrameCountExponentOfTwo number of average is decided. More frames are captured and averaged if device configuration has low average frames and vice versa
 	//data = new OPT3101::frameData[nFrames];
 	for (c0 = 0; c0<nFrames; c0++)
-		data[c0].capture(&host, this); ///* Captures all calculated number of frames from the h/w using OPT3101::frameData::capture method
+		data[c0].capture(&host, this); /// Captures all calculated number of frames from the h/w using OPT3101::frameData::capture method
 
-	meanData.populateWithMean(&data[0], nFrames);  ///* Measures the mean of the captured frames OPT3101::frameData::populateWithMean method
-	phaseOffsetRegister = (int32_t) (meanData.phase - refDistanceInCodes);  ///* Calculates the actual phase offset register value based on the input argument refDistanceInCodes and measured phase OPT3101::frameData::phase (mean over captured frames)
-	phaseOffset->freqCount = this->reg.freq_count_read_reg.read(); ///* Captures snapshot of register value OPT3101::registers::freq_count_read_reg and assigns to input argument phaseOffset's OPT3101::phaseOffsetC::freqCount
+	meanData.populateWithMean(&data[0], nFrames);  /// Measures the mean of the captured frames OPT3101::frameData::populateWithMean method
+	phaseOffsetRegister = (int32_t) (meanData.phase - refDistanceInCodes);  /// Calculates the actual phase offset register value based on the input argument refDistanceInCodes and measured phase OPT3101::frameData::phase (mean over captured frames)
+	phaseOffset->freqCount = this->reg.freq_count_read_reg.read(); /// Captures snapshot of register value OPT3101::registers::freq_count_read_reg and assigns to input argument phaseOffset's OPT3101::phaseOffsetC::freqCount
 	if (phaseOffset->freqCount > 0)
-		phaseOffsetRegister = (int32_t)((phaseOffsetRegister * 16384) / phaseOffset->freqCount); ///* Scales phase offset value with OPT3101::phaseOffsetC::freqCount value 
+		phaseOffsetRegister = (int32_t)((phaseOffsetRegister * 16384) / phaseOffset->freqCount); /// Scales phase offset value with OPT3101::phaseOffsetC::freqCount value 
 	else
 		phaseOffsetRegister = 0;
 
-	phaseOffset->phaseOffset = (uint16_t)(phaseOffsetRegister & 0xFFFF); ///* Assigns input argument phaseOffset's  OPT3101::phaseOffsetC::phaseOffset with scaled register value
+	phaseOffset->phaseOffset = (uint16_t)(phaseOffsetRegister & 0xFFFF); /// Assigns input argument phaseOffset's  OPT3101::phaseOffsetC::phaseOffset with scaled register value
 
-	phaseOffset->data = meanData; ///* Captures the calculated mean OPT3101::frameData to OPT3101::phaseOffsetC::data
-	phaseOffset->referenceDistanceInCodes = refDistanceInCodes;  ///* Captures the snapshot of input argument refDistanceInCodes to the input argument phaseOffset's OPT3101::phaseOffsetC::referenceDistanceInCodes
+	phaseOffset->data = meanData; /// Captures the calculated mean OPT3101::frameData to OPT3101::phaseOffsetC::data
+	phaseOffset->referenceDistanceInCodes = refDistanceInCodes;  /// Captures the snapshot of input argument refDistanceInCodes to the input argument phaseOffset's OPT3101::phaseOffsetC::referenceDistanceInCodes
 }
 
 void OPT3101::device::measurePhaseOffset(OPT3101::phaseOffsetC *phaseOffset, uint8_t txChannel, char registerSet, uint16_t refDistanceInCodes,uint8_t shiftIllumPhase) {
 	uint8_t regStore[14];
-	uint8_t dummy;
 
 	/// <b>Algorithm of the method is as follows</b>
 	regStore[0] = this->reg.en_sequencer.read();
@@ -911,17 +916,17 @@ void OPT3101::device::measurePhaseOffset(OPT3101::phaseOffsetC *phaseOffset, uin
 	regStore[10] = this->reg.amb_phase_corr_pwl_coeff1.read();
 	regStore[11] = this->reg.amb_phase_corr_pwl_coeff2.read();
 	regStore[12] = this->reg.amb_phase_corr_pwl_coeff3.read();
-	regStore[13] = this->reg.shift_illum_phase.read(); ///* Critical registers which are modified in this method are read from the h/w and temporarily buffered to local variables.
+	regStore[13] = this->reg.shift_illum_phase.read(); /// Critical registers which are modified in this method are read from the h/w and temporarily buffered to local variables.
 
 
 	this->reg.tg_en = 0;
 	this->reg.en_sequencer = 0;
 	this->reg.en_processor_values = 0;
 	if (registerSet == 'h')
-		this->reg.sel_hdr_mode = 1; ///* Register set is chosen based on registerSet input to this method by setting OPT3101::registers::sel_hdr_mode
+		this->reg.sel_hdr_mode = 1; /// Register set is chosen based on registerSet input to this method by setting OPT3101::registers::sel_hdr_mode
 	if (registerSet == 'l')
 		this->reg.sel_hdr_mode = 0;
-	this->reg.sel_tx_ch = txChannel; ///* TX channel is chosen based on txChannel input to this method by setting OPT3101::registers::sel_tx_ch
+	this->reg.sel_tx_ch = txChannel; /// TX channel is chosen based on txChannel input to this method by setting OPT3101::registers::sel_tx_ch
 	this->reg.en_tx_switch = 0;
 	this->reg.en_adaptive_hdr = 0;
 	this->reg.en_phase_corr = 0;
@@ -931,24 +936,14 @@ void OPT3101::device::measurePhaseOffset(OPT3101::phaseOffsetC *phaseOffset, uin
 	this->reg.amb_phase_corr_pwl_coeff1 = 0;
 	this->reg.amb_phase_corr_pwl_coeff2 = 0;
 	this->reg.amb_phase_corr_pwl_coeff3 = 0;
-	this->reg.shift_illum_phase = shiftIllumPhase; ///* Sets up the OPT3101::registers::shift_illum_phase based on the input to this method shiftIllumPhase
+	this->reg.shift_illum_phase = shiftIllumPhase; /// Sets up the OPT3101::registers::shift_illum_phase based on the input to this method shiftIllumPhase
 	this->reg.tg_en = 1;
 
-	this->measurePhaseOffset(phaseOffset, refDistanceInCodes); ///* Measures phase offset with following steps
-	// Added dummy lines so that Doxygen can recognize these multi-line comments
-	dummy = 0; ///* Calculates number of frames to average the data. Based on the OPT3101::device::configurationFlags_avgFrameCountExponentOfTwo number of average is decided. More frames are captured and averaged if device configuration has low average frames and vice versa
-	dummy = 0; ///* Captures all calculated number of frames from the h/w using OPT3101::frameData::capture method
-	dummy = 0; ///* Measures the mean of the captured frames OPT3101::frameData::populateWithMean method
-	dummy = 0; ///* Calculates the actual phase offset register value based on the input argument refDistanceInCodes and measured phase OPT3101::frameData::phase (mean over captured frames)
-	dummy = 0; ///* Captures snapshot of register value OPT3101::registers::freq_count_read_reg and assigns to input argument phaseOffset's OPT3101::phaseOffsetC::freqCount
-	dummy = 0; ///* Scales phase offset value with OPT3101::phaseOffsetC::freqCount value
-	dummy = 0; ///* Assigns input argument phaseOffset's  OPT3101::phaseOffsetC::phaseOffset with scaled register value
-	dummy = 0; ///* Captures the calculated mean OPT3101::frameData to OPT3101::phaseOffsetC::data
-	dummy = 0; ///* Captures the snapshot of input argument refDistanceInCodes to the input argument phaseOffset's OPT3101::phaseOffsetC::referenceDistanceInCodes
+	this->measurePhaseOffset(phaseOffset, refDistanceInCodes); /// Measures phase offset with following steps
 
 	phaseOffset->shiftIllumPhase = shiftIllumPhase;
 	phaseOffset->illumDCdac = this->reg.ILLUM_DC_CURR_DAC.read();
-	switch (txChannel) { ///* Captures the snapshot of the illum dac, illum DC and illum scale settings form h/w to the phaseOffset input argument 
+	switch (txChannel) { /// Captures the snapshot of the illum dac, illum DC and illum scale settings form h/w to the phaseOffset input argument 
 	case 0:
 		if (registerSet == 'h') {
 			phaseOffset->illumDac = this->reg.illum_dac_h_tx0.read();
@@ -997,7 +992,7 @@ void OPT3101::device::measurePhaseOffset(OPT3101::phaseOffsetC *phaseOffset, uin
 	this->reg.amb_phase_corr_pwl_coeff1 = regStore[10];
 	this->reg.amb_phase_corr_pwl_coeff2 = regStore[11];
 	this->reg.amb_phase_corr_pwl_coeff3 = regStore[12];
-	this->reg.shift_illum_phase = regStore[13]; ///* Restores the device state to the same state as before entering this method from the buffered local variables
+	this->reg.shift_illum_phase = regStore[13]; /// Restores the device state to the same state as before entering this method from the buffered local variables
 	this->reg.tg_en = 1;
 
 }
@@ -1006,27 +1001,30 @@ void OPT3101::device::writeDataToEEPROM(uint8_t location, uint8_t data) {
 	this->reg.i2c_write_data1 = location;
 	this->reg.i2c_write_data2 = data;
 	this->reg.i2c_trig_reg = 1;
-	host.sleep(1); ///* Added delay to initiate an I2C write transaction
+	host.sleep(1); // Added delay to initiate an I2C write transaction
 	this->reg.i2c_trig_reg = 0;
-	host.sleep(1); ///* Added delay to initiate an I2C write transaction
+	host.sleep(1); // Added delay to initiate an I2C write transaction
 }
 
 uint8_t OPT3101::device::readDataFromEEPROM(uint8_t location) {
-/* Will be updated in future revision of the SDK
+#if 0
+	// Will be updated in future revision of the SDK.
 	this->reg.i2c_write_data1 = location;
 	this->reg.i2c_trig_reg = 1;
-	host.sleep(50); ///* Added delay to initiate an I2C write transaction
+	host.sleep(50); // Added delay to initiate an I2C write transaction
 	this->reg.i2c_trig_reg = 0;
-	host.sleep(50); ///* Added delay to initiate an I2C write transaction
+	host.sleep(50); // Added delay to initiate an I2C write transaction
 	return ((uint8_t) (this->reg.i2c_read_data.read()&0xFF));
-*/
+#endif
 	return 0x00;
 }
 
 void OPT3101::device::loadIllumCrosstalkSet(bool loadFromFile)
 {
 	uint8_t c0, c1;
+#ifdef TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
 	uint16_t flashLocation;
+#endif
 	/// <b>Algorithm of the method is as follows</b>
 #ifdef OPT3101_USE_STDIOLIB
 	char fileName[FILENAME_LENGTH];
@@ -1034,14 +1032,14 @@ void OPT3101::device::loadIllumCrosstalkSet(bool loadFromFile)
 	host.printf("INFO::Loading Illumination cross talk Set\r\n");
 
 	// Loop to iterate over all TX channels
-	if(loadFromFile){ ///* Checks if input argument loadFromFile is true. If true proceeds to load files in to  OPT3101::device::calibration
-		for (c0 = 0; c0 < 3; c0++) {  ///* Loops though all the valid TX channel and register set configurations
+	if(loadFromFile){ /// Checks if input argument loadFromFile is true. If true proceeds to load files in to  OPT3101::device::calibration
+		for (c0 = 0; c0 < 3; c0++) {  /// Loops though all the valid TX channel and register set configurations
 			if (this->configurationFlags_isTXChannelActive[c0]) { // Checking is TX channel is active for this profile 
 				for (c1 = 0; c1 < 2; c1++) { // Loop to iterate over the H/L registers 
 					if (this->configurationFlags_isRegisterSetActive[c1]) { // Checking if registers are active for this profile
 #ifdef OPT3101_USE_STDIOLIB
 						sprintf(fileName, "%s/illumCrosstalk_TX%d_%c.txt", filePath, c0, c1 ? 'h' : 'l');
-						this->calibration->illumCrosstalk[c0][c1].loadFromFile(fileName);  ///* Calls method OPT3101::crosstalkC::loadFromFile to load data from non-volatile memory to all the OPT3101::device::calibration::illumCrosstalk members
+						this->calibration->illumCrosstalk[c0][c1].loadFromFile(fileName);  /// Calls method OPT3101::crosstalkC::loadFromFile to load data from non-volatile memory to all the OPT3101::device::calibration::illumCrosstalk members
 #endif
 #ifdef TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
 						flashLocation=(c1+(c0<<1))<<4;
@@ -1058,13 +1056,13 @@ void OPT3101::device::loadIllumCrosstalkSet(bool loadFromFile)
 		}
 	}
 
-	this->calibration->findCommonCrosstalkScale(&this->calibration->illumCrosstalk[0][0], this->configurationFlags_isTXChannelActive,this->configurationFlags_isTXChannelActive); ///* Finds common crosstalk scale for the illum Crosstalk values captured in OPT3101::device::calibrationC using method OPT3101::calibrationC::findCommonCrosstalkScale
+	this->calibration->findCommonCrosstalkScale(&this->calibration->illumCrosstalk[0][0], this->configurationFlags_isTXChannelActive,this->configurationFlags_isTXChannelActive); /// Finds common crosstalk scale for the illum Crosstalk values captured in OPT3101::device::calibrationC using method OPT3101::calibrationC::findCommonCrosstalkScale
 	// Loop to iterate over all TX channels
-	for (c0 = 0; c0 < 3; c0++) {  ///* Loops though all the valid TX channel and register set configurations
+	for (c0 = 0; c0 < 3; c0++) {  /// Loops though all the valid TX channel and register set configurations
 		if (this->configurationFlags_isTXChannelActive[c0]) { // Checking is TX channel is active for this profile 
 			for (c1 = 0; c1 < 2; c1++) { // Loop to iterate over the H/L registers 
 				if (this->configurationFlags_isRegisterSetActive[c1])  // Checking if registers are active for this profile
-					this->loadIllumCrosstalk(&this->calibration->illumCrosstalk[c0][c1], c0, c1 ? 'h' : 'l'); ///* Loads all the illum crosstalk corresponding to TX and register set configurations to the device from the OPT3101::device::calibrationC::illumCrosstalk member by calling OPT3101::device::loadIllumCrosstalk
+					this->loadIllumCrosstalk(&this->calibration->illumCrosstalk[c0][c1], c0, c1 ? 'h' : 'l'); /// Loads all the illum crosstalk corresponding to TX and register set configurations to the device from the OPT3101::device::calibrationC::illumCrosstalk member by calling OPT3101::device::loadIllumCrosstalk
 			}
 		}
 	}
@@ -1073,7 +1071,9 @@ void OPT3101::device::loadIllumCrosstalkSet(bool loadFromFile)
 void OPT3101::device::loadPhaseOffsetSet(bool loadFromFile)
 {
 	uint8_t c0, c1;
+#ifdef TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
 	uint16_t flashLocation;
+#endif
 #ifdef OPT3101_USE_STDIOLIB
 	char fileName[FILENAME_LENGTH];
 #endif
@@ -1083,13 +1083,13 @@ void OPT3101::device::loadPhaseOffsetSet(bool loadFromFile)
 	// Loop to iterate over all TX channels
 	
 	if(loadFromFile){
-		for (c0 = 0; c0 < 3; c0++) { ///* Loops though all the valid TX channel and register set configurations
+		for (c0 = 0; c0 < 3; c0++) { /// Loops though all the valid TX channel and register set configurations
 			if (this->configurationFlags_isTXChannelActive[c0]) { // Checking is TX channel is active for this profile
 				for (c1 = 0; c1 < 2; c1++) { // Loop to iterate over the H/L registers
 					if (this->configurationFlags_isRegisterSetActive[c1]) { // Checking if registers are active for this profile
 	#ifdef OPT3101_USE_STDIOLIB
-						sprintf(fileName, "%s/phaseOffset_TX%d_%c.txt", filePath, c0, c1 ? 'h' : 'l'); ///* Creates filename  illumCrosstalk_TX{channel}_{h/l}.txt in path filePath
-						this->calibration->phaseOffset[c0][c1].loadFromFile(fileName);  ///* Calls method OPT3101::crosstalkC::loadFromFile to store the data
+						sprintf(fileName, "%s/phaseOffset_TX%d_%c.txt", filePath, c0, c1 ? 'h' : 'l'); /// Creates filename  illumCrosstalk_TX{channel}_{h/l}.txt in path filePath
+						this->calibration->phaseOffset[c0][c1].loadFromFile(fileName);  /// Calls method OPT3101::crosstalkC::loadFromFile to store the data
 	#endif
 	#ifdef TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
 						flashLocation = 96 + 36 * ((c0 << 1) + c1);
@@ -1105,11 +1105,11 @@ void OPT3101::device::loadPhaseOffsetSet(bool loadFromFile)
 		}
 	}
 	
-	for (c0 = 0; c0 < 3; c0++) { ///* Loops though all the valid TX channel and register set configurations
+	for (c0 = 0; c0 < 3; c0++) { /// Loops though all the valid TX channel and register set configurations
 		if (this->configurationFlags_isTXChannelActive[c0]) { // Checking is TX channel is active for this profile 
 			for (c1 = 0; c1 < 2; c1++) { // Loop to iterate over the H/L registers 
 				if (this->configurationFlags_isRegisterSetActive[c1]) // Checking if registers are active for this profile
-					this->loadPhaseOffset(&this->calibration->phaseOffset[c0][c1], c0, c1 ? 'h' : 'l'); ///* Loads all the phase offset corresponding to TX and register set configurations to the device from the OPT3101::device::calibrationC::phaseOffset member by calling OPT3101::device::loadPhaseOffset
+					this->loadPhaseOffset(&this->calibration->phaseOffset[c0][c1], c0, c1 ? 'h' : 'l'); /// Loads all the phase offset corresponding to TX and register set configurations to the device from the OPT3101::device::calibrationC::phaseOffset member by calling OPT3101::device::loadPhaseOffset
 			}
 		}
 	}
@@ -1124,14 +1124,14 @@ void OPT3101::device::loadIllumCrosstalkTempCoffSet()
 	uint8_t c0, c1;
 
 	host.printf("INFO::Loading Illumination crosstalk Temperature Coefficient Set\r\n");
-	this->loadIllumCrosstalkSet(true); ///* Calls OPT3101::device::loadIllumCrosstalkSet with the same loafFromFile flag specified to this method
-	this->calibration->findCrosstalkTempRegisterValues(&this->calibration->illumCrosstalkTempCoff[0][0], this->configurationFlags_isTXChannelActive,this->configurationFlags_isTXChannelActive, &this->calibration->illumCrosstalk[0][0]); ///* Calls OPT3101::calibrationC::findCrosstalkTempRegisterValues based on the members from OPT3101::calibrationC class OPT3101::calibrationC::illumCrosstalkTempCoff and OPT3101::calibrationC::illumCrosstalk
+	this->loadIllumCrosstalkSet(true); /// Calls OPT3101::device::loadIllumCrosstalkSet with the same loafFromFile flag specified to this method
+	this->calibration->findCrosstalkTempRegisterValues(&this->calibration->illumCrosstalkTempCoff[0][0], this->configurationFlags_isTXChannelActive,this->configurationFlags_isTXChannelActive, &this->calibration->illumCrosstalk[0][0]); /// Calls OPT3101::calibrationC::findCrosstalkTempRegisterValues based on the members from OPT3101::calibrationC class OPT3101::calibrationC::illumCrosstalkTempCoff and OPT3101::calibrationC::illumCrosstalk
 	// Loop to iterate over all TX channels
-	for (c0 = 0; c0 < 3; c0++) { ///* Loops though all the valid TX channel and register set configurations
+	for (c0 = 0; c0 < 3; c0++) { /// Loops though all the valid TX channel and register set configurations
 		if (this->configurationFlags_isTXChannelActive[c0]) { // Checking is TX channel is active for this profile 
 			for (c1 = 0; c1 < 2; c1++) { // Loop to iterate over the H/L registers 
 				if (this->configurationFlags_isRegisterSetActive[c1]) // Checking if registers are active for this profile
-					this->loadIllumCrosstalkTempCoff(&this->calibration->illumCrosstalkTempCoff[c0][c1], c0, c1 ? 'h' : 'l'); ///* Calls the method OPT3101::device::loadIllumCrosstalkTempCoff to load all the crosstalk temp coff values from the OPT3101::calibrationC::illumCrosstalkTempCoff member
+					this->loadIllumCrosstalkTempCoff(&this->calibration->illumCrosstalkTempCoff[c0][c1], c0, c1 ? 'h' : 'l'); /// Calls the method OPT3101::device::loadIllumCrosstalkTempCoff to load all the crosstalk temp coff values from the OPT3101::calibrationC::illumCrosstalkTempCoff member
 			}
 		}
 	}
@@ -1142,14 +1142,14 @@ void OPT3101::device::loadPhaseOffsetTempCoffSet() {
 	uint8_t c0, c1;
 
 	host.printf("INFO::Loading Phase Temperature coefficient Set\r\n");
-	this->calibration->findPhaseTempRegisterValues(&this->calibration->phaseTempCoff[0][0], this->configurationFlags_isTXChannelActive,this->configurationFlags_isTXChannelActive, this->reg.freq_count_read_reg.read()); ///* Calls OPT3101::calibrationC::findPhaseTempRegisterValues based on the members from OPT3101::calibrationC class OPT3101::calibrationC::phaseTempCoff and current device register OPT3101::registers::freq_count_read_reg
+	this->calibration->findPhaseTempRegisterValues(&this->calibration->phaseTempCoff[0][0], this->configurationFlags_isTXChannelActive,this->configurationFlags_isTXChannelActive, this->reg.freq_count_read_reg.read()); /// Calls OPT3101::calibrationC::findPhaseTempRegisterValues based on the members from OPT3101::calibrationC class OPT3101::calibrationC::phaseTempCoff and current device register OPT3101::registers::freq_count_read_reg
 
 	// Loop to iterate over all TX channels
-	for (c0 = 0; c0 < 3; c0++) { ///* Loops though all the valid TX channel and register set configurations
+	for (c0 = 0; c0 < 3; c0++) { /// Loops though all the valid TX channel and register set configurations
 		if (this->configurationFlags_isTXChannelActive[c0]) { // Checking is TX channel is active for this profile 
 			for (c1 = 0; c1 < 2; c1++) { // Loop to iterate over the H/L registers 
 				if (this->configurationFlags_isRegisterSetActive[c1]) // Checking if registers are active for this profile
-					this->loadPhaseOffsetTempCoff(&this->calibration->phaseTempCoff[c0][c1], c0, c1 ? 'h' : 'l');  ///* Calls the method OPT3101::device::loadPhaseOffsetTempCoff to load all the phase temp coff values from the OPT3101::calibrationC::phaseTempCoff member
+					this->loadPhaseOffsetTempCoff(&this->calibration->phaseTempCoff[c0][c1], c0, c1 ? 'h' : 'l');  /// Calls the method OPT3101::device::loadPhaseOffsetTempCoff to load all the phase temp coff values from the OPT3101::calibrationC::phaseTempCoff member
 			}
 		}
 	}
@@ -1158,8 +1158,8 @@ void OPT3101::device::loadPhaseOffsetTempCoffSet() {
 void OPT3101::device::loadPhaseAmbientCoffSet()
 {
 	host.printf("INFO::Loading Phase Ambient Coefficient Set\r\n");
-	this->calibration->phaseAmbientCoff[0].calculateCoff(this->reg.freq_count_read_reg.read()); ///* Calculates the phase ambient coff by calling method OPT3101::phaseAmbientCoffC::calculateCoff also passing argument of device register OPT3101::registers::freq_count_read_reg
-	this->loadPhaseAmbientCoff(&this->calibration->phaseAmbientCoff[0]); ///* Calls method OPT3101::device::loadPhaseAmbientCoff to load ambient coff to device from OPT3101::calibrationC::phaseAmbientCoff member
+	this->calibration->phaseAmbientCoff[0].calculateCoff(this->reg.freq_count_read_reg.read()); /// Calculates the phase ambient coff by calling method OPT3101::phaseAmbientCoffC::calculateCoff also passing argument of device register OPT3101::registers::freq_count_read_reg
+	this->loadPhaseAmbientCoff(&this->calibration->phaseAmbientCoff[0]); /// Calls method OPT3101::device::loadPhaseAmbientCoff to load ambient coff to device from OPT3101::calibrationC::phaseAmbientCoff member
 }
 
 void OPT3101::calibrationC::findCommonCrosstalkScale(OPT3101::crosstalkC* illumXtalk, bool *txActiveList,bool *registerSetActiveList) {
@@ -1169,27 +1169,28 @@ void OPT3101::calibrationC::findCommonCrosstalkScale(OPT3101::crosstalkC* illumX
 	for (c0 = 0; c0 < 3; c0++) {
 		for (c1 = 0; c1 < 2; c1++){
 			if(txActiveList[c0] && registerSetActiveList[c1])
-				maxScale = illumXtalk[(c0<<1)+c1].xtalkScale > maxScale ? illumXtalk[(c0<<1)+c1].xtalkScale : maxScale; ///* Finds the largest scale what will fit all the input OPT3101::crosstalkC arguments
+				maxScale = illumXtalk[(c0<<1)+c1].xtalkScale > maxScale ? illumXtalk[(c0<<1)+c1].xtalkScale : maxScale; /// Finds the largest scale what will fit all the input OPT3101::crosstalkC arguments
 		}
 	}
 	for (c0 = 0; c0 < 3; c0++) {
 		for (c1 = 0; c1 < 2; c1++){
 			if(txActiveList[c0] && registerSetActiveList[c1])
-				illumXtalk[(c0<<1)+c1].commonScale = maxScale; ///* Assigns the identified maxScale to all the input argument illum Crosstalk pointers OPT3101::crosstalkC
+				illumXtalk[(c0<<1)+c1].commonScale = maxScale; /// Assigns the identified maxScale to all the input argument illum Crosstalk pointers OPT3101::crosstalkC
 		}
 	}
 }
 
 OPT3101::calibrationC::calibrationC(bool dummyFlag) {
 	/// <b>Algorithm of the method is as follows</b>
-	///* Allocates memory for OPT3101::calibrationC::internalCrosstalk size based on system configuration 
-	///* Allocates memory for OPT3101::calibrationC::illumCrosstalk size based on system configuration 
-	///* Allocates memory for OPT3101::calibrationC::phaseOffset size based on system configuration 
-	///* Allocates memory for OPT3101::calibrationC::illumCrosstalkTempCoff size based on system configuration 
-	///* Allocates memory for OPT3101::calibrationC::phaseTempCoff size based on system configuration 
-	///* Allocates memory for OPT3101::calibrationC::phaseAmbientCoff size based on system configuration 
-	///* Sets the member OPT3101::calibrationC::registerAddressListSize based on number of calibration registers requires 
-	///* Allocates memory for OPT3101::calibrationC::registerAddressList based on  OPT3101::calibrationC::registerAddressListSize
-	///* Sets up the flag OPT3101::calibrationC::EEPROM_connected based on configuration
-	///* Sets up the flag OPT3101::calibrationC::extTempSensor_connected based on configuration
+	/// Allocates memory for OPT3101::calibrationC::internalCrosstalk size based on system configuration 
+	/// Allocates memory for OPT3101::calibrationC::illumCrosstalk size based on system configuration 
+	/// Allocates memory for OPT3101::calibrationC::phaseOffset size based on system configuration 
+	/// Allocates memory for OPT3101::calibrationC::illumCrosstalkTempCoff size based on system configuration 
+	/// Allocates memory for OPT3101::calibrationC::phaseTempCoff size based on system configuration 
+	/// Allocates memory for OPT3101::calibrationC::phaseAmbientCoff size based on system configuration 
+	/// Sets the member OPT3101::calibrationC::registerAddressListSize based on number of calibration registers requires 
+	/// Allocates memory for OPT3101::calibrationC::registerAddressList based on  OPT3101::calibrationC::registerAddressListSize
+	/// Sets up the flag OPT3101::calibrationC::EEPROM_connected based on configuration
+	/// Sets up the flag OPT3101::calibrationC::extTempSensor_connected based on configuration
 }
+

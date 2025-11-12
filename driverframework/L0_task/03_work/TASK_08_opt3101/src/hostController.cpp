@@ -26,234 +26,202 @@
 */
 
 #include "hostController.h"
-#include "string.h"
-#include <stdarg.h>
 
-#ifdef _WIN32
-#ifdef OPT3101_USE_SERIALLIB
-#define WINPAUSE system("pause")
-#endif
-#endif
+#include <rtdevice.h>
+#include <rtthread.h>
 
+#include <cstdarg>
+#include <cstdio>
+#include <cstring>
+
+#include "I2cInterface.h"
 
 hostController host;
 
+namespace {
 
-#ifdef OPT3101_USE_SERIALLIB
-/** \brief Serial Command Port  declaration
-This global variable declaration with name OPT3101commandPort of class serial::Serial is used by class like OPT3101::deviceRegister for I2C read and writes.
-*/
-//serial::Serial OPT3101commandPort("COM4", 9600, serial::Timeout::simpleTimeout(1000));
-#ifdef linux
-serial::Serial OPT3101I2CCommandPort("/dev/ttyACM0", 9600, serial::Timeout::simpleTimeout(1000));
-#endif
+static I2cInterface_t g_i2c_interface = {0};
+static rt_mutex_t g_i2c_mutex = RT_NULL;
+static rt_base_t g_reset_pin = PIN_NONE;
+static bool g_i2c_ready = false;
 
-#ifdef _WIN32
-serial::Serial OPT3101I2CCommandPort("COM20", 9600, serial::Timeout::simpleTimeout(1000));
-#endif //WIN32
-#endif //SERIALLIB
+class ScopedMutex {
+ public:
+  explicit ScopedMutex(rt_mutex_t mutex) : mutex_(mutex) {
+    if (mutex_) {
+      rt_mutex_take(mutex_, RT_WAITING_FOREVER);
+    }
+  }
+  ~ScopedMutex() {
+    if (mutex_) {
+      rt_mutex_release(mutex_);
+    }
+  }
 
+ private:
+  rt_mutex_t mutex_;
+};
 
-#ifdef TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
-volatile uint8_t bCDCDataReceived_event = false; // Indicates data has been rx'ed without an open rx operation
-volatile uint8_t bDataReceiveCompleted_event = false;
-volatile uint8_t bDataSendCompleted_event = false;
-#endif
-
-hostController::hostController(void){
-#ifdef TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
-	this->initialize();
-#endif;
+static void ensure_mutex_created() {
+  if (g_i2c_mutex == RT_NULL) {
+    g_i2c_mutex = rt_mutex_create("opt3101_i2c", RT_IPC_FLAG_PRIO);
+    if (g_i2c_mutex == RT_NULL) {
+      rt_kprintf("[OPT3101][ERR] create mutex failed\n");
+    }
+  }
 }
+
+static void configure_reset_pin(void) {
+#ifdef WORK_TASK_OPT3101_RESET_PIN
+  if ((g_reset_pin == PIN_NONE) && (WORK_TASK_OPT3101_RESET_PIN[0] != '\0')) {
+    g_reset_pin = rt_pin_get(WORK_TASK_OPT3101_RESET_PIN);
+    if (g_reset_pin == PIN_NONE) {
+      rt_kprintf("[OPT3101][WARN] reset pin %s not found\n", WORK_TASK_OPT3101_RESET_PIN);
+      return;
+    }
+    rt_pin_mode(g_reset_pin, PIN_MODE_OUTPUT);
+    rt_pin_write(g_reset_pin, PIN_HIGH);
+    rt_kprintf("[OPT3101] reset pin %s mapped to %ld\n", WORK_TASK_OPT3101_RESET_PIN, g_reset_pin);
+  }
+#endif
+}
+
+static void apply_i2c_speed(void) {
+#ifdef WORK_TASK_OPT3101_I2C_SPEED
+  if (WORK_TASK_OPT3101_I2C_SPEED > 0 && g_i2c_interface.i2c_dev != RT_NULL) {
+    if (set_i2c_speed(g_i2c_interface.i2c_dev, WORK_TASK_OPT3101_I2C_SPEED) != RT_EOK) {
+      rt_kprintf("[OPT3101][WARN] failed to set i2c speed to %d Hz\n", WORK_TASK_OPT3101_I2C_SPEED);
+    } else {
+      rt_kprintf("[OPT3101] I2C speed set to %d Hz\n", WORK_TASK_OPT3101_I2C_SPEED);
+    }
+  }
+#endif
+}
+
+static rt_err_t ensure_i2c_ready(void) {
+  if (g_i2c_ready) {
+    return RT_EOK;
+  }
+
+  ensure_mutex_created();
+  if (g_i2c_mutex == RT_NULL) {
+    return -RT_ERROR;
+  }
+
+  ScopedMutex lock(g_i2c_mutex);
+
+  if (g_i2c_ready) {
+    return RT_EOK;
+  }
+
+  rt_err_t ret = get_i2c_interface(WORK_TASK_OPT3101_I2C_NAME, OPT3101_I2C_SLAVEADDRESS, &g_i2c_interface);
+  if (ret != RT_EOK) {
+    rt_kprintf("[OPT3101][ERR] get_i2c_interface %s failed (%d)\n", WORK_TASK_OPT3101_I2C_NAME, ret);
+    return ret;
+  }
+
+  apply_i2c_speed();
+  configure_reset_pin();
+
+  g_i2c_ready = true;
+  rt_kprintf("[OPT3101] I2C ready on %s addr 0x%02X\n", WORK_TASK_OPT3101_I2C_NAME, OPT3101_I2C_SLAVEADDRESS);
+  return RT_EOK;
+}
+
+static uint32_t pack_bytes_to_u24(const uint8_t buffer[3]) {
+  return (static_cast<uint32_t>(buffer[0]) << 16) |
+         (static_cast<uint32_t>(buffer[1]) << 8) |
+         static_cast<uint32_t>(buffer[2]);
+}
+
+}  // namespace
+
+hostController::hostController() = default;
 
 void hostController::writeI2C(uint8_t address, uint32_t data) {
-	/// <b>Algorithm of the method is as follows</b>
-#if defined(OPT3101_USE_STDIOLIB) && defined(OPT3101_USE_SERIALLIB)
-	std::string returnValue;
-	char writeData[20];
-	sprintf(writeData, "REGWx%02xx%06x\r", address, data); /// * Creates WRITE I2C command to send to h/w with address and data specified in arguments
-	OPT3101I2CCommandPort.write((uint8_t*)writeData, strlen(writeData)); /// * Writes the WRITE I2C command to h/w
-	returnValue = OPT3101I2CCommandPort.readline();
-#endif
-#ifdef TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
-	this->i2c.write(address,data);
-#endif
+  if (ensure_i2c_ready() != RT_EOK) {
+    rt_kprintf("[OPT3101][ERR] writeI2C aborted, bus not ready\n");
+    return;
+  }
 
+  uint8_t buffer[3];
+  buffer[0] = static_cast<uint8_t>((data >> 16) & 0xFF);
+  buffer[1] = static_cast<uint8_t>((data >> 8) & 0xFF);
+  buffer[2] = static_cast<uint8_t>(data & 0xFF);
+
+  ScopedMutex lock(g_i2c_mutex);
+  if (i2c_write_reg8_mult_pack(g_i2c_interface, address, buffer, sizeof(buffer)) != RT_EOK) {
+    rt_kprintf("[OPT3101][ERR] I2C write addr 0x%02X failed\n", address);
+  }
 }
+
 uint32_t hostController::readI2C(uint8_t address) {
-	uint32_t i2cReadValue=0;
-#if defined(OPT3101_USE_STDIOLIB) && defined(OPT3101_USE_SERIALLIB)
-	char writeData[10];
-	std::string returnValue;
-	uint8_t c0;
-	
-	/// <b>Algorithm of the method is as follows</b>
-	sprintf(writeData, "REGRx%02x\r", address); /// * Creates READ I2C command to send to h/w with address and data specified in arguments
+  if (ensure_i2c_ready() != RT_EOK) {
+    rt_kprintf("[OPT3101][ERR] readI2C aborted, bus not ready\n");
+    return 0;
+  }
 
-	i2cReadValue = 0;
+  uint8_t buffer[3] = {0};
+  ScopedMutex lock(g_i2c_mutex);
+  if (i2c_read_reg8_mult_pack(g_i2c_interface, address, buffer, sizeof(buffer)) != RT_EOK) {
+    rt_kprintf("[OPT3101][ERR] I2C read addr 0x%02X failed\n", address);
+    return 0;
+  }
 
-	OPT3101I2CCommandPort.write((uint8_t*)writeData, strlen(writeData)); /// * Writes the READ I2C command to h/w
-	returnValue = OPT3101I2CCommandPort.readline(); /// * Waits and receives response from h/w
-	if (returnValue.length() == 18) {
-		returnValue = returnValue.substr(10, 6);
-		c0 = 0;
-		for (std::string::iterator it = returnValue.begin(); it != returnValue.end(); ++it) { /// * Converters the received string output from h/w to uint32_t value
-			if (*it >= '0' && *it <= '9')
-				i2cReadValue += ((*it) - 48) << ((5 - c0) * 4);
-			else if (*it >= 'A' && *it <= 'F')
-				i2cReadValue += ((*it) - 65 + 10) << ((5 - c0) * 4);
-			else if (*it >= 'a' && *it <= 'f')
-				i2cReadValue += ((*it) - 97 + 10) << ((5 - c0) * 4);
-			c0++;
-		}
-	}
-#endif
-#ifdef TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
-	this->i2c.read(address,&i2cReadValue);
-#endif
-	return i2cReadValue; /// * Returns the data in uint32_t format
+  return pack_bytes_to_u24(buffer);
 }
 
 void hostController::sleep(uint32_t timeInMilliSeconds) {
-	/// <b>Algorithm of the method is as follows</b>
-
-#if defined(HOST_PC) && defined(_WIN32) && defined(OPT3101_USE_SERIALLIB)	
-	Sleep(timeInMilliSeconds);/// * Sleeps for the time specified in the argument timeInMilliSeconds
-#endif
-#ifdef TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
-	uint32_t c;
-	for(c=0;c<timeInMilliSeconds;c++)
-		__delay_cycles(24000);
-
-#endif
-
+  rt_thread_mdelay(timeInMilliSeconds);
 }
+
 void hostController::sleepDataReadyCounts(uint16_t dataReadyCounts) {
-	/// <b>Algorithm of the method is as follows</b>
-	/// * Currently empty function needs to be implemented by user. Based on interrupts from data ready signal from OPT3101, the host needs to count those pulses and wait until dataReadyCounts have reached. 
+  uint32_t delay = static_cast<uint32_t>(dataReadyCounts) * WORK_TASK_OPT3101_FRAME_TIME_MS;
+  rt_thread_mdelay(delay);
 }
 
-void hostController::pause()
-{
-	/// <b>Algorithm of the method is as follows</b>
-	this->printf("Press any Key to continue:\r\n");
-
-#if defined(HOST_PC) && defined(_WIN32) && defined(OPT3101_USE_SERIALLIB)
-	WINPAUSE; 	/// * Pause for user input
+void hostController::pause() {
+#ifdef VERBOSE_MODE
+  this->printf("[OPT3101] pause %d ms\n", WORK_TASK_OPT3101_PAUSE_DELAY_MS);
 #endif
-
-#ifdef TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
-    while(!bCDCDataReceived_event);
-	bCDCDataReceived_event=false;
-    if(USBCDC_getBytesInUSBBuffer(CDC0_INTFNUM))
-        USBCDC_rejectData(CDC0_INTFNUM);
-
-#endif
-
+  rt_thread_mdelay(WORK_TASK_OPT3101_PAUSE_DELAY_MS);
 }
 
-
-void hostController::printfSetColor(uint8_t color){
-#ifdef PRINT_COLOR_TERMINAL
-	switch(color){
-		case 0xFF:
-			host.printf("\u001b[0m");
-			break;
-		case 0b000:
-			host.printf("\u001b[30m");
-			break;
-		case 0b100:
-			host.printf("\u001b[31m");
-			break;
-		case 0b010:
-			host.printf("\u001b[32m");
-			break;
-		case 0b001:
-			host.printf("\u001b[34m");
-			break;
-		case 0b110:
-			host.printf("\u001b[33m");
-			break;
-		case 0b101:
-			host.printf("\u001b[35m");
-			break;
-		case 0b011:
-			host.printf("\u001b[36m");
-			break;
-		case 0b111:
-			host.printf("\u001b[37m");
-			break;
-		default:
-			host.printf("\u001b[0m");
-			break;
-	}
-#endif
+void hostController::printfSetColor(uint8_t color) {
+  RT_UNUSED(color);
 }
-
-
 
 void hostController::resetDevice() {
-	// These comments rest the device on power-up
-#if defined(HOST_PC) && defined(OPT3101_USE_STDIOLIB) && defined(OPT3101_USE_SERIALLIB)
-	char writeData[10];
-	/// <b>Algorithm of the method is as follows</b>
-	sprintf(writeData, "DEVR\r"); /// * Creates a command which specifies host to send RESET Pulse to OPT3101 h/w 
-	OPT3101I2CCommandPort.write((uint8_t*)writeData, strlen(writeData)); /// * Send the RESET command to the h/w
-#endif
-#ifdef TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
-	this->gpio.rstz=0;
-	this->sleep(1);
-	this->gpio.rstz=1;
-#endif
+  if (ensure_i2c_ready() != RT_EOK) {
+    rt_kprintf("[OPT3101][ERR] resetDevice aborted, bus not ready\n");
+    return;
+  }
 
+  if (g_reset_pin != PIN_NONE) {
+    rt_pin_write(g_reset_pin, PIN_LOW);
+    rt_thread_mdelay(WORK_TASK_OPT3101_RESET_PULSE_MS);
+    rt_pin_write(g_reset_pin, PIN_HIGH);
+    rt_thread_mdelay(WORK_TASK_OPT3101_RESET_RELEASE_MS);
+    return;
+  }
+
+  rt_kprintf("[OPT3101][WARN] resetDevice called but reset pin not configured\n");
 }
 
-void hostController::initialize(){
-#if defined(HOST_PC) && defined(OPT3101_USE_STDIOLIB) && defined(OPT3101_USE_SERIALLIB)
-	char writeData[16];
-	/// <b>Algorithm of the method is as follows</b>
-	sprintf(writeData, "DEVAx%02x\r", OPT3101_I2C_SLAVEADDRESS); /// * Creates a command which specifies host to send RESET Pulse to OPT3101 h/w 
-	OPT3101I2CCommandPort.write((uint8_t*)writeData, strlen(writeData)); /// * Send the RESET command to the h/w
-#endif
-
-#ifdef TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
-	WDT_A_hold(WDT_A_BASE);
-	USB_setup(true,true); // Enables the USP with event handling
-	PMM_setVCore(PMM_CORE_LEVEL_3); // Minumum Vcore setting required for the USB API is PMM_CORE_LEVEL_2 .
-	USBHAL_initClocks(24000000);	 // Config clocks. MCLK=SMCLK=FLL=8MHz; ACLK=REFO=32kHz
-	UCS_turnOnXT2(UCS_XT2_DRIVE_4MHZ_8MHZ); // Turns the XT2 crystal clock ON
-	UCS_turnOnSMCLK(); // Turns the SMCLK On
-	UCS_initClockSignal(
-					 UCS_ACLK,
-					 UCS_XT2CLK_SELECT,
-					 UCS_CLOCK_DIVIDER_32); // Enabling clock to come on pin 14 P1.0/ACLK. This enables 4MHz/32 which is 125KHz on the ACLK pin
-	this->i2c.init();
-	this->gpio.init();
-	this->gpio.rstz=1;
-
-	__enable_interrupt();  // Enable interrupts globally
-#endif
-
-
+void hostController::initialize() {
+  (void)ensure_i2c_ready();
 }
 
-
-void hostController::printf(const char *fmt, ...){
+void hostController::printf(const char* fmt, ...) {
 #ifdef VERBOSE_MODE
-    va_list args;
-	va_start(args, fmt);
-	char oBuffer[256];
-	vsnprintf(oBuffer, sizeof oBuffer, fmt, args);
+  va_list args;
+  va_start(args, fmt);
+  char buffer[256];
+  int length = vsnprintf(buffer, sizeof(buffer), fmt, args);
+  va_end(args);
 
-#ifdef TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
-	USBCDC_sendDataInBackground((uint8_t*)oBuffer,strlen(oBuffer),CDC0_INTFNUM,0xFF);
-	__delay_cycles(24000);
+  if (length > 0) {
+    rt_kprintf("%s", buffer);
+  }
 #endif
-#ifdef HOST_PC
-	std::printf("%s",oBuffer);
-#endif
-	va_end(args);
-#endif // VERBOSE MODE
-
 }
-

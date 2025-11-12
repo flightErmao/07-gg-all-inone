@@ -6,6 +6,9 @@
 #include "flyerPidDefParam.h"
 #include "imuFilterParam.h"
 #include "imuCaliParam.h"
+#ifdef PROJECT_MINIFLY_TASK05_PARAM_OPT3101_EN
+#include "opt3101Param.h"
+#endif
 
 #ifdef PKG_USING_MIXER
 extern void reloadMixer(void);
@@ -42,6 +45,9 @@ static void init_param_sources(void) {
   register_param_source(imuFilterParam_list(), imuFilterParam_count());
   register_param_source(imuCaliParam_list(), imuCaliParam_count());
 #endif
+#ifdef PROJECT_MINIFLY_TASK05_PARAM_OPT3101_EN
+  register_param_source(opt3101Param_list(), opt3101Param_count());
+#endif
 }
 
 static param_list* find_param_entry(const char* name) {
@@ -75,6 +81,9 @@ int uparam_data_init(void) {
   uparam_add_list(flyerPidDefParam_list(), flyerPidDefParam_count());
   uparam_add_list(imuFilterParam_list(), imuFilterParam_count());
   uparam_add_list(imuCaliParam_list(), imuCaliParam_count());
+#endif
+#ifdef PROJECT_MINIFLY_TASK05_PARAM_OPT3101_EN
+  uparam_add_list(opt3101Param_list(), opt3101Param_count());
 #endif
   return 0;  // 返回 0 表示成功
 }

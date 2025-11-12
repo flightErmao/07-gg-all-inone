@@ -43,25 +43,25 @@ environmentalController::environmentalController()
 void environmentalController::setTargetDistance(uint16_t targetDistanceInMM)
 {
 	/// <b>Algorithm of the method is as follows</b>
-	host.printf("Set Target to distance [%04d]mm\r\n",targetDistanceInMM); ///* Prints Set Target message on console
-	host.pause(); ///* Waits on user input
-	///* User implemented function to set the target distance.
+	host.printf("Set Target to distance [%04d]mm\r\n",targetDistanceInMM); /// Prints Set Target message on console
+	host.pause(); /// Waits on user input
+	/// User implemented function to set the target distance.
 }
 
 void environmentalController::setChamberTemperature(int8_t chamberTemperatureInC)
 {
 	/// <b>Algorithm of the method is as follows</b>
-	host.printf("INFO:Settings Chamber Temperature to %dC\r\n",chamberTemperatureInC); ///* Prints Set Chamber temperature message on console
-	host.pause(); ///* Waits on user input
-	///* User implemented function to set the target distance.
+	host.printf("INFO:Settings Chamber Temperature to %dC\r\n",chamberTemperatureInC); /// Prints Set Chamber temperature message on console
+	host.pause(); /// Waits on user input
+	/// User implemented function to set the target distance.
 }
 
 void environmentalController::setAmbientLight(uint32_t setAmbientLightInLux) 
 {
 	/// <b>Algorithm of the method is as follows</b>
-	host.printf("Set Ambient light to %dlux\r\n",setAmbientLightInLux); ///* Prints Set Ambient light message on console
-    host.pause();///* Waits on user input
-	///* User implemented function to set the target distance.
+	host.printf("Set Ambient light to %dlux\r\n",setAmbientLightInLux); /// Prints Set Ambient light message on console
+    host.pause();/// Waits on user input
+	/// User implemented function to set the target distance.
 }
 
 void environmentalController::setTargetToInfinity_OR_coverPhotodiode()
@@ -70,6 +70,7 @@ void environmentalController::setTargetToInfinity_OR_coverPhotodiode()
 	/// * This is an empty function to convey the measurement setup required. 
 	/// * With a cover glass in place, the system is expected to be pointed towards a target with very low reflectivity far beyond the range of the system 
 	/// * It is also acceptable to cover the photo diode alone with an optically isolating light blocker. 
-    host.printf("INFO::Cover Photodiode with optical shied for illumination Cross talk measurement\r\n"); ///* Prints message to set target to infinity or cover up photodiode
-    host.pause();///* Waits on user input
+    host.printf("INFO::Cover Photodiode with optical shied for illumination Cross talk measurement\r\n"); /// Prints message to set target to infinity or cover up photodiode
+    host.pause();/// Waits on user input
 }
+

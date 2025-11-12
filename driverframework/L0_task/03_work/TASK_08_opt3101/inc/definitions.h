@@ -28,69 +28,29 @@
 #ifndef DEFINITIONS_H_
 #define DEFINITIONS_H_
 
-/*! \def TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
-\brief This pre-processor derivative dictates whether the host is TI MSP430 calibration hardware is being used or not
-*/
-#define TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
+#include <rtconfig.h>
 
-#ifndef TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
-/*! \def HOST_PC
-\brief This pre-processor derivative dictates whether the host is PC
-In a PC environment file storage, std::iostream and stdio::printf methods are available. All these libraries are enabled then this derivative is defined
-Disable this derivative in MCU or RTOS like environments where file storage doesn't make sense
-Disabling this disabled report routines and file storage and load routines
-*/
-#define HOST_PC
+#ifdef __cplusplus
+extern "C" {
 #endif
 
-#ifdef TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
-/*! \def PRINT_COLOR_TERMINAL
-\brief Prints colors in terminal
-*/
-#define PRINT_COLOR_TERMINAL
-#endif
-
+#ifndef OPT3101_I2C_SLAVEADDRESS
+#ifdef WORK_TASK_OPT3101_I2C_ADDR
+#define OPT3101_I2C_SLAVEADDRESS WORK_TASK_OPT3101_I2C_ADDR
+#else
 #define OPT3101_I2C_SLAVEADDRESS 0x58
+#endif
+#endif
 
-
-#ifdef TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
-/*! \def VERBOSE_MODE
-\brief This pre-processor derivative dictates whether to print INFO, WARN and ERROR
-*/
+#ifdef WORK_TASK_OPT3101_VERBOSE
 #define VERBOSE_MODE
 #endif
-
 
 #define TEMP_CYCLE_DELAY_IN_SECONDS_BETWEEN_DATA_POINTS 1
 #define TEMP_CYCLE_TOTAL_NUMBER_OF_DATA_POINTS_PER_SETTING 1000 // MAX is 65535
 
-
-#ifdef HOST_PC
-#define PRINT_COLOR_TERMINAL
-/*! \def VERBOSE_MODE
-\brief This pre-processor derivative dictates whether to print INFO, WARN and ERROR
-*/
-#define VERBOSE_MODE
-/*! \def OPT3101_USE_SERIALLIB
-\brief This pre-processor derivative dictates whether to use included serial.h library
-This is enabled by default in SDK. Not defining this derivate would disable the serial communication capability.
-In case of usage with TI EVM this derivative is required, if using any other method of communication this can be disabled by user
-*/
-#define OPT3101_USE_SERIALLIB
-
-/*! \def OPT3101_USE_STREAMLIB
-\brief This pre-processor derivative dictates whether to load std::iostream and std::fstream  libraries
-This is enabled by default in SDK. Not defining this derivate would disable all the std::iostream and related libraries. File storage will no longer be possible with the SDK.
-All methods related to loadFromFile and saveToFile are hidden to the compiler.
-*/
-#define OPT3101_USE_STREAMLIB
-
-/*! \def OPT3101_USE_STDIOLIB
-\brief This pre-processor derivative dictates whether to load stdio library which contains printf and sprintf methods
-This is enabled by default in SDK. Not defining this derivate would disable all sprintf and printf methods.
-This means that the report() methods on several calls will be blank to the compiler. All file storage is also disabled since the name for the files cannot be resolved without the sprintf method
-*/
-#define OPT3101_USE_STDIOLIB
+#ifdef __cplusplus
+}
 #endif
 
 #endif /* DEFINITIONS_H_ */

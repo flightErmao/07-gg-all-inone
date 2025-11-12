@@ -29,62 +29,9 @@
 
 #include "definitions.h"
 
-#ifdef TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
-#include "MSP430/i2cHandler.h"
-#include "MSP430/flashHandler.h"
-#include "MSP430/MSPConnections.h"
-extern "C"
-{
-#include "MSP430/hal.h"
-#include "MSP430/USB_config/descriptors.h"
-#include "MSP430/USB_API/USB_Common/device.h"
-#include "MSP430/USB_API/USB_Common/usb.h"                 // USB-specific functions
-#include "MSP430/USB_API/USB_CDC_API/UsbCdc.h"
-#include "MSP430/USB_app/usbConstructs.h"
-}
-#include <stdlib.h> //Added to support abs function
-#endif
-
 #include <stdint.h>
 
-#ifdef OPT3101_USE_SERIALLIB 
-#include "serialLib/serial.h"
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <unistd.h>
-#endif /*_WIN32 */
-#endif /* for OPT3101_USE_SERIALLIB */
-
-#ifdef OPT3101_USE_STDIOLIB 
-#include <stdio.h>
-/*! \def filename length
-This sets memory allocation length for file naming strings
-*/
-#define FILENAME_LENGTH 50
-const char filePath[] = { "C:/temp/" };
-#endif
-
-#ifdef OPT3101_USE_SERIALLIB
-/** \brief Serial Command Port  declaration
-This global variable declaration with name OPT3101commandPort of class serial::Serial is used by class like OPT3101::deviceRegister for I2C read and writes.
-*/
-//serial::Serial OPT3101commandPort("COM4", 9600, serial::Timeout::simpleTimeout(1000));
-#if defined(linux) || defined(_WIN32)
-extern serial::Serial OPT3101I2CCommandPort;
-#endif
-
-#endif // SERIAL LIB
-
 class hostController;
-
-
-#ifdef OPT3101_USE_STDIOLIB 
-/** \brief filePath
-This global variable to declare a path to all calibration files storage 
-*/
-extern const char filePath[];
-#endif
 
 /** \brief hostController declaration
 This global variable declaration with name host of class hostController is used by various different classes like OPT3101::deviceRegister , OPT3101::registers and OPT3101::device to specify specific instructions to the host like wait, sleep, I2C reads and writes
@@ -167,13 +114,6 @@ class hostController {
         * \return Nothing
         */
         void printfSetColor(uint8_t color=0xFF);
-
-
-#ifdef TIMSP430F5529_LAUNCHPAD_CALIBRATION_TOOL
-		I2C::i2cHandler i2c;
-		STORAGE::flashHandler flash;
-		LAUNCHPAD::MSPConnections gpio;
-#endif
 
 };
 

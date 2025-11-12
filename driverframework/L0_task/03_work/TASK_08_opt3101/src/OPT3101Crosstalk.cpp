@@ -42,7 +42,7 @@ OPT3101::crosstalkC::crosstalkC(){
 	this->tillum = 0;
 	this->shiftIllumPhase = 0;
 	this->commonScale = 0;
-	this->illumXtalk=false; ///* sets OPT3101::crosstalkC::illumXtalk to false by default
+	this->illumXtalk=false; /// sets OPT3101::crosstalkC::illumXtalk to false by default
 }
 
 void OPT3101::crosstalkC::readCrosstalkRegisters(OPT3101::device *dev){
@@ -51,9 +51,9 @@ void OPT3101::crosstalkC::readCrosstalkRegisters(OPT3101::device *dev){
 	uint8_t c0;
 
 	/// <b>Algorithm of the method is as follows</b>
-	iRead=((int32_t) (dev->reg.iphase_xtalk.read()<<8))>>8; ///* Reads register OPT3101::registers::iphase_xtalk in 24 bit from and converts to signed number
-	qRead=((int32_t) (dev->reg.qphase_xtalk.read()<<8))>>8; ///* Reads register OPT3101::registers::qphase_xtalk in 24 bit from and converts to signed number
-	mRead=abs(iRead)>abs(qRead)?abs(iRead):abs(qRead); ///* Finds absolute max among the read I and Q register values to determine the OPT3101::crosstalkC::illumXtalk
+	iRead=((int32_t) (dev->reg.iphase_xtalk.read()<<8))>>8; /// Reads register OPT3101::registers::iphase_xtalk in 24 bit from and converts to signed number
+	qRead=((int32_t) (dev->reg.qphase_xtalk.read()<<8))>>8; /// Reads register OPT3101::registers::qphase_xtalk in 24 bit from and converts to signed number
+	mRead=abs(iRead)>abs(qRead)?abs(iRead):abs(qRead); /// Finds absolute max among the read I and Q register values to determine the OPT3101::crosstalkC::illumXtalk
 
 	this->xtalkScale = 0;
 	for (c0 = 15; c0 < 23; c0++) {
@@ -63,25 +63,25 @@ void OPT3101::crosstalkC::readCrosstalkRegisters(OPT3101::device *dev){
 		}
 	}
 
-	///* Determines OPT3101::crosstalkC::illumXtalk and assigns. The algorithm finds the minimum OPT3101::crosstalkC::illumXtalk value for which the raw I and Q registers can be fit to a 16 bit register 
-	this->I=(int16_t) (iRead>>this->xtalkScale); ///* Scales down the  24 bit raw register I and Q values with OPT3101::crosstalkC::illumXtalk and assigns to OPT3101::crosstalkC::I and OPT3101::crosstalkC::Q
+	/// Determines OPT3101::crosstalkC::illumXtalk and assigns. The algorithm finds the minimum OPT3101::crosstalkC::illumXtalk value for which the raw I and Q registers can be fit to a 16 bit register 
+	this->I=(int16_t) (iRead>>this->xtalkScale); /// Scales down the  24 bit raw register I and Q values with OPT3101::crosstalkC::illumXtalk and assigns to OPT3101::crosstalkC::I and OPT3101::crosstalkC::Q
 	this->Q=(int16_t) (qRead>>this->xtalkScale);
 }
 
 double OPT3101::crosstalkC::magnitude(){
 	double amplitude;
 	/// <b>Algorithm of the method is as follows</b>
-	amplitude=sqrt(pow(this->I>>(9-this->xtalkScale),2)+pow(this->Q>>(9-this->xtalkScale),2))*1.646; ///* Calculates the magnitude of crosstalk based on a predefined formula. <b>Warning:</b> This uses floating point arithmetic and math.h library for power and sqrt functions
+	amplitude=sqrt(pow(this->I>>(9-this->xtalkScale),2)+pow(this->Q>>(9-this->xtalkScale),2))*1.646; /// Calculates the magnitude of crosstalk based on a predefined formula. <b>Warning:</b> This uses floating point arithmetic and math.h library for power and sqrt functions
 	return amplitude;
 }
 
 void OPT3101::crosstalkC::readTemperatureMain(OPT3101::device *dev){
 	/// <b>Algorithm of the method is as follows</b>
-	this->tmain=dev->reg.tmain.read();  ///* Reads register OPT3101Register::tmain and assigns to OPT3101::crosstalkC::tmain
+	this->tmain=dev->reg.tmain.read();  /// Reads register OPT3101Register::tmain and assigns to OPT3101::crosstalkC::tmain
 }
 void OPT3101::crosstalkC::readTemperatureIllum(OPT3101::device *dev){
 	/// <b>Algorithm of the method is as follows</b>
-	this->tillum=dev->reg.tillum.read(); ///* Reads register OPT3101Register::illum and assigns to OPT3101::crosstalkC::illum
+	this->tillum=dev->reg.tillum.read(); /// Reads register OPT3101Register::illum and assigns to OPT3101::crosstalkC::illum
 }
 
 #ifdef OPT3101_USE_STDIOLIB
@@ -91,7 +91,7 @@ void OPT3101::crosstalkC::storeToFile(char *fileName)
 	/// <b>Algorithm of the method is as follows</b>
 	std::ofstream ofs(fileName);
 	ofs << this;
-	ofs.close(); ///* User needs to implement file storage based on host. 
+	ofs.close(); /// User needs to implement file storage based on host. 
 #endif
 }
 #endif 
@@ -103,7 +103,7 @@ void OPT3101::crosstalkC::loadFromFile(char * fileName)
 	/// <b>Algorithm of the method is as follows</b>
 	std::ifstream ifs(fileName);
 	ifs >> this;
-	ifs.close(); ///* User needs to implement file load/restore based on host. 
+	ifs.close(); /// User needs to implement file load/restore based on host. 
 #endif
 }
 #endif
@@ -115,9 +115,9 @@ void OPT3101::crosstalkC::report()
 	/// <b>Algorithm of the method is as follows</b>
 	host.printf("----------------------\r\n");
 	host.printf("Crosstalk Class Report\r\n");
-	host.printf("----------------------\r\n"); ///* Prints all the members and values of members on screen.
+	host.printf("----------------------\r\n"); /// Prints all the members and values of members on screen.
 	host.printf("I=%d\r\n", this->I);
-	host.printf("Q=%d\r\n", this->Q); ///* User needs to implement file load/restore based on host.
+	host.printf("Q=%d\r\n", this->Q); /// User needs to implement file load/restore based on host.
 	host.printf("xtalkScale=%d\r\n", this->xtalkScale);
 	host.printf("illumXtalk=%d\r\n", this->illumXtalk);
 	host.printf("illumScale=%d\r\n", this->illumScale);
@@ -171,7 +171,7 @@ void OPT3101::crosstalkC::print()
 #ifdef OPT3101_USE_STREAMLIB
 std::istream& OPT3101::operator>>(std::istream &is, OPT3101::crosstalkC *data) {
 	/// <b>Algorithm of the method is as follows</b>
-	is >> data->I; ///* From input stream members are de-serialized and restored 
+	is >> data->I; /// From input stream members are de-serialized and restored 
 	is >> data->Q;
 	is >> data->xtalkScale;
 	is >> data->illumXtalk;
@@ -188,7 +188,7 @@ std::istream& OPT3101::operator>>(std::istream &is, OPT3101::crosstalkC *data) {
 
 #ifdef OPT3101_USE_STREAMLIB
 std::ostream& OPT3101::operator<<(std::ostream &os, const OPT3101::crosstalkC *data) {
-	os << data->I << '\n'; ///* From class serialize the members
+	os << data->I << '\n'; /// From class serialize the members
 	os << data->Q << '\n';
 	os << data->xtalkScale << '\n';
 	os << data->illumXtalk << '\n';
@@ -203,3 +203,4 @@ std::ostream& OPT3101::operator<<(std::ostream &os, const OPT3101::crosstalkC *d
 	return os;
 }
 #endif
+
