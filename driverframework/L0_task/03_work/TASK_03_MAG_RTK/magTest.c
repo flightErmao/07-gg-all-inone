@@ -8,6 +8,10 @@
 #define THREAD_STACK_SIZE 2048
 #define THREAD_TIMESLICE 5
 
+/* 重测机制配置 */
+#define MAG_TEST_RETRY_COUNT 3      /* 重测次数 */
+#define MAG_TEST_RETRY_INTERVAL 15  /* 每次重测间隔(ms) */
+
 typedef struct {
   rt_device_t dev;
   rt_size_t size;
@@ -150,10 +154,27 @@ static void mag_thread_entry(void* parameter) {
       }
 
       if (try_parse_trigger()) {
-        /* 触发 I2C 读取并比对 */
+        /* 触发 I2C 读取并比对，使用重测机制防止误判 */
+        rt_bool_t test_result = RT_FALSE;
         uint8_t id_val = 0;
-        if (mag_i2c_read_reg(WORK_TASK_MAG_TEST_6308_ID_REG, &id_val) == RT_EOK &&
-            id_val == WORK_TASK_MAG_TEST_6308_ID_EXPECT) {
+
+        /* 进行多次重测，任意一次成功即判定为OK */
+        for (uint8_t retry = 0; retry < MAG_TEST_RETRY_COUNT; retry++) {
+          rt_err_t read_result = mag_i2c_read_reg(WORK_TASK_MAG_TEST_6308_ID_REG, &id_val);
+
+          if (read_result == RT_EOK && id_val == WORK_TASK_MAG_TEST_6308_ID_EXPECT) {
+            test_result = RT_TRUE;
+            break;
+          }
+
+          /* 本次重测失败，如果还有余下尝试，则延时后继续 */
+          if (retry < MAG_TEST_RETRY_COUNT - 1) {
+            rt_thread_mdelay(MAG_TEST_RETRY_INTERVAL);
+          }
+        }
+
+        /* 根据重测结果返回响应 */
+        if (test_result == RT_TRUE) {
           const char ok_msg[] = "MAG6308 OK\r\n";
           rt_device_write(g_mag_uart, 0, ok_msg, sizeof(ok_msg) - 1);
         } else {
