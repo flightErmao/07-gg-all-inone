@@ -2,15 +2,22 @@ from building import *
 import os
 
 cwd = GetCurrentDir()
-src  = []
+src = []
 group = []
 path = [cwd]
 
-# 获取当前目录下的所有 .c 文件
-src  = Glob('./*.c')
+cmd_cal_src = Glob('./cmdImuCalGeneral.c')
 
-# 定义编译组
-group = DefineGroup('IMU', src, depend = [''], CPPPATH = path)
+# 获取当前目录下的所有 .c 文件（排除可选组件）
+src = [item for item in Glob('./*.c') if item not in cmd_cal_src]
+
+# 定义基础编译组
+group = DefineGroup('IMU', src, depend=[''], CPPPATH=path)
+
+# 可选编译组：IMU 通用标定命令
+group = group + DefineGroup('IMU_CMD_CAL_GENERAL', cmd_cal_src,
+                            depend=['BSP_USING_IMU_CMD_CAL_GENERAL'],
+                            CPPPATH=path, CPPDEFINES=['BSP_USING_IMU_CMD_CAL_GENERAL'])
 
 env = DefaultEnvironment()
 
@@ -19,8 +26,8 @@ for item in list:
     item_path = os.path.join(cwd, item)
     if os.path.isdir(item_path) and os.path.isfile(os.path.join(item_path, 'SConscript')):
         # 为所有子目录自动使用variant_dir创建构建目录
-        sub_group = SConscript(os.path.join(cwd, item, 'SConscript'), 
-                              variant_dir=item, duplicate=0)
+        sub_group = SConscript(os.path.join(cwd, item, 'SConscript'),
+                               variant_dir=item, duplicate=0)
         group = group + sub_group
 
 Return('group')
