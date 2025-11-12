@@ -28,6 +28,7 @@ typedef struct {
 
 void sendUserDatafloat3(uint8_t group, float a, float b, float c);
 void sendUserDatafloat6(uint8_t group, float a, float b, float c, float d, float e, float f);
+void sendUserDatafloatN(uint8_t group, const float *values, uint8_t count);
 void sendUserDatafloat9(uint8_t group, float a, float b, float c, float d, float e, float f, float g, float h, float i);
 void sendUserDatafloat6_u32(uint8_t group, float a, float b, float c, float d, float e, float f, uint32_t uint32_t);
 void sendUserDatafloat12_u32(uint8_t group, float a, float b, float c, float d, float e, float f, float g, float h,

@@ -64,6 +64,18 @@ void sendUserDatafloat6(uint8_t group, float a, float b, float c, float d, float
   anotc_telem_send_floats(group, values, 6, MSG_ASYNC);
 }
 
+void sendUserDatafloatN(uint8_t group, const float *values, uint8_t count) {
+  if (values == RT_NULL || count == 0) {
+    return;
+  }
+
+  if (count > sizeof(((atkp_t *)0)->data) / sizeof(float)) {
+    count = sizeof(((atkp_t *)0)->data) / sizeof(float);
+  }
+
+  anotc_telem_send_floats(group, values, count, MSG_ASYNC);
+}
+
 void sendUserDatafloat9(uint8_t group, float a, float b, float c, float d, float e, float f, float g, float h, float i) {
   float values[9] = {a, b, c, d, e, f, g, h, i};
   anotc_telem_send_floats(group, values, 9, MSG_ASYNC);
