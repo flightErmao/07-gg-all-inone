@@ -27,11 +27,7 @@ SOFTWARE.
 #ifndef INA226_h
 #define INA226_h
 
-#if ARDUINO >= 100
-#include "Arduino.h"
-#else
-#include "WProgram.h"
-#endif
+#include <stdint.h>
 
 #define INA226_ADDRESS              (0x40)
 

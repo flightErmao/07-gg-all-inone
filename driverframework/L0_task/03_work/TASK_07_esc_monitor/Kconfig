@@ -14,7 +14,7 @@ menuconfig WORK_TASK_ESC_MONITOR_EN
 
         config WORK_TASK_ESC_MONITOR_I2C_ADDR
             hex "I2C device address"
-            default 0x00
+            default 0x40
             help
                 7-bit I2C device address used by ESC monitor
 

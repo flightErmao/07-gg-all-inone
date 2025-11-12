@@ -24,22 +24,36 @@ SOFTWARE.
 
 */
 
-#if ARDUINO >= 100
-#include "Arduino.h"
-#else
-#include "WProgram.h"
-#endif
+#include <cmath>
 
-#include <Wire.h>
+#include <rtthread.h>
+
+extern "C" {
+#include "esc_monitor_i2c.h"
+#define LOG_TAG "ina226"
+#define LOG_LVL LOG_LVL_INFO
+#include <ulog.h>
+}
 
 #include "INA226.h"
 
+namespace {
+static const I2cInterface_t* g_i2c_interface = nullptr;
+static bool g_ina_initialized = false;
+static INA226 g_ina_device;
+}  // namespace
+
 bool INA226::begin(uint8_t address)
 {
-    //注意，我去掉了Wire　ｂｅｇｉｎ
-    //Wire.begin();
-    inaAddress = address;
-    return true;
+  const I2cInterface_t* interface = esc_monitor_get_i2c_interface();
+  if (interface == RT_NULL || interface->i2c_dev == RT_NULL) {
+    LOG_E("begin: no I2C interface");
+    return false;
+  }
+
+  g_i2c_interface = interface;
+  inaAddress = address;
+  return true;
 }
 
 bool INA226::configure(ina226_averages_t avg, ina226_busConvTime_t busConvTime, ina226_shuntConvTime_t shuntConvTime, ina226_mode_t mode)
@@ -61,16 +75,12 @@ bool INA226::calibrate(float rShuntValue, float iMaxExpected)
     uint16_t calibrationValue;
     rShunt = rShuntValue;
 
-    float iMaxPossible, minimumLSB;
-
-    iMaxPossible = vShuntMax / rShunt;
-
-    minimumLSB = iMaxExpected / 32767;
+    float minimumLSB = iMaxExpected / 32767;
 
     currentLSB = (uint32_t)(minimumLSB * 100000000);
     currentLSB /= 100000000;
     currentLSB /= 0.0001;
-    currentLSB = ceil(currentLSB);
+    currentLSB = std::ceil(currentLSB);
     currentLSB *= 0.0001;
 
     powerLSB = currentLSB * 25;
@@ -302,43 +312,92 @@ int16_t INA226::readRegister16(uint8_t reg)
 {
     int16_t value;
 
-    Wire.beginTransmission(inaAddress);
-    #if ARDUINO >= 100
-        Wire.write(reg);
-    #else
-        Wire.send(reg);
-    #endif
-    Wire.endTransmission();
+    if (g_i2c_interface == nullptr || g_i2c_interface->i2c_dev == RT_NULL) {
+      LOG_E("read reg 0x%02x: bus null", reg);
+      return 0;
+    }
 
-    Wire.requestFrom(inaAddress, 2);
-    #if ARDUINO >= 100
-        uint8_t vha = Wire.read();
-        uint8_t vla = Wire.read();
-    #else
-        uint8_t vha = Wire.receive();
-        uint8_t vla = Wire.receive();
-    #endif
+    uint8_t buffer[2] = {0};
 
-    value = vha << 8 | vla;
+    if (i2c_read_reg8_mult_pack(*g_i2c_interface, reg, buffer, sizeof(buffer)) != RT_EOK) {
+      LOG_E("read reg 0x%02x: transfer fail", reg);
+      return 0;
+    }
+
+    value = static_cast<int16_t>((buffer[0] << 8) | buffer[1]);
 
     return value;
 }
 
 void INA226::writeRegister16(uint8_t reg, uint16_t val)
 {
-    uint8_t vla;
-    vla = (uint8_t)val;
-    val >>= 8;
+  if (g_i2c_interface == nullptr || g_i2c_interface->i2c_dev == RT_NULL) {
+    LOG_E("write reg 0x%02x: bus null", reg);
+    return;
+  }
 
-    Wire.beginTransmission(inaAddress);
-    #if ARDUINO >= 100
-        Wire.write(reg);
-        Wire.write((uint8_t)val);
-        Wire.write(vla);
-    #else
-        Wire.send(reg);
-        Wire.send((uint8_t)val);
-        Wire.send(vla);
-    #endif
-    Wire.endTransmission();
+  uint8_t buffer[2];
+  buffer[0] = static_cast<uint8_t>((val >> 8) & 0xFF);
+  buffer[1] = static_cast<uint8_t>(val & 0xFF);
+
+  i2c_write_reg8_mult_pack(*g_i2c_interface, reg, buffer, sizeof(buffer));
 }
+
+static rt_err_t ina226_demo_init(void) {
+  if (g_ina_initialized) {
+    return RT_EOK;
+  }
+
+  const I2cInterface_t* interface = esc_monitor_get_i2c_interface();
+  if (interface == RT_NULL || interface->i2c_dev == RT_NULL) {
+    if (esc_monitor_i2c_init() != RT_EOK) {
+      LOG_E("cmd: i2c init failed");
+      return -RT_ERROR;
+    }
+  }
+
+  if (!g_ina_device.begin(0x40)) {
+    LOG_E("cmd: sensor begin failed");
+    return -RT_ERROR;
+  }
+
+  if (!g_ina_device.configure(INA226_AVERAGES_1, INA226_BUS_CONV_TIME_1100US, INA226_SHUNT_CONV_TIME_1100US,
+                              INA226_MODE_SHUNT_BUS_CONT)) {
+    LOG_E("cmd: configure failed");
+    return -RT_ERROR;
+  }
+
+  if (!g_ina_device.calibrate(0.01f, 4.0f)) {
+    LOG_E("cmd: calibrate failed");
+    return -RT_ERROR;
+  }
+
+  g_ina_device.enableOverPowerLimitAlert();
+  g_ina_device.setPowerLimit(0.130f);
+
+  g_ina_initialized = true;
+  return RT_EOK;
+}
+
+extern "C" void cmdIna226Demo(int argc, char** argv) {
+  RT_UNUSED(argc);
+  RT_UNUSED(argv);
+
+  if (ina226_demo_init() != RT_EOK) {
+    return;
+  }
+
+  float bus_voltage = g_ina_device.readBusVoltage();
+  float bus_power = g_ina_device.readBusPower();
+  float shunt_voltage = g_ina_device.readShuntVoltage();
+  float shunt_current = g_ina_device.readShuntCurrent();
+
+  LOG_I("-----------------------------------------------");
+  LOG_I("INA226 quick read");
+  LOG_I("Bus voltage:   %.5f V", bus_voltage);
+  LOG_I("Bus power:     %.5f W", bus_power);
+  LOG_I("Shunt voltage: %.5f V", shunt_voltage);
+  LOG_I("Shunt current: %.5f A", shunt_current);
+  LOG_I("-----------------------------------------------");
+}
+MSH_CMD_EXPORT_ALIAS(cmdIna226Demo, cmdIna226Demo, INA226 quick read once);
