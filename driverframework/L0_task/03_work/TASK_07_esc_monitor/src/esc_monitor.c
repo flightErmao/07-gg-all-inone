@@ -111,7 +111,7 @@ static void cmdEscMonitor(int argc, char** argv) {
     LOG_W("INA226 stage2 start fail");
   }
 
-  esc_monitor_state_e state_3 = esc_monitor_phone_v1p8(1000);
+  esc_monitor_state_e state_3 = esc_monitor_phone_v1p8(1200);
   esc_monitor_set_detection_result(ESC_MONITOR_DETECTION_INDEX_STATE3_HIGH,
                                    (state_3 == PHONE_ON_V1P8_HIGH_LEVEL) ? RT_TRUE : RT_FALSE);
 
