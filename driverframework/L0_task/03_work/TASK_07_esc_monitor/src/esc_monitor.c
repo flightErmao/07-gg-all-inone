@@ -114,7 +114,7 @@ static void cmdEscMonitor(int argc, char** argv) {
   if (esc_monitor_ina226_start_stage(ESC_MONITOR_INA_STAGE_1) != RT_EOK) {
     LOG_W("INA226 stage1 start fail");
   }
-
+  rt_thread_mdelay(1200);
   rt_pin_write(pinNameDroneOnOff_, PIN_LOW);
   esc_monitor_state_e state_1 = esc_monitor_phone_v1p8(1000);
   esc_monitor_set_detection_value(ESC_MONITOR_DETECTION_INDEX_STATE1_HIGH,
