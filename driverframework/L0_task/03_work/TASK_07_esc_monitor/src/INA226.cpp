@@ -343,7 +343,7 @@ void INA226::writeRegister16(uint8_t reg, uint16_t val)
   i2c_write_reg8_mult_pack(*g_i2c_interface, reg, buffer, sizeof(buffer));
 }
 
-static rt_err_t ina226_demo_init(void) {
+rt_err_t ina226_demo_init(void) {
   if (g_ina_initialized) {
     return RT_EOK;
   }
@@ -401,3 +401,17 @@ extern "C" void cmdIna226Demo(int argc, char** argv) {
   LOG_I("-----------------------------------------------");
 }
 MSH_CMD_EXPORT_ALIAS(cmdIna226Demo, cmdIna226Demo, INA226 quick read once);
+
+extern "C" INA226Data_t ina226_read_data(void) {
+  INA226Data_t data = {0};
+  if (ina226_demo_init() != RT_EOK) {
+    LOG_W("ina226_read_data: ina226 not initialized");
+    return data;
+  }
+
+  data.bus_voltage = g_ina_device.readBusVoltage();
+  data.bus_power = g_ina_device.readBusPower();
+  data.shunt_voltage = g_ina_device.readShuntVoltage();
+  data.shunt_current = g_ina_device.readShuntCurrent();
+  return data;
+}

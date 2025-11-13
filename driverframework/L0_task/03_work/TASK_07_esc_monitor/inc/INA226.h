@@ -100,6 +100,14 @@ typedef enum
     INA226_MODE_SHUNT_BUS_CONT  = 0b111,
 } ina226_mode_t;
 
+typedef struct INA226Data {
+  float bus_voltage;
+  float bus_power;
+  float shunt_voltage;
+  float shunt_current;
+} INA226Data_t;
+
+#ifdef __cplusplus
 class INA226
 {
     public:
@@ -156,5 +164,17 @@ class INA226
 	void writeRegister16(uint8_t reg, uint16_t val);
 	int16_t readRegister16(uint8_t reg);
 };
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+INA226Data_t ina226_read_data(void);
+rt_err_t ina226_demo_init(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

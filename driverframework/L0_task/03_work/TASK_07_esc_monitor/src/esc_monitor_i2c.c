@@ -1,5 +1,9 @@
 #include <rtthread.h>
 
+#define LOG_TAG "esc_i2c"
+#define LOG_LVL LOG_LVL_INFO
+#include <ulog.h>
+
 #include "esc_monitor_i2c.h"
 
 static I2cInterface_t g_esc_i2c_interface = {0};
@@ -9,7 +13,7 @@ rt_err_t esc_monitor_i2c_init(void) {
                                       WORK_TASK_ESC_MONITOR_I2C_ADDR,
                                       &g_esc_i2c_interface);
   if (result != RT_EOK) {
-    rt_kprintf("[ESC_MON_I2C] get interface fail\n");
+    LOG_E("get interface fail");
     return result;
   }
   return RT_EOK;
