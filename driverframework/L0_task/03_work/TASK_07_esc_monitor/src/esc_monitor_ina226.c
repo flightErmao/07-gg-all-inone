@@ -120,25 +120,6 @@ static void esc_monitor_ina226_finalize_stage(esc_monitor_ina_stage_context_t* c
   result->valid = (count == ESC_MONITOR_INA226_SAMPLE_COUNT);
   result->threshold_pass = RT_FALSE;
 
-  if (result->valid) {
-    switch (stage) {
-      case ESC_MONITOR_INA_STAGE_1:
-        if (result->shunt_current_median >= ESC_MONITOR_STAGE1_CURRENT_MIN &&
-            result->shunt_current_median <= ESC_MONITOR_STAGE1_CURRENT_MAX) {
-          result->threshold_pass = RT_TRUE;
-        }
-        break;
-      case ESC_MONITOR_INA_STAGE_2:
-        if (result->shunt_current_median >= ESC_MONITOR_STAGE2_CURRENT_MIN &&
-            result->shunt_current_median <= ESC_MONITOR_STAGE2_CURRENT_MAX) {
-          result->threshold_pass = RT_TRUE;
-        }
-        break;
-      default:
-        break;
-    }
-  }
-
   float power = result->bus_voltage_median * result->shunt_current_median;
   LOG_I("stage %d done, samples=%d, Vmed=%.3f, Imed=%.3f, Pmed=%.3f",
         stage, count, result->bus_voltage_median, result->shunt_current_median, power);

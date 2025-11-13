@@ -27,7 +27,7 @@ static rt_base_t pinNameDroneOnOff_ = -1;
 static rt_base_t pinNamePhoneOnV1P8_ = -1;
 static esc_monitor_ina_stage_result_t state1_ina226_result_ = {0};
 static esc_monitor_ina_stage_result_t state2_ina226_result_ = {0};
-static rt_bool_t esc_monitor_detection_[ESC_MONITOR_DETECTION_INDEX_MAX] = {RT_FALSE};
+static rt_uint16_t esc_monitor_detection_[ESC_MONITOR_DETECTION_INDEX_MAX] = {0};
 static rt_bool_t io_init_done_ = RT_FALSE;
 
 void cmdEscMonResult(int argc, char** argv);
@@ -39,11 +39,33 @@ static void esc_monitor_reset_detection_results(void) {
   memset(&state2_ina226_result_, 0, sizeof(state2_ina226_result_));
 }
 
-static void esc_monitor_set_detection_result(esc_monitor_detection_index_e index, rt_bool_t value) {
+static void esc_monitor_set_detection_value(esc_monitor_detection_index_e index, rt_uint16_t value) {
   if (index >= ESC_MONITOR_DETECTION_INDEX_MAX) {
     return;
   }
-  esc_monitor_detection_[index] = value ? RT_TRUE : RT_FALSE;
+  esc_monitor_detection_[index] = value;
+}
+
+static rt_uint16_t esc_monitor_convert_current_to_ma(float current_ampere) {
+  if (current_ampere <= 0.0f) {
+    return 0;
+  }
+  float scaled = current_ampere * (float)ESC_MONITOR_CURRENT_SCALE_MA;
+  if (scaled > 65535.0f) {
+    scaled = 65535.0f;
+  }
+  return (rt_uint16_t)(scaled + 0.5f);
+}
+
+static rt_uint16_t esc_monitor_convert_bus_voltage_to_x10(float voltage) {
+  if (voltage <= 0.0f) {
+    return 0;
+  }
+  float scaled = voltage * (float)ESC_MONITOR_BUS_VOLTAGE_SCALE_X10;
+  if (scaled > 65535.0f) {
+    scaled = 65535.0f;
+  }
+  return (rt_uint16_t)(scaled + 0.5f);
 }
 
 static esc_monitor_state_e esc_monitor_phone_v1p8(uint16_t times_span) {
@@ -95,15 +117,15 @@ static void cmdEscMonitor(int argc, char** argv) {
 
   rt_pin_write(pinNameDroneOnOff_, PIN_LOW);
   esc_monitor_state_e state_1 = esc_monitor_phone_v1p8(1000);
-  esc_monitor_set_detection_result(ESC_MONITOR_DETECTION_INDEX_STATE1_HIGH,
-                                   (state_1 == PHONE_ON_V1P8_HIGH_LEVEL) ? RT_TRUE : RT_FALSE);
+  esc_monitor_set_detection_value(ESC_MONITOR_DETECTION_INDEX_STATE1_HIGH,
+                                  (state_1 == PHONE_ON_V1P8_HIGH_LEVEL) ? 1 : 0);
 
   rt_thread_mdelay(500);
 
   rt_pin_write(pinNameDroneOnOff_, PIN_HIGH);
   esc_monitor_state_e state_2 = esc_monitor_phone_v1p8(1200);
-  esc_monitor_set_detection_result(ESC_MONITOR_DETECTION_INDEX_STATE2_LOW,
-                                   (state_2 == PHONE_ON_V1P8_LOW_LEVEL) ? RT_TRUE : RT_FALSE);
+  esc_monitor_set_detection_value(ESC_MONITOR_DETECTION_INDEX_STATE2_LOW,
+                                  (state_2 == PHONE_ON_V1P8_LOW_LEVEL) ? 1 : 0);
 
   rt_thread_mdelay(1000);
 
@@ -112,26 +134,34 @@ static void cmdEscMonitor(int argc, char** argv) {
   }
 
   esc_monitor_state_e state_3 = esc_monitor_phone_v1p8(1200);
-  esc_monitor_set_detection_result(ESC_MONITOR_DETECTION_INDEX_STATE3_HIGH,
-                                   (state_3 == PHONE_ON_V1P8_HIGH_LEVEL) ? RT_TRUE : RT_FALSE);
+  esc_monitor_set_detection_value(ESC_MONITOR_DETECTION_INDEX_STATE3_HIGH,
+                                  (state_3 == PHONE_ON_V1P8_HIGH_LEVEL) ? 1 : 0);
 
   const esc_monitor_ina_stage_result_t* stage1_result = esc_monitor_ina226_get_stage_result(ESC_MONITOR_INA_STAGE_1);
   if (stage1_result != RT_NULL) {
     state1_ina226_result_ = *stage1_result;
-    esc_monitor_set_detection_result(ESC_MONITOR_DETECTION_INDEX_STAGE1_ANALOG, state1_ina226_result_.threshold_pass);
+    esc_monitor_set_detection_value(ESC_MONITOR_DETECTION_INDEX_STAGE1_BUS_VOLTAGE_X10,
+                                    esc_monitor_convert_bus_voltage_to_x10(state1_ina226_result_.bus_voltage_median));
+    esc_monitor_set_detection_value(ESC_MONITOR_DETECTION_INDEX_STAGE1_CURRENT_MA,
+                                    esc_monitor_convert_current_to_ma(state1_ina226_result_.shunt_current_median));
   } else {
-    esc_monitor_set_detection_result(ESC_MONITOR_DETECTION_INDEX_STAGE1_ANALOG, RT_FALSE);
+    esc_monitor_set_detection_value(ESC_MONITOR_DETECTION_INDEX_STAGE1_BUS_VOLTAGE_X10, 0);
+    esc_monitor_set_detection_value(ESC_MONITOR_DETECTION_INDEX_STAGE1_CURRENT_MA, 0);
   }
 
   const esc_monitor_ina_stage_result_t* stage2_result = esc_monitor_ina226_get_stage_result(ESC_MONITOR_INA_STAGE_2);
   if (stage2_result != RT_NULL) {
     state2_ina226_result_ = *stage2_result;
-    esc_monitor_set_detection_result(ESC_MONITOR_DETECTION_INDEX_STAGE2_ANALOG, state2_ina226_result_.threshold_pass);
+    esc_monitor_set_detection_value(ESC_MONITOR_DETECTION_INDEX_STAGE2_BUS_VOLTAGE_X10,
+                                    esc_monitor_convert_bus_voltage_to_x10(state2_ina226_result_.bus_voltage_median));
+    esc_monitor_set_detection_value(ESC_MONITOR_DETECTION_INDEX_STAGE2_CURRENT_MA,
+                                    esc_monitor_convert_current_to_ma(state2_ina226_result_.shunt_current_median));
   } else {
-    esc_monitor_set_detection_result(ESC_MONITOR_DETECTION_INDEX_STAGE2_ANALOG, RT_FALSE);
+    esc_monitor_set_detection_value(ESC_MONITOR_DETECTION_INDEX_STAGE2_BUS_VOLTAGE_X10, 0);
+    esc_monitor_set_detection_value(ESC_MONITOR_DETECTION_INDEX_STAGE2_CURRENT_MA, 0);
   }
 
-  esc_monitor_set_detection_result(ESC_MONITOR_DETECTION_INDEX_FLOW_DONE, RT_TRUE);
+  esc_monitor_set_detection_value(ESC_MONITOR_DETECTION_INDEX_FLOW_DONE, 1);
 
   cmdEscMonResult(0, RT_NULL);
 }
@@ -140,7 +170,7 @@ void cmdEscMonResult(int argc, char** argv) {
   RT_UNUSED(argc);
   RT_UNUSED(argv);
 
-  rt_bool_t results[ESC_MONITOR_DETECTION_INDEX_MAX] = {RT_FALSE};
+  rt_uint16_t results[ESC_MONITOR_DETECTION_INDEX_MAX] = {0};
   if (!esc_monitor_get_detection_result(results, ESC_MONITOR_DETECTION_INDEX_MAX)) {
     LOG_W("get detection result failed");
     return;
@@ -150,38 +180,14 @@ void cmdEscMonResult(int argc, char** argv) {
   LOG_I("State1 high: %s", results[ESC_MONITOR_DETECTION_INDEX_STATE1_HIGH] ? "YES" : "NO");
   LOG_I("State2 low:  %s", results[ESC_MONITOR_DETECTION_INDEX_STATE2_LOW] ? "YES" : "NO");
   LOG_I("State3 high: %s", results[ESC_MONITOR_DETECTION_INDEX_STATE3_HIGH] ? "YES" : "NO");
-
-  const esc_monitor_ina_stage_result_t* stage1 = esc_monitor_ina226_get_stage_result(ESC_MONITOR_INA_STAGE_1);
-  if (stage1 == RT_NULL && state1_ina226_result_.valid) {
-    stage1 = &state1_ina226_result_;
-  }
-  if (stage1 != RT_NULL) {
-    float power = stage1->bus_voltage_median * stage1->shunt_current_median;
-    LOG_I("Stage1 analog: flag=%s, pass=%s, Vmed=%.3f, Imed=%.3f, Pmed=%.3f, Ith=[%.3f, %.3f]",
-          results[ESC_MONITOR_DETECTION_INDEX_STAGE1_ANALOG] ? "YES" : "NO", stage1->threshold_pass ? "YES" : "NO",
-          stage1->bus_voltage_median, stage1->shunt_current_median, power, ESC_MONITOR_STAGE1_CURRENT_MIN,
-          ESC_MONITOR_STAGE1_CURRENT_MAX);
-  } else {
-    LOG_I("Stage1 analog: flag=%s, no data, Ith=[%.3f, %.3f]",
-          results[ESC_MONITOR_DETECTION_INDEX_STAGE1_ANALOG] ? "YES" : "NO", ESC_MONITOR_STAGE1_CURRENT_MIN,
-          ESC_MONITOR_STAGE1_CURRENT_MAX);
-  }
-
-  const esc_monitor_ina_stage_result_t* stage2 = esc_monitor_ina226_get_stage_result(ESC_MONITOR_INA_STAGE_2);
-  if (stage2 == RT_NULL && state2_ina226_result_.valid) {
-    stage2 = &state2_ina226_result_;
-  }
-  if (stage2 != RT_NULL) {
-    float power = stage2->bus_voltage_median * stage2->shunt_current_median;
-    LOG_I("Stage2 analog: flag=%s, pass=%s, Vmed=%.3f, Imed=%.3f, Pmed=%.3f, Ith=[%.3f, %.3f]",
-          results[ESC_MONITOR_DETECTION_INDEX_STAGE2_ANALOG] ? "YES" : "NO", stage2->threshold_pass ? "YES" : "NO",
-          stage2->bus_voltage_median, stage2->shunt_current_median, power, ESC_MONITOR_STAGE2_CURRENT_MIN,
-          ESC_MONITOR_STAGE2_CURRENT_MAX);
-  } else {
-    LOG_I("Stage2 analog: flag=%s, no data, Ith=[%.3f, %.3f]",
-          results[ESC_MONITOR_DETECTION_INDEX_STAGE2_ANALOG] ? "YES" : "NO", ESC_MONITOR_STAGE2_CURRENT_MIN,
-          ESC_MONITOR_STAGE2_CURRENT_MAX);
-  }
+  LOG_I("Stage1 bus voltage reg: %u (%.1fV)", results[ESC_MONITOR_DETECTION_INDEX_STAGE1_BUS_VOLTAGE_X10],
+        (float)results[ESC_MONITOR_DETECTION_INDEX_STAGE1_BUS_VOLTAGE_X10] / ESC_MONITOR_BUS_VOLTAGE_SCALE_X10);
+  LOG_I("Stage1 current reg: %u (%.3fA)", results[ESC_MONITOR_DETECTION_INDEX_STAGE1_CURRENT_MA],
+        (float)results[ESC_MONITOR_DETECTION_INDEX_STAGE1_CURRENT_MA] / ESC_MONITOR_CURRENT_SCALE_MA);
+  LOG_I("Stage2 bus voltage reg: %u (%.1fV)", results[ESC_MONITOR_DETECTION_INDEX_STAGE2_BUS_VOLTAGE_X10],
+        (float)results[ESC_MONITOR_DETECTION_INDEX_STAGE2_BUS_VOLTAGE_X10] / ESC_MONITOR_BUS_VOLTAGE_SCALE_X10);
+  LOG_I("Stage2 current reg: %u (%.3fA)", results[ESC_MONITOR_DETECTION_INDEX_STAGE2_CURRENT_MA],
+        (float)results[ESC_MONITOR_DETECTION_INDEX_STAGE2_CURRENT_MA] / ESC_MONITOR_CURRENT_SCALE_MA);
 }
 
 static void esc_monitor_thread_entry(void* parameter) {
@@ -241,7 +247,7 @@ INIT_APP_EXPORT(esc_monitor_init);
 MSH_CMD_EXPORT_ALIAS(cmdEscMonitor, cmdEscMonitor, ESC monitor command);
 MSH_CMD_EXPORT_ALIAS(cmdEscMonResult, cmdEscMonResult, ESC monitor show result);
 
-rt_bool_t esc_monitor_get_detection_result(rt_bool_t* results, rt_size_t length) {
+rt_bool_t esc_monitor_get_detection_result(rt_uint16_t* results, rt_size_t length) {
   if (results == RT_NULL || length < ESC_MONITOR_DETECTION_INDEX_MAX) {
     return RT_FALSE;
   }

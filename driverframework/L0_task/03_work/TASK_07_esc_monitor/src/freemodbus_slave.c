@@ -32,13 +32,13 @@ static void send_thread_entry(void *parameter) {
   usRegHoldingBuf = usSRegHoldBuf;
 
   while (1) {
-    rt_bool_t monitor_results[ESC_MONITOR_DETECTION_INDEX_MAX] = {RT_FALSE};
+    rt_uint16_t monitor_results[ESC_MONITOR_DETECTION_INDEX_MAX] = {0};
     if (esc_monitor_get_detection_result(monitor_results, ESC_MONITOR_DETECTION_INDEX_MAX)) {
       rt_base_t level = rt_hw_interrupt_disable();
       for (rt_size_t i = 0; i < ESC_MONITOR_DETECTION_INDEX_MAX; ++i) {
         rt_uint16_t reg_index = WORK_TASK_ESC_MONITOR_MODBUS_REG_INDEX + i;
         if (reg_index < S_REG_HOLDING_NREGS) {
-          usRegHoldingBuf[reg_index] = monitor_results[i] ? 1 : 0;
+          usRegHoldingBuf[reg_index] = monitor_results[i];
         }
       }
       rt_hw_interrupt_enable(level);
