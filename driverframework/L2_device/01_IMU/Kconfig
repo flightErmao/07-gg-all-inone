@@ -3,6 +3,11 @@ menu "01 IMU CONFIG"
         bool "Enable general IMU calibration command"
         default n
 
+    config IMU_CAL_GENERAL_DEVICE_NAME
+        string "IMU calibration device name"
+        default "imu0"
+        depends on BSP_USING_IMU_CMD_CAL_GENERAL
+
     menu "01 ICM42688_130 CONFIG"
         source "$(PROJECT_ROOT)/driverframework/L2_device/01_IMU/01_ICM42688_130/Kconfig"
     endmenu

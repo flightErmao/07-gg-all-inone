@@ -30,9 +30,10 @@ enum imu_mode {
 };
 
 enum imu_pos {
-  IMU_POS_GYRO = 0, /* gyro data */
-  IMU_POS_ACC_GYRO, /* accel and gyro data */
-  IMU_POS_TEMP,     /* ASIC temperature data */
+  IMU_POS_ACC_GYRO = 0,
+  IMU_POS_GYRO = 1,
+  IMU_POS_ACC = 2,
+  IMU_POS_TEMP, /* ASIC temperature data */
 };
 
 /* default config for accel sensor */

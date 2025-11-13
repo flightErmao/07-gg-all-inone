@@ -1,6 +1,5 @@
 
 #include "rtthread.h"
-#include "biasGyro.h"
 #include "filterLpf2p.h"
 #include "filterNotch2p.h"
 #include "imuProcess.h"
@@ -9,6 +8,8 @@
 #include <string.h>
 #include "aMlogSensorImu.h"
 #include "timestamp.h"
+#include "../../TASK_05_PARAM/inc/param.h"
+#include "../../TASK_05_PARAM/inc/imuCaliParam.h"
 #ifdef L1_MIDDLEWARE_01_MODULE_05_FILTER_RPM_EN
 #include "rpmFilter.h"
 #include "aMcnDshot.h"
@@ -32,11 +33,50 @@
 static sensorData_t sensors;
 
 static Axis3f gyroBias = {0};
+static Axis3f accBias = {0};
 static float accScale = 1;
 static bool gyroBiasFound = false;
+static bool accBiasFound = false;
 static float g_gyro_deg_per_lsb = (float)((2 * 2000.0) / 65536.0);
 static float g_acc_g_per_lsb = (float)((2 * 16) / 65536.0);
 static enum Rotation imu_mount_rotation = ROTATION_NEGATE_X;
+
+// sensor_align_e from cmdImuCalGeneral.c
+typedef enum {
+  ALIGN_DEFAULT = 0,
+  CW0_DEG = 1,
+  CW90_DEG = 2,
+  CW180_DEG = 3,
+  CW270_DEG = 4,
+  CW0_DEG_FLIP = 5,
+  CW90_DEG_FLIP = 6,
+  CW180_DEG_FLIP = 7,
+  CW270_DEG_FLIP = 8,
+} sensor_align_e;
+
+// static enum Rotation sensor_align_to_rotation(uint8_t align) {
+//   switch (align) {
+//     case ALIGN_DEFAULT:
+//     case CW0_DEG:
+//       return ROTATION_NONE;
+//     case CW90_DEG:
+//       return ROTATION_YAW_90;
+//     case CW180_DEG:
+//       return ROTATION_YAW_180;
+//     case CW270_DEG:
+//       return ROTATION_YAW_270;
+//     case CW0_DEG_FLIP:
+//       return ROTATION_NEGATE_X;
+//     case CW90_DEG_FLIP:
+//       return ROTATION_ROLL_180_YAW_90;
+//     case CW180_DEG_FLIP:
+//       return ROTATION_ROLL_180;
+//     case CW270_DEG_FLIP:
+//       return ROTATION_ROLL_180_YAW_270;
+//     default:
+//       return ROTATION_NONE;
+//   }
+// }
 
 static inline void gyroRemoveBiasRaw(Axis3f* out, Axis3i16* raw, const Axis3f* bias) {
   out->x = (float)raw->x - bias->x;
@@ -76,26 +116,7 @@ static enum Rotation parseRotationFromString(const char* rot_str) {
   return ROTATION_NONE;
 }
 
-static bool getAccScale(Axis3i16 accRaw) {
-  if (!gyroBiasFound) {
-    return false;
-  }
-  static float accScaleSum = 0;
-  static bool accBiasFound = false;
-  static uint32_t accScaleSumCount = 0;
-
-  if (!accBiasFound) {
-    accScaleSum += sqrtf(powf(accRaw.x * g_acc_g_per_lsb, 2) + powf(accRaw.y * g_acc_g_per_lsb, 2) +
-                         powf(accRaw.z * g_acc_g_per_lsb, 2));
-    accScaleSumCount++;
-
-    if (accScaleSumCount == SENSORS_ACC_SCALE_SAMPLES) {
-      accScale = accScaleSum / SENSORS_ACC_SCALE_SAMPLES;
-      accBiasFound = true;
-    }
-  }
-  return accBiasFound;
-}
+// Removed getAccScale - acc scale is now handled via calibration parameters
 
 static inline void sensorsLoadRawFromBuffer(const uint8_t* buffer) {
   sensors.acc_raw.x = (int16_t)((((int16_t)buffer[1]) << 8) | buffer[0]);
@@ -107,12 +128,58 @@ static inline void sensorsLoadRawFromBuffer(const uint8_t* buffer) {
 }
 
 void initImuRotationDir(void) {
-  imu_mount_rotation =
-#ifdef PROJECT_MINIFLY_TASK_SENSOR_ROTATION
-      parseRotationFromString(PROJECT_MINIFLY_TASK_SENSOR_ROTATION);
-#else
-      ROTATION_NEGATE_X;
-#endif
+  // Load calibration parameters from parameter table
+  float gyro_bias[3] = {0.0f};
+  float acc_bias[3] = {0.0f};
+  // uint8_t orientation = ALIGN_DEFAULT;
+
+  rt_err_t ret;
+
+  // Load gyro bias
+  ret = getParam(IMU_CALI_PARAM_GYRO_BIAS, gyro_bias, sizeof(gyro_bias));
+  if (ret == RT_EOK) {
+    gyroBias.x = gyro_bias[0];
+    gyroBias.y = gyro_bias[1];
+    gyroBias.z = gyro_bias[2];
+    gyroBiasFound = !(gyro_bias[0] == 0.0f && gyro_bias[1] == 0.0f && gyro_bias[2] == 0.0f);
+    if (gyroBiasFound) {
+      LOG_I("Gyro bias loaded: [%.6f, %.6f, %.6f]", gyroBias.x, gyroBias.y, gyroBias.z);
+    }
+  } else {
+    LOG_W("Failed to load gyro bias: %d", ret);
+  }
+
+  // Load acc bias
+  ret = getParam(IMU_CALI_PARAM_ACC_BIAS, acc_bias, sizeof(acc_bias));
+  if (ret == RT_EOK) {
+    accBias.x = acc_bias[0];
+    accBias.y = acc_bias[1];
+    accBias.z = acc_bias[2];
+    accBiasFound = !(acc_bias[0] == 0.0f && acc_bias[1] == 0.0f && acc_bias[2] == 0.0f);
+    if (accBiasFound) {
+      LOG_I("Acc bias loaded: [%.6f, %.6f, %.6f]", accBias.x, accBias.y, accBias.z);
+    }
+  } else {
+    LOG_W("Failed to load acc bias: %d", ret);
+  }
+
+  //   // Load orientation
+  //   ret = getParam(IMU_CALI_PARAM_ORIENTATION, &orientation, sizeof(orientation));
+  //   if (ret == RT_EOK) {
+  //     imu_mount_rotation = sensor_align_to_rotation(orientation);
+  //     LOG_I("IMU orientation loaded: %d -> rotation %d", orientation, imu_mount_rotation);
+  //   } else {
+  //     // Fallback to compile-time or default rotation
+  //     imu_mount_rotation =
+  // #ifdef PROJECT_MINIFLY_TASK_SENSOR_ROTATION
+  //         parseRotationFromString(PROJECT_MINIFLY_TASK_SENSOR_ROTATION);
+  // #else
+  //         ROTATION_NEGATE_X;
+  // #endif
+  //     LOG_W("Failed to load orientation: %d, using default", ret);
+  //   }
+
+  imu_mount_rotation = parseRotationFromString(PROJECT_MINIFLY_TASK_SENSOR_ROTATION);
 }
 
 static void generateAngularAccel(void) {
@@ -150,8 +217,13 @@ static void generateAngularAccel(void) {
 }
 
 static void dealWithGyroData(void) {
-  gyroBiasFound = getGyroBias(sensors.gyro_raw, &gyroBias);
-  gyroRemoveBiasRaw(&sensors.gyro_filter, &sensors.gyro_raw, &gyroBias);
+  if (gyroBiasFound) {
+    gyroRemoveBiasRaw(&sensors.gyro_filter, &sensors.gyro_raw, &gyroBias);
+  } else {
+    sensors.gyro_filter.x = (float)sensors.gyro_raw.x;
+    sensors.gyro_filter.y = (float)sensors.gyro_raw.y;
+    sensors.gyro_filter.z = (float)sensors.gyro_raw.z;
+  }
   gyroApplyScale(&sensors.gyro_filter);
   gyroApplyRotation(imu_mount_rotation, &sensors.gyro_filter);
   mlogImuCopyGyroData(&sensors.gyro_filter, RT_NULL);
@@ -167,8 +239,14 @@ static void dealWithGyroData(void) {
 }
 
 static void dealWithAccData(void) {
-  getAccScale(sensors.acc_raw);
+  // Apply scale first
   accApplyScale(&sensors.acc_filter, &sensors.acc_raw);
+  // Apply calibration bias from parameter table if available
+  if (accBiasFound) {
+    sensors.acc_filter.x -= accBias.x;
+    sensors.acc_filter.y -= accBias.y;
+    sensors.acc_filter.z -= accBias.z;
+  }
   accApplyRotation(imu_mount_rotation, &sensors.acc_filter);
   mlogImuCopyAccData(&sensors.acc_filter, RT_NULL);
   applyAxis3fNotchAcc(&sensors.acc_filter);

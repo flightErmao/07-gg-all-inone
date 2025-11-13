@@ -70,9 +70,9 @@ static void stabilizer_thread_entry(void* parameter) {
   taskStabilizerInit();
 
   /* Wait for gyro bias calibration */
-  while (!outputGyroBiasFound()) {
-    rt_thread_mdelay(100);
-  }
+  // while (!outputGyroBiasFound()) {
+  //   rt_thread_mdelay(100);
+  // }
 
   while (1) {
     mcnWaitImuPub();

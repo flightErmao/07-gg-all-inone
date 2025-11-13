@@ -17,7 +17,7 @@ group = DefineGroup('IMU', src, depend=[''], CPPPATH=path)
 # 可选编译组：IMU 通用标定命令
 group = group + DefineGroup('IMU_CMD_CAL_GENERAL', cmd_cal_src,
                             depend=['BSP_USING_IMU_CMD_CAL_GENERAL'],
-                            CPPPATH=path, CPPDEFINES=['BSP_USING_IMU_CMD_CAL_GENERAL'])
+                            CPPPATH=path)
 
 env = DefaultEnvironment()
 
