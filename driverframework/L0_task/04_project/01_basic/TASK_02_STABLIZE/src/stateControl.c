@@ -82,7 +82,7 @@ static void pidParamInit(void) {
   //     load_param_float("mc_yr_int_threshold")   // yaw轴积分清零阈值
   // };
 
-  float int_threshold[3] = {5.0f, 5.0f, 5.0f};
+  float int_threshold[3] = {1.0f, 1.0f, 1.0f};
 
   rcpx4_set_integral_threshold(&g_rate_ctrl_px4, int_threshold);
 }
