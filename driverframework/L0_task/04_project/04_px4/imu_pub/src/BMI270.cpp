@@ -805,24 +805,64 @@ bool BMI270::configureSensor() {
 
   bool ok = true;
   ok &= regWrite(Register::PWR_CTRL, PWR_CTRL_BIT::accel_en | PWR_CTRL_BIT::gyr_en | PWR_CTRL_BIT::temp_en);
-  ok &= regWrite(Register::ACC_CONF,
-                 static_cast<uint8_t>(ACC_CONF_BIT::acc_bwp_Normal | ACC_CONF_BIT::acc_odr_1600));
+  rt_thread_mdelay(10);
+  ok &= regWrite(Register::ACC_CONF, static_cast<uint8_t>(ACC_CONF_BIT::acc_bwp_Normal | ACC_CONF_BIT::acc_odr_1600));
+  rt_thread_mdelay(10);
   ok &= regWrite(Register::ACC_RANGE, static_cast<uint8_t>(ACC_RANGE_BIT::acc_range_16g));
+  rt_thread_mdelay(10);
   ok &= regWrite(Register::GYR_CONF,
                  static_cast<uint8_t>(GYR_CONF_BIT::gyr_odr_1k6 | GYR_CONF_BIT::gyr_flt_mode_normal |
                                       GYR_CONF_BIT::gyr_noise_hp | GYR_CONF_BIT::gyr_flt_hp));
+  rt_thread_mdelay(10);
   ok &= regWrite(Register::FIFO_CONFIG_0,
                  static_cast<uint8_t>(FIFO_CONFIG_0_BIT::BIT1_ALWAYS | FIFO_CONFIG_0_BIT::FIFO_mode));
+  rt_thread_mdelay(10);
   ok &= regWrite(Register::FIFO_CONFIG_1,
                  static_cast<uint8_t>(FIFO_CONFIG_1_BIT::BIT4_ALWAYS | FIFO_CONFIG_1_BIT::Acc_en |
                                       FIFO_CONFIG_1_BIT::Gyr_en));
+  rt_thread_mdelay(10);
   ok &= regWrite(Register::FIFO_WTM_0, watermark_bytes & 0xFF);
+  rt_thread_mdelay(10);
   ok &= regWrite(Register::FIFO_WTM_1, (watermark_bytes >> 8) & 0x07);
-  ok &= regWrite(Register::INT1_IO_CTRL,
-                 static_cast<uint8_t>(INT1_IO_CONF_BIT::int1_out | INT1_IO_CONF_BIT::int1_lvl));
+  rt_thread_mdelay(10);
+  
+  // 在配置INT1之前，先清除FIFO和所有pending中断，确保INT1初始状态为高电平
+  fifoReset();
+  rt_thread_mdelay(5);
+  (void)regRead(Register::STATUS);
+  (void)regRead(Register::EVENT);
+  rt_thread_mdelay(5);
+  
+  // 映射FIFO watermark中断到INT1（在配置INT1_IO_CTRL之前先映射中断源）
   ok &= regWrite(Register::INT_MAP_DATA, static_cast<uint8_t>(INT1_INT2_MAP_DATA_BIT::int1_fwm));
+  rt_thread_mdelay(10);
+  // 验证INT_MAP_DATA配置
+  uint8_t int_map_data_val = regRead(Register::INT_MAP_DATA);
+  LOG_D("BMI270 INT_MAP_DATA = 0x%02X (expected: 0x02)", int_map_data_val);
+  
+  // INT1_IO_CTRL配置：
+  // - int1_out: INT1配置为输出模式
+  // - 不设置int1_od位（Bit2=0），表示推挽输出（推挽输出不需要外部上拉）
+  // - 不设置int1_lvl位（Bit1=0），表示低电平有效（下降沿触发）
+  // - int1_edge_ctrl: 边沿触发模式
+  // 配置值: 0x09 = Bit3 (int1_out) | Bit0 (int1_edge_ctrl)
+  // 注意：Bit2=0表示推挽输出，Bit1=0表示低电平有效
+  ok &= regWrite(Register::INT1_IO_CTRL,
+                 static_cast<uint8_t>(INT1_IO_CONF_BIT::int1_out | INT1_IO_CONF_BIT::int1_edge_ctrl));
+  rt_thread_mdelay(10);
+  // 验证INT1_IO_CTRL配置（应该为0x09，包含int1_out和int1_edge_ctrl）
+  uint8_t int1_io_ctrl_val = regRead(Register::INT1_IO_CTRL);
+  LOG_D("BMI270 INT1_IO_CTRL = 0x%02X (expected: 0x09)", int1_io_ctrl_val);
+  if ((int1_io_ctrl_val & 0x08) == 0) {
+    LOG_E("BMI270 INT1_IO_CTRL output enable not set!");
+  }
+  // 再次清除中断状态，确保INT1输出高电平
+  (void)regRead(Register::STATUS);
+  (void)regRead(Register::EVENT);
+  rt_thread_mdelay(5);
 
   if (!ok) {
+    LOG_E("BMI270 sensor config write failed");
     return false;
   }
 
@@ -831,8 +871,25 @@ bool BMI270::configureSensor() {
     fifo_interval_us_ = kSampleDtUs;
   }
 
-  fifoReset();
+  // 最后再次清除中断状态，确保INT1初始为高电平
+  // 注意：这里不再调用fifoReset()，因为前面已经重置过，避免重复触发中断
+  (void)regRead(Register::STATUS);
+  (void)regRead(Register::EVENT);
   rt_thread_mdelay(5);
+  
+  // 验证FIFO状态：应该是空的
+  uint16_t fifo_len = fifoLevel();
+  LOG_D("BMI270 FIFO length after config: %u (should be 0)", fifo_len);
+  if (fifo_len != 0) {
+    LOG_W("BMI270 FIFO not empty after reset, length: %u", fifo_len);
+    // 如果FIFO不为空，再次重置
+    fifoReset();
+    rt_thread_mdelay(5);
+    (void)regRead(Register::STATUS);
+    (void)regRead(Register::EVENT);
+  }
+  
+  LOG_D("BMI270 sensor configuration complete, INT1 should be HIGH now");
   return true;
 }
 
@@ -847,22 +904,61 @@ bool BMI270::configureInterrupt() {
   int_pin_ = parse_pin_name_from_config(config_.int_pin_name);
   if (int_pin_ < 0) {
     use_interrupt_ = false;
+    LOG_E("BMI270 invalid int pin name");
     return false;
   }
 
-  rt_pin_mode(int_pin_, PIN_MODE_INPUT_PULLDOWN);
-  if (rt_pin_attach_irq(int_pin_, PIN_IRQ_MODE_RISING, &BMI270::drdyIsr, this) != RT_EOK) {
+  // 配置为输入模式，带内部上拉
+  // 注意：如果BMI270的INT1配置为推挽输出，GPIO也应该配置为输入模式来接收中断
+  rt_pin_mode(int_pin_, PIN_MODE_INPUT_PULLUP);
+  
+  // 延迟一下，确保引脚状态稳定
+  rt_thread_mdelay(5);
+  
+  // 先清除可能存在的pending中断
+  (void)regRead(Register::STATUS);
+  (void)regRead(Register::EVENT);
+  rt_thread_mdelay(5);
+  
+  // 读取当前引脚电平状态用于调试
+  int pin_level = rt_pin_read(int_pin_);
+  LOG_D("BMI270 INT1 pin level before attach: %d", pin_level);
+  
+  if (rt_pin_attach_irq(int_pin_, PIN_IRQ_MODE_FALLING, &BMI270::drdyIsr, this) != RT_EOK) {
     use_interrupt_ = false;
+    LOG_E("BMI270 attach irq failed");
     return false;
   }
 
   if (rt_pin_irq_enable(int_pin_, PIN_IRQ_ENABLE) != RT_EOK) {
     rt_pin_detach_irq(int_pin_);
     use_interrupt_ = false;
+    LOG_E("BMI270 enable irq failed");
     return false;
   }
 
   use_interrupt_ = true;
+  
+  // 再次清除中断状态，确保INT1输出高电平
+  (void)regRead(Register::STATUS);
+  (void)regRead(Register::EVENT);
+  rt_thread_mdelay(5);
+  
+  // 读取引脚电平状态用于调试（应该是高电平）
+  pin_level = rt_pin_read(int_pin_);
+  LOG_D("BMI270 interrupt configured on pin %d, pin level: %d (1=HIGH, 0=LOW)", int_pin_, pin_level);
+  if (pin_level == 0) {
+    LOG_W("BMI270 INT1 pin is LOW, may have pending interrupt");
+    // 再次尝试清除中断状态
+    fifoReset();
+    rt_thread_mdelay(5);
+    (void)regRead(Register::STATUS);
+    (void)regRead(Register::EVENT);
+    rt_thread_mdelay(5);
+    pin_level = rt_pin_read(int_pin_);
+    LOG_D("BMI270 INT1 pin level after clear: %d", pin_level);
+  }
+  
   return true;
 }
 

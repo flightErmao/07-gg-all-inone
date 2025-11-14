@@ -151,8 +151,9 @@ enum FIFO_CONFIG_1_BIT : uint8_t {
 enum INT1_IO_CONF_BIT : uint8_t {
 	int1_in  = Bit4,
 	int1_out = Bit3,
-
-	int1_lvl = Bit1,
+	int1_od  = Bit2,  // 0=推挽输出，1=开漏输出
+	int1_lvl = Bit1,  // 0=低电平有效，1=高电平有效
+	int1_edge_ctrl = Bit0,  // 0=电平触发，1=边沿触发
 };
 
 // INT1_INT2_MAP_DATA
