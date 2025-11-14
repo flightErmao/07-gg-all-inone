@@ -8,8 +8,6 @@ extern "C" {
 }
 
 #include <cstring>
-#include "../../L1_middleWare/05_px4_lib/02_mathlib/filter/LowPassFilter2p.hpp"
-
 #include "workqueueManage.h"
 
 // Matrix types are available through LowPassFilter2p.hpp

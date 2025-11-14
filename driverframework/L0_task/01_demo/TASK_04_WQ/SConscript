@@ -2,27 +2,21 @@ from building import *
 import os
 
 cwd = GetCurrentDir()
-
 src = Glob("./src/*.c")
 src += Glob("./src/*.cpp")
 
-path = [
+include_paths = [
     cwd,
-    os.path.join(cwd, "inc"),
-    os.path.join(cwd, "..", "..", "..", "..", "kernel", "rtthread", "components", "utilities", "ulog"),
-    os.path.join(cwd, "..", "..", "..", "L1_middleWare", "05_px4_lib", "02_mathlib", "filter"),
-    os.path.join(cwd, "..", "..", "..", "L1_middleWare", "05_px4_lib", "02_mathlib", "common"),
-    # Matrix library: add base directory and subdirectories
-    # Base directory allows <px4_platform_common/defines.h> to work
-    os.path.join(cwd, "..", "..", "..", "L1_middleWare", "05_px4_lib", "03_matrix"),
-    os.path.join(cwd, "..", "..", "..", "L1_middleWare", "05_px4_lib", "03_matrix", "px4_platform_common"),
+    os.path.join(cwd, "inc"),  # Local inc directory
+    os.path.join(cwd, "..", "..", "..", "L1_middleWare", "05_px4_lib", "02_mathlib"),  # For <filter/LowPassFilter2p.hpp>
+    os.path.join(cwd, "..", "..", "..", "L1_middleWare", "05_px4_lib", "03_matrix"),  # For <matrix/math.hpp>
 ]
 
 group = DefineGroup(
     "TASK_04_WQ",
     src,
     depend=["TASK_DEMO_04_WQ_EN", "L1_MIDDLEWARE_05_PX4_LIB_02_MATHLIB_EN", "L1_MIDDLEWARE_05_PX4_LIB_03_MATRIX_EN"],
-    CPPPATH=path,
+    CPPPATH=include_paths,
 )
 
 Return("group")

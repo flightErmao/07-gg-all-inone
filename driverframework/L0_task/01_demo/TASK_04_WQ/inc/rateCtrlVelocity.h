@@ -5,7 +5,7 @@
 #include <uMCN.h>
 #include <ipc/workqueue.h>
 #include <matrix/math.hpp>
-#include "../../L1_middleWare/05_px4_lib/02_mathlib/filter/LowPassFilter2p.hpp"
+#include <filter/LowPassFilter2p.hpp>
 
 #include "wq_topics.h"
 
