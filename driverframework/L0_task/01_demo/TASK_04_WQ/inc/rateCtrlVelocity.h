@@ -4,8 +4,12 @@
 #include <rtthread.h>
 #include <uMCN.h>
 #include <ipc/workqueue.h>
+#include <matrix/math.hpp>
+#include "../../L1_middleWare/05_px4_lib/02_mathlib/filter/LowPassFilter2p.hpp"
 
 #include "wq_topics.h"
+
+using namespace matrix;
 
 class RateCtrlVelocity {
 public:
@@ -22,6 +26,10 @@ private:
     struct rt_work work_;
     McnNode_t imu_node_;
     imu_raw_msg_t latest_imu_;
+    
+    // Low pass filters for velocity calculation
+    math::LowPassFilter2p<Vector3f> accel_filter_;
+    math::LowPassFilter2p<Vector3f> gyro_filter_;
 };
 
 #endif /* RATE_CTRL_VELOCITY_H__ */

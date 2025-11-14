@@ -1,0 +1,8 @@
+menuconfig L1_MIDDLEWARE_05_PX4_LIB_03_MATRIX_EN
+    bool "ENABLE: L1_MIDDLEWARE_05_PX4_LIB_03_MATRIX_EN"
+    default n
+    help
+        Enable PX4 matrix library support.
+        This library provides matrix operations including Vector3f, Vector4f, etc.
+
+

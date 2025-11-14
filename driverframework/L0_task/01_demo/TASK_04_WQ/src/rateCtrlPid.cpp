@@ -8,13 +8,35 @@ extern "C" {
 }
 
 #include <cstring>
+#include <math.h>
+#include "../../L1_middleWare/05_px4_lib/02_mathlib/filter/LowPassFilter2p.hpp"
 
 #include "workqueueManage.h"
 
+// Matrix types are available through LowPassFilter2p.hpp
+using namespace matrix;
+
 MCN_DEFINE(rate_ctrl_actuator_cmd, sizeof(rate_ctrl_actuator_cmd_msg_t));
 
+// PID gains: P, I, D for roll, pitch, yaw
+#define PID_GAIN_P_ROLL  0.5f
+#define PID_GAIN_P_PITCH 0.5f
+#define PID_GAIN_P_YAW   0.5f
+#define PID_GAIN_I_ROLL  0.1f
+#define PID_GAIN_I_PITCH 0.1f
+#define PID_GAIN_I_YAW   0.1f
+#define PID_GAIN_D_ROLL  0.1f
+#define PID_GAIN_D_PITCH 0.1f
+#define PID_GAIN_D_YAW   0.1f
+#define PID_INT_LIMIT    10.0f
+
 RateCtrlPid::RateCtrlPid()
-    : velocity_node_(RT_NULL)
+    : velocity_node_(RT_NULL),
+      gain_p_(PID_GAIN_P_ROLL, PID_GAIN_P_PITCH, PID_GAIN_P_YAW),
+      gain_i_(PID_GAIN_I_ROLL, PID_GAIN_I_PITCH, PID_GAIN_I_YAW),
+      gain_d_(PID_GAIN_D_ROLL, PID_GAIN_D_PITCH, PID_GAIN_D_YAW),
+      rate_int_(0.0f, 0.0f, 0.0f),
+      lim_int_(PID_INT_LIMIT, PID_INT_LIMIT, PID_INT_LIMIT)
 {
     std::memset(&latest_velocity_, 0, sizeof(latest_velocity_));
     std::memset(&actuator_output_, 0, sizeof(actuator_output_));
@@ -79,18 +101,42 @@ void RateCtrlPid::handleWork()
 {
     actuator_output_.seq = latest_velocity_.seq;
 
-    const float kp = 0.5f;
-    const float kd = 0.1f;
-
-    for (size_t i = 0; i < 3; ++i) {
-        float velocity = latest_velocity_.velocity[i];
-        float command = kp * velocity + kd * (velocity - 0.0f);
-        actuator_output_.actuator_outputs[i] = command;
+    // Convert array to Vector3f
+    Vector3f velocity(latest_velocity_.velocity[0], 
+                      latest_velocity_.velocity[1], 
+                      latest_velocity_.velocity[2]);
+    
+    // For simplicity, assume setpoint is zero (rate control)
+    Vector3f rate_sp(0.0f, 0.0f, 0.0f);
+    Vector3f rate_error = rate_sp - velocity;
+    
+    // Calculate dt (assuming 3ms interval from IMU publish)
+    const float dt = 0.003f;
+    
+    // Update integral term with anti-windup
+    for (int i = 0; i < 3; i++) {
+        float rate_i = rate_int_(i) + gain_i_(i) * rate_error(i) * dt;
+        // Constrain integral term
+        if (rate_i > lim_int_(i)) {
+            rate_int_(i) = lim_int_(i);
+        } else if (rate_i < -lim_int_(i)) {
+            rate_int_(i) = -lim_int_(i);
+        } else {
+            rate_int_(i) = rate_i;
+        }
     }
-
-    actuator_output_.actuator_outputs[3] = actuator_output_.actuator_outputs[0]
-        + actuator_output_.actuator_outputs[1]
-        + actuator_output_.actuator_outputs[2];
+    
+    // PID control: P + I + D
+    // Note: D term would need angular acceleration, simplified here
+    Vector3f torque = gain_p_.emult(rate_error) + rate_int_ - gain_d_.emult(velocity);
+    
+    // Convert to actuator outputs
+    actuator_output_.actuator_outputs[0] = torque(0);
+    actuator_output_.actuator_outputs[1] = torque(1);
+    actuator_output_.actuator_outputs[2] = torque(2);
+    
+    // 4th output is sum (for testing)
+    actuator_output_.actuator_outputs[3] = torque(0) + torque(1) + torque(2);
 
     if (mcn_publish(MCN_HUB(rate_ctrl_actuator_cmd), &actuator_output_) != RT_EOK) {
         LOG_E("publish actuator cmd failed");

@@ -10,6 +10,16 @@ path = [
     cwd,
     os.path.join(cwd, "inc"),
     os.path.join(cwd, "..", "..", "..", "..", "kernel", "rtthread", "components", "utilities", "ulog"),
+    os.path.join(cwd, "..", "..", "..", "L1_middleWare", "05_px4_lib", "02_mathlib"),
+    os.path.join(cwd, "..", "..", "..", "L1_middleWare", "05_px4_lib", "02_mathlib", "filter"),
+    os.path.join(cwd, "..", "..", "..", "L1_middleWare", "05_px4_lib", "02_mathlib", "math"),
+    os.path.join(cwd, "..", "..", "..", "L1_middleWare", "05_px4_lib", "02_mathlib", "mathlib"),
+    # Matrix library: add both the base directory and inc subdirectory
+    # This allows <matrix/math.hpp> to find inc/math.hpp when inc/ is treated as matrix/
+    os.path.join(cwd, "..", "..", "..", "L1_middleWare", "05_px4_lib", "03_matrix"),
+    os.path.join(cwd, "..", "..", "..", "L1_middleWare", "05_px4_lib", "03_matrix", "inc"),
+    # Add px4_platform_common directory for compatibility defines
+    os.path.join(cwd, "..", "..", "..", "L1_middleWare", "05_px4_lib", "03_matrix", "px4_platform_common"),
 ]
 
 group = DefineGroup(

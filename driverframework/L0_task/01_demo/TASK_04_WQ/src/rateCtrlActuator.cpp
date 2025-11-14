@@ -8,8 +8,12 @@ extern "C" {
 }
 
 #include <cstring>
+#include "../../L1_middleWare/05_px4_lib/02_mathlib/filter/LowPassFilter2p.hpp"
 
 #include "workqueueManage.h"
+
+// Matrix types are available through LowPassFilter2p.hpp
+using namespace matrix;
 
 RateCtrlActuator::RateCtrlActuator()
     : actuator_node_(RT_NULL)
@@ -73,12 +77,48 @@ void RateCtrlActuator::handleWork()
 
 void RateCtrlActuator::applyActuatorOutputs(const rate_ctrl_actuator_cmd_msg_t& cmd)
 {
+    // Convert array to Vector4f
+    Vector4f outputs(cmd.actuator_outputs[0],
+                     cmd.actuator_outputs[1],
+                     cmd.actuator_outputs[2],
+                     cmd.actuator_outputs[3]);
+    
+    // Convert to PWM/DShot
+    convertToPwmDshot(outputs);
+    
     LOG_I("apply seq:%u outputs(%.3f, %.3f, %.3f, %.3f)",
         cmd.seq,
         cmd.actuator_outputs[0],
         cmd.actuator_outputs[1],
         cmd.actuator_outputs[2],
         cmd.actuator_outputs[3]);
+}
+
+void RateCtrlActuator::convertToPwmDshot(const Vector4f& outputs)
+{
+    // Normalize outputs to [0, 1] range for PWM
+    // For DShot, convert to [48, 2047] range (typical DShot range)
+    const float dshot_min = 48.0f;
+    const float dshot_max = 2047.0f;
+    const float dshot_range = dshot_max - dshot_min;
+    
+    // Clamp and scale outputs
+    Vector4f normalized = outputs;
+    for (int i = 0; i < 4; i++) {
+        // Clamp to [0, 1]
+        if (normalized(i) > 1.0f) {
+            normalized(i) = 1.0f;
+        } else if (normalized(i) < 0.0f) {
+            normalized(i) = 0.0f;
+        }
+        // Convert to DShot value
+        float dshot_value = dshot_min + normalized(i) * dshot_range;
+        // TODO: Actually send to PWM/DShot hardware here
+        // For now, just log
+        if (i == 0) {
+            LOG_I("motor[%d] dshot: %.0f", i, dshot_value);
+        }
+    }
 }
 
 

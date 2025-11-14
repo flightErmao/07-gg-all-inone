@@ -4,8 +4,11 @@
 #include <rtthread.h>
 #include <uMCN.h>
 #include <ipc/workqueue.h>
+#include <matrix/math.hpp>
 
 #include "wq_topics.h"
+
+using namespace matrix;
 
 class RateCtrlActuator {
 public:
@@ -19,6 +22,7 @@ private:
 
     void handleWork();
     void applyActuatorOutputs(const rate_ctrl_actuator_cmd_msg_t& cmd);
+    void convertToPwmDshot(const Vector4f& outputs);
 
     struct rt_work work_;
     McnNode_t actuator_node_;

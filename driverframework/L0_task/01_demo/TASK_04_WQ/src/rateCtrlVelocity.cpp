@@ -11,10 +11,19 @@ extern "C" {
 
 #include "workqueueManage.h"
 
+// Matrix types are available through LowPassFilter2p.hpp
+using namespace matrix;
+
 MCN_DEFINE(vehicle_accelerate_velocity, sizeof(vehicle_accelerate_velocity_msg_t));
 
+// Filter parameters: sample_freq = 333Hz (3ms interval), cutoff_freq = 30Hz
+#define VELOCITY_FILTER_SAMPLE_FREQ 333.0f
+#define VELOCITY_FILTER_CUTOFF_FREQ 30.0f
+
 RateCtrlVelocity::RateCtrlVelocity()
-    : imu_node_(RT_NULL)
+    : imu_node_(RT_NULL),
+      accel_filter_(VELOCITY_FILTER_SAMPLE_FREQ, VELOCITY_FILTER_CUTOFF_FREQ),
+      gyro_filter_(VELOCITY_FILTER_SAMPLE_FREQ, VELOCITY_FILTER_CUTOFF_FREQ)
 {
     std::memset(&latest_imu_, 0, sizeof(latest_imu_));
     rt_work_init(&work_, RateCtrlVelocity::workHandler, this);
@@ -79,11 +88,21 @@ void RateCtrlVelocity::handleWork()
     vehicle_accelerate_velocity_msg_t velocity_msg = { 0 };
     velocity_msg.seq = latest_imu_.seq;
 
-    for (size_t i = 0; i < 3; ++i) {
-        float accel = latest_imu_.accel[i];
-        float gyro = latest_imu_.gyro[i];
-        velocity_msg.velocity[i] = 0.8f * accel + 0.2f * gyro;
-    }
+    // Convert array to Vector3f
+    Vector3f accel_raw(latest_imu_.accel[0], latest_imu_.accel[1], latest_imu_.accel[2]);
+    Vector3f gyro_raw(latest_imu_.gyro[0], latest_imu_.gyro[1], latest_imu_.gyro[2]);
+
+    // Apply low pass filters
+    Vector3f accel_filtered = accel_filter_.apply(accel_raw);
+    Vector3f gyro_filtered = gyro_filter_.apply(gyro_raw);
+
+    // Calculate velocity: weighted combination of filtered accel and gyro
+    Vector3f velocity = 0.8f * accel_filtered + 0.2f * gyro_filtered;
+
+    // Convert back to array for message
+    velocity_msg.velocity[0] = velocity(0);
+    velocity_msg.velocity[1] = velocity(1);
+    velocity_msg.velocity[2] = velocity(2);
 
     if (mcn_publish(MCN_HUB(vehicle_accelerate_velocity), &velocity_msg) != RT_EOK) {
         LOG_E("publish velocity failed");

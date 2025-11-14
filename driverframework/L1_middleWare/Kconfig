@@ -6,9 +6,14 @@ menu "L1_MIDDLEWARE_CONFIG"
     source "$(PROJECT_ROOT)/driverframework/L1_middleWare/01_module/04_pid_minifly/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L1_middleWare/01_module/05_filter/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L1_middleWare/01_module/06_hardTimestamp/Kconfig"
+    
     source "$(PROJECT_ROOT)/driverframework/L1_middleWare/02_mode/01_led_blink/Kconfig"
+
     source "$(PROJECT_ROOT)/driverframework/L1_middleWare/04_px4_module/01_mc_rate_control/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L1_middleWare/04_px4_module/04_sensor_vehicleAngularVelocity/Kconfig"
+
     source "$(PROJECT_ROOT)/driverframework/L1_middleWare/05_px4_lib/02_mathlib/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L1_middleWare/05_px4_lib/03_matrix/Kconfig"
+
     source "$(PROJECT_ROOT)/driverframework/L1_middleWare/03_package/uMCN-latest/Kconfig"
 endmenu

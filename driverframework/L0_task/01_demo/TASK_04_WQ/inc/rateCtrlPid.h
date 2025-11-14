@@ -4,8 +4,11 @@
 #include <rtthread.h>
 #include <uMCN.h>
 #include <ipc/workqueue.h>
+#include <matrix/math.hpp>
 
 #include "wq_topics.h"
+
+using namespace matrix;
 
 class RateCtrlPid {
 public:
@@ -23,6 +26,13 @@ private:
     McnNode_t velocity_node_;
     vehicle_accelerate_velocity_msg_t latest_velocity_;
     rate_ctrl_actuator_cmd_msg_t actuator_output_;
+    
+    // PID gains
+    Vector3f gain_p_;
+    Vector3f gain_i_;
+    Vector3f gain_d_;
+    Vector3f rate_int_;
+    Vector3f lim_int_;
 };
 
 #endif /* RATE_CTRL_PID_H__ */
