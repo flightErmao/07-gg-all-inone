@@ -38,7 +38,7 @@
 
 #pragma once
 
-#include <mathlib/math/Functions.hpp>
+#include "../common/Functions.hpp"
 #include <float.h>
 #include <matrix/math.hpp>
 

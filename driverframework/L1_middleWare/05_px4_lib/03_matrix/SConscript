@@ -6,9 +6,8 @@ cwd = GetCurrentDir()
 # Matrix library only contains header files, no source files
 src = []
 
-# Add both the base directory (for matrix/math.hpp wrapper) and inc directory
-# The wrapper allows <matrix/math.hpp> to work correctly
-inc_dir = os.path.join(cwd, "inc")
+# Add base directory (for matrix/math.hpp wrapper), inc directory and px4_platform_common directory
+inc_dir = os.path.join(cwd, "matrix")
 px4_common_dir = os.path.join(cwd, "px4_platform_common")
 include_paths = [cwd, inc_dir, px4_common_dir]
 

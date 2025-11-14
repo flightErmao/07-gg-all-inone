@@ -12,7 +12,7 @@ src = (
 
 include_paths = [cwd]
 
-for subdir in ("filter", "inc", "math", "mathlib"):
+for subdir in ("filter", "inc", "math", "common", "mathlib"):
     candidate = os.path.join(cwd, subdir)
     if os.path.isdir(candidate) and candidate not in include_paths:
         include_paths.append(candidate)
