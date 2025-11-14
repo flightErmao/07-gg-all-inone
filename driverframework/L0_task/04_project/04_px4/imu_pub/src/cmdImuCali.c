@@ -4,7 +4,7 @@
 #include "rtconfig.h"
 
 #include "../../TASK_01_SENSOR/inc/sensorsTypes.h"
-#include "../../../../../L2_device/01_IMU/05_BMI270_px4/inc/taskImuPub_mcn.h"
+#include "taskImuPub_mcn.h"  // Fixed: file is in ../inc/, which is already in CPPPATH
 #include "../../../../../L3_peripheral/22_timConfig/inc/timestamp.h"
 #include "../inc/param.h"
 #include "../inc/imuCaliParam.h"
@@ -104,8 +104,6 @@ static rt_err_t imu_cali_verify_level(const float acc_avg[3], const float gyro_a
 static rt_err_t imu_cali_store(const float gyro_bias_dps[3], const float acc_bias_g[3]) {
     float gyro_bias[3] = {gyro_bias_dps[0], gyro_bias_dps[1], gyro_bias_dps[2]};
     float acc_bias[3] = {acc_bias_g[0], acc_bias_g[1], acc_bias_g[2]};
-    uint32_t timestamp_ms = timestamp_micros() / 1000U;
-    uint32_t status = 1;
 
     if (setParam(IMU_CALI_PARAM_GYRO_BIAS, gyro_bias, sizeof(gyro_bias)) != RT_EOK) {
         LOG_E("store gyro bias failed");
@@ -117,15 +115,15 @@ static rt_err_t imu_cali_store(const float gyro_bias_dps[3], const float acc_bia
         return -RT_ERROR;
     }
 
-    if (setParam(IMU_CALI_PARAM_TIMESTAMP, &timestamp_ms, sizeof(timestamp_ms)) != RT_EOK) {
-        LOG_E("store timestamp failed");
-        return -RT_ERROR;
-    }
+    // if (setParam(IMU_CALI_PARAM_TIMESTAMP, &timestamp_ms, sizeof(timestamp_ms)) != RT_EOK) {
+    //     LOG_E("store timestamp failed");
+    //     return -RT_ERROR;
+    // }
 
-    if (setParam(IMU_CALI_PARAM_STATUS, &status, sizeof(status)) != RT_EOK) {
-        LOG_E("store status failed");
-        return -RT_ERROR;
-    }
+    // if (setParam(IMU_CALI_PARAM_STATUS, &status, sizeof(status)) != RT_EOK) {
+    //     LOG_E("store status failed");
+    //     return -RT_ERROR;
+    // }
 
     return RT_EOK;
 }

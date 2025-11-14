@@ -61,42 +61,41 @@ static constexpr uint8_t DIR_READ = 0x80;
 static constexpr uint8_t chip_id = 0x24;
 
 enum class Register : uint8_t {
-	CHIP_ID            = 0x00,
+  CHIP_ID = 0x00,
 
-	ERR_REG            = 0x02,
-	STATUS	           = 0x03,
+  ERR_REG = 0x02,
+  STATUS = 0x03,
 
-	EVENT	           = 0x1B,
+  EVENT = 0x1B,
 
-	INTERNAL_STATUS    = 0X21,
-	TEMP_MSB           = 0x22,
-	TEMP_LSB           = 0x23,
-	FIFO_LENGTH_0      = 0x24,
-	FIFO_LENGTH_1      = 0x25,
-	FIFO_DATA          = 0x26,
+  INTERNAL_STATUS = 0X21,
+  TEMP_MSB = 0x22,
+  TEMP_LSB = 0x23,
+  FIFO_LENGTH_0 = 0x24,
+  FIFO_LENGTH_1 = 0x25,
+  FIFO_DATA = 0x26,
 
-	ACC_CONF           = 0x40,
-	ACC_RANGE          = 0x41,
-	GYR_CONF           = 0x42,
+  ACC_CONF = 0x40,
+  ACC_RANGE = 0x41,
+  GYR_CONF = 0x42,
 
-	FIFO_DOWNS         = 0x45,
-	FIFO_WTM_0         = 0x46,
-	FIFO_WTM_1         = 0x47,
-	FIFO_CONFIG_0      = 0x48,
-	FIFO_CONFIG_1      = 0x49,
+  FIFO_DOWNS = 0x45,
+  FIFO_WTM_0 = 0x46,
+  FIFO_WTM_1 = 0x47,
+  FIFO_CONFIG_0 = 0x48,
+  FIFO_CONFIG_1 = 0x49,
 
-	// controls interrupt pin behaviour
-	INT1_IO_CTRL       = 0x53,
+  // controls interrupt pin behaviour
+  INT1_IO_CTRL = 0x53,
 
-	INT_MAP_DATA       = 0x58,
-	CONFIG1            = 0x59,
+  INT_MAP_DATA = 0x58,
+  CONFIG1 = 0x59,
 
-	CONFIG2            = 0x5E,
-	PWR_CONF           = 0x7C,
-	PWR_CTRL           = 0x7D,
-	CMD                = 0x7E,
-
-
+  CONFIG2 = 0x5E,
+  NV_CONF = 0x70,
+  PWR_CONF = 0x7C,
+  PWR_CTRL = 0x7D,
+  CMD = 0x7E,
 
 };
 

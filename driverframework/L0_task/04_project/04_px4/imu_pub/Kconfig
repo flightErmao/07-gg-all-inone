@@ -1,42 +1,42 @@
-config BSP_USING_BMI270_PX4
+menuconfig BSP_USING_BMI270_PX4
     bool "Enable BMI270 PX4 IMU Sensor"
     default n
     select BSP_USING_SPI
     help
         Enable BMI270 PX4 style IMU driver
 
-if BSP_USING_BMI270_PX4
+    if BSP_USING_BMI270_PX4
 
-config SENSOR_NAME_BMI270_PX4
-    string "BMI270 PX4 IMU device name"
-    default "bmi270_px4"
+    config SENSOR_NAME_BMI270_PX4
+        string "BMI270 PX4 IMU device name"
+        default "bmi270_px4"
 
-config SENSOR_SPI_NAME_BMI270_PX4
-    string "BMI270 PX4 SPI bus name"
-    default "spi1"
+    config SENSOR_SPI_NAME_BMI270_PX4
+        string "BMI270 PX4 SPI bus name"
+        default "spi1"
 
-config SENSOR_SPI_SLAVE_NAME_BMI270_PX4
-    string "BMI270 PX4 SPI device name"
-    default "spi10"
+    config SENSOR_SPI_SLAVE_NAME_BMI270_PX4
+        string "BMI270 PX4 SPI device name"
+        default "spi10"
 
-config SENSOR_BMI270_PX4_SPI_MAX_HZ
-    int "BMI270 PX4 SPI max frequency (Hz)"
-    default 10000000
-    range 100000 20000000
+    config SENSOR_BMI270_PX4_SPI_MAX_HZ
+        int "BMI270 PX4 SPI max frequency (Hz)"
+        default 10000000
+        range 100000 20000000
 
-config SENSOR_BMI270_PX4_SPI_CS_PIN
-    string "BMI270 PX4 SPI CS pin"
-    default "PA4"
+    config SENSOR_BMI270_PX4_SPI_CS_PIN
+        string "BMI270 PX4 SPI CS pin"
+        default "PA4"
 
-config SENSOR_BMI270_PX4_INT_PIN
-    string "BMI270 PX4 interrupt pin"
-    default "PA15"
+    config SENSOR_BMI270_PX4_INT_PIN
+        string "BMI270 PX4 interrupt pin"
+        default "PA15"
 
-config SENSOR_BMI270_PX4_FIFO_WM
-    int "BMI270 PX4 FIFO watermark samples"
-    default 2
-    range 2 32
+    config SENSOR_BMI270_PX4_FIFO_WM
+        int "BMI270 PX4 FIFO watermark samples"
+        default 2
+        range 2 32
 
-endif
+    endif
 
 
