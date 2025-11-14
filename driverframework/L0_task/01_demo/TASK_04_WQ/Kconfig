@@ -1,0 +1,47 @@
+menuconfig TASK_DEMO_04_WQ_EN
+    bool "ENABLE: TASK_DEMO_04_WQ_EN"
+    default n
+    help
+        Enable rate control workqueue demo task.
+
+    if TASK_DEMO_04_WQ_EN
+
+        config WORK_TASK_WQ_WORKQUEUE_STACK_SIZE
+            int "Workqueue stack size"
+            default 1536
+            help
+                Stack size for the workqueue servicing rate control jobs.
+
+        config WORK_TASK_WQ_WORKQUEUE_PRIORITY
+            int "Workqueue priority"
+            default 16
+            help
+                Thread priority for the workqueue servicing rate control jobs.
+
+        config WORK_TASK_WQ_IMU_THREAD_STACK_SIZE
+            int "IMU publisher thread stack size"
+            default 1024
+            help
+                Stack size for the IMU publishing thread.
+
+        config WORK_TASK_WQ_IMU_THREAD_PRIORITY
+            int "IMU publisher thread priority"
+            default 14
+            help
+                Runtime priority for the IMU publishing thread.
+
+        config WORK_TASK_WQ_IMU_THREAD_TIMESLICE
+            int "IMU publisher thread timeslice"
+            default 20
+            help
+                Timeslice (ticks) used by the IMU publishing thread.
+
+        config WORK_TASK_WQ_IMU_PUBLISH_INTERVAL_MS
+            int "IMU publish interval (ms)"
+            default 3000
+            help
+                Interval in milliseconds between IMU raw publishes.
+
+    endif
+
+

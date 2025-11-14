@@ -1,0 +1,24 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+
+src = Glob("./src/*.c")
+src += Glob("./src/*.cpp")
+
+path = [
+    cwd,
+    os.path.join(cwd, "inc"),
+    os.path.join(cwd, "..", "..", "..", "..", "kernel", "rtthread", "components", "utilities", "ulog"),
+]
+
+group = DefineGroup(
+    "TASK_04_WQ",
+    src,
+    depend=["TASK_DEMO_04_WQ_EN"],
+    CPPPATH=path,
+)
+
+Return("group")
+
+
