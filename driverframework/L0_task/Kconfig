@@ -28,4 +28,6 @@ menu "L0_TASK_CONFIG"
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/03_fpv/02_HARDWARE_TIMER/Kconfig"
 
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/04_px4/imu_pub/Kconfig"
+    
+    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/05_bf/imu270_pub/Kconfig"
 endmenu

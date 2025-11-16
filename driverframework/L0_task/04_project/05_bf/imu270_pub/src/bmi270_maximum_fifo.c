@@ -36,18 +36,11 @@
 *
 */
 
-/***************************************************************************/
+/* 仅保留 BMI270 配置固件数组，去掉对 Bosch 通用驱动的依赖（bmi2.h 等）。 */
 
-/*!             Header files
- ****************************************************************************/
-#include "bmi270_maximum_fifo.h"
+#include <stdint.h>
 
-/***************************************************************************/
-
-/*!              Global Variable
- ****************************************************************************/
-
-/*! @name  Global array that stores the configuration file of BMI270 */
+/* Global array that stores the configuration file of BMI270 */
 const uint8_t bmi270_maximum_fifo_config_file[] = {
     0xc8, 0x2e, 0x00, 0x2e, 0x80, 0x2e, 0x1a, 0x00, 0xc8, 0x2e, 0x00, 0x2e, 0xc8, 0x2e, 0x00, 0x2e, 0xc8, 0x2e, 0x00,
     0x2e, 0xc8, 0x2e, 0x00, 0x2e, 0xc8, 0x2e, 0x00, 0x2e, 0xc8, 0x2e, 0x00, 0x2e, 0x90, 0x32, 0x21, 0x2e, 0x59, 0xf5,
@@ -68,6 +61,9 @@ const uint8_t bmi270_maximum_fifo_config_file[] = {
     0x00, 0x40, 0x40, 0x42, 0x7e, 0x82, 0xe1, 0x7f, 0xf2, 0x7f, 0x98, 0x2e, 0x6a, 0xd6, 0x21, 0x30, 0x23, 0x2e, 0x61,
     0xf5, 0xeb, 0x2c, 0xe1, 0x6f
 };
+
+/* 提供配置数组长度，方便其它模块使用 */
+const uint32_t bmi270_maximum_fifo_config_file_size = sizeof(bmi270_maximum_fifo_config_file);
 
 // The rest of this is not needed, avoid compiler errors due to pedantic settings
 #if false

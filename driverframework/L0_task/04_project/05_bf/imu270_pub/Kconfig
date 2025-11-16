@@ -1,0 +1,33 @@
+menuconfig BSP_USING_BMI270_BF
+    bool "Enable BMI270 Betaflight-style IMU Sensor"
+    default n
+    select BSP_USING_SPI
+    help
+        Enable BMI270 IMU driver for Betaflight-style project (no FIFO, DRDY interrupt + register read).
+
+    if BSP_USING_BMI270_BF
+
+    config SENSOR_SPI_NAME_BMI270_BF
+        string "BMI270 BF SPI bus name"
+        default "spi1"
+
+    config SENSOR_SPI_SLAVE_NAME_BMI270_BF
+        string "BMI270 BF SPI device name"
+        default "spi10"
+
+    config SENSOR_BMI270_BF_SPI_MAX_HZ
+        int "BMI270 BF SPI max frequency (Hz)"
+        default 10000000
+        range 100000 20000000
+
+    config SENSOR_BMI270_BF_SPI_CS_PIN
+        string "BMI270 BF SPI CS pin"
+        default "PA4"
+
+    config SENSOR_BMI270_BF_INT_PIN
+        string "BMI270 BF interrupt pin"
+        default "PA15"
+
+    endif
+
+

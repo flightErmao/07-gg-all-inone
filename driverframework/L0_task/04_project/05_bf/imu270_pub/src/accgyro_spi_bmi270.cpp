@@ -1,0 +1,428 @@
+/**
+ * @file accgyro_spi_bmi270.cpp
+ *
+ * 基于 Betaflight BMI270 寄存器配置的简化版 RT-Thread C++ 驱动：
+ * - 只使用数据就绪中断 + 直接寄存器读取，不使用 FIFO；
+ * - 将原始加速度/角速度转换为 float，并通过 imu_raw MCN 话题发布。
+ */
+
+#include "accgyro_spi_bmi270.hpp"
+
+extern "C" {
+#include "timestamp.h"
+#include "bmi270_maximum_fifo.h"
+#include "pinInterface.h"
+#include <ulog.h>
+}
+
+/* 定义 IMU 原始数据话题（在本文件内完成定义与发布）
+ * 类型 imu_raw_msg_t 和 MCN_DECLARE(imu_raw) 在 accgyro_spi_bmi270.hpp 中定义
+ */
+MCN_DEFINE(imu_raw, sizeof(imu_raw_msg_t));
+
+#undef LOG_TAG
+#define LOG_TAG "bmi270_bf"
+#ifndef LOG_LVL
+#define LOG_LVL LOG_LVL_INFO
+#endif
+
+namespace bf_bmi270 {
+
+namespace {
+
+// BMI270 部分寄存器（与 accgyro_spi_bmi270.c 中保持一致）
+enum bmi270Register_e : uint8_t {
+  BMI270_REG_CHIP_ID = 0x00,
+  BMI270_REG_ACC_DATA_X_LSB = 0x0C,
+  BMI270_REG_GYR_DATA_X_LSB = 0x12,
+  BMI270_REG_STATUS = 0x03,
+  BMI270_REG_PWR_CONF = 0x7C,
+  BMI270_REG_PWR_CTRL = 0x7D,
+  BMI270_REG_ACC_CONF = 0x40,
+  BMI270_REG_ACC_RANGE = 0x41,
+  BMI270_REG_GYRO_CONF = 0x42,
+  BMI270_REG_GYRO_RANGE = 0x43,
+  BMI270_REG_INT1_IO_CTRL = 0x53,
+  BMI270_REG_INT_MAP_DATA = 0x58,
+  BMI270_REG_INIT_CTRL = 0x59,
+  BMI270_REG_INIT_DATA = 0x5E,
+  BMI270_REG_CMD = 0x7E,
+};
+
+// 关键配置值，直接参考 accgyro_spi_bmi270.c
+static constexpr uint8_t BMI270_CHIP_ID = 0x24;
+static constexpr uint8_t BMI270_VAL_CMD_SOFTRESET = 0xB6;
+static constexpr uint8_t BMI270_VAL_PWR_CTRL = 0x0E;              // gyro+acc+temp 使能
+static constexpr uint8_t BMI270_VAL_PWR_CONF = 0x02;              // 性能模式
+static constexpr uint8_t BMI270_VAL_ACC_CONF =
+    (0x01u << 7) | (0x01u << 4) | 0x0Bu;                          // 高性能 + osr2 + 800Hz
+static constexpr uint8_t BMI270_VAL_ACC_RANGE_16G = 0x03;
+static constexpr uint8_t BMI270_VAL_GYRO_CONF =
+    (0x01u << 7) | (0x01u << 6) | (0x00u << 4) | 0x0Du;           // HP filter/noise + OSR4 + 3200Hz
+static constexpr uint8_t BMI270_VAL_GYRO_RANGE_2000DPS = 0x08;
+static constexpr uint8_t BMI270_VAL_INT_MAP_DATA_DRDY_INT1 = 0x04;
+static constexpr uint8_t BMI270_VAL_INT1_IO_CTRL_PINMODE = 0x0A;  // 高电平、推挽、输出
+
+// 原始值转换系数（简单按量程估算）
+// 16G: 32768 -> 16g
+static constexpr float ACC_SCALE_16G = 16.0f / 32768.0f;
+// 2000dps: 32768 -> 2000 deg/s
+static constexpr float GYRO_SCALE_2000DPS = 2000.0f / 32768.0f;
+
+static inline int16_t combine(uint8_t msb, uint8_t lsb) {
+  return static_cast<int16_t>((static_cast<uint16_t>(msb) << 8) | lsb);
+}
+
+}  // namespace
+
+BMI270 &BMI270::instance() {
+  static BMI270 inst;
+  return inst;
+}
+
+BMI270::BMI270()
+    : spi_{},
+      spi_inited_(false),
+      init_ok_(false),
+      int_pin_(-1),
+      event_inited_(false),
+      worker_thread_(RT_NULL),
+      worker_inited_(false) {
+  cfg_ = {};
+}
+
+BMI270::~BMI270() {
+  disableInterrupt();
+}
+
+rt_err_t BMI270::init(const RuntimeConfig &cfg) {
+  cfg_ = cfg;
+  init_ok_ = false;
+
+  if (!cfg_.spi_bus_name || !cfg_.spi_device_name) {
+    return -RT_EINVAL;
+  }
+
+  // 使用 SpiInterface 初始化 SPI 设备和 CS 引脚（方式与 PX4 版本保持一致）
+  if (!spi_.init(cfg_.spi_bus_name, cfg_.spi_device_name, cfg_.cs_pin_name)) {
+    LOG_E("BMI270 spi init failed");
+    return -RT_ERROR;
+  }
+
+  // 配置 SPI：MODE3，MSB first，使用 RT_SPI_MODE_MASK
+  rt_uint16_t mode = (RT_SPI_MODE_3 | RT_SPI_MSB) & RT_SPI_MODE_MASK;
+  if (!spi_.configure(mode, cfg_.spi_max_hz ? cfg_.spi_max_hz : 10000000)) {
+    LOG_E("BMI270 spi configure failed");
+    return -RT_ERROR;
+  }
+
+  spi_inited_ = true;
+
+  if (!resetSensor()) {
+    return -RT_ERROR;
+  }
+
+  // 加载 Bosch 提供的 BMI270 配置固件（microcode）
+  if (!loadConfigFile()) {
+    return -RT_ERROR;
+  }
+
+  if (!configureSensor()) {
+    return -RT_ERROR;
+  }
+
+  if (!configureInterrupt()) {
+    // 如果中断失败，仍然允许后续通过轮询方式调试使用
+    // 这里只记录失败，不直接返回错误
+  }
+
+  /* 初始化事件与工作线程（静态创建） */
+  if (!event_inited_) {
+    if (rt_event_init(&event_, "b270_evt", RT_IPC_FLAG_FIFO) != RT_EOK) {
+      LOG_E("BMI270 event init failed");
+      return -RT_ERROR;
+    }
+    event_inited_ = true;
+  }
+
+  if (!worker_inited_) {
+    rt_err_t err = rt_thread_init(&worker_thread_obj_, "b270_wk",
+                                  &BMI270::workerEntry, this,
+                                  worker_stack_, THREAD_STACK_SIZE,
+                                  THREAD_PRIORITY, THREAD_TIMESLICE);
+    if (err != RT_EOK) {
+      LOG_E("BMI270 worker thread init failed: %d", err);
+      return err;
+    }
+    worker_thread_ = &worker_thread_obj_;
+    worker_inited_ = true;
+    rt_thread_startup(worker_thread_);
+  }
+
+  init_ok_ = true;
+  return RT_EOK;
+}
+
+bool BMI270::resetSensor() {
+  // 软复位
+  regWrite(BMI270_REG_CMD, BMI270_VAL_CMD_SOFTRESET, 100);
+
+  // 多次读取 chip id 做探测，增加鲁棒性
+  const uint8_t kMaxRetry = 5;
+  uint8_t id = 0;
+
+  for (uint8_t i = 0; i < kMaxRetry; i++) {
+    id = regRead(BMI270_REG_CHIP_ID);
+    if (id == BMI270_CHIP_ID) {
+      LOG_I("BMI270 probe OK, chip id: 0x%02X (retry=%u)", id, i);
+      return true;
+    }
+    rt_thread_mdelay(2);
+  }
+
+  LOG_E("BMI270 probe failed, unexpected chip id: 0x%02X (expected 0x%02X)", id, BMI270_CHIP_ID);
+  return false;
+}
+
+bool BMI270::loadConfigFile() {
+  if (!spi_inited_) {
+    return false;
+  }
+
+  // 关闭高级省电，准备写入配置
+  regWrite(BMI270_REG_PWR_CONF, 0x00, 1);
+  regWrite(BMI270_REG_INIT_CTRL, 0x00, 1);
+
+  // 写入 Bosch 提供的配置文件到 INIT_DATA
+  if (spi_.writeMultiReg8(BMI270_REG_INIT_DATA,
+                          (uint8_t *)bmi270_maximum_fifo_config_file,
+                          (uint16_t)bmi270_maximum_fifo_config_file_size) != RT_EOK) {
+    return false;
+  }
+
+  // 启动配置解析
+  regWrite(BMI270_REG_INIT_CTRL, 0x01, 1);
+  rt_thread_mdelay(10);
+
+  return true;
+}
+
+bool BMI270::configureSensor() {
+  if (!spi_inited_) {
+    return false;
+  }
+
+  // 电源配置
+  regWrite(BMI270_REG_PWR_CONF, BMI270_VAL_PWR_CONF, 1);
+  regWrite(BMI270_REG_PWR_CTRL, BMI270_VAL_PWR_CTRL, 1);
+
+  // 加速度计配置：800Hz，16G
+  regWrite(BMI270_REG_ACC_CONF, BMI270_VAL_ACC_CONF, 1);
+  regWrite(BMI270_REG_ACC_RANGE, BMI270_VAL_ACC_RANGE_16G, 1);
+
+  // 陀螺仪配置：3200Hz，2000dps
+  regWrite(BMI270_REG_GYRO_CONF, BMI270_VAL_GYRO_CONF, 1);
+  regWrite(BMI270_REG_GYRO_RANGE, BMI270_VAL_GYRO_RANGE_2000DPS, 1);
+
+  // 映射 data ready 中断到 INT1
+  regWrite(BMI270_REG_INT_MAP_DATA, BMI270_VAL_INT_MAP_DATA_DRDY_INT1, 1);
+
+  // 配置 INT1 引脚行为（高电平、推挽、输出，边沿触发）
+  regWrite(BMI270_REG_INT1_IO_CTRL, BMI270_VAL_INT1_IO_CTRL_PINMODE, 1);
+
+  // 清一次状态寄存器
+  (void)regRead(BMI270_REG_STATUS);
+
+  return true;
+}
+
+bool BMI270::configureInterrupt() {
+  disableInterrupt();
+
+  if (!cfg_.int_pin_name || cfg_.int_pin_name[0] == '\0') {
+    return false;
+  }
+
+  // 解析 GPIO 引脚索引（支持 \"PA15\" 之类的字符串配置）
+  int_pin_ = parse_pin_name_from_config(cfg_.int_pin_name);
+  if (int_pin_ < 0) {
+    int_pin_ = -1;
+    return false;
+  }
+
+  rt_pin_mode(int_pin_, PIN_MODE_INPUT_PULLDOWN);
+
+  // 先读一次状态寄存器，清掉可能存在的 pending 中断
+  (void)regRead(BMI270_REG_STATUS);
+
+  // 实际硬件为“高电平有效 + 上升沿触发”，使用上升沿 EXTI
+  if (rt_pin_attach_irq(int_pin_, PIN_IRQ_MODE_RISING, &BMI270::drdyIsr, this) != RT_EOK) {
+    int_pin_ = -1;
+    return false;
+  }
+
+  if (rt_pin_irq_enable(int_pin_, PIN_IRQ_ENABLE) != RT_EOK) {
+    rt_pin_detach_irq(int_pin_);
+    int_pin_ = -1;
+    return false;
+  }
+
+  return true;
+}
+
+void BMI270::disableInterrupt() {
+  if (int_pin_ >= 0) {
+    rt_pin_irq_enable(int_pin_, PIN_IRQ_DISABLE);
+    rt_pin_detach_irq(int_pin_);
+    int_pin_ = -1;
+  }
+}
+
+bool BMI270::readAccelGyro(int16_t acc[3], int16_t gyro[3]) {
+  if (!spi_inited_) {
+    return false;
+  }
+
+  uint8_t acc_buf[6] = {0};
+  uint8_t gyro_buf[6] = {0};
+
+  // 读取加速度：0x0C 开始 6 字节
+  if (spi_.readMultiReg16(BMI270_REG_ACC_DATA_X_LSB, acc_buf, 6) != RT_EOK) {
+    return false;
+  }
+
+  // 读取陀螺：0x12 开始 6 字节
+  if (spi_.readMultiReg16(BMI270_REG_GYR_DATA_X_LSB, gyro_buf, 6) != RT_EOK) {
+    return false;
+  }
+
+  acc[0] = combine(acc_buf[1], acc_buf[0]);
+  acc[1] = combine(acc_buf[3], acc_buf[2]);
+  acc[2] = combine(acc_buf[5], acc_buf[4]);
+
+  gyro[0] = combine(gyro_buf[1], gyro_buf[0]);
+  gyro[1] = combine(gyro_buf[3], gyro_buf[2]);
+  gyro[2] = combine(gyro_buf[5], gyro_buf[4]);
+
+  return true;
+}
+
+void BMI270::publishImu(const int16_t acc[3], const int16_t gyro[3]) {
+  imu_raw_msg_t msg{};
+  static rt_uint32_t s_seq = 0;
+
+  msg.seq = ++s_seq;
+
+  msg.accel[0] = ACC_SCALE_16G * static_cast<float>(acc[0]);
+  msg.accel[1] = ACC_SCALE_16G * static_cast<float>(acc[1]);
+  msg.accel[2] = ACC_SCALE_16G * static_cast<float>(acc[2]);
+
+  msg.gyro[0] = GYRO_SCALE_2000DPS * static_cast<float>(gyro[0]);
+  msg.gyro[1] = GYRO_SCALE_2000DPS * static_cast<float>(gyro[1]);
+  msg.gyro[2] = GYRO_SCALE_2000DPS * static_cast<float>(gyro[2]);
+
+  mcn_publish(MCN_HUB(imu_raw), &msg);
+}
+
+uint8_t BMI270::regRead(uint8_t reg) {
+  if (!spi_inited_) {
+    return 0;
+  }
+  uint8_t value[2] = {0};
+  if (spi_.readMultiReg16(static_cast<uint8_t>(reg), value, 1) != RT_EOK) {
+    return 0;
+  }
+  return value[0];
+}
+
+void BMI270::regWrite(uint8_t reg, uint8_t value, unsigned delayMs) {
+  if (!spi_inited_) {
+    return;
+  }
+
+  uint8_t v = value;
+  (void)spi_.writeMultiReg8(static_cast<uint8_t>(reg), &v, 1);
+
+  if (delayMs) {
+    rt_thread_mdelay(delayMs);
+  }
+}
+
+void BMI270::drdyIsr(void *parameter) {
+  auto *self = static_cast<BMI270 *>(parameter);
+  if (!self || !self->init_ok_ || !self->event_inited_) {
+    return;
+  }
+
+  /* 在中断中只发送事件，让工作线程去做 SPI 读取和发布 */
+  rt_event_send(&self->event_, 0x01);
+}
+
+void BMI270::workerLoop() {
+  while (true) {
+    if (!event_inited_) {
+      rt_thread_mdelay(10);
+      continue;
+    }
+
+    rt_uint32_t recved = 0;
+    rt_err_t err = rt_event_recv(&event_, 0x01,
+                                 RT_EVENT_FLAG_AND | RT_EVENT_FLAG_CLEAR,
+                                 RT_WAITING_FOREVER, &recved);
+    if (err != RT_EOK) {
+      continue;
+    }
+
+    int16_t acc[3] = {0};
+    int16_t gyro[3] = {0};
+
+    if (!readAccelGyro(acc, gyro)) {
+      continue;
+    }
+
+    publishImu(acc, gyro);
+  }
+}
+
+void BMI270::workerEntry(void *parameter) {
+  auto *self = static_cast<BMI270 *>(parameter);
+  if (!self) {
+    return;
+  }
+  self->workerLoop();
+}
+
+rt_err_t bf_bmi270_init_default() {
+  RuntimeConfig cfg{};
+
+  // 从 Kconfig 中读取默认配置
+  cfg.spi_bus_name = SENSOR_SPI_NAME_BMI270_BF;
+  cfg.spi_device_name = SENSOR_SPI_SLAVE_NAME_BMI270_BF;
+  cfg.cs_pin_name = SENSOR_BMI270_BF_SPI_CS_PIN;
+  cfg.int_pin_name = SENSOR_BMI270_BF_INT_PIN;
+  cfg.spi_max_hz = SENSOR_BMI270_BF_SPI_MAX_HZ;
+
+  // MCN 话题 imu_raw 的广告发布（重复调用返回 -RT_EBUSY 视为成功）
+  rt_err_t ret = mcn_advertise(MCN_HUB(imu_raw), RT_NULL);
+  if (ret != RT_EOK && ret != -RT_EBUSY) {
+    LOG_E("imu_raw advertise failed: %d", ret);
+    return ret;
+  }
+
+  return BMI270::instance().init(cfg);
+}
+
+}  // namespace bf_bmi270
+
+
+extern "C" {
+
+#ifdef BSP_USING_BMI270_BF
+/* RT-Thread 自动初始化包装函数，调用命名空间内的实现 */
+static int bf_bmi270_init_default_wrapper(void) {
+  return (int)bf_bmi270::bf_bmi270_init_default();
+}
+INIT_APP_EXPORT(bf_bmi270_init_default_wrapper);
+#endif
+
+}
