@@ -1,0 +1,24 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+
+src = Glob("./src/*.cpp")
+
+include_paths = [
+    cwd,
+    os.path.join(cwd, "inc"),
+    os.path.join(cwd, "../imu270_pub/inc"),
+    os.path.join(cwd, "..", "..", "..", "L1_middleWare", "06_bf_lib", "filter_imu", "inc"),
+    os.path.join(cwd, "..", "..", "01_basic", "TASK_05_PARAM", "inc"),
+]
+
+group = DefineGroup(
+    "PROJECT_BF_RATE_CTRL",
+    src,
+    depend=["PROJECT_BF_RATE_CTRL_EN", "PROJECT_MINIFLY_TASK05_PARAM_FLYER_BF_DEFAULT_EN", "L1_MIDDLEWARE_06_BF_LIB_FILTER_IMU_EN"],
+    CPPPATH=include_paths,
+)
+
+Return("group")
+

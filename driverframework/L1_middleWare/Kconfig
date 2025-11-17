@@ -15,5 +15,7 @@ menu "L1_MIDDLEWARE_CONFIG"
     source "$(PROJECT_ROOT)/driverframework/L1_middleWare/05_px4_lib/02_mathlib/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L1_middleWare/05_px4_lib/03_matrix/Kconfig"
 
+    source "$(PROJECT_ROOT)/driverframework/L1_middleWare/06_bf_lib/filter_imu/Kconfig"
+
     source "$(PROJECT_ROOT)/driverframework/L1_middleWare/03_package/uMCN-latest/Kconfig"
 endmenu

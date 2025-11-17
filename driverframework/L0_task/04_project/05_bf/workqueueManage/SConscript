@@ -1,0 +1,21 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+
+src = Glob("./src/*.c")
+
+include_paths = [
+    cwd,
+    os.path.join(cwd, "inc"),  # Local inc directory
+]
+
+group = DefineGroup(
+    "PROJECT_BF_WORKQUEUE_MANAGE",
+    src,
+    depend=["PROJECT_BF_WORKQUEUE_MANAGE_EN"],
+    CPPPATH=include_paths,
+)
+
+Return("group")
+

@@ -1,11 +1,11 @@
-menuconfig BSP_USING_BMI270_BF
+menuconfig PROJECT_BF_BMI270_EN
     bool "Enable BMI270 Betaflight-style IMU Sensor"
     default n
     select BSP_USING_SPI
     help
         Enable BMI270 IMU driver for Betaflight-style project (no FIFO, DRDY interrupt + register read).
 
-    if BSP_USING_BMI270_BF
+    if PROJECT_BF_BMI270_EN
 
     config SENSOR_SPI_NAME_BMI270_BF
         string "BMI270 BF SPI bus name"

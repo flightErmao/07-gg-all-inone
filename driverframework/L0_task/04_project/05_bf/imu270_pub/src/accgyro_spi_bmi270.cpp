@@ -417,7 +417,7 @@ rt_err_t bf_bmi270_init_default() {
 
 extern "C" {
 
-#ifdef BSP_USING_BMI270_BF
+#ifdef PROJECT_BF_BMI270_EN
 /* RT-Thread 自动初始化包装函数，调用命名空间内的实现 */
 static int bf_bmi270_init_default_wrapper(void) {
   return (int)bf_bmi270::bf_bmi270_init_default();

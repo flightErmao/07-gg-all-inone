@@ -1,0 +1,45 @@
+menuconfig PROJECT_BF_RATE_CTRL_EN
+    bool "ENABLE: PROJECT_BF_RATE_CTRL_EN"
+    default n
+    help
+        Enable Betaflight-style rate control with angular velocity processing.
+
+    if PROJECT_BF_RATE_CTRL_EN
+        config PROJECT_BF_RATE_CTRL_GYRO_CALIBRATION_DURATION_MS
+            int "Gyro Calibration Duration (ms)"
+            range 500 5000
+            default 1250
+            help
+                Duration in milliseconds for gyro calibration. Default: 1250ms (1.25 seconds).
+
+        config PROJECT_BF_RATE_CTRL_GYRO_MOVEMENT_THRESHOLD
+            int "Gyro Movement Calibration Threshold"
+            range 0 200
+            default 48
+            help
+                Standard deviation threshold for detecting movement during calibration. 
+                If exceeded, calibration will restart. Set to 0 to disable movement detection.
+
+        config PROJECT_BF_RATE_CTRL_GYRO_OFFSET_YAW
+            int "Gyro Yaw Offset (centidegrees)"
+            range -10000 10000
+            default 0
+            help
+                Manual yaw axis offset in centidegrees. This value is subtracted from 
+                the calibrated yaw zero point.
+
+        config PROJECT_BF_RATE_CTRL_ANGULAR_VELOCITY_FILTER_SAMPLE_FREQ
+            int "Angular Velocity Filter Sample Frequency (Hz)"
+            range 100 1000
+            default 333
+            help
+                Sample frequency for angular velocity low-pass filter in Hz.
+
+        config PROJECT_BF_RATE_CTRL_ANGULAR_VELOCITY_FILTER_CUTOFF_FREQ
+            int "Angular Velocity Filter Cutoff Frequency (Hz)"
+            range 10 200
+            default 50
+            help
+                Cutoff frequency for angular velocity low-pass filter in Hz.
+    endif
+

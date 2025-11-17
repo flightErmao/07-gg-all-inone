@@ -10,6 +10,12 @@ menuconfig PROJECT_MINIFLY_TASK05_PARAM_EN
             help
                 "enable flyer default parameters"
 
+        config PROJECT_MINIFLY_TASK05_PARAM_FLYER_BF_DEFAULT_EN
+            bool "ENABLE: PROJECT_MINIFLY_TASK05_PARAM_FLYER_BF_DEFAULT_EN"
+            default n
+            help
+                "enable Betaflight-style flyer default parameters"
+
         config PROJECT_MINIFLY_TASK05_PARAM_AUTO_SAVE_EN
         bool "ENABLE: PROJECT_MINIFLY_TASK05_PARAM_AUTO_SAVE_EN"
         default n

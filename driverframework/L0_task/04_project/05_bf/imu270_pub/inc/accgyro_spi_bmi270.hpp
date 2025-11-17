@@ -15,15 +15,7 @@ extern "C" {
 
 #include <cstdint>
 #include "spi_interface.hpp"
-
-/* IMU 原始数据消息类型与 MCN 声明（本驱动自包含，不依赖其它头文件） */
-typedef struct {
-  float accel[3];
-  float gyro[3];
-  rt_uint32_t seq;
-} imu_raw_msg_t;
-
-MCN_DECLARE(imu_raw);
+#include "imu_raw_msg.h"
 
 namespace bf_bmi270 {
 

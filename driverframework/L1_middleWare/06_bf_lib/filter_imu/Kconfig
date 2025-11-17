@@ -1,0 +1,7 @@
+menuconfig L1_MIDDLEWARE_06_BF_LIB_FILTER_IMU_EN
+    bool "ENABLE: L1_MIDDLEWARE_06_BF_LIB_FILTER_IMU_EN"
+    default n
+    depends on L1_MIDDLEWARE_05_PX4_LIB_02_MATHLIB_EN
+    depends on L1_MIDDLEWARE_05_PX4_LIB_03_MATRIX_EN
+    help
+        Enable Betaflight-style IMU filter library support.

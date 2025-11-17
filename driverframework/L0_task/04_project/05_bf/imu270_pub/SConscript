@@ -10,7 +10,7 @@ inc_path = [
     os.path.join(cwd, 'inc'),
 ]
 
-group = DefineGroup('bmi270_bf', src, depend=['BSP_USING_BMI270_BF'], CPPPATH=inc_path)
+group = DefineGroup('bmi270_bf', src, depend=['PROJECT_BF_BMI270_EN'], CPPPATH=inc_path)
 
 Return('group')
 

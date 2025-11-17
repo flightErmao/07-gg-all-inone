@@ -1,0 +1,25 @@
+menuconfig PROJECT_BF_WORKQUEUE_MANAGE_EN
+    bool "ENABLE: PROJECT_BF_WORKQUEUE_MANAGE_EN"
+    default n
+    help
+        Enable workqueue management for rate control tasks.
+
+    if PROJECT_BF_WORKQUEUE_MANAGE_EN
+
+        config PROJECT_BF_WORKQUEUE_STACK_SIZE
+            int "Workqueue stack size"
+            range 512 4096
+            default 1536
+            help
+                Stack size for the workqueue servicing rate control jobs.
+
+        config PROJECT_BF_WORKQUEUE_PRIORITY
+            int "Workqueue priority"
+            range 1 32
+            default 16
+            help
+                Thread priority for the workqueue servicing rate control jobs.
+                Higher number = higher priority.
+
+    endif
+
