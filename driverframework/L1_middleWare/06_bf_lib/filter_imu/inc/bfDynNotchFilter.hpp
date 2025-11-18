@@ -3,6 +3,7 @@
  * 
  * Betaflight 风格动态 notch 滤波器封装类
  * 从 dyn_notch_filter.c 抽取的动态 notch filter 逻辑
+ * 使用前向声明避免依赖 Betaflight 头文件
  */
 
 #pragma once
@@ -10,8 +11,22 @@
 #include <cstdint>
 #include <cstring>
 
+// 前向声明，避免包含 dyn_notch_filter.h（它依赖 Betaflight 头文件）
 extern "C" {
-#include "dyn_notch_filter.h"
+    // 时间类型（微秒）
+    typedef uint32_t timeUs_t;
+    
+    // 动态 notch 配置结构体（不透明类型）
+    typedef struct dynNotchConfig_s dynNotchConfig_t;
+    
+    // 动态 notch 函数声明
+    void dynNotchInit(const dynNotchConfig_t *config, timeUs_t targetLooptimeUs);
+    void dynNotchPush(int axis, float sample);
+    void dynNotchUpdate(void);
+    float dynNotchFilter(int axis, float value);
+    bool isDynNotchActive(void);
+    int getMaxFFT(void);
+    void resetMaxFFT(void);
 }
 
 // 动态 notch 滤波器包装类

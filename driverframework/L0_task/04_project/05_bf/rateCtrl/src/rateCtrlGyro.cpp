@@ -1,4 +1,4 @@
-#include "rateCtrlAngularVelocity.h"
+#include "rateCtrlGyro.h"
 
 extern "C" {
 #include <rtthread.h>
@@ -10,7 +10,7 @@ extern "C" {
 
 #include <cstring>
 
-#include "../workqueueManage.h"
+#include "workqueueManage.hpp"
 #include "bfImuFilterInit.h"
 #include "../imu270_pub/inc/accgyro_spi_bmi270.hpp"
 #include "bfSensorAlignment.hpp"
@@ -21,13 +21,38 @@ extern "C" {
 extern "C" {
 #include "param.h"
 #include "bfImuFilterParam.h"
-#include "rpmFilter.h"
+// #include "rpmFilter.h"  // TODO: RPM 滤波器暂未实现，先注释
 #include "timestamp.h"
 }
 
 // IMU 采样频率（Hz）- 假设从 IMU 发布频率推算
 #ifndef PROJECT_BF_RATE_CTRL_IMU_SAMPLE_RATE_HZ
 #define PROJECT_BF_RATE_CTRL_IMU_SAMPLE_RATE_HZ 800.0f
+#endif
+
+// Kconfig 宏默认值（如果未在 rtconfig.h 中定义）
+#ifndef CONFIG_PROJECT_BF_WORKQUEUE_NAME
+#define CONFIG_PROJECT_BF_WORKQUEUE_NAME "wq_rate_ctrl"
+#endif
+
+#ifndef CONFIG_PROJECT_BF_WORKQUEUE_STACK_SIZE
+#define CONFIG_PROJECT_BF_WORKQUEUE_STACK_SIZE 1536
+#endif
+
+#ifndef CONFIG_PROJECT_BF_WORKQUEUE_PRIORITY
+#define CONFIG_PROJECT_BF_WORKQUEUE_PRIORITY 16
+#endif
+
+#ifndef CONFIG_PROJECT_BF_RATE_CTRL_GYRO_CALIBRATION_DURATION_MS
+#define CONFIG_PROJECT_BF_RATE_CTRL_GYRO_CALIBRATION_DURATION_MS 1250
+#endif
+
+#ifndef CONFIG_PROJECT_BF_RATE_CTRL_GYRO_MOVEMENT_THRESHOLD
+#define CONFIG_PROJECT_BF_RATE_CTRL_GYRO_MOVEMENT_THRESHOLD 48
+#endif
+
+#ifndef CONFIG_PROJECT_BF_RATE_CTRL_GYRO_OFFSET_YAW
+#define CONFIG_PROJECT_BF_RATE_CTRL_GYRO_OFFSET_YAW 0
 #endif
 
 // GyroCalibration 实现
@@ -164,8 +189,7 @@ void GyroCalibration::applyZeroOffset(const float gyro_raw[3], float gyro_correc
 }
 
 RateCtrlAngularVelocity::RateCtrlAngularVelocity()
-    : imu_node_(RT_NULL),
-      // 从 gyro_t 映射的简单变量初始化（参考 gyro_t 的 FAST_DATA_ZERO_INIT）
+    : // 从 gyro_t 映射的简单变量初始化（参考 gyro_t 的 FAST_DATA_ZERO_INIT）
       sample_rate_hz_(0),
       target_looptime_us_(0),
       sample_looptime_us_(0),
@@ -190,7 +214,9 @@ RateCtrlAngularVelocity::RateCtrlAngularVelocity()
       // 其他辅助成员
       gyro_align_(BfSensorAlignment::ALIGN_DEFAULT),
       use_custom_matrix_(false),
-      calibration_started_(false)
+      calibration_started_(false),
+      // MCN 订阅相关（需要在简单变量之后初始化）
+      imu_node_(RT_NULL)
 {
     // 清零数组
     std::memset(&latest_imu_, 0, sizeof(latest_imu_));
@@ -201,15 +227,28 @@ RateCtrlAngularVelocity::RateCtrlAngularVelocity()
     
     // 初始化工作队列
     rt_work_init(&work_, RateCtrlAngularVelocity::workHandler, this);
+    workqueue_ = nullptr;  // 将在 init() 中通过名称查找
 }
 
 rt_err_t RateCtrlAngularVelocity::init()
 {
-    rt_err_t ret = wq_workqueue_manage_init();
-    if (ret != RT_EOK) {
-        LOG_E("workqueue init failed (%d)", ret);
-        return ret;
+    // 通过工作队列管理器实例，根据名称查找或创建工作队列
+    // 工作队列名称从 Kconfig 获取：CONFIG_PROJECT_BF_WORKQUEUE_NAME
+    bf_workqueue::WorkqueueManager& wq_mgr = bf_workqueue::WorkqueueManager::instance();
+    wq_mgr.init();  // 确保已初始化
+    
+    // 通过名称查找工作队列（如果不存在会自动创建）
+    // 使用 Kconfig 中定义的名称和参数
+    const char* wq_name = CONFIG_PROJECT_BF_WORKQUEUE_NAME;
+    uint32_t stack_size = CONFIG_PROJECT_BF_WORKQUEUE_STACK_SIZE;
+    uint8_t priority = CONFIG_PROJECT_BF_WORKQUEUE_PRIORITY;
+    
+    workqueue_ = wq_mgr.getOrCreate(wq_name, stack_size, priority);
+    if (workqueue_ == nullptr) {
+        LOG_E("get or create workqueue '%s' failed", wq_name);
+        return -RT_ERROR;
     }
+    LOG_I("Found workqueue '%s' (stack_size=%u, priority=%u)", wq_name, stack_size, priority);
 
     imu_node_ = mcn_subscribe(MCN_HUB(imu_raw), RT_NULL, RT_NULL);
     if (imu_node_ == RT_NULL) {
@@ -217,7 +256,7 @@ rt_err_t RateCtrlAngularVelocity::init()
         return -RT_ERROR;
     }
 
-    ret = mcn_register_async_cb(imu_node_, RateCtrlAngularVelocity::asyncCallback, this);
+    rt_err_t ret = mcn_register_async_cb(imu_node_, RateCtrlAngularVelocity::asyncCallback, this);
     if (ret != RT_EOK) {
         LOG_E("register imu callback failed (%d)", ret);
         return ret;
@@ -304,7 +343,8 @@ void RateCtrlAngularVelocity::initFilters()
     }
     
     // 使用目标循环时间（微秒）- 用于滤波器初始化
-    uint32_t target_looptime_us = target_looptime_us_;
+    // 注意：target_looptime_us 目前未直接使用，但保留用于未来可能的动态滤波器
+    // uint32_t target_looptime_us = target_looptime_us_;
     
     // 参考 gyroInitFilters() 的实现方式
     // 步骤1: 读取 LPF1 参数并初始化（参考 gyro_init.c:229-244）
@@ -515,8 +555,15 @@ void RateCtrlAngularVelocity::asyncCallback(const void* data, void* user_data)
     RateCtrlAngularVelocity* instance = static_cast<RateCtrlAngularVelocity*>(user_data);
     std::memcpy(&instance->latest_imu_, data, sizeof(instance->latest_imu_));
 
-    if (wq_add_work(&instance->work_) != RT_EOK) {
-        LOG_E("submit angular velocity work failed");
+    // 通过实例的工作队列，将自己加入到工作队列中
+    if (instance->workqueue_ != nullptr) {
+        rt_err_t ret = bf_workqueue::WorkqueueManager::instance().addWork(
+            instance->workqueue_, &instance->work_);
+        if (ret != RT_EOK) {
+            LOG_E("submit angular velocity work failed (%d)", ret);
+        }
+    } else {
+        LOG_E("workqueue not initialized");
     }
 }
 

@@ -10,7 +10,9 @@ include_paths = [
     os.path.join(cwd, "inc"),
     os.path.join(cwd, "../imu270_pub/inc"),
     os.path.join(cwd, "../mlog/inc"),
-    os.path.join(cwd, "..", "..", "..", "L1_middleWare", "06_bf_lib", "filter_imu", "inc"),
+    os.path.join(cwd, "../workqueueManage/inc"),  # workqueueManage.h 所在目录
+    os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "06_bf_lib", "filter_imu"),  # dyn_notch_filter.h 所在目录
+    os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "06_bf_lib", "filter_imu", "inc"),
     os.path.join(cwd, "..", "..", "01_basic", "TASK_05_PARAM", "inc"),
 ]
 

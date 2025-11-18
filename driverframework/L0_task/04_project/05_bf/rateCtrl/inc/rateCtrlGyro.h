@@ -1,5 +1,5 @@
-#ifndef RATE_CTRL_ANGULAR_VELOCITY_H__
-#define RATE_CTRL_ANGULAR_VELOCITY_H__
+#ifndef RATE_CTRL_GYRO__
+#define RATE_CTRL_GYRO__
 
 #include <rtthread.h>
 #include <uMCN.h>
@@ -189,6 +189,10 @@ private:
     struct rt_work work_;
     McnNode_t imu_node_;
     imu_raw_msg_t latest_imu_;
+    
+    // 工作队列相关
+    struct rt_workqueue* workqueue_;  // 通过名称找到的工作队列
+    // 工作队列名称从 Kconfig 获取：CONFIG_PROJECT_BF_WORKQUEUE_NAME
     
     // Mlog 数据记录（参考 aMlogStabilze.c）
     bf_mlog::MlogGyro mlog_gyro_;

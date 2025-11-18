@@ -3,16 +3,113 @@
  * 
  * Betaflight 风格 notch 滤波器封装类
  * 从 gyro_init.c 抽取的 notch filter 逻辑
+ * 内联了 biquad 滤波器的实现，避免库间依赖
  */
 
 #pragma once
 
 #include <cstdint>
 #include <cstring>
+#include <cmath>
 
-extern "C" {
-#include "biquad.h"
+#ifndef M_PIf
+#define M_PIf 3.14159265358979323846f
+#endif
+
+// Biquad 滤波器结构体（从 biquad.h 内联）
+typedef struct biquad_filter_s {
+    float q;
+    float b0, b1, b2;
+    float a1, a2;
+    float x1, x2, y1, y2;
+    float weight;
+} biquadFilter_t;
+
+// Biquad 滤波器类型枚举（从 biquad.h 内联）
+enum biquad_filter_type_e {
+    FILTER_LPF = 0,
+    FILTER_NOTCH,
+    FILTER_BPF,
+};
+
+// 内联的 biquad 滤波器实现函数
+namespace bf_biquad_internal {
+
+// 更新 biquad 滤波器系数（从 biquad.c 内联）
+static inline void updateBiquadFilter(biquadFilter_t *filter, float frequency, float time_interval, float Q,
+                                      biquad_filter_type_e type, float weight) {
+    // setup variables
+    const float omega = 2.0f * M_PIf * frequency * time_interval;
+    const float sn = std::sin(omega);
+    const float cs = std::cos(omega);
+    const float alpha = sn / (2.0f * Q);
+
+    switch (type) {
+        case FILTER_LPF:
+            // 2nd order Butterworth (with Q=1/sqrt(2)) / Butterworth biquad section with Q
+            filter->b1 = 1.0f - cs;
+            filter->b0 = filter->b1 * 0.5f;
+            filter->b2 = filter->b0;
+            filter->a1 = -2.0f * cs;
+            filter->a2 = 1.0f - alpha;
+            break;
+        case FILTER_NOTCH:
+            filter->b0 = 1.0f;
+            filter->b1 = -2.0f * cs;
+            filter->b2 = 1.0f;
+            filter->a1 = filter->b1;
+            filter->a2 = 1.0f - alpha;
+            break;
+        case FILTER_BPF:
+            filter->b0 = alpha;
+            filter->b1 = 0.0f;
+            filter->b2 = -alpha;
+            filter->a1 = -2.0f * cs;
+            filter->a2 = 1.0f - alpha;
+            break;
+    }
+
+    const float a0 = 1.0f + alpha;
+
+    // precompute the coefficients
+    filter->b0 /= a0;
+    filter->b1 /= a0;
+    filter->b2 /= a0;
+    filter->a1 /= a0;
+    filter->a2 /= a0;
+
+    // update weight
+    filter->weight = weight;
 }
+
+// 初始化 biquad 滤波器（从 biquad.c 内联）
+static inline void initBiquadFilter(biquadFilter_t *filter, float frequency, float time_interval, float Q,
+                                    biquad_filter_type_e type, float weight) {
+    updateBiquadFilter(filter, frequency, time_interval, Q, type, weight);
+
+    // zero initial samples
+    filter->x1 = filter->x2 = 0.0f;
+    filter->y1 = filter->y2 = 0.0f;
+}
+
+// 应用 DF1 biquad 滤波器（从 biquad.c 内联）
+static inline float applyDF1BiquadFilter(biquadFilter_t *filter, float input) {
+    /* compute result */
+    const float result = filter->b0 * input + filter->b1 * filter->x1 + filter->b2 * filter->x2 -
+                         filter->a1 * filter->y1 - filter->a2 * filter->y2;
+
+    /* shift x1 to x2, input to x1 */
+    filter->x2 = filter->x1;
+    filter->x1 = input;
+
+    /* shift y1 to y2, result to y1 */
+    filter->y2 = filter->y1;
+    filter->y1 = result;
+
+    return result;
+}
+
+}  // namespace bf_biquad_internal
 
 // Notch 滤波器类（每个轴一个）
 class BfNotchFilter {
@@ -56,7 +153,7 @@ public:
         const float dt = 1.0f / sample_rate_hz;
         
         // 初始化 biquad 滤波器
-        initBiquadFilter(&filter_, center_hz, dt, q, FILTER_NOTCH, 1.0f);
+        bf_biquad_internal::initBiquadFilter(&filter_, center_hz, dt, q, FILTER_NOTCH, 1.0f);
         
         initialized_ = true;
         enabled_ = true;
@@ -86,7 +183,7 @@ public:
         if (!isEnabled()) {
             return input;
         }
-        return applyDF1BiquadFilter(const_cast<biquadFilter_t*>(&filter_), input);
+        return bf_biquad_internal::applyDF1BiquadFilter(const_cast<biquadFilter_t*>(&filter_), input);
     }
     
     /**

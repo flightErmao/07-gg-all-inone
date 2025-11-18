@@ -3,7 +3,8 @@ import os
 
 cwd = GetCurrentDir()
 
-src = Glob("./src/*.c")
+# 包含 C++ 源文件
+src = Glob("./src/*.cpp")
 
 include_paths = [
     cwd,

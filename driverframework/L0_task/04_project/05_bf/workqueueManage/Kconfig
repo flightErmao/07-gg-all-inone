@@ -6,6 +6,13 @@ menuconfig PROJECT_BF_WORKQUEUE_MANAGE_EN
 
     if PROJECT_BF_WORKQUEUE_MANAGE_EN
 
+        config PROJECT_BF_WORKQUEUE_NAME
+            string "Workqueue name"
+            default "wq_rate_ctrl"
+            help
+                Name of the workqueue for rate control jobs.
+                This name is used to identify and create the workqueue instance.
+
         config PROJECT_BF_WORKQUEUE_STACK_SIZE
             int "Workqueue stack size"
             range 512 4096
