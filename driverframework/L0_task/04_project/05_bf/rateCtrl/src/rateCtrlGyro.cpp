@@ -6,6 +6,7 @@ extern "C" {
 #define LOG_TAG "rate_ang_vel"
 #define LOG_LVL LOG_LVL_INFO
 #include <ulog.h>
+#include "debugPin.h"
 }
 
 #include <cstring>
@@ -54,6 +55,17 @@ extern "C" {
 #ifndef CONFIG_PROJECT_BF_RATE_CTRL_GYRO_OFFSET_YAW
 #define CONFIG_PROJECT_BF_RATE_CTRL_GYRO_OFFSET_YAW 0
 #endif
+
+// Debug Pin 配置
+#ifndef CONFIG_PROJECT_BF_RATE_CTRL_DEBUG_PIN_INDEX
+#define CONFIG_PROJECT_BF_RATE_CTRL_DEBUG_PIN_INDEX 0
+#endif
+
+// RateCtrlAngularVelocity 单例实现
+RateCtrlAngularVelocity& RateCtrlAngularVelocity::instance() {
+  static RateCtrlAngularVelocity instance_obj;
+  return instance_obj;
+}
 
 // GyroCalibration 实现
 GyroCalibration::GyroCalibration()
@@ -228,6 +240,9 @@ RateCtrlAngularVelocity::RateCtrlAngularVelocity()
     // 初始化工作队列
     rt_work_init(&work_, RateCtrlAngularVelocity::workHandler, this);
     workqueue_ = nullptr;  // 将在 init() 中通过名称查找
+
+    // 初始化 Debug Pin（默认未配置，使用 DEBUG0）
+    debug_pin_ = 0;
 }
 
 rt_err_t RateCtrlAngularVelocity::init()
@@ -301,6 +316,19 @@ rt_err_t RateCtrlAngularVelocity::init()
     // 初始化调试和状态相关变量（参考 gyro.c:592-594）
     gyro_has_overflow_protection_ = true;  // 默认有溢出保护
     gyro_debug_mode_ = 0;  // DEBUG_NONE
+
+    // 初始化 Debug Pin（用于测量滤波耗时）
+#ifdef PROJECT_BF_RATE_CTRL_DEBUG_PIN_EN
+    debug_pin_ = CONFIG_PROJECT_BF_RATE_CTRL_DEBUG_PIN_INDEX;
+    if (debug_pin_ < 4) {
+      LOG_I("Debug pin initialized: debugPin index=%d", debug_pin_);
+    } else {
+      LOG_W("Debug pin index out of range: %d (should be 0-3)", debug_pin_);
+      debug_pin_ = 0xFF;  // 无效索引
+    }
+#else
+    debug_pin_ = 0xFF;  // 未使能，使用无效索引
+#endif
     use_multi_gyro_debugging_ = false;
     gyro_debug_axis_ = 0;  // FD_ROLL (需要根据实际枚举值调整)
     
@@ -351,135 +379,139 @@ void RateCtrlAngularVelocity::initFilters()
     uint8_t gyro_lpf1_type = 0;
     uint16_t gyro_lpf1_static_hz = 0;
     uint16_t gyro_lpf1_dyn_min_hz = 0;
-    
-    if (getParam("gyro_lpf1_type", &gyro_lpf1_type, sizeof(gyro_lpf1_type)) == RT_EOK &&
-        getParam("gyro_lpf1_static_hz", &gyro_lpf1_static_hz, sizeof(gyro_lpf1_static_hz)) == RT_EOK) {
-        
-        // 读取动态滤波器参数
-        if (getParam("gyro_lpf1_dyn_min_hz", &gyro_lpf1_dyn_min_hz, sizeof(gyro_lpf1_dyn_min_hz)) == RT_EOK) {
-            // 如果动态滤波器参数大于0，使用动态最小值作为初始频率（参考 gyro_init.c:231-236）
-            if (gyro_lpf1_dyn_min_hz > 0) {
-                gyro_lpf1_static_hz = gyro_lpf1_dyn_min_hz;
-                LOG_I("Dynamic LPF1 enabled, using dyn_min_hz: %u Hz", gyro_lpf1_dyn_min_hz);
-            }
+
+    if (getParam("filter_gyro_lpf1_type", &gyro_lpf1_type, sizeof(gyro_lpf1_type)) == RT_EOK &&
+        getParam("filter_gyro_lpf1_static_hz", &gyro_lpf1_static_hz, sizeof(gyro_lpf1_static_hz)) == RT_EOK) {
+      // 读取动态滤波器参数
+      if (getParam("filter_gyro_lpf1_dyn_min_hz", &gyro_lpf1_dyn_min_hz, sizeof(gyro_lpf1_dyn_min_hz)) == RT_EOK) {
+        // 如果动态滤波器参数大于0，使用动态最小值作为初始频率（参考 gyro_init.c:231-236）
+        if (gyro_lpf1_dyn_min_hz > 0) {
+          gyro_lpf1_static_hz = gyro_lpf1_dyn_min_hz;
+          LOG_I("Dynamic LPF1 enabled, using dyn_min_hz: %u Hz", gyro_lpf1_dyn_min_hz);
         }
-        
-        // 初始化 LPF1 滤波器（参考 gyro_init.c:239-244）
-        if (gyro_lpf1_type > 0 && gyro_lpf1_static_hz > 0) {
-            BfLpfFilterType filter_type = static_cast<BfLpfFilterType>(gyro_lpf1_type);
-            float cutoff_hz = static_cast<float>(gyro_lpf1_static_hz);
-            if (lpf1_filter_.init(filter_type, cutoff_hz, sample_rate_hz)) {
-                lpf1_filter_.setEnabled(true);
-                LOG_I("LPF1 filter initialized: type=%u, cutoff=%u Hz, sample_rate=%.1f Hz", 
-                      gyro_lpf1_type, gyro_lpf1_static_hz, sample_rate_hz);
-            } else {
-                LOG_W("LPF1 filter init failed: type=%u, cutoff=%u Hz", gyro_lpf1_type, gyro_lpf1_static_hz);
-            }
+      }
+
+      // 初始化 LPF1 滤波器（参考 gyro_init.c:239-244）
+      if (gyro_lpf1_type > 0 && gyro_lpf1_static_hz > 0) {
+        BfLpfFilterType filter_type = static_cast<BfLpfFilterType>(gyro_lpf1_type);
+        float cutoff_hz = static_cast<float>(gyro_lpf1_static_hz);
+        if (lpf1_filter_.init(filter_type, cutoff_hz, sample_rate_hz)) {
+          lpf1_filter_.setEnabled(true);
+          LOG_I("LPF1 filter initialized: type=%u, cutoff=%u Hz, sample_rate=%.1f Hz", gyro_lpf1_type,
+                gyro_lpf1_static_hz, sample_rate_hz);
+        } else {
+          LOG_W("LPF1 filter init failed: type=%u, cutoff=%u Hz", gyro_lpf1_type, gyro_lpf1_static_hz);
         }
+      }
     }
-    
+
     // 步骤2: 读取并初始化 LPF2 滤波器（参考 gyro_init.c:246-251）
     uint8_t gyro_lpf2_type = 0;
     uint16_t gyro_lpf2_static_hz = 0;
-    
-    if (getParam("gyro_lpf2_type", &gyro_lpf2_type, sizeof(gyro_lpf2_type)) == RT_EOK &&
-        getParam("gyro_lpf2_static_hz", &gyro_lpf2_static_hz, sizeof(gyro_lpf2_static_hz)) == RT_EOK) {
-        
-        // 初始化 LPF2 滤波器
-        if (gyro_lpf2_type > 0 && gyro_lpf2_static_hz > 0) {
-            BfLpfFilterType filter_type = static_cast<BfLpfFilterType>(gyro_lpf2_type);
-            float cutoff_hz = static_cast<float>(gyro_lpf2_static_hz);
-            if (lpf2_filter_.init(filter_type, cutoff_hz, sample_rate_hz)) {
-                lpf2_filter_.setEnabled(true);
-                downsample_filter_enabled_ = true;  // LPF2 开启时使用滤波降采样（对应 gyro.downsampleFilterEnabled）
-                LOG_I("LPF2 filter initialized: type=%u, cutoff=%u Hz, sample_rate=%.1f Hz", 
-                      gyro_lpf2_type, gyro_lpf2_static_hz, sample_rate_hz);
-            } else {
-                LOG_W("LPF2 filter init failed: type=%u, cutoff=%u Hz", gyro_lpf2_type, gyro_lpf2_static_hz);
-            }
+
+    if (getParam("filter_gyro_lpf2_type", &gyro_lpf2_type, sizeof(gyro_lpf2_type)) == RT_EOK &&
+        getParam("filter_gyro_lpf2_static_hz", &gyro_lpf2_static_hz, sizeof(gyro_lpf2_static_hz)) == RT_EOK) {
+      // 初始化 LPF2 滤波器
+      if (gyro_lpf2_type > 0 && gyro_lpf2_static_hz > 0) {
+        BfLpfFilterType filter_type = static_cast<BfLpfFilterType>(gyro_lpf2_type);
+        float cutoff_hz = static_cast<float>(gyro_lpf2_static_hz);
+        if (lpf2_filter_.init(filter_type, cutoff_hz, sample_rate_hz)) {
+          lpf2_filter_.setEnabled(true);
+          downsample_filter_enabled_ = true;  // LPF2 开启时使用滤波降采样（对应 gyro.downsampleFilterEnabled）
+          LOG_I("LPF2 filter initialized: type=%u, cutoff=%u Hz, sample_rate=%.1f Hz", gyro_lpf2_type,
+                gyro_lpf2_static_hz, sample_rate_hz);
+        } else {
+          LOG_W("LPF2 filter init failed: type=%u, cutoff=%u Hz", gyro_lpf2_type, gyro_lpf2_static_hz);
         }
+      }
     }
-    
+
     // 初始化动态 LPF 参数（参考 gyro_init.c:199-226 中的 dynLpfFilterInit）
 #ifdef USE_DYN_LPF
     uint16_t gyro_lpf1_dyn_min_hz = 0;
-    if (getParam("gyro_lpf1_dyn_min_hz", &gyro_lpf1_dyn_min_hz, sizeof(gyro_lpf1_dyn_min_hz)) == RT_EOK) {
-        if (gyro_lpf1_dyn_min_hz > 0) {
-            dyn_lpf_min_ = gyro_lpf1_dyn_min_hz;
-            
-            uint16_t gyro_lpf1_dyn_max_hz = 0;
-            if (getParam("gyro_lpf1_dyn_max_hz", &gyro_lpf1_dyn_max_hz, sizeof(gyro_lpf1_dyn_max_hz)) == RT_EOK) {
-                dyn_lpf_max_ = gyro_lpf1_dyn_max_hz;
-            } else {
-                dyn_lpf_max_ = 250;  // 默认值
-            }
-            
-            uint8_t gyro_lpf1_dyn_expo = 0;
-            if (getParam("gyro_lpf1_dyn_expo", &gyro_lpf1_dyn_expo, sizeof(gyro_lpf1_dyn_expo)) == RT_EOK) {
-                dyn_lpf_curve_expo_ = gyro_lpf1_dyn_expo;
-            } else {
-                dyn_lpf_curve_expo_ = 5;  // 默认值
-            }
-            
-            // 根据 LPF1 类型设置动态滤波器类型
-            uint8_t gyro_lpf1_type = 0;
-            if (getParam("gyro_lpf1_type", &gyro_lpf1_type, sizeof(gyro_lpf1_type)) == RT_EOK) {
-                switch (gyro_lpf1_type) {
-                    case 1: dyn_lpf_filter_ = 1; break;  // DYN_LPF_PT1
-                    case 2: dyn_lpf_filter_ = 2; break;  // DYN_LPF_BIQUAD
-                    case 3: dyn_lpf_filter_ = 3; break;  // DYN_LPF_PT2
-                    case 4: dyn_lpf_filter_ = 4; break;  // DYN_LPF_PT3
-                    default: dyn_lpf_filter_ = 0; break; // DYN_LPF_NONE
-                }
-            }
+    if (getParam("filter_gyro_lpf1_dyn_min_hz", &gyro_lpf1_dyn_min_hz, sizeof(gyro_lpf1_dyn_min_hz)) == RT_EOK) {
+      if (gyro_lpf1_dyn_min_hz > 0) {
+        dyn_lpf_min_ = gyro_lpf1_dyn_min_hz;
+
+        uint16_t gyro_lpf1_dyn_max_hz = 0;
+        if (getParam("filter_gyro_lpf1_dyn_max_hz", &gyro_lpf1_dyn_max_hz, sizeof(gyro_lpf1_dyn_max_hz)) == RT_EOK) {
+          dyn_lpf_max_ = gyro_lpf1_dyn_max_hz;
         } else {
-            dyn_lpf_filter_ = 0;  // DYN_LPF_NONE
+          dyn_lpf_max_ = 250;  // 默认值
         }
+
+        uint8_t gyro_lpf1_dyn_expo = 0;
+        if (getParam("filter_gyro_lpf1_dyn_expo", &gyro_lpf1_dyn_expo, sizeof(gyro_lpf1_dyn_expo)) == RT_EOK) {
+          dyn_lpf_curve_expo_ = gyro_lpf1_dyn_expo;
+        } else {
+          dyn_lpf_curve_expo_ = 5;  // 默认值
+        }
+
+        // 根据 LPF1 类型设置动态滤波器类型
+        uint8_t gyro_lpf1_type = 0;
+        if (getParam("filter_gyro_lpf1_type", &gyro_lpf1_type, sizeof(gyro_lpf1_type)) == RT_EOK) {
+          switch (gyro_lpf1_type) {
+            case 1:
+              dyn_lpf_filter_ = 1;
+              break;  // DYN_LPF_PT1
+            case 2:
+              dyn_lpf_filter_ = 2;
+              break;  // DYN_LPF_BIQUAD
+            case 3:
+              dyn_lpf_filter_ = 3;
+              break;  // DYN_LPF_PT2
+            case 4:
+              dyn_lpf_filter_ = 4;
+              break;  // DYN_LPF_PT3
+            default:
+              dyn_lpf_filter_ = 0;
+              break;  // DYN_LPF_NONE
+          }
+        }
+      } else {
+        dyn_lpf_filter_ = 0;  // DYN_LPF_NONE
+      }
     }
 #endif
     
     // 步骤3: 初始化 Notch1 滤波器（参考 gyro_init.c:253）
     uint16_t gyro_soft_notch_hz_1 = 0;
     uint16_t gyro_soft_notch_cutoff_1 = 0;
-    
-    if (getParam("gyro_soft_notch_hz_1", &gyro_soft_notch_hz_1, sizeof(gyro_soft_notch_hz_1)) == RT_EOK &&
-        getParam("gyro_soft_notch_cutoff_1", &gyro_soft_notch_cutoff_1, sizeof(gyro_soft_notch_cutoff_1)) == RT_EOK) {
-        
-        if (gyro_soft_notch_hz_1 > 0 && gyro_soft_notch_cutoff_1 > 0) {
-            float freq_hz = static_cast<float>(gyro_soft_notch_hz_1);
-            float cutoff_hz = static_cast<float>(gyro_soft_notch_cutoff_1);
-            if (notch1_filter_.init(freq_hz, cutoff_hz, sample_rate_hz)) {
-                notch1_filter_.setEnabled(true);
-                LOG_I("Notch1 filter initialized: freq=%u Hz, cutoff=%u Hz", 
-                      gyro_soft_notch_hz_1, gyro_soft_notch_cutoff_1);
-            } else {
-                LOG_W("Notch1 filter init failed: freq=%u Hz, cutoff=%u Hz", 
-                      gyro_soft_notch_hz_1, gyro_soft_notch_cutoff_1);
-            }
+
+    if (getParam("filter_gyro_soft_notch_hz_1", &gyro_soft_notch_hz_1, sizeof(gyro_soft_notch_hz_1)) == RT_EOK &&
+        getParam("filter_gyro_soft_notch_cutoff_1", &gyro_soft_notch_cutoff_1, sizeof(gyro_soft_notch_cutoff_1)) ==
+            RT_EOK) {
+      if (gyro_soft_notch_hz_1 > 0 && gyro_soft_notch_cutoff_1 > 0) {
+        float freq_hz = static_cast<float>(gyro_soft_notch_hz_1);
+        float cutoff_hz = static_cast<float>(gyro_soft_notch_cutoff_1);
+        if (notch1_filter_.init(freq_hz, cutoff_hz, sample_rate_hz)) {
+          notch1_filter_.setEnabled(true);
+          LOG_I("Notch1 filter initialized: freq=%u Hz, cutoff=%u Hz", gyro_soft_notch_hz_1, gyro_soft_notch_cutoff_1);
+        } else {
+          LOG_W("Notch1 filter init failed: freq=%u Hz, cutoff=%u Hz", gyro_soft_notch_hz_1, gyro_soft_notch_cutoff_1);
         }
+      }
     }
-    
+
     // 步骤4: 初始化 Notch2 滤波器（参考 gyro_init.c:254）
     uint16_t gyro_soft_notch_hz_2 = 0;
     uint16_t gyro_soft_notch_cutoff_2 = 0;
-    
-    if (getParam("gyro_soft_notch_hz_2", &gyro_soft_notch_hz_2, sizeof(gyro_soft_notch_hz_2)) == RT_EOK &&
-        getParam("gyro_soft_notch_cutoff_2", &gyro_soft_notch_cutoff_2, sizeof(gyro_soft_notch_cutoff_2)) == RT_EOK) {
-        
-        if (gyro_soft_notch_hz_2 > 0 && gyro_soft_notch_cutoff_2 > 0) {
-            float freq_hz = static_cast<float>(gyro_soft_notch_hz_2);
-            float cutoff_hz = static_cast<float>(gyro_soft_notch_cutoff_2);
-            if (notch2_filter_.init(freq_hz, cutoff_hz, sample_rate_hz)) {
-                notch2_filter_.setEnabled(true);
-                LOG_I("Notch2 filter initialized: freq=%u Hz, cutoff=%u Hz", 
-                      gyro_soft_notch_hz_2, gyro_soft_notch_cutoff_2);
-            } else {
-                LOG_W("Notch2 filter init failed: freq=%u Hz, cutoff=%u Hz", 
-                      gyro_soft_notch_hz_2, gyro_soft_notch_cutoff_2);
-            }
+
+    if (getParam("filter_gyro_soft_notch_hz_2", &gyro_soft_notch_hz_2, sizeof(gyro_soft_notch_hz_2)) == RT_EOK &&
+        getParam("filter_gyro_soft_notch_cutoff_2", &gyro_soft_notch_cutoff_2, sizeof(gyro_soft_notch_cutoff_2)) ==
+            RT_EOK) {
+      if (gyro_soft_notch_hz_2 > 0 && gyro_soft_notch_cutoff_2 > 0) {
+        float freq_hz = static_cast<float>(gyro_soft_notch_hz_2);
+        float cutoff_hz = static_cast<float>(gyro_soft_notch_cutoff_2);
+        if (notch2_filter_.init(freq_hz, cutoff_hz, sample_rate_hz)) {
+          notch2_filter_.setEnabled(true);
+          LOG_I("Notch2 filter initialized: freq=%u Hz, cutoff=%u Hz", gyro_soft_notch_hz_2, gyro_soft_notch_cutoff_2);
+        } else {
+          LOG_W("Notch2 filter init failed: freq=%u Hz, cutoff=%u Hz", gyro_soft_notch_hz_2, gyro_soft_notch_cutoff_2);
         }
+      }
     }
-    
+
     // TODO: 初始化动态 notch 滤波器（参考 gyro_init.c:258-259）
     // 需要 dynNotchConfig_t 结构体，可以从参数系统读取或使用默认值
     // dyn_notch_filter_.init(config, target_looptime_us);
@@ -683,47 +715,73 @@ void RateCtrlAngularVelocity::handleWork()
 
 void RateCtrlAngularVelocity::applyFilterChain(const float input[3], float output[3])
 {
-    // 参考 gyro_filter_impl.c 的滤波顺序
-    float filtered[3];
-    std::memcpy(filtered, input, sizeof(float) * 3);
-    
-    // TODO: 应用 RPM 滤波器（如果使能）
-    // rpmFilter(gyroData, rpmData, filtered);
-    
-    // 应用静态 notch 滤波器
-    if (notch1_filter_.isEnabled()) {
-        float temp[3];
-        notch1_filter_.apply(filtered, temp);
-        std::memcpy(filtered, temp, sizeof(float) * 3);
-    }
-    
-    if (notch2_filter_.isEnabled()) {
-        float temp[3];
-        notch2_filter_.apply(filtered, temp);
-        std::memcpy(filtered, temp, sizeof(float) * 3);
-    }
-    
-    // 应用 LPF1 滤波器
-    if (lpf1_filter_.isEnabled()) {
-        float temp[3];
-        lpf1_filter_.apply(filtered, temp);
-        std::memcpy(filtered, temp, sizeof(float) * 3);
-    }
-    
-    // 应用动态 notch 滤波器（如果激活）
-    if (dyn_notch_filter_.isActive()) {
-        // 推送样本用于频率分析
-        for (int i = 0; i < 3; i++) {
-            dyn_notch_filter_.push(i, filtered[i]);
+  // Debug Pin: 拉高，表示开始滤波处理
+#ifdef PROJECT_BF_RATE_CTRL_DEBUG_PIN_EN
+  DEBUG_PIN_DEBUG0_HIGH();
+#endif
+
+        // 参考 gyro_filter_impl.c 的滤波顺序
+        float filtered[3];
+        std::memcpy(filtered, input, sizeof(float) * 3);
+
+        // TODO: 应用 RPM 滤波器（如果使能）
+        // rpmFilter(gyroData, rpmData, filtered);
+
+        // 应用静态 notch 滤波器
+        if (notch1_filter_.isEnabled()) {
+          float temp[3];
+          notch1_filter_.apply(filtered, temp);
+          std::memcpy(filtered, temp, sizeof(float) * 3);
         }
-        
-        // 更新动态 notch 滤波器
-        dyn_notch_filter_.update();
-        
-        // 应用动态 notch 滤波器
-        dyn_notch_filter_.apply3Axis(filtered, filtered);
-    }
-    
-    std::memcpy(output, filtered, sizeof(float) * 3);
+
+        if (notch2_filter_.isEnabled()) {
+          float temp[3];
+          notch2_filter_.apply(filtered, temp);
+          std::memcpy(filtered, temp, sizeof(float) * 3);
+        }
+
+        // 应用 LPF1 滤波器
+        if (lpf1_filter_.isEnabled()) {
+          float temp[3];
+          lpf1_filter_.apply(filtered, temp);
+          std::memcpy(filtered, temp, sizeof(float) * 3);
+        }
+
+        // 应用动态 notch 滤波器（如果激活）
+        if (dyn_notch_filter_.isActive()) {
+          // 推送样本用于频率分析
+          for (int i = 0; i < 3; i++) {
+            dyn_notch_filter_.push(i, filtered[i]);
+          }
+
+          // 更新动态 notch 滤波器
+          dyn_notch_filter_.update();
+
+          // 应用动态 notch 滤波器
+          dyn_notch_filter_.apply3Axis(filtered, filtered);
+        }
+
+        std::memcpy(output, filtered, sizeof(float) * 3);
+
+        // Debug Pin: 拉低，表示滤波处理完成
+#ifdef PROJECT_BF_RATE_CTRL_DEBUG_PIN_EN
+  DEBUG_PIN_DEBUG0_LOW();
+#endif
 }
 
+// RT-Thread 自动初始化包装函数
+#ifdef PROJECT_BF_RATE_CTRL_EN
+extern "C" {
+static int rate_ctrl_angular_velocity_init_wrapper(void) {
+  RateCtrlAngularVelocity& instance = RateCtrlAngularVelocity::instance();
+  rt_err_t ret = instance.init();
+  if (ret == RT_EOK) {
+    LOG_I("RateCtrlAngularVelocity auto-init success");
+  } else {
+    LOG_E("RateCtrlAngularVelocity auto-init failed: %d", ret);
+  }
+  return (int)ret;
+}
+INIT_APP_EXPORT(rate_ctrl_angular_velocity_init_wrapper);
+}
+#endif

@@ -11,17 +11,28 @@ include_paths = [
     os.path.join(cwd, "../imu270_pub/inc"),
     os.path.join(cwd, "../mlog/inc"),
     os.path.join(cwd, "../workqueueManage/inc"),  # workqueueManage.h 所在目录
-    os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "06_bf_lib", "filter_imu"),  # dyn_notch_filter.h 所在目录
-    os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "06_bf_lib", "filter_imu", "inc"),
+    os.path.join(
+        cwd, "..", "..", "..", "..", "L1_middleWare", "06_bf_lib", "filter_imu"
+    ),  # dyn_notch_filter.h 所在目录
+    os.path.join(
+        cwd, "..", "..", "..", "..", "L1_middleWare", "06_bf_lib", "filter_imu", "inc"
+    ),
     os.path.join(cwd, "..", "..", "01_basic", "TASK_05_PARAM", "inc"),
+    os.path.join(
+        cwd, "..", "..", "..", "..", "L1_middleWare", "01_module", "03_debugPin"
+    ),  # debugPin.h 所在目录
 ]
 
 group = DefineGroup(
-    "PROJECT_BF_RATE_CTRL",
+    "PROJECT_BF_RATE_CTRL_EN",
     src,
-    depend=["PROJECT_BF_RATE_CTRL_EN", "PROJECT_MINIFLY_TASK05_PARAM_FLYER_BF_DEFAULT_EN", "L1_MIDDLEWARE_06_BF_LIB_FILTER_IMU_EN", "PROJECT_BF_MLOG_GYRO_EN"],
+    depend=[
+        "PROJECT_BF_RATE_CTRL_EN",
+        "PROJECT_MINIFLY_TASK05_PARAM_FLYER_BF_DEFAULT_EN",
+        "L1_MIDDLEWARE_06_BF_LIB_FILTER_IMU_EN",
+        "PROJECT_BF_MLOG_GYRO_EN",
+    ],
     CPPPATH=include_paths,
 )
 
 Return("group")
-

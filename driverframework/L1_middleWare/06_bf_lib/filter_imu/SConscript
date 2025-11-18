@@ -4,9 +4,11 @@ import os
 cwd = GetCurrentDir()
 
 src = Glob("./src/*.cpp")
+# 添加动态 notch 滤波器的 stub 实现（不使用 ref 文件夹中的文件）
+src += Glob("./src/dyn_notch_filter_stub.c")
 
 include_paths = [
-    cwd,  # dyn_notch_filter.h 所在目录
+    cwd,
     os.path.join(cwd, "inc"),
     os.path.join(cwd, "..", "..", "..", "L0_task", "04_project", "01_basic", "TASK_05_PARAM", "inc"),
 ]

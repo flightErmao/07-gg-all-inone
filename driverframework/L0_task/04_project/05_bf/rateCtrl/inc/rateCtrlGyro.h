@@ -96,6 +96,9 @@ private:
 // 简单变量直接映射为成员变量，复杂成员变量对象化
 class RateCtrlAngularVelocity {
 public:
+    // 单例模式：获取唯一实例
+    static RateCtrlAngularVelocity& instance();
+
     RateCtrlAngularVelocity();
 
     rt_err_t init();
@@ -193,6 +196,9 @@ private:
     // 工作队列相关
     struct rt_workqueue* workqueue_;  // 通过名称找到的工作队列
     // 工作队列名称从 Kconfig 获取：CONFIG_PROJECT_BF_WORKQUEUE_NAME
+    
+    // Debug Pin（用于测量滤波耗时）
+    uint8_t debug_pin_;  // debugPin 索引 (0-3)，0xFF 表示未配置
     
     // Mlog 数据记录（参考 aMlogStabilze.c）
     bf_mlog::MlogGyro mlog_gyro_;

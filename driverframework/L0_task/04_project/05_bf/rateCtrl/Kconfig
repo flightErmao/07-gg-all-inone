@@ -41,5 +41,13 @@ menuconfig PROJECT_BF_RATE_CTRL_EN
             default 50
             help
                 Cutoff frequency for angular velocity low-pass filter in Hz.
+
+        config PROJECT_BF_RATE_CTRL_DEBUG_PIN_EN
+            bool "Enable Debug Pin for Filter Timing Measurement"
+            default n
+            depends on L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN
+            help
+                Enable debug pin to measure filter processing time.
+                The pin will be set HIGH during filter processing and LOW otherwise.
     endif
 

@@ -67,15 +67,15 @@ static void bf_pid_param_default(void *address, uint8_t size) {
 }
 
 static param_list bf_pid_params[] = {
-    {(void *)bf_rate_pid_roll, sizeof(bf_rate_pid_roll), "bf_rate_pid_roll", "vf", bf_pid_param_default},
-    {(void *)bf_rate_pid_pitch, sizeof(bf_rate_pid_pitch), "bf_rate_pid_pitch", "vf", bf_pid_param_default},
-    {(void *)bf_rate_pid_yaw, sizeof(bf_rate_pid_yaw), "bf_rate_pid_yaw", "vf", bf_pid_param_default},
-    {(void *)bf_angle_pid_roll, sizeof(bf_angle_pid_roll), "bf_angle_pid_roll", "vf", bf_pid_param_default},
-    {(void *)bf_angle_pid_pitch, sizeof(bf_angle_pid_pitch), "bf_angle_pid_pitch", "vf", bf_pid_param_default},
-    {(void *)bf_angle_pid_yaw, sizeof(bf_angle_pid_yaw), "bf_angle_pid_yaw", "vf", bf_pid_param_default},
-    {(void *)&bf_rate_pid_roll_i_limit, sizeof(bf_rate_pid_roll_i_limit), "bf_rate_pid_roll_i_limit", "f", bf_pid_param_default},
-    {(void *)&bf_rate_pid_pitch_i_limit, sizeof(bf_rate_pid_pitch_i_limit), "bf_rate_pid_pitch_i_limit", "f", bf_pid_param_default},
-    {(void *)&bf_rate_pid_yaw_i_limit, sizeof(bf_rate_pid_yaw_i_limit), "bf_rate_pid_yaw_i_limit", "f", bf_pid_param_default},
+    {(void *)bf_rate_pid_roll, sizeof(bf_rate_pid_roll), "pid_rate_roll", "vf", bf_pid_param_default},
+    {(void *)bf_rate_pid_pitch, sizeof(bf_rate_pid_pitch), "pid_rate_pitch", "vf", bf_pid_param_default},
+    {(void *)bf_rate_pid_yaw, sizeof(bf_rate_pid_yaw), "pid_rate_yaw", "vf", bf_pid_param_default},
+    {(void *)bf_angle_pid_roll, sizeof(bf_angle_pid_roll), "pid_angle_roll", "vf", bf_pid_param_default},
+    {(void *)bf_angle_pid_pitch, sizeof(bf_angle_pid_pitch), "pid_angle_pitch", "vf", bf_pid_param_default},
+    {(void *)bf_angle_pid_yaw, sizeof(bf_angle_pid_yaw), "pid_angle_yaw", "vf", bf_pid_param_default},
+    {(void *)&bf_rate_pid_roll_i_limit, sizeof(bf_rate_pid_roll_i_limit), "pid_rate_roll_i_limit", "f", bf_pid_param_default},
+    {(void *)&bf_rate_pid_pitch_i_limit, sizeof(bf_rate_pid_pitch_i_limit), "pid_rate_pitch_i_limit", "f", bf_pid_param_default},
+    {(void *)&bf_rate_pid_yaw_i_limit, sizeof(bf_rate_pid_yaw_i_limit), "pid_rate_yaw_i_limit", "f", bf_pid_param_default},
     {(void *)&pid_process_denom, sizeof(pid_process_denom), "pid_process_denom", "u8", bf_pid_param_default},
 };
 
