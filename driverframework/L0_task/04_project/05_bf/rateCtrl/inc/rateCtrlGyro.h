@@ -125,10 +125,10 @@ private:
     uint16_t sample_rate_hz_;           // gyro.sampleRateHz
     uint32_t target_looptime_us_;       // gyro.targetLooptime (微秒)
     uint32_t sample_looptime_us_;       // gyro.sampleLooptime (微秒)
-    float scale_;                        // gyro.scale
+    // 注意：scale_ 已移除，因为 mcn 发布的数据已经是缩放后的（在 accgyro_spi_bmi270.cpp 中已应用 GYRO_SCALE_2000DPS）
     
     // 角速度数据（对应 gyro.gyroADC, gyro.gyroADCf）
-    float gyro_adc_[3];                 // gyro.gyroADC[XYZ_AXIS_COUNT] - 对齐、校准、缩放但未滤波的数据
+    float gyro_adc_[3];                 // gyro.gyroADC[XYZ_AXIS_COUNT] - 对齐、校准但未滤波的数据（已缩放）
     float gyro_adcf_[3];                // gyro.gyroADCf[XYZ_AXIS_COUNT] - 滤波后的角速度数据
     
     // 降采样相关（对应 gyro.sampleCount, sampleSum, downsampleFilterEnabled）
@@ -193,9 +193,8 @@ private:
     McnNode_t imu_node_;
     imu_raw_msg_t latest_imu_;
     
-    // 工作队列相关
-    struct rt_workqueue* workqueue_;  // 通过名称找到的工作队列
-    // 工作队列名称从 Kconfig 获取：CONFIG_PROJECT_BF_WORKQUEUE_NAME
+    // 工作队列相关（工作队列在 workqueueManage 模块中创建，这里只查找和使用）
+    struct rt_workqueue* workqueue_;  // 通过名称从 workqueueManage 查找到的工作队列
     
     // Debug Pin（用于测量滤波耗时）
     uint8_t debug_pin_;  // debugPin 索引 (0-3)，0xFF 表示未配置

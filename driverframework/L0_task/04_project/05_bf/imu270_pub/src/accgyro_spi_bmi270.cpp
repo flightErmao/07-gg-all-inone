@@ -73,7 +73,7 @@ static constexpr uint8_t BMI270_VAL_ACC_CONF =
     (0x01u << 7) | (0x01u << 4) | 0x0Bu;                          // 高性能 + osr2 + 800Hz
 static constexpr uint8_t BMI270_VAL_ACC_RANGE_16G = 0x03;
 static constexpr uint8_t BMI270_VAL_GYRO_CONF =
-    (0x01u << 7) | (0x01u << 6) | (0x00u << 4) | 0x0Du;           // HP filter/noise + OSR4 + 3200Hz
+    (0x01u << 7) | (0x01u << 6) | (0x01u << 4) | 0x0Bu;           // HP filter/noise + OSR2 + 800Hz (临时调试，降低频率)
 static constexpr uint8_t BMI270_VAL_GYRO_RANGE_2000DPS = 0x08;
 static constexpr uint8_t BMI270_VAL_INT_MAP_DATA_DRDY_INT1 = 0x04;
 static constexpr uint8_t BMI270_VAL_INT1_IO_CTRL_PINMODE = 0x0A;  // 高电平、推挽、输出
@@ -106,8 +106,8 @@ BMI270::BMI270()
       event_inited_(false),
       worker_thread_(RT_NULL),
       worker_inited_(false),
-      gyro_sample_rate_hz_(3200.0f),  // BMI270 陀螺仪配置为 3200Hz
-      gyro_sample_dt_(1.0f / 3200.0f),
+      gyro_sample_rate_hz_(800.0f),   // BMI270 陀螺仪配置为 800Hz (临时调试，降低频率)
+      gyro_sample_dt_(1.0f / 800.0f),
       gyro_scale_(GYRO_SCALE_2000DPS) {  // BMI270 陀螺仪配置为 2000DPS
   cfg_ = {};
 }
@@ -241,7 +241,7 @@ bool BMI270::configureSensor() {
   regWrite(BMI270_REG_ACC_CONF, BMI270_VAL_ACC_CONF, 1);
   regWrite(BMI270_REG_ACC_RANGE, BMI270_VAL_ACC_RANGE_16G, 1);
 
-  // 陀螺仪配置：3200Hz，2000dps
+  // 陀螺仪配置：800Hz，2000dps (临时调试，降低频率)
   regWrite(BMI270_REG_GYRO_CONF, BMI270_VAL_GYRO_CONF, 1);
   regWrite(BMI270_REG_GYRO_RANGE, BMI270_VAL_GYRO_RANGE_2000DPS, 1);
 
@@ -304,26 +304,31 @@ bool BMI270::readAccelGyro(int16_t acc[3], int16_t gyro[3]) {
     return false;
   }
 
-  uint8_t acc_buf[6] = {0};
-  uint8_t gyro_buf[6] = {0};
+  // 优化：一次性读取加速度和陀螺仪数据
+  // BMI270 寄存器布局：0x0C (ACC_X_LSB) 到 0x17 (GYR_Z_MSB) = 18 字节
+  // 0x0C-0x11: 加速度数据（6字节）
+  // 0x12-0x17: 陀螺仪数据（6字节）
+  // 中间 0x0C-0x12 之间有保留寄存器，但我们一次性读取可以包含这些数据
+  uint8_t data_buf[18] = {0};
 
-  // 读取加速度：0x0C 开始 6 字节
-  if (spi_.readMultiReg16(BMI270_REG_ACC_DATA_X_LSB, acc_buf, 6) != RT_EOK) {
+  // 从 ACC_DATA_X_LSB (0x0C) 开始读取 18 字节，一次性获取加速度和陀螺仪数据
+  if (spi_.readMultiReg16(BMI270_REG_ACC_DATA_X_LSB, data_buf, 18) != RT_EOK) {
     return false;
   }
 
-  // 读取陀螺：0x12 开始 6 字节
-  if (spi_.readMultiReg16(BMI270_REG_GYR_DATA_X_LSB, gyro_buf, 6) != RT_EOK) {
-    return false;
-  }
+  // 解析加速度数据（前 6 字节，offset 0-5）
+  acc[0] = combine(data_buf[1], data_buf[0]);
+  acc[1] = combine(data_buf[3], data_buf[2]);
+  acc[2] = combine(data_buf[5], data_buf[4]);
 
-  acc[0] = combine(acc_buf[1], acc_buf[0]);
-  acc[1] = combine(acc_buf[3], acc_buf[2]);
-  acc[2] = combine(acc_buf[5], acc_buf[4]);
-
-  gyro[0] = combine(gyro_buf[1], gyro_buf[0]);
-  gyro[1] = combine(gyro_buf[3], gyro_buf[2]);
-  gyro[2] = combine(gyro_buf[5], gyro_buf[4]);
+  // 解析陀螺仪数据（offset 6-11，对应寄存器 0x12-0x17）
+  // 0x0C-0x11: 加速度数据（6字节，offset 0-5）
+  // 0x12-0x17: 陀螺仪数据（6字节，offset 6-11）
+  // 注意：BMI270 寄存器地址 0x0C 到 0x17 是连续的，0x12 相对于 0x0C 的偏移是 6 字节
+  uint8_t gyro_offset = 6;  // 从 0x0C 开始，0x12 相对于 0x0C 的偏移是 6 字节（0x12 - 0x0C = 6）
+  gyro[0] = combine(data_buf[gyro_offset + 1], data_buf[gyro_offset + 0]);
+  gyro[1] = combine(data_buf[gyro_offset + 3], data_buf[gyro_offset + 2]);
+  gyro[2] = combine(data_buf[gyro_offset + 5], data_buf[gyro_offset + 4]);
 
   return true;
 }

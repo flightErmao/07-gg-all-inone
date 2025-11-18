@@ -31,15 +31,8 @@ extern "C" {
 #define PROJECT_BF_RATE_CTRL_IMU_SAMPLE_RATE_HZ 800.0f
 #endif
 
-// Kconfig 宏默认值（如果未在 rtconfig.h 中定义）
-#ifndef CONFIG_PROJECT_BF_WORKQUEUE_RATE_CTRL_NAME
-#define CONFIG_PROJECT_BF_WORKQUEUE_RATE_CTRL_NAME "wq_rate_ctrl"
-#endif
-
-// 向后兼容的宏定义
-#ifndef CONFIG_PROJECT_BF_WORKQUEUE_NAME
-#define CONFIG_PROJECT_BF_WORKQUEUE_NAME CONFIG_PROJECT_BF_WORKQUEUE_RATE_CTRL_NAME
-#endif
+// 工作队列名称：从 workqueueManage 模块配置中获取，这里不定义宏，直接使用字符串常量
+// 工作队列应该在 workqueueManage 模块中通过 INIT_ENV_EXPORT 自动创建
 
 #ifndef CONFIG_PROJECT_BF_RATE_CTRL_GYRO_CALIBRATION_DURATION_MS
 #define CONFIG_PROJECT_BF_RATE_CTRL_GYRO_CALIBRATION_DURATION_MS 1250
@@ -202,7 +195,6 @@ RateCtrlAngularVelocity::RateCtrlAngularVelocity()
       sample_rate_hz_(0),
       target_looptime_us_(0),
       sample_looptime_us_(0),
-      scale_(1.0f),
       sample_count_(0),
       downsample_filter_enabled_(false),
       gyro_enabled_bitmask_(0),
@@ -245,17 +237,22 @@ RateCtrlAngularVelocity::RateCtrlAngularVelocity()
 rt_err_t RateCtrlAngularVelocity::init()
 {
     // 通过工作队列管理器实例，根据名称查找工作队列
-    // 工作队列应该已经通过 INIT_ENV_EXPORT 自动创建，这里只需要查找
-    // 工作队列名称从 Kconfig 获取：CONFIG_PROJECT_BF_WORKQUEUE_RATE_CTRL_NAME
+    // 工作队列应该已经通过 workqueueManage 模块的 INIT_ENV_EXPORT 自动创建，这里只需要查找
+    // 工作队列名称从 workqueueManage 的 Kconfig 配置中获取（通过宏定义，如果没有则使用默认值）
     bf_workqueue::WorkqueueManager& wq_mgr = bf_workqueue::WorkqueueManager::instance();
     wq_mgr.init();  // 确保管理器已初始化
     
     // 通过名称查找工作队列（不能创建，只能查找）
-    const char* wq_name = CONFIG_PROJECT_BF_WORKQUEUE_RATE_CTRL_NAME;
+    // 优先使用 Kconfig 定义的名称，如果没有则使用默认值
+#ifdef PROJECT_BF_WORKQUEUE_RATE_CTRL_NAME
+    const char* wq_name = PROJECT_BF_WORKQUEUE_RATE_CTRL_NAME;
+#else
+    const char* wq_name = "wq_rate_ctrl";  // 默认工作队列名称
+#endif
     
     workqueue_ = wq_mgr.find(wq_name);
     if (workqueue_ == nullptr) {
-        LOG_E("find workqueue '%s' failed, make sure it's enabled in Kconfig", wq_name);
+        LOG_E("find workqueue '%s' failed, make sure it's enabled and created in workqueueManage module", wq_name);
         return -RT_ERROR;
     }
     LOG_I("Found workqueue '%s'", wq_name);
@@ -292,8 +289,7 @@ rt_err_t RateCtrlAngularVelocity::init()
     // 参考 gyro.c:734-740 中 gyro.sampleRateHz 的设置
     sample_rate_hz_ = static_cast<uint16_t>(sample_rate_hz);
     
-    // 从 BMI270 获取陀螺仪比例因子（对应 gyro.scale）
-    scale_ = bmi270.getGyroScale();
+    // 注意：scale_ 已移除，因为 mcn 发布的数据已经是缩放后的（在 accgyro_spi_bmi270.cpp 中已应用 GYRO_SCALE_2000DPS）
     
     // 读取 pid_process_denom 参数并设置目标循环时间（参考 gyro.c:750-759 中的 gyroSetTargetLooptime）
     uint8_t pid_process_denom = 1;  // 默认值

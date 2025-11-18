@@ -513,6 +513,7 @@
 
 /* Mlog gyro logging is configured via parameter system (mlog_gyro_en) */
 
+#define PROJECT_BF_MLOG_GYRO_DEBUG_PIN_EN
 #define PROJECT_BF_WORKQUEUE_MANAGE_EN
 #define PROJECT_BF_WORKQUEUE_RATE_CTRL_EN
 #define PROJECT_BF_WORKQUEUE_RATE_CTRL_NAME "wq_rate_ctrl"
