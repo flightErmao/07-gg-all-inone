@@ -62,6 +62,10 @@
 
 #define BMI270_CONFIG_SIZE 328
 
+// 陀螺仪比例因子定义（从 Betaflight 抽取）
+#define GYRO_SCALE_2000DPS (2000.0f / (1 << 15))   // 16.384 dps/lsb scalefactor for 2000dps sensors
+#define GYRO_SCALE_4000DPS (4000.0f / (1 << 15))   // 8.192 dps/lsb scalefactor for 4000dps sensors
+
 // Declaration for the device config (microcode) that must be uploaded to the sensor
 extern const uint8_t bmi270_maximum_fifo_config_file[BMI270_CONFIG_SIZE];
 

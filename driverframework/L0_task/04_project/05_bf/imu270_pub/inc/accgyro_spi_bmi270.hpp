@@ -36,6 +36,15 @@ class BMI270 {
   /** 是否已经完成初始化并开始工作 */
   bool initialized() const { return init_ok_; }
 
+  /** 获取陀螺仪采样频率（Hz） */
+  float getGyroSampleRateHz() const { return gyro_sample_rate_hz_; }
+
+  /** 获取陀螺仪采样周期（秒） */
+  float getGyroSampleDt() const { return gyro_sample_dt_; }
+
+  /** 获取陀螺仪比例因子（对应 gyro.scale） */
+  float getGyroScale() const { return gyro_scale_; }
+
   /* 工作线程配置（静态栈） */
   static constexpr rt_uint16_t THREAD_STACK_SIZE = 2048;
   static constexpr rt_uint8_t THREAD_PRIORITY = 12;
@@ -82,6 +91,13 @@ class BMI270 {
   struct rt_thread worker_thread_obj_;
   rt_uint8_t worker_stack_[THREAD_STACK_SIZE];
   bool worker_inited_;
+
+  /* IMU 采样频率和周期 */
+  float gyro_sample_rate_hz_;  // 陀螺仪采样频率（Hz）
+  float gyro_sample_dt_;       // 陀螺仪采样周期（秒）
+  
+  /* IMU 比例因子（对应 gyro.scale） */
+  float gyro_scale_;           // 陀螺仪比例因子（dps/lsb）
 };
 
 /** 使用 Kconfig 默认参数做一次全局初始化，并开始发布 imu_raw MCN 数据 */

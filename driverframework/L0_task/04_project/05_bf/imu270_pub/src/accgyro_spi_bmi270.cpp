@@ -63,11 +63,14 @@ static constexpr uint8_t BMI270_VAL_GYRO_RANGE_2000DPS = 0x08;
 static constexpr uint8_t BMI270_VAL_INT_MAP_DATA_DRDY_INT1 = 0x04;
 static constexpr uint8_t BMI270_VAL_INT1_IO_CTRL_PINMODE = 0x0A;  // 高电平、推挽、输出
 
-// 原始值转换系数（简单按量程估算）
+// 原始值转换系数（从 Betaflight 抽取，与 accgyro_spi_bmi270.c 保持一致）
 // 16G: 32768 -> 16g
 static constexpr float ACC_SCALE_16G = 16.0f / 32768.0f;
-// 2000dps: 32768 -> 2000 deg/s
-static constexpr float GYRO_SCALE_2000DPS = 2000.0f / 32768.0f;
+// 陀螺仪比例因子（对应 accgyro_spi_bmi270.c 中的定义）
+// 2000dps: 2000.0f / (1 << 15) = 16.384 dps/lsb scalefactor for 2000dps sensors
+static constexpr float GYRO_SCALE_2000DPS = 2000.0f / (1 << 15);
+// 4000dps: 4000.0f / (1 << 15) = 8.192 dps/lsb scalefactor for 4000dps sensors
+static constexpr float GYRO_SCALE_4000DPS = 4000.0f / (1 << 15);
 
 static inline int16_t combine(uint8_t msb, uint8_t lsb) {
   return static_cast<int16_t>((static_cast<uint16_t>(msb) << 8) | lsb);
@@ -87,7 +90,10 @@ BMI270::BMI270()
       int_pin_(-1),
       event_inited_(false),
       worker_thread_(RT_NULL),
-      worker_inited_(false) {
+      worker_inited_(false),
+      gyro_sample_rate_hz_(3200.0f),  // BMI270 陀螺仪配置为 3200Hz
+      gyro_sample_dt_(1.0f / 3200.0f),
+      gyro_scale_(GYRO_SCALE_2000DPS) {  // BMI270 陀螺仪配置为 2000DPS
   cfg_ = {};
 }
 

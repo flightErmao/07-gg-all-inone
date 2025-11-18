@@ -10,6 +10,7 @@
 #include "bfImuFilterParam.h"
 #include "bfPidParam.h"
 #include "bfImuCaliOffsetParam.h"
+#include "bfMlogParam.h"
 #endif
 
 #ifdef PKG_USING_MIXER
@@ -51,6 +52,7 @@ static void init_param_sources(void) {
   register_param_source(bfImuFilterParam_list(), bfImuFilterParam_count());
   register_param_source(bfPidParam_list(), bfPidParam_count());
   register_param_source(bfImuCaliOffsetParam_list(), bfImuCaliOffsetParam_count());
+  register_param_source(bfMlogParam_list(), bfMlogParam_count());
 #endif
 }
 
@@ -90,6 +92,7 @@ int uparam_data_init(void) {
   uparam_add_list(bfImuFilterParam_list(), bfImuFilterParam_count());
   uparam_add_list(bfPidParam_list(), bfPidParam_count());
   uparam_add_list(bfImuCaliOffsetParam_list(), bfImuCaliOffsetParam_count());
+  uparam_add_list(bfMlogParam_list(), bfMlogParam_count());
 #endif
   return 0;  // 返回 0 表示成功
 }

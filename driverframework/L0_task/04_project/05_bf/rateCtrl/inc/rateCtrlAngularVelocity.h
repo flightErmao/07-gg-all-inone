@@ -6,12 +6,17 @@
 #include <ipc/workqueue.h>
 #include <cstdint>
 #include <cmath>
+#include <cstring>
 
 extern "C" {
 #include "imu_raw_msg.h"
 }
 
 #include "bfGyroLpfFilter.hpp"
+#include "bfSensorAlignment.hpp"
+#include "bfNotchFilter.hpp"
+#include "bfDynNotchFilter.hpp"
+#include "../mlog/inc/mlog_gyro.hpp"
 
 // 简化的标准差统计结构（用于校准运动检测）
 class DeviationStats {
@@ -87,11 +92,23 @@ private:
     bool isOnFinalCycle() const;
 };
 
+// RateCtrlAngularVelocity 是 gyro_t 的 C++ 版本
+// 简单变量直接映射为成员变量，复杂成员变量对象化
 class RateCtrlAngularVelocity {
 public:
     RateCtrlAngularVelocity();
 
     rt_err_t init();
+
+    // 获取滤波后的角速度数据（对应 gyro.gyroADCf）
+    void getFilteredGyro(float gyro_filtered[3]) const {
+        std::memcpy(gyro_filtered, gyro_adcf_, sizeof(gyro_adcf_));
+    }
+    
+    // 获取对齐后的角速度数据（对应 gyro.gyroADC）
+    void getGyroAdc(float gyro_adc[3]) const {
+        std::memcpy(gyro_adc, gyro_adc_, sizeof(gyro_adc_));
+    }
 
 private:
     static void workHandler(struct rt_work* work, void* parameter);
@@ -99,20 +116,96 @@ private:
 
     void handleWork();
 
+    // ========== 从 gyro_t 映射的简单变量 ==========
+    
+    // 采样频率和时间（对应 gyro.sampleRateHz, targetLooptime, sampleLooptime）
+    uint16_t sample_rate_hz_;           // gyro.sampleRateHz
+    uint32_t target_looptime_us_;       // gyro.targetLooptime (微秒)
+    uint32_t sample_looptime_us_;       // gyro.sampleLooptime (微秒)
+    float scale_;                        // gyro.scale
+    
+    // 角速度数据（对应 gyro.gyroADC, gyro.gyroADCf）
+    float gyro_adc_[3];                 // gyro.gyroADC[XYZ_AXIS_COUNT] - 对齐、校准、缩放但未滤波的数据
+    float gyro_adcf_[3];                // gyro.gyroADCf[XYZ_AXIS_COUNT] - 滤波后的角速度数据
+    
+    // 降采样相关（对应 gyro.sampleCount, sampleSum, downsampleFilterEnabled）
+    uint8_t sample_count_;              // gyro.sampleCount - 陀螺仪采样计数器
+    float sample_sum_[3];               // gyro.sampleSum[XYZ_AXIS_COUNT] - 用于降采样的累加样本
+    bool downsample_filter_enabled_;    // gyro.downsampleFilterEnabled - 是否使用 LPF2 降采样
+    
+    // 调试和状态相关
+    uint8_t gyro_enabled_bitmask_;      // gyro.gyroEnabledBitmask
+    uint8_t gyro_debug_mode_;           // gyro.gyroDebugMode
+    bool gyro_has_overflow_protection_; // gyro.gyroHasOverflowProtection
+    bool use_multi_gyro_debugging_;     // gyro.useMultiGyroDebugging
+    uint8_t gyro_debug_axis_;           // gyro.gyroDebugAxis (flight_dynamics_index_t)
+    
+    // 加速度采样频率
+    uint16_t acc_sample_rate_hz_;       // gyro.accSampleRateHz
+    
+#ifdef USE_DYN_LPF
+    // 动态 LPF1 参数（对应 gyro.dynLpfFilter, dynLpfMin, dynLpfMax, dynLpfCurveExpo）
+    uint8_t dyn_lpf_filter_;            // gyro.dynLpfFilter
+    uint16_t dyn_lpf_min_;              // gyro.dynLpfMin
+    uint16_t dyn_lpf_max_;              // gyro.dynLpfMax
+    uint8_t dyn_lpf_curve_expo_;        // gyro.dynLpfCurveExpo
+#endif
+
+#ifdef USE_GYRO_OVERFLOW_CHECK
+    uint8_t overflow_axis_mask_;        // gyro.overflowAxisMask
+#endif
+
+    // ========== 复杂成员变量对象化 ==========
+    
+    // 低通滤波器（对应 gyro.lowpassFilter, lowpass2Filter）
+    // 原本：gyroLowpassFilter_t lowpassFilter[XYZ_AXIS_COUNT] + filterApplyFnPtr
+    BfGyroLpfFilter lpf1_filter_;       // LPF1 滤波器对象
+    BfGyroLpfFilter lpf2_filter_;       // LPF2 滤波器对象
+    
+    // Notch 滤波器（对应 gyro.notchFilter1, notchFilter2）
+    // 原本：biquadFilter_t notchFilter1[XYZ_AXIS_COUNT] + filterApplyFnPtr
+    BfNotchFilter3Axis notch1_filter_;  // Notch1 滤波器对象
+    BfNotchFilter3Axis notch2_filter_;  // Notch2 滤波器对象
+    
+    // 动态 notch 滤波器（对应 dynNotchInit/dynNotchFilter 函数）
+    BfDynNotchFilter dyn_notch_filter_;
+    
+    // IMU 降采样滤波器（对应 gyro.imuGyroFilter[XYZ_AXIS_COUNT]）
+    // 需要创建一个 PT1 滤波器对象，或者使用现有的 BfGyroLpfFilter
+    BfGyroLpfFilter imu_gyro_filter_[3]; // gyro.imuGyroFilter[XYZ_AXIS_COUNT]
+    
+    // ========== 其他辅助成员 ==========
+    
+    // 传感器对齐
+    BfSensorAlignment gyro_align_;
+    float rotation_matrix_[3][3];       // 自定义旋转矩阵（如果使用）
+    bool use_custom_matrix_;
+    
+    // Gyro calibration（对应 gyro.gyroSensor[].calibration）
+    GyroCalibration gyro_calibration_;
+    bool calibration_started_;
+    
+    // MCN 订阅相关
     struct rt_work work_;
     McnNode_t imu_node_;
     imu_raw_msg_t latest_imu_;
     
-    // Betaflight 风格 LPF 滤波器（LPF1 和 LPF2）
-    BfGyroLpfFilter lpf1_filter_;
-    BfGyroLpfFilter lpf2_filter_;
+    // Mlog 数据记录（参考 aMlogStabilze.c）
+    bf_mlog::MlogGyro mlog_gyro_;
     
-    // Gyro calibration
-    GyroCalibration gyro_calibration_;
-    bool calibration_started_;
+    // ========== 内部方法 ==========
     
-    // 初始化滤波器（从参数系统读取配置）
+    // 初始化滤波器（从参数系统读取配置，参考 gyroInitFilters）
     void initFilters();
+    
+    // 应用完整的滤波链（参考 gyro_filter_impl.c）
+    void applyFilterChain(const float input[3], float output[3]);
+    
+    // 初始化降采样滤波器（参考 gyroInitFilters 中的 imuGyroFilter 初始化）
+    void initDownsampleFilter();
+    
+    // 设置目标循环时间（参考 gyro.c:750-759 中的 gyroSetTargetLooptime）
+    void setTargetLooptime(uint8_t pid_denom);
 };
 
 #endif /* RATE_CTRL_ANGULAR_VELOCITY_H__ */

@@ -1,0 +1,12 @@
+menuconfig PROJECT_BF_MLOG_GYRO_EN
+    bool "ENABLE: PROJECT_BF_MLOG_GYRO_EN"
+    default n
+    depends on TASK_TOOL_02_SD_MLOG
+    help
+        Enable Betaflight-style gyro data logging via mlog system.
+        Records filtered and unfiltered gyro data (gyroADC and gyroADCf).
+
+    if PROJECT_BF_MLOG_GYRO_EN
+        comment "Mlog gyro logging is configured via parameter system (mlog_gyro_en)"
+    endif
+

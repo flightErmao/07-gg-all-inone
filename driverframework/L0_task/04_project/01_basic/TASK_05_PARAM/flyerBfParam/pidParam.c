@@ -26,6 +26,9 @@ static float bf_rate_pid_roll_i_limit;
 static float bf_rate_pid_pitch_i_limit;
 static float bf_rate_pid_yaw_i_limit;
 
+/* PID 处理分母（控制 PID 循环频率） */
+static uint8_t pid_process_denom;  // 对应 activePidLoopDenom，用于计算 targetLooptime
+
 /* 默认值 - Betaflight 典型配置 */
 static const float bf_rate_pid_roll_default[3] = {42.0f, 65.0f, 29.0f};    // 典型 Betaflight 默认值
 static const float bf_rate_pid_pitch_default[3] = {45.0f, 62.0f, 31.0f};
@@ -39,6 +42,8 @@ static const float bf_rate_pid_roll_i_limit_default = 100.0f;
 static const float bf_rate_pid_pitch_i_limit_default = 100.0f;
 static const float bf_rate_pid_yaw_i_limit_default = 100.0f;
 
+static const uint8_t pid_process_denom_default = 1;  // 默认值为 1，对应 activePidLoopDenom
+
 static const param_default_t bf_pid_defaults[] = {
     {bf_rate_pid_roll, bf_rate_pid_roll_default},
     {bf_rate_pid_pitch, bf_rate_pid_pitch_default},
@@ -49,6 +54,7 @@ static const param_default_t bf_pid_defaults[] = {
     {&bf_rate_pid_roll_i_limit, &bf_rate_pid_roll_i_limit_default},
     {&bf_rate_pid_pitch_i_limit, &bf_rate_pid_pitch_i_limit_default},
     {&bf_rate_pid_yaw_i_limit, &bf_rate_pid_yaw_i_limit_default},
+    {&pid_process_denom, &pid_process_denom_default},
 };
 
 static void bf_pid_param_default(void *address, uint8_t size) {
@@ -70,6 +76,7 @@ static param_list bf_pid_params[] = {
     {(void *)&bf_rate_pid_roll_i_limit, sizeof(bf_rate_pid_roll_i_limit), "bf_rate_pid_roll_i_limit", "f", bf_pid_param_default},
     {(void *)&bf_rate_pid_pitch_i_limit, sizeof(bf_rate_pid_pitch_i_limit), "bf_rate_pid_pitch_i_limit", "f", bf_pid_param_default},
     {(void *)&bf_rate_pid_yaw_i_limit, sizeof(bf_rate_pid_yaw_i_limit), "bf_rate_pid_yaw_i_limit", "f", bf_pid_param_default},
+    {(void *)&pid_process_denom, sizeof(pid_process_denom), "pid_process_denom", "u8", bf_pid_param_default},
 };
 
 param_list *bfPidParam_list(void) { return bf_pid_params; }

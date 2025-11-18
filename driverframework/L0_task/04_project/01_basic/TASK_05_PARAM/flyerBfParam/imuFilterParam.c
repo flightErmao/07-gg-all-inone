@@ -11,67 +11,60 @@ typedef struct {
 
 static void bf_imu_filter_param_default(void *address, uint8_t size);
 
-/* Betaflight 风格 IMU 滤波器参数 */
-static float bf_imu_filter_sample_rate_hz;
-static float bf_imu_filter_lpf_gyro_cutoff_hz;
-static float bf_imu_filter_lpf_acc_cutoff_hz;
-static float bf_imu_filter_notch0_freq_hz;
-static float bf_imu_filter_notch0_bw_hz;
-static float bf_imu_filter_notch1_freq_hz;
-static float bf_imu_filter_notch1_bw_hz;
-static float bf_imu_filter_lpf1_dyn_min_hz;
-static float bf_imu_filter_lpf1_dyn_max_hz;
-static float bf_imu_filter_lpf1_dyn_expo;
+/* Betaflight 风格 IMU 滤波器参数 - 完全仿照 gyroConfig 的参数名称 */
 
 /* LPF1 滤波器参数 */
-static uint8_t bf_imu_filter_lpf1_enabled;
-static uint8_t bf_imu_filter_lpf1_type;  // 0=NONE, 1=PT1, 2=BIQUAD, 3=PT2, 4=PT3
-static float bf_imu_filter_lpf1_cutoff_hz;
+static uint8_t gyro_lpf1_type;  // 0=NONE, 1=PT1, 2=BIQUAD, 3=PT2, 4=PT3
+static uint16_t gyro_lpf1_static_hz;  // LPF1 静态截止频率
 
 /* LPF2 滤波器参数 */
-static uint8_t bf_imu_filter_lpf2_enabled;
-static uint8_t bf_imu_filter_lpf2_type;  // 0=NONE, 1=PT1, 2=BIQUAD, 3=PT2, 4=PT3
-static float bf_imu_filter_lpf2_cutoff_hz;
+static uint8_t gyro_lpf2_type;  // 0=NONE, 1=PT1, 2=BIQUAD, 3=PT2, 4=PT3
+static uint16_t gyro_lpf2_static_hz;  // LPF2 静态截止频率
 
-/* 默认值 - Betaflight 典型配置 */
-static const float bf_imu_filter_sample_rate_hz_default = 8000.0f;  // Betaflight 默认 8kHz
-static const float bf_imu_filter_lpf_gyro_cutoff_hz_default = 100.0f;
-static const float bf_imu_filter_lpf_acc_cutoff_hz_default = 50.0f;
-static const float bf_imu_filter_notch0_freq_hz_default = 0.0f;
-static const float bf_imu_filter_notch0_bw_hz_default = 0.0f;
-static const float bf_imu_filter_notch1_freq_hz_default = 0.0f;
-static const float bf_imu_filter_notch1_bw_hz_default = 0.0f;
-static const float bf_imu_filter_lpf1_dyn_min_hz_default = 80.0f;
-static const float bf_imu_filter_lpf1_dyn_max_hz_default = 250.0f;
-static const float bf_imu_filter_lpf1_dyn_expo_default = 5.0f;
+/* Notch 滤波器参数 */
+static uint16_t gyro_soft_notch_hz_1;  // Notch1 中心频率
+static uint16_t gyro_soft_notch_cutoff_1;  // Notch1 截止频率
+static uint16_t gyro_soft_notch_hz_2;  // Notch2 中心频率
+static uint16_t gyro_soft_notch_cutoff_2;  // Notch2 截止频率
 
-/* LPF1 默认值 */
-static const uint8_t bf_imu_filter_lpf1_enabled_default = 1;  // 默认使能
-static const uint8_t bf_imu_filter_lpf1_type_default = 1;     // PT1
-static const float bf_imu_filter_lpf1_cutoff_hz_default = 100.0f;
+/* 动态 LPF1 滤波器参数 */
+static uint16_t gyro_lpf1_dyn_min_hz;  // 动态 LPF1 最小频率
+static uint16_t gyro_lpf1_dyn_max_hz;  // 动态 LPF1 最大频率
+static uint8_t gyro_lpf1_dyn_expo;  // 动态 LPF1 指数
 
-/* LPF2 默认值 */
-static const uint8_t bf_imu_filter_lpf2_enabled_default = 0;  // 默认禁用
-static const uint8_t bf_imu_filter_lpf2_type_default = 0;     // NONE
-static const float bf_imu_filter_lpf2_cutoff_hz_default = 0.0f;
+/* 默认值 - 完全仿照 pgResetFn_gyroConfig 的默认值 */
+#define GYRO_LPF1_DYN_MIN_HZ_DEFAULT 80
+#define GYRO_LPF1_DYN_MAX_HZ_DEFAULT 250
+#define GYRO_LPF2_HZ_DEFAULT 0
+#define FILTER_PT1 1
+
+static const uint8_t gyro_lpf1_type_default = FILTER_PT1;  // PT1
+static const uint16_t gyro_lpf1_static_hz_default = GYRO_LPF1_DYN_MIN_HZ_DEFAULT;  // 默认使用动态最小值
+
+static const uint8_t gyro_lpf2_type_default = FILTER_PT1;  // PT1
+static const uint16_t gyro_lpf2_static_hz_default = GYRO_LPF2_HZ_DEFAULT;  // 默认禁用
+
+static const uint16_t gyro_soft_notch_hz_1_default = 0;
+static const uint16_t gyro_soft_notch_cutoff_1_default = 0;
+static const uint16_t gyro_soft_notch_hz_2_default = 0;
+static const uint16_t gyro_soft_notch_cutoff_2_default = 0;
+
+static const uint16_t gyro_lpf1_dyn_min_hz_default = GYRO_LPF1_DYN_MIN_HZ_DEFAULT;
+static const uint16_t gyro_lpf1_dyn_max_hz_default = GYRO_LPF1_DYN_MAX_HZ_DEFAULT;
+static const uint8_t gyro_lpf1_dyn_expo_default = 5;
 
 static const param_default_t bf_imu_filter_defaults[] = {
-    {&bf_imu_filter_sample_rate_hz, &bf_imu_filter_sample_rate_hz_default},
-    {&bf_imu_filter_lpf_gyro_cutoff_hz, &bf_imu_filter_lpf_gyro_cutoff_hz_default},
-    {&bf_imu_filter_lpf_acc_cutoff_hz, &bf_imu_filter_lpf_acc_cutoff_hz_default},
-    {&bf_imu_filter_notch0_freq_hz, &bf_imu_filter_notch0_freq_hz_default},
-    {&bf_imu_filter_notch0_bw_hz, &bf_imu_filter_notch0_bw_hz_default},
-    {&bf_imu_filter_notch1_freq_hz, &bf_imu_filter_notch1_freq_hz_default},
-    {&bf_imu_filter_notch1_bw_hz, &bf_imu_filter_notch1_bw_hz_default},
-    {&bf_imu_filter_lpf1_dyn_min_hz, &bf_imu_filter_lpf1_dyn_min_hz_default},
-    {&bf_imu_filter_lpf1_dyn_max_hz, &bf_imu_filter_lpf1_dyn_max_hz_default},
-    {&bf_imu_filter_lpf1_dyn_expo, &bf_imu_filter_lpf1_dyn_expo_default},
-    {&bf_imu_filter_lpf1_enabled, &bf_imu_filter_lpf1_enabled_default},
-    {&bf_imu_filter_lpf1_type, &bf_imu_filter_lpf1_type_default},
-    {&bf_imu_filter_lpf1_cutoff_hz, &bf_imu_filter_lpf1_cutoff_hz_default},
-    {&bf_imu_filter_lpf2_enabled, &bf_imu_filter_lpf2_enabled_default},
-    {&bf_imu_filter_lpf2_type, &bf_imu_filter_lpf2_type_default},
-    {&bf_imu_filter_lpf2_cutoff_hz, &bf_imu_filter_lpf2_cutoff_hz_default},
+    {&gyro_lpf1_type, &gyro_lpf1_type_default},
+    {&gyro_lpf1_static_hz, &gyro_lpf1_static_hz_default},
+    {&gyro_lpf2_type, &gyro_lpf2_type_default},
+    {&gyro_lpf2_static_hz, &gyro_lpf2_static_hz_default},
+    {&gyro_soft_notch_hz_1, &gyro_soft_notch_hz_1_default},
+    {&gyro_soft_notch_cutoff_1, &gyro_soft_notch_cutoff_1_default},
+    {&gyro_soft_notch_hz_2, &gyro_soft_notch_hz_2_default},
+    {&gyro_soft_notch_cutoff_2, &gyro_soft_notch_cutoff_2_default},
+    {&gyro_lpf1_dyn_min_hz, &gyro_lpf1_dyn_min_hz_default},
+    {&gyro_lpf1_dyn_max_hz, &gyro_lpf1_dyn_max_hz_default},
+    {&gyro_lpf1_dyn_expo, &gyro_lpf1_dyn_expo_default},
 };
 
 static void bf_imu_filter_param_default(void *address, uint8_t size) {
@@ -84,37 +77,27 @@ static void bf_imu_filter_param_default(void *address, uint8_t size) {
 }
 
 static param_list bf_imu_filter_params[] = {
-    {(void*)&bf_imu_filter_sample_rate_hz, sizeof(bf_imu_filter_sample_rate_hz), "bf_imu_filter_sample_rate_hz", "f",
+    {(void*)&gyro_lpf1_type, sizeof(gyro_lpf1_type), "gyro_lpf1_type", "u8",
      bf_imu_filter_param_default},
-    {(void*)&bf_imu_filter_lpf_gyro_cutoff_hz, sizeof(bf_imu_filter_lpf_gyro_cutoff_hz), "bf_imu_filter_lpf_gyro_cutoff_hz", "f",
+    {(void*)&gyro_lpf1_static_hz, sizeof(gyro_lpf1_static_hz), "gyro_lpf1_static_hz", "u16",
      bf_imu_filter_param_default},
-    {(void*)&bf_imu_filter_lpf_acc_cutoff_hz, sizeof(bf_imu_filter_lpf_acc_cutoff_hz), "bf_imu_filter_lpf_acc_cutoff_hz", "f",
+    {(void*)&gyro_lpf2_type, sizeof(gyro_lpf2_type), "gyro_lpf2_type", "u8",
      bf_imu_filter_param_default},
-    {(void*)&bf_imu_filter_notch0_freq_hz, sizeof(bf_imu_filter_notch0_freq_hz), "bf_imu_filter_notch0_freq_hz", "f",
+    {(void*)&gyro_lpf2_static_hz, sizeof(gyro_lpf2_static_hz), "gyro_lpf2_static_hz", "u16",
      bf_imu_filter_param_default},
-    {(void*)&bf_imu_filter_notch0_bw_hz, sizeof(bf_imu_filter_notch0_bw_hz), "bf_imu_filter_notch0_bw_hz", "f",
+    {(void*)&gyro_soft_notch_hz_1, sizeof(gyro_soft_notch_hz_1), "gyro_soft_notch_hz_1", "u16",
      bf_imu_filter_param_default},
-    {(void*)&bf_imu_filter_notch1_freq_hz, sizeof(bf_imu_filter_notch1_freq_hz), "bf_imu_filter_notch1_freq_hz", "f",
+    {(void*)&gyro_soft_notch_cutoff_1, sizeof(gyro_soft_notch_cutoff_1), "gyro_soft_notch_cutoff_1", "u16",
      bf_imu_filter_param_default},
-    {(void*)&bf_imu_filter_notch1_bw_hz, sizeof(bf_imu_filter_notch1_bw_hz), "bf_imu_filter_notch1_bw_hz", "f",
+    {(void*)&gyro_soft_notch_hz_2, sizeof(gyro_soft_notch_hz_2), "gyro_soft_notch_hz_2", "u16",
      bf_imu_filter_param_default},
-    {(void*)&bf_imu_filter_lpf1_dyn_min_hz, sizeof(bf_imu_filter_lpf1_dyn_min_hz), "bf_imu_filter_lpf1_dyn_min_hz", "f",
+    {(void*)&gyro_soft_notch_cutoff_2, sizeof(gyro_soft_notch_cutoff_2), "gyro_soft_notch_cutoff_2", "u16",
      bf_imu_filter_param_default},
-    {(void*)&bf_imu_filter_lpf1_dyn_max_hz, sizeof(bf_imu_filter_lpf1_dyn_max_hz), "bf_imu_filter_lpf1_dyn_max_hz", "f",
+    {(void*)&gyro_lpf1_dyn_min_hz, sizeof(gyro_lpf1_dyn_min_hz), "gyro_lpf1_dyn_min_hz", "u16",
      bf_imu_filter_param_default},
-    {(void*)&bf_imu_filter_lpf1_dyn_expo, sizeof(bf_imu_filter_lpf1_dyn_expo), "bf_imu_filter_lpf1_dyn_expo", "f",
+    {(void*)&gyro_lpf1_dyn_max_hz, sizeof(gyro_lpf1_dyn_max_hz), "gyro_lpf1_dyn_max_hz", "u16",
      bf_imu_filter_param_default},
-    {(void*)&bf_imu_filter_lpf1_enabled, sizeof(bf_imu_filter_lpf1_enabled), "bf_imu_filter_lpf1_enabled", "u8",
-     bf_imu_filter_param_default},
-    {(void*)&bf_imu_filter_lpf1_type, sizeof(bf_imu_filter_lpf1_type), "bf_imu_filter_lpf1_type", "u8",
-     bf_imu_filter_param_default},
-    {(void*)&bf_imu_filter_lpf1_cutoff_hz, sizeof(bf_imu_filter_lpf1_cutoff_hz), "bf_imu_filter_lpf1_cutoff_hz", "f",
-     bf_imu_filter_param_default},
-    {(void*)&bf_imu_filter_lpf2_enabled, sizeof(bf_imu_filter_lpf2_enabled), "bf_imu_filter_lpf2_enabled", "u8",
-     bf_imu_filter_param_default},
-    {(void*)&bf_imu_filter_lpf2_type, sizeof(bf_imu_filter_lpf2_type), "bf_imu_filter_lpf2_type", "u8",
-     bf_imu_filter_param_default},
-    {(void*)&bf_imu_filter_lpf2_cutoff_hz, sizeof(bf_imu_filter_lpf2_cutoff_hz), "bf_imu_filter_lpf2_cutoff_hz", "f",
+    {(void*)&gyro_lpf1_dyn_expo, sizeof(gyro_lpf1_dyn_expo), "gyro_lpf1_dyn_expo", "u8",
      bf_imu_filter_param_default},
 };
 

@@ -1,0 +1,22 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+
+src = Glob("./src/*.cpp")
+
+include_paths = [
+    cwd,
+    os.path.join(cwd, "inc"),
+    os.path.join(cwd, "..", "..", "..", "02_tools", "TASK_02_SD_MLOG", "inc"),
+]
+
+group = DefineGroup(
+    "PROJECT_BF_MLOG_GYRO",
+    src,
+    depend=["PROJECT_BF_MLOG_GYRO_EN", "TASK_TOOL_02_SD_MLOG"],
+    CPPPATH=include_paths,
+)
+
+Return("group")
+
