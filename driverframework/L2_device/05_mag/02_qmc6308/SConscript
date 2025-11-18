@@ -7,7 +7,9 @@ src = []
 src = Glob("./src/*.c")
 src += Glob("./src/*.cpp")
 
-path = [cwd, os.path.join(cwd, "inc")]
+ulog_path = os.path.abspath(os.path.join(cwd, "../../../../kernel/rtthread/components/utilities/ulog"))
+
+path = [cwd, os.path.join(cwd, "inc"), ulog_path]
 
 group = DefineGroup("QMC6308", src, depend=["BSP_USING_MAG_QMC6308"], CPPPATH=path)
 

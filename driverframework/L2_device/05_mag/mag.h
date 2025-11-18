@@ -31,19 +31,28 @@ extern "C" {
 
 typedef struct {
   uint32_t timestamp_ms;
-  int16_t value_x;
-  int16_t value_y;
-  int16_t value_z;
+  float value_x;  /* magnetometer value in uT */
+  float value_y;  /* magnetometer value in uT */
+  float value_z;  /* magnetometer value in uT */
 } mag_report_t;
 
-struct mag_configure {
-  rt_uint16_t osr; /* oversampling ratio */
-};
+typedef struct mag_configure {
+  rt_uint16_t range_g;      /* magnetometer range in Gauss (e.g., 2, 8, 12, 30) */
+  rt_uint16_t odr_hz;        /* output data rate in Hz (e.g., 10, 50, 100, 200) */
+  float lsb;                 /* least significant bit scale factor (uT/LSB) */
+                              /* Note: For QMC6308, LSB values and GS conversion (from datasheet):
+                               *   - ±30G range: 1000 LSB/G,  0.1 uT/LSB,    1 GS = 100 uT = 1000 LSB
+                               *   - ±12G range: 2500 LSB/G,  0.04 uT/LSB,   1 GS = 100 uT = 2500 LSB
+                               *   - ±8G range:  3750 LSB/G, 0.02667 uT/LSB, 1 GS = 100 uT = 3750 LSB
+                               *   - ±2G range:  15000 LSB/G, 0.00667 uT/LSB, 1 GS = 100 uT = 15000 LSB
+                               * Where 1 GS (Gauss) = 100 uT (microTesla) */
+} mag_configure_t;
 
 struct mag_device {
   struct rt_device parent;
   const struct mag_ops* ops;
   uint8_t id;
+  mag_configure_t config;    /* magnetometer configuration */
 };
 typedef struct mag_device* mag_dev_t;
 

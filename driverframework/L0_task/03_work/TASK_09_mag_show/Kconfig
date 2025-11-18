@@ -1,0 +1,32 @@
+menuconfig WORK_TASK_MAG_REPORT_EN
+    bool "ENABLE: WORK_TASK_MAG_REPORT_EN"
+    default n
+    help
+       open mag report task
+
+    if WORK_TASK_MAG_REPORT_EN
+
+        config TASK_MAG_DEVICE_NAME
+            string "Magnetometer device name"
+            default "qmc6308"
+            help
+                Magnetometer device name used by rt_device_find.
+                Valid values: qmc6308, qmc5883l.
+
+        config TASK_MAG_ATKP_LOG_EN
+            bool "Enable ATKP logging for magnetometer data"
+            default n
+            help
+                Enable ATKP logging for magnetometer data transmission
+
+            if TASK_MAG_ATKP_LOG_EN
+                config TASK_MAG_ATKP_CHANNEL
+                    int "ATKP channel number for magnetometer data"
+                    range 1 8
+                    default 2
+                    help
+                        ATKP channel number (1-8) for sending magnetometer data
+            endif
+
+    endif
+
