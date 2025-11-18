@@ -47,7 +47,7 @@ class BMI270 {
 
   /* 工作线程配置（静态栈） */
   static constexpr rt_uint16_t THREAD_STACK_SIZE = 2048;
-  static constexpr rt_uint8_t THREAD_PRIORITY = 12;
+  static constexpr rt_uint8_t THREAD_PRIORITY = 5;
   static constexpr rt_uint8_t THREAD_TIMESLICE = 5;
 
  private:

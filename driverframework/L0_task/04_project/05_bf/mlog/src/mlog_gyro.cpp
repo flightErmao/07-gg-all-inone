@@ -66,15 +66,23 @@ void MlogGyro::init()
 void MlogGyro::startCallback()
 {
     // 当 mlog 开始时启用推送（参考 aMlogStabilze.c:187）
+    // 但是需要检查参数使能状态，只有参数使能时才真正启用推送
     if (instance_ != nullptr) {
-        instance_->enabled_ = true;
+        // 如果参数已使能，则设置 enabled_ 为 true
+        // 否则保持 enabled_ 为 false，这样 pushGyroData 会被跳过
+        if (instance_->param_enabled_) {
+            instance_->enabled_ = true;
+        } else {
+            instance_->enabled_ = false;
+        }
     }
 }
 
 void MlogGyro::pushGyroData(uint32_t seq, uint32_t timestamp, const float gyro_raw[3], const float gyro_filtered[3])
 {
     // 检查是否启用推送（参考 aMlogStabilze.c:210）
-    if (bus_id_ < 0 || !enabled_) {
+    // 必须同时满足：bus_id_ 有效、mlog 系统已启用（enabled_）、参数已使能（param_enabled_）
+    if (bus_id_ < 0 || !isEnabled()) {
         return;
     }
     

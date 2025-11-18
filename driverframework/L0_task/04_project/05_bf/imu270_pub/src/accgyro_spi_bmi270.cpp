@@ -26,6 +26,21 @@ MCN_DEFINE(imu_raw, sizeof(imu_raw_msg_t));
 #define LOG_LVL LOG_LVL_INFO
 #endif
 
+// MCN echo 函数（参考 aMcnSensorImu.c 中的 sensor_imu_echo）
+static int imu_raw_echo(void* parameter) {
+  imu_raw_msg_t imu_data;
+  
+  if (mcn_copy_from_hub((McnHub*)parameter, &imu_data) != RT_EOK) {
+    return -1;
+  }
+
+  LOG_I("seq: %lu, acc: %.2f, %.2f, %.2f, gyro: %.2f, %.2f, %.2f", 
+        imu_data.seq,
+        imu_data.accel[0], imu_data.accel[1], imu_data.accel[2],
+        imu_data.gyro[0], imu_data.gyro[1], imu_data.gyro[2]);
+  return 0;
+}
+
 namespace bf_bmi270 {
 
 namespace {
@@ -409,7 +424,8 @@ rt_err_t bf_bmi270_init_default() {
   cfg.spi_max_hz = SENSOR_BMI270_BF_SPI_MAX_HZ;
 
   // MCN 话题 imu_raw 的广告发布（重复调用返回 -RT_EBUSY 视为成功）
-  rt_err_t ret = mcn_advertise(MCN_HUB(imu_raw), RT_NULL);
+  // 参考 aMcnSensorImu.c，使用 echo 函数来打印数据
+  rt_err_t ret = mcn_advertise(MCN_HUB(imu_raw), imu_raw_echo);
   if (ret != RT_EOK && ret != -RT_EBUSY) {
     LOG_E("imu_raw advertise failed: %d", ret);
     return ret;

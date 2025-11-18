@@ -29,20 +29,17 @@ public:
     
     /**
      * @brief 初始化工作队列管理器
-     * 如果 PROJECT_BF_WORKQUEUE_MANAGE_EN 使能，会自动调用
+     * 只需要初始化管理器本身，工作队列由 INIT_ENV_EXPORT 自动创建
      */
     rt_err_t init();
     
     /**
-     * @brief 创建或获取工作队列（通过名称）
+     * @brief 注册工作队列（内部使用，由 INIT_ENV_EXPORT 调用的初始化函数使用）
      * @param name 工作队列名称
-     * @param stack_size 栈大小（字节），如果为 0 使用默认值
-     * @param priority 优先级，如果为 0 使用默认值
-     * @return 工作队列指针，失败返回 RT_NULL
+     * @param wq 工作队列指针
+     * @return RT_EOK 成功，其他值失败
      */
-    struct rt_workqueue* getOrCreate(const char* name, 
-                                      uint32_t stack_size = 0, 
-                                      uint8_t priority = 0);
+    rt_err_t registerWorkqueue(const char* name, struct rt_workqueue* wq);
     
     /**
      * @brief 通过名称查找工作队列
@@ -101,6 +98,14 @@ private:
      * @brief 查找已使用的队列条目（通过名称）
      */
     WorkqueueEntry* findEntryByName(const char* name);
+    
+    /**
+     * @brief 创建或获取工作队列（已废弃，仅内部使用）
+     * @deprecated 工作队列应该通过 INIT_ENV_EXPORT 自动创建，不应手动调用此方法
+     */
+    struct rt_workqueue* getOrCreate(const char* name, 
+                                      uint32_t stack_size = 0, 
+                                      uint8_t priority = 0);
 };
 
 } // namespace bf_workqueue

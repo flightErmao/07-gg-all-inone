@@ -32,16 +32,13 @@ extern "C" {
 #endif
 
 // Kconfig 宏默认值（如果未在 rtconfig.h 中定义）
+#ifndef CONFIG_PROJECT_BF_WORKQUEUE_RATE_CTRL_NAME
+#define CONFIG_PROJECT_BF_WORKQUEUE_RATE_CTRL_NAME "wq_rate_ctrl"
+#endif
+
+// 向后兼容的宏定义
 #ifndef CONFIG_PROJECT_BF_WORKQUEUE_NAME
-#define CONFIG_PROJECT_BF_WORKQUEUE_NAME "wq_rate_ctrl"
-#endif
-
-#ifndef CONFIG_PROJECT_BF_WORKQUEUE_STACK_SIZE
-#define CONFIG_PROJECT_BF_WORKQUEUE_STACK_SIZE 1536
-#endif
-
-#ifndef CONFIG_PROJECT_BF_WORKQUEUE_PRIORITY
-#define CONFIG_PROJECT_BF_WORKQUEUE_PRIORITY 16
+#define CONFIG_PROJECT_BF_WORKQUEUE_NAME CONFIG_PROJECT_BF_WORKQUEUE_RATE_CTRL_NAME
 #endif
 
 #ifndef CONFIG_PROJECT_BF_RATE_CTRL_GYRO_CALIBRATION_DURATION_MS
@@ -247,23 +244,21 @@ RateCtrlAngularVelocity::RateCtrlAngularVelocity()
 
 rt_err_t RateCtrlAngularVelocity::init()
 {
-    // 通过工作队列管理器实例，根据名称查找或创建工作队列
-    // 工作队列名称从 Kconfig 获取：CONFIG_PROJECT_BF_WORKQUEUE_NAME
+    // 通过工作队列管理器实例，根据名称查找工作队列
+    // 工作队列应该已经通过 INIT_ENV_EXPORT 自动创建，这里只需要查找
+    // 工作队列名称从 Kconfig 获取：CONFIG_PROJECT_BF_WORKQUEUE_RATE_CTRL_NAME
     bf_workqueue::WorkqueueManager& wq_mgr = bf_workqueue::WorkqueueManager::instance();
-    wq_mgr.init();  // 确保已初始化
+    wq_mgr.init();  // 确保管理器已初始化
     
-    // 通过名称查找工作队列（如果不存在会自动创建）
-    // 使用 Kconfig 中定义的名称和参数
-    const char* wq_name = CONFIG_PROJECT_BF_WORKQUEUE_NAME;
-    uint32_t stack_size = CONFIG_PROJECT_BF_WORKQUEUE_STACK_SIZE;
-    uint8_t priority = CONFIG_PROJECT_BF_WORKQUEUE_PRIORITY;
+    // 通过名称查找工作队列（不能创建，只能查找）
+    const char* wq_name = CONFIG_PROJECT_BF_WORKQUEUE_RATE_CTRL_NAME;
     
-    workqueue_ = wq_mgr.getOrCreate(wq_name, stack_size, priority);
+    workqueue_ = wq_mgr.find(wq_name);
     if (workqueue_ == nullptr) {
-        LOG_E("get or create workqueue '%s' failed", wq_name);
+        LOG_E("find workqueue '%s' failed, make sure it's enabled in Kconfig", wq_name);
         return -RT_ERROR;
     }
-    LOG_I("Found workqueue '%s' (stack_size=%u, priority=%u)", wq_name, stack_size, priority);
+    LOG_I("Found workqueue '%s'", wq_name);
 
     imu_node_ = mcn_subscribe(MCN_HUB(imu_raw), RT_NULL, RT_NULL);
     if (imu_node_ == RT_NULL) {

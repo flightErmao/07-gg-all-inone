@@ -10,20 +10,24 @@
 #include <rtconfig.h>
 #include <ipc/workqueue.h>
 
-#ifndef CONFIG_PROJECT_BF_WORKQUEUE_NAME
-#define CONFIG_PROJECT_BF_WORKQUEUE_NAME "wq_rate_ctrl"
+// Kconfig 宏定义（如果没有定义，提供默认值）
+#ifndef CONFIG_PROJECT_BF_WORKQUEUE_RATE_CTRL_NAME
+#define CONFIG_PROJECT_BF_WORKQUEUE_RATE_CTRL_NAME "wq_rate_ctrl"
 #endif
 
-#ifndef CONFIG_PROJECT_BF_WORKQUEUE_STACK_SIZE
-#define CONFIG_PROJECT_BF_WORKQUEUE_STACK_SIZE 1536
+#ifndef CONFIG_PROJECT_BF_WORKQUEUE_RATE_CTRL_STACK_SIZE
+#define CONFIG_PROJECT_BF_WORKQUEUE_RATE_CTRL_STACK_SIZE 1536
 #endif
 
-#ifndef CONFIG_PROJECT_BF_WORKQUEUE_PRIORITY
-#define CONFIG_PROJECT_BF_WORKQUEUE_PRIORITY 16
+#ifndef CONFIG_PROJECT_BF_WORKQUEUE_RATE_CTRL_PRIORITY
+#define CONFIG_PROJECT_BF_WORKQUEUE_RATE_CTRL_PRIORITY 16
 #endif
 
-// 从 Kconfig 获取工作队列名称（用于向后兼容的 C 接口）
-#define WQ_RATE_CTRL_NAME CONFIG_PROJECT_BF_WORKQUEUE_NAME
+// 向后兼容的宏定义
+#define CONFIG_PROJECT_BF_WORKQUEUE_NAME CONFIG_PROJECT_BF_WORKQUEUE_RATE_CTRL_NAME
+#define CONFIG_PROJECT_BF_WORKQUEUE_STACK_SIZE CONFIG_PROJECT_BF_WORKQUEUE_RATE_CTRL_STACK_SIZE
+#define CONFIG_PROJECT_BF_WORKQUEUE_PRIORITY CONFIG_PROJECT_BF_WORKQUEUE_RATE_CTRL_PRIORITY
+#define WQ_RATE_CTRL_NAME CONFIG_PROJECT_BF_WORKQUEUE_RATE_CTRL_NAME
 
 namespace bf_workqueue {
 
@@ -63,12 +67,7 @@ rt_err_t WorkqueueManager::init()
     }
     
     initialized_ = true;
-    
-    // 初始化默认工作队列（向后兼容）
-    // 使用 Kconfig 中定义的名称为和参数
-    getOrCreate(CONFIG_PROJECT_BF_WORKQUEUE_NAME, 
-                CONFIG_PROJECT_BF_WORKQUEUE_STACK_SIZE,
-                CONFIG_PROJECT_BF_WORKQUEUE_PRIORITY);
+    // 不再自动创建工作队列，工作队列由 INIT_ENV_EXPORT 自动创建
     
     return RT_EOK;
 }
@@ -99,6 +98,34 @@ WorkqueueManager::WorkqueueEntry* WorkqueueManager::findEntryByName(const char* 
     return nullptr;
 }
 
+rt_err_t WorkqueueManager::registerWorkqueue(const char* name, struct rt_workqueue* wq)
+{
+    if (name == nullptr || wq == nullptr) {
+        return -RT_EINVAL;
+    }
+    
+    // 检查是否已存在同名的工作队列
+    WorkqueueEntry* entry = findEntryByName(name);
+    if (entry != nullptr) {
+        // 已存在同名工作队列
+        return -RT_EBUSY;
+    }
+    
+    // 查找空闲条目
+    entry = findFreeEntry();
+    if (entry == nullptr) {
+        // 没有空闲的条目
+        return -RT_ENOSPC;
+    }
+    
+    // 注册工作队列
+    entry->name = name;  // 注意：这里假设 name 是静态字符串常量
+    entry->wq = wq;
+    entry->in_use = true;
+    
+    return RT_EOK;
+}
+
 struct rt_workqueue* WorkqueueManager::getOrCreate(const char* name, 
                                                      uint32_t stack_size, 
                                                      uint8_t priority)
@@ -113,7 +140,7 @@ struct rt_workqueue* WorkqueueManager::getOrCreate(const char* name,
         return entry->wq;
     }
     
-    // 如果不存在，创建新的工作队列
+    // 如果不存在，创建新的工作队列（仅用于向后兼容，不建议使用）
     entry = findFreeEntry();
     if (entry == nullptr) {
         // 没有空闲的条目
@@ -159,12 +186,8 @@ rt_err_t WorkqueueManager::addWork(const char* wq_name, struct rt_work* work)
     
     struct rt_workqueue* wq = find(wq_name);
     if (wq == nullptr) {
-        // 如果未找到，尝试创建
-        wq = getOrCreate(wq_name, CONFIG_PROJECT_BF_WORKQUEUE_STACK_SIZE, 
-                         CONFIG_PROJECT_BF_WORKQUEUE_PRIORITY);
-        if (wq == nullptr) {
-            return -RT_ERROR;
-        }
+        // 工作队列未找到，只能通过 find 查找，不能自动创建
+        return -RT_ENOENT;
     }
     
     return rt_workqueue_dowork(wq, work);
@@ -226,8 +249,7 @@ struct rt_workqueue* wq_workqueue_get_by_name(const char* name)
 
 #ifdef PROJECT_BF_WORKQUEUE_MANAGE_EN
 
-// 静态初始化器：当 PROJECT_BF_WORKQUEUE_MANAGE_EN 使能时自动初始化
-// 使用 RT-Thread 的初始化机制
+// 工作队列管理器自动初始化（INIT_ENV_EXPORT）
 static int workqueue_manager_auto_init(void)
 {
     bf_workqueue::WorkqueueManager& mgr = bf_workqueue::WorkqueueManager::instance();
@@ -237,7 +259,44 @@ static int workqueue_manager_auto_init(void)
     }
     return 0;
 }
-INIT_COMPONENT_EXPORT(workqueue_manager_auto_init);
+INIT_ENV_EXPORT(workqueue_manager_auto_init);
+
+// 速率控制工作队列自动创建（INIT_ENV_EXPORT）
+#ifdef PROJECT_BF_WORKQUEUE_RATE_CTRL_EN
+static int workqueue_rate_ctrl_init(void)
+{
+    const char* name = CONFIG_PROJECT_BF_WORKQUEUE_RATE_CTRL_NAME;
+    uint32_t stack_size = CONFIG_PROJECT_BF_WORKQUEUE_RATE_CTRL_STACK_SIZE;
+    uint8_t priority = CONFIG_PROJECT_BF_WORKQUEUE_RATE_CTRL_PRIORITY;
+    
+    // 创建工作队列
+    struct rt_workqueue* wq = rt_workqueue_create(name, stack_size, priority);
+    if (wq == nullptr) {
+        rt_kprintf("[WQ] Failed to create workqueue '%s'\n", name);
+        return -1;
+    }
+    
+    // 注册到管理器
+    bf_workqueue::WorkqueueManager& mgr = bf_workqueue::WorkqueueManager::instance();
+    mgr.init();  // 确保管理器已初始化
+    rt_err_t ret = mgr.registerWorkqueue(name, wq);
+    if (ret != RT_EOK) {
+        rt_kprintf("[WQ] Failed to register workqueue '%s': %d\n", name, ret);
+        return -1;
+    }
+    
+    rt_kprintf("[WQ] Created workqueue '%s' (stack=%u, priority=%u)\n", name, stack_size, priority);
+    return 0;
+}
+INIT_ENV_EXPORT(workqueue_rate_ctrl_init);
+#endif /* PROJECT_BF_WORKQUEUE_RATE_CTRL_EN */
+
+// 可以在这里添加更多工作队列的自动初始化函数
+// 例如：
+// #ifdef PROJECT_BF_WORKQUEUE_SENSOR_EN
+// static int workqueue_sensor_init(void) { ... }
+// INIT_ENV_EXPORT(workqueue_sensor_init);
+// #endif
 
 #endif /* PROJECT_BF_WORKQUEUE_MANAGE_EN */
 
