@@ -104,12 +104,14 @@ BMI270::BMI270()
       init_ok_(false),
       int_pin_(-1),
       event_inited_(false),
+      timer_inited_(false),  // 调整顺序，在 worker_inited_ 之前初始化
       worker_thread_(RT_NULL),
       worker_inited_(false),
-      gyro_sample_rate_hz_(800.0f),   // BMI270 陀螺仪配置为 800Hz (临时调试，降低频率)
+      gyro_sample_rate_hz_(800.0f),  // BMI270 陀螺仪配置为 800Hz (临时调试，降低频率)
       gyro_sample_dt_(1.0f / 800.0f),
       gyro_scale_(GYRO_SCALE_2000DPS) {  // BMI270 陀螺仪配置为 2000DPS
   cfg_ = {};
+  rt_memset(&timer_, 0, sizeof(timer_));
 }
 
 BMI270::~BMI270() {
@@ -152,11 +154,6 @@ rt_err_t BMI270::init(const RuntimeConfig &cfg) {
     return -RT_ERROR;
   }
 
-  if (!configureInterrupt()) {
-    // 如果中断失败，仍然允许后续通过轮询方式调试使用
-    // 这里只记录失败，不直接返回错误
-  }
-
   /* 初始化事件与工作线程（静态创建） */
   if (!event_inited_) {
     if (rt_event_init(&event_, "b270_evt", RT_IPC_FLAG_FIFO) != RT_EOK) {
@@ -166,11 +163,15 @@ rt_err_t BMI270::init(const RuntimeConfig &cfg) {
     event_inited_ = true;
   }
 
+  if (!configureInterrupt()) {
+    // 如果中断失败，仍然允许后续通过轮询方式调试使用
+    // 这里只记录失败，不直接返回错误
+    LOG_W("BMI270 interrupt configure failed, will use polling mode");
+  }
+
   if (!worker_inited_) {
-    rt_err_t err = rt_thread_init(&worker_thread_obj_, "b270_wk",
-                                  &BMI270::workerEntry, this,
-                                  worker_stack_, THREAD_STACK_SIZE,
-                                  THREAD_PRIORITY, THREAD_TIMESLICE);
+    rt_err_t err = rt_thread_init(&worker_thread_obj_, "b270_wk", &BMI270::workerEntry, this, worker_stack_,
+                                  THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
     if (err != RT_EOK) {
       LOG_E("BMI270 worker thread init failed: %d", err);
       return err;
@@ -215,8 +216,7 @@ bool BMI270::loadConfigFile() {
   regWrite(BMI270_REG_INIT_CTRL, 0x00, 1);
 
   // 写入 Bosch 提供的配置文件到 INIT_DATA
-  if (spi_.writeMultiReg8(BMI270_REG_INIT_DATA,
-                          (uint8_t *)bmi270_maximum_fifo_config_file,
+  if (spi_.writeMultiReg8(BMI270_REG_INIT_DATA, (uint8_t*)bmi270_maximum_fifo_config_file,
                           (uint16_t)bmi270_maximum_fifo_config_file_size) != RT_EOK) {
     return false;
   }
@@ -260,6 +260,9 @@ bool BMI270::configureSensor() {
 bool BMI270::configureInterrupt() {
   disableInterrupt();
 
+  // 临时关闭中断 IO 初始化，使用软件定时器替代（调试用）
+  // 原始中断初始化代码已注释
+  /*
   if (!cfg_.int_pin_name || cfg_.int_pin_name[0] == '\0') {
     return false;
   }
@@ -276,7 +279,7 @@ bool BMI270::configureInterrupt() {
   // 先读一次状态寄存器，清掉可能存在的 pending 中断
   (void)regRead(BMI270_REG_STATUS);
 
-  // 实际硬件为“高电平有效 + 上升沿触发”，使用上升沿 EXTI
+  // 实际硬件为"高电平有效 + 上升沿触发"，使用上升沿 EXTI
   if (rt_pin_attach_irq(int_pin_, PIN_IRQ_MODE_RISING, &BMI270::drdyIsr, this) != RT_EOK) {
     int_pin_ = -1;
     return false;
@@ -287,15 +290,46 @@ bool BMI270::configureInterrupt() {
     int_pin_ = -1;
     return false;
   }
+  */
+
+  // 临时使用软件定时器替代中断（周期 1ms，用于调试）
+  if (!timer_inited_ && event_inited_) {
+    // 创建软件定时器，周期为 1ms (RT_TICK_PER_SECOND / 1000)
+    // 注意：rt_timer_init 返回 void，不返回错误码
+    rt_timer_init(&timer_, "b270_tmr", &BMI270::timerCallback, this,
+                  RT_TICK_PER_SECOND / 1000,  // 1ms = 1000Hz
+                  RT_TIMER_FLAG_PERIODIC | RT_TIMER_FLAG_HARD_TIMER);
+
+    // 启动定时器
+    rt_err_t ret = rt_timer_start(&timer_);
+    if (ret != RT_EOK) {
+      LOG_E("BMI270 timer start failed: %d", ret);
+      rt_timer_detach(&timer_);
+      return false;
+    }
+
+    timer_inited_ = true;
+    LOG_I("BMI270 using software timer (1ms) instead of interrupt");
+  }
 
   return true;
 }
 
 void BMI270::disableInterrupt() {
+  // 临时关闭中断（已注释）
+  /*
   if (int_pin_ >= 0) {
     rt_pin_irq_enable(int_pin_, PIN_IRQ_DISABLE);
     rt_pin_detach_irq(int_pin_);
     int_pin_ = -1;
+  }
+  */
+
+  // 停止软件定时器（临时替代中断）
+  if (timer_inited_) {
+    rt_timer_stop(&timer_);
+    rt_timer_detach(&timer_);
+    timer_inited_ = false;
   }
 }
 
@@ -381,6 +415,17 @@ void BMI270::drdyIsr(void *parameter) {
   }
 
   /* 在中断中只发送事件，让工作线程去做 SPI 读取和发布 */
+  rt_event_send(&self->event_, 0x01);
+}
+
+/* 软件定时器回调（临时替代中断，用于调试） */
+void BMI270::timerCallback(void* parameter) {
+  auto* self = static_cast<BMI270*>(parameter);
+  if (!self || !self->init_ok_ || !self->event_inited_) {
+    return;
+  }
+
+  /* 在定时器回调中发送事件，和中断回调一样，让工作线程去做 SPI 读取和发布 */
   rt_event_send(&self->event_, 0x01);
 }
 

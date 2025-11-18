@@ -64,6 +64,9 @@ class BMI270 {
   void disableInterrupt();
 
   void workerLoop();
+  
+  /* 软件定时器回调（临时替代中断） */
+  static void timerCallback(void *parameter);
 
   bool readAccelGyro(int16_t acc[3], int16_t gyro[3]);
   void publishImu(const int16_t acc[3], const int16_t gyro[3]);
@@ -86,6 +89,10 @@ class BMI270 {
   /* 中断事件 + 工作线程（静态创建） */
   rt_event event_;
   bool event_inited_;
+  
+  /* 软件定时器（临时替代中断，用于调试） */
+  struct rt_timer timer_;
+  bool timer_inited_;
 
   rt_thread_t worker_thread_;
   struct rt_thread worker_thread_obj_;
