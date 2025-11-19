@@ -1,6 +1,6 @@
 /**
  * @file gyro_filtered_msg.h
- * 
+ *
  * 滤波后陀螺仪数据消息类型定义（C 接口，供 C++ 使用）
  */
 
@@ -20,4 +20,3 @@ typedef struct {
 MCN_DECLARE(gyro_filtered);
 
 #endif /* GYRO_FILTERED_MSG_H__ */
-
