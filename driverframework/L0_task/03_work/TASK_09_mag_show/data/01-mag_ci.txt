@@ -1,0 +1,65 @@
+17846号磁力计
+
+I/mag_cmd tshell: BEFORE: X=-48.880 uT Y=-14.693 uT Z=-37.253 uT Magnitude=63.190 uT Diff=29.20% timestamp=85151ms
+I/mag_cmd tshell: AFTER:  X=-138.400 uT Y=5.493 uT Z=-58.427 uT Magnitude=150.328 uT Diff=207.36% timestamp=96691ms
+I/mag_cmd tshell: DIFF:   X=-89.520 uT Y=20.187 uT Z=-21.173 uT Magnitude=87.138 uT (137.90%) timestamp=96691ms
+I/mag_cmd tshell: BEFORE: X=-44.880 uT Y=-18.080 uT Z=-31.707 uT Magnitude=57.848 uT Diff=18.27% timestamp=265531ms
+I/mag_cmd tshell: AFTER:  X=-136.800 uT Y=6.293 uT Z=-51.253 uT Magnitude=146.222 uT Diff=198.96% timestamp=280771ms
+I/mag_cmd tshell: DIFF:   X=-91.920 uT Y=24.373 uT Z=-19.547 uT Magnitude=88.373 uT (152.77%) timestamp=280771ms
+I/mag_cmd tshell: BEFORE: X=-46.693 uT Y=-19.680 uT Z=-37.467 uT Magnitude=63.018 uT Diff=28.85% timestamp=312971ms
+I/mag_cmd tshell: AFTER:  X=-140.293 uT Y=6.587 uT Z=-55.600 uT Magnitude=151.053 uT Diff=208.84% timestamp=327891ms
+I/mag_cmd tshell: DIFF:   X=-93.600 uT Y=26.267 uT Z=-18.133 uT Magnitude=88.034 uT (139.70%) timestamp=327891ms
+I/mag_cmd tshell: BEFORE: X=-49.093 uT Y=-15.280 uT Z=-36.640 uT Magnitude=63.136 uT Diff=29.09% timestamp=405711ms
+I/mag_cmd tshell: AFTER:  X=-140.400 uT Y=2.187 uT Z=-44.400 uT Magnitude=147.269 uT Diff=201.10% timestamp=423331ms
+I/mag_cmd tshell: DIFF:   X=-91.307 uT Y=17.467 uT Z=-7.760 uT Magnitude=84.134 uT (133.26%) timestamp=423331ms
+I/mag_cmd tshell: BEFORE: X=-49.200 uT Y=-14.293 uT Z=-38.053 uT Magnitude=63.820 uT Diff=30.48% timestamp=454911ms
+I/mag_cmd tshell: AFTER:  X=-142.080 uT Y=6.880 uT Z=-57.173 uT Magnitude=153.306 uT Diff=213.45% timestamp=472591ms
+I/mag_cmd tshell: DIFF:   X=-92.880 uT Y=21.173 uT Z=-19.120 uT Magnitude=89.486 uT (140.22%) timestamp=472591ms
+I/mag_cmd tshell: BEFORE: X=-49.280 uT Y=-14.293 uT Z=-36.240 uT Magnitude=62.818 uT Diff=28.44% timestamp=523751ms
+I/mag_cmd tshell: AFTER:  X=-136.693 uT Y=3.280 uT Z=-41.253 uT Magnitude=142.820 uT Diff=192.01% timestamp=540951ms
+I/mag_cmd tshell: DIFF:   X=-87.413 uT Y=17.573 uT Z=-5.013 uT Magnitude=80.002 uT (127.35%) timestamp=540951ms
+I/mag_cmd tshell: BEFORE: X=-48.800 uT Y=-15.280 uT Z=-36.053 uT Magnitude=62.568 uT Diff=27.92% timestamp=565051ms
+I/mag_cmd tshell: AFTER:  X=-140.693 uT Y=7.600 uT Z=-60.800 uT Magnitude=153.457 uT Diff=213.75% timestamp=574951ms
+I/mag_cmd tshell: DIFF:   X=-91.893 uT Y=22.880 uT Z=-24.747 uT Magnitude=90.889 uT (145.26%) timestamp=574951ms
+I/mag_cmd tshell: BEFORE: X=-49.387 uT Y=-14.693 uT Z=-38.853 uT Magnitude=64.533 uT Diff=31.94% timestamp=598951ms
+I/mag_cmd tshell: AFTER:  X=-142.987 uT Y=6.000 uT Z=-58.773 uT Magnitude=154.711 uT Diff=216.32% timestamp=617431ms
+I/mag_cmd tshell: DIFF:   X=-93.600 uT Y=20.693 uT Z=-19.920 uT Magnitude=90.178 uT (139.74%) timestamp=617431ms
+I/mag_cmd tshell: BEFORE: X=-48.800 uT Y=-14.480 uT Z=-37.040 uT Magnitude=62.953 uT Diff=28.71% timestamp=636991ms
+I/mag_cmd tshell: AFTER:  X=-140.400 uT Y=-0.187 uT Z=-49.813 uT Magnitude=148.975 uT Diff=204.59% timestamp=648791m
+I/mag_cmd tshell: DIFF:   X=-91.600 uT Y=14.293 uT Z=-12.773 uT Magnitude=86.022 uT (136.65%) timestamp=648791ms
+I/mag_cmd tshell: BEFORE: X=-48.480 uT Y=-14.693 uT Z=-38.453 uT Magnitude=63.599 uT Diff=30.03% timestamp=672571ms
+I/mag_cmd tshell: AFTER:  X=-144.293 uT Y=2.000 uT Z=-46.347 uT Magnitude=151.567 uT Diff=209.89% timestamp=684011ms
+I/mag_cmd tshell: DIFF:   X=-95.813 uT Y=16.693 uT Z=-7.893 uT Magnitude=87.968 uT (138.32%) timestamp=684011ms
+
+17741号磁力计
+
+I/mag_cmd tshell: BEFORE: X=-41.200 uT Y=-10.587 uT Z=-35.573 uT Magnitude=55.452 uT Diff=13.38% timestamp=87711ms
+I/mag_cmd tshell: AFTER:  X=-132.187 uT Y=5.387 uT Z=-55.707 uT Magnitude=143.546 uT Diff=193.49% timestamp=106791ms
+I/mag_cmd tshell: DIFF:   X=-90.987 uT Y=15.973 uT Z=-20.133 uT Magnitude=88.094 uT (158.86%) timestamp=106791ms
+I/mag_cmd tshell: BEFORE: X=-40.400 uT Y=-11.493 uT Z=-37.067 uT Magnitude=56.020 uT Diff=14.54% timestamp=187951ms
+I/mag_cmd tshell: AFTER:  X=-130.987 uT Y=6.480 uT Z=-51.013 uT Magnitude=140.719 uT Diff=187.71% timestamp=198931ms
+I/mag_cmd tshell: DIFF:   X=-90.587 uT Y=17.973 uT Z=-13.947 uT Magnitude=84.699 uT (151.20%) timestamp=198931ms
+I/mag_cmd tshell: BEFORE: X=-43.493 uT Y=-13.600 uT Z=-36.240 uT Magnitude=58.223 uT Diff=19.04% timestamp=231191ms
+I/mag_cmd tshell: AFTER:  X=-130.480 uT Y=-0.800 uT Z=-41.840 uT Magnitude=137.026 uT Diff=180.16% timestamp=251431m
+I/mag_cmd tshell: DIFF:   X=-86.987 uT Y=12.800 uT Z=-5.600 uT Magnitude=78.803 uT (135.35%) timestamp=251431ms
+I/mag_cmd tshell: BEFORE: X=-42.293 uT Y=-15.893 uT Z=-35.467 uT Magnitude=57.439 uT Diff=17.44% timestamp=285411ms
+I/mag_cmd tshell: AFTER:  X=-130.480 uT Y=5.280 uT Z=-47.307 uT Magnitude=138.891 uT Diff=183.97% timestamp=297591ms
+I/mag_cmd tshell: DIFF:   X=-88.187 uT Y=21.173 uT Z=-11.840 uT Magnitude=81.453 uT (141.81%) timestamp=297591ms
+I/mag_cmd tshell: BEFORE: X=-39.200 uT Y=-14.293 uT Z=-36.133 uT Magnitude=55.196 uT Diff=12.85% timestamp=353011ms
+I/mag_cmd tshell: AFTER:  X=-125.787 uT Y=0.187 uT Z=-48.187 uT Magnitude=134.701 uT Diff=175.41% timestamp=373471ms
+I/mag_cmd tshell: DIFF:   X=-86.587 uT Y=14.480 uT Z=-12.053 uT Magnitude=79.505 uT (144.04%) timestamp=373471ms
+I/mag_cmd tshell: BEFORE: X=-39.787 uT Y=-14.587 uT Z=-36.160 uT Magnitude=55.707 uT Diff=13.90% timestamp=422271ms
+I/mag_cmd tshell: AFTER:  X=-126.693 uT Y=12.987 uT Z=-68.987 uT Magnitude=144.841 uT Diff=196.14% timestamp=434131m
+I/mag_cmd tshell: DIFF:   X=-86.907 uT Y=27.573 uT Z=-32.827 uT Magnitude=89.134 uT (160.00%) timestamp=434131ms
+I/mag_cmd tshell: BEFORE: X=-37.787 uT Y=-14.480 uT Z=-35.733 uT Magnitude=53.985 uT Diff=10.38% timestamp=455091ms
+I/mag_cmd tshell: AFTER:  X=-117.893 uT Y=3.493 uT Z=-49.867 uT Magnitude=128.054 uT Diff=161.81% timestamp=467591ms
+I/mag_cmd tshell: DIFF:   X=-80.107 uT Y=17.973 uT Z=-14.133 uT Magnitude=74.069 uT (137.20%) timestamp=467591ms
+I/mag_cmd tshell: BEFORE: X=-36.480 uT Y=-14.480 uT Z=-35.120 uT Magnitude=52.668 uT Diff=7.68% timestamp=527312ms
+I/mag_cmd tshell: AFTER:  X=-128.080 uT Y=-3.493 uT Z=-35.520 uT Magnitude=132.960 uT Diff=171.85% timestamp=549971m
+I/mag_cmd tshell: DIFF:   X=-91.600 uT Y=10.987 uT Z=-0.400 uT Magnitude=80.292 uT (152.45%) timestamp=549971ms
+I/mag_cmd tshell: BEFORE: X=-37.493 uT Y=-14.987 uT Z=-36.587 uT Magnitude=54.488 uT Diff=11.40% timestamp=580911ms
+I/mag_cmd tshell: AFTER:  X=-131.680 uT Y=8.480 uT Z=-55.413 uT Magnitude=143.116 uT Diff=192.61% timestamp=597211ms
+I/mag_cmd tshell: DIFF:   X=-94.187 uT Y=23.467 uT Z=-18.827 uT Magnitude=88.628 uT (162.66%) timestamp=597211ms
+I/mag_cmd tshell: BEFORE: X=-37.600 uT Y=-15.893 uT Z=-36.053 uT Magnitude=54.463 uT Diff=11.35% timestamp=638991ms
+I/mag_cmd tshell: AFTER:  X=-124.587 uT Y=5.387 uT Z=-60.907 uT Magnitude=138.782 uT Diff=183.75% timestamp=649351ms
+I/mag_cmd tshell: DIFF:   X=-86.987 uT Y=21.280 uT Z=-24.853 uT Magnitude=84.319 uT (154.82%) timestamp=649351ms

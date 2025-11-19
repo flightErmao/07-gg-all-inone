@@ -289,5 +289,184 @@ static void cmd_mag_heading(int argc, char **argv)
 
 MSH_CMD_EXPORT_ALIAS(cmd_mag_heading, mag_heading, Calculate and show magnetometer heading angle);
 
+/* ============================================================================
+ * 磁力计受磁前后对比命令
+ * ============================================================================ */
+
+/* 参考地磁场强度 (uT) */
+#define MAG_REF_FIELD_UT 48.910f
+
+/* 存储受磁前数据 */
+static struct {
+    float x;                  /* X轴 (uT) */
+    float y;                  /* Y轴 (uT) */
+    float z;                  /* Z轴 (uT) */
+    float magnitude;          /* 模长 (uT) */
+    float diff_percent;       /* 差值百分比 (%) */
+    uint32_t timestamp_ms;    /* 时间戳 */
+    rt_bool_t is_valid;       /* 数据是否有效 */
+} mag_before_data = {0};
+
+/* 存储受磁后数据 */
+static struct {
+    float x;                  /* X轴 (uT) */
+    float y;                  /* Y轴 (uT) */
+    float z;                  /* Z轴 (uT) */
+    float magnitude;          /* 模长 (uT) */
+    float diff_percent;       /* 差值百分比 (%) */
+    uint32_t timestamp_ms;    /* 时间戳 */
+    rt_bool_t is_valid;       /* 数据是否有效 */
+} mag_after_data = {0};
+
+/* 计算模长 */
+static float calculate_magnitude(float x, float y, float z) {
+    return sqrtf(x * x + y * y + z * z);
+}
+
+/* 计算差值百分比 */
+static float calculate_diff_percent(float magnitude) {
+    if (MAG_REF_FIELD_UT > 0.0f) {
+        return ((magnitude - MAG_REF_FIELD_UT) / MAG_REF_FIELD_UT) * 100.0f;
+    }
+    return 0.0f;
+}
+
+/* 记录受磁前数据 */
+static void cmd_mag_before(int argc, char **argv)
+{
+    RT_UNUSED(argc);
+    RT_UNUSED(argv);
+    
+    mag_report_t mag_data = {0};
+    
+    /* 使用mcnMagReportAcquire获取数据 */
+    if (mcnMagReportAcquire(&mag_data) != 0) {
+        LOG_E("Failed to acquire magnetometer data");
+        return;
+    }
+    
+    /* 计算模长和差值百分比 */
+    float mag_magnitude = calculate_magnitude(mag_data.value_x, 
+                                               mag_data.value_y, 
+                                               mag_data.value_z);
+    float diff_percent = calculate_diff_percent(mag_magnitude);
+    
+    /* 保存受磁前数据 */
+    mag_before_data.x = mag_data.value_x;
+    mag_before_data.y = mag_data.value_y;
+    mag_before_data.z = mag_data.value_z;
+    mag_before_data.magnitude = mag_magnitude;
+    mag_before_data.diff_percent = diff_percent;
+    mag_before_data.timestamp_ms = mag_data.timestamp_ms;
+    mag_before_data.is_valid = RT_TRUE;
+    
+    LOG_I("受磁前数据记录完成！");
+    LOG_I("  X=%.3f uT Y=%.3f uT Z=%.3f uT", 
+          mag_before_data.x, mag_before_data.y, mag_before_data.z);
+    LOG_I("  Magnitude=%.3f uT Diff=%.2f%%", 
+          mag_before_data.magnitude, mag_before_data.diff_percent);
+}
+
+MSH_CMD_EXPORT_ALIAS(cmd_mag_before, mag_before, Record magnetometer data before magnetic interference);
+
+/* 记录受磁后数据 */
+static void cmd_mag_after(int argc, char **argv)
+{
+    RT_UNUSED(argc);
+    RT_UNUSED(argv);
+    
+    mag_report_t mag_data = {0};
+    
+    /* 使用mcnMagReportAcquire获取数据 */
+    if (mcnMagReportAcquire(&mag_data) != 0) {
+        LOG_E("Failed to acquire magnetometer data");
+        return;
+    }
+    
+    /* 计算模长和差值百分比 */
+    float mag_magnitude = calculate_magnitude(mag_data.value_x, 
+                                               mag_data.value_y, 
+                                               mag_data.value_z);
+    float diff_percent = calculate_diff_percent(mag_magnitude);
+    
+    /* 保存受磁后数据 */
+    mag_after_data.x = mag_data.value_x;
+    mag_after_data.y = mag_data.value_y;
+    mag_after_data.z = mag_data.value_z;
+    mag_after_data.magnitude = mag_magnitude;
+    mag_after_data.diff_percent = diff_percent;
+    mag_after_data.timestamp_ms = mag_data.timestamp_ms;
+    mag_after_data.is_valid = RT_TRUE;
+    
+    LOG_I("受磁后数据记录完成！");
+    LOG_I("  X=%.3f uT Y=%.3f uT Z=%.3f uT", 
+          mag_after_data.x, mag_after_data.y, mag_after_data.z);
+    LOG_I("  Magnitude=%.3f uT Diff=%.2f%%", 
+          mag_after_data.magnitude, mag_after_data.diff_percent);
+}
+
+MSH_CMD_EXPORT_ALIAS(cmd_mag_after, mag_after, Record magnetometer data after magnetic interference);
+
+/* 显示受磁前后对比结果 */
+static void cmd_mag_result(int argc, char **argv)
+{
+    RT_UNUSED(argc);
+    RT_UNUSED(argv);
+    
+    /* 检查数据是否有效 */
+    if (!mag_before_data.is_valid) {
+        LOG_W("受磁前数据未记录，请先使用 'mag_before' 命令记录数据");
+        return;
+    }
+    
+    if (!mag_after_data.is_valid) {
+        LOG_W("受磁后数据未记录，请先使用 'mag_after' 命令记录数据");
+        return;
+    }
+    
+    /* 计算差值 */
+    float diff_x = mag_after_data.x - mag_before_data.x;
+    float diff_y = mag_after_data.y - mag_before_data.y;
+    float diff_z = mag_after_data.z - mag_before_data.z;
+    float diff_magnitude = mag_after_data.magnitude - mag_before_data.magnitude;
+    
+    /* 计算差值百分比 */
+    float diff_magnitude_percent = 0.0f;
+    if (mag_before_data.magnitude > 0.001f) {
+        diff_magnitude_percent = (diff_magnitude / mag_before_data.magnitude) * 100.0f;
+    }
+    
+    LOG_I("=== 磁力计受磁前后对比结果 ===");
+    
+    /* 第一行：受磁前数据 */
+    LOG_I("BEFORE: X=%.3f uT Y=%.3f uT Z=%.3f uT Magnitude=%.3f uT Diff=%.2f%% timestamp=%ums",
+          mag_before_data.x,
+          mag_before_data.y,
+          mag_before_data.z,
+          mag_before_data.magnitude,
+          mag_before_data.diff_percent,
+          mag_before_data.timestamp_ms);
+    
+    /* 第二行：受磁后数据 */
+    LOG_I("AFTER:  X=%.3f uT Y=%.3f uT Z=%.3f uT Magnitude=%.3f uT Diff=%.2f%% timestamp=%ums",
+          mag_after_data.x,
+          mag_after_data.y,
+          mag_after_data.z,
+          mag_after_data.magnitude,
+          mag_after_data.diff_percent,
+          mag_after_data.timestamp_ms);
+    
+    /* 第三行：差值数据 */
+    LOG_I("DIFF:   X=%.3f uT Y=%.3f uT Z=%.3f uT Magnitude=%.3f uT (%.2f%%) timestamp=%ums",
+          diff_x,
+          diff_y,
+          diff_z,
+          diff_magnitude,
+          diff_magnitude_percent,
+          mag_after_data.timestamp_ms);
+}
+
+MSH_CMD_EXPORT_ALIAS(cmd_mag_result, mag_result, Show magnetometer before/after comparison result);
+
 #endif /* RT_USING_FINSH */
 
