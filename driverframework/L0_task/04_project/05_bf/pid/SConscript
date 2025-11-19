@@ -1,0 +1,31 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+
+src = Glob("./src/*.cpp")
+
+include_paths = [
+    cwd,
+    os.path.join(cwd, "inc"),
+    os.path.join(cwd, "../rateCtrl/inc"),  # gyro_filtered_msg.h
+    os.path.join(cwd, "../imu270_pub/inc"),
+    os.path.join(cwd, "../mlog/inc"),
+    os.path.join(cwd, "..", "..", "01_basic", "TASK_02_STABLIZE", "inc"),  # aMcnStabilize.h
+    os.path.join(cwd, "..", "..", "01_basic", "TASK_05_PARAM", "inc"),  # param.h
+    os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "01_module", "05_timestamp", "inc"),  # timestamp.h
+]
+
+group = DefineGroup(
+    "PROJECT_BF_PID_EN",
+    src,
+    depend=[
+        "PROJECT_BF_PID_EN",
+        "PROJECT_BF_RATE_CTRL_EN",  # Depends on rate control for gyro_filtered data
+        "PROJECT_MINIFLY_TASK05_PARAM_FLYER_BF_DEFAULT_EN",
+    ],
+    CPPPATH=include_paths,
+)
+
+Return("group")
+
