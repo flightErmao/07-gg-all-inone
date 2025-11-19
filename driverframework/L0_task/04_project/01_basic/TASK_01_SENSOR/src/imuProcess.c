@@ -187,7 +187,9 @@ static void generateAngularAccel(void) {
   static Axis3f last_gyro_filter = {0};
   float dt = 0.0f;
   uint32_t timestamp = timestamp_micros();
-  DEBUG_PIN_DEBUG0_TOGGLE();
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_DEBUGPIN_MLOG_EN
+  // DEBUG_PIN_DEBUG0_TOGGLE();
+#endif
   if (last_timestamp != 0) {
     dt = (timestamp - last_timestamp) / 1000000.0f;
     dt = fmaxf(fminf(dt, 0.1f), 0.0005f);

@@ -696,7 +696,7 @@ rt_err_t mlog_init(void) {
   mlog_handle.header.max_desc_len = MLOG_DESCRIPTION_SIZE;
   mlog_handle.header.max_model_info_len = MLOG_MODEL_INFO_SIZE;
   mlog_handle.header.num_bus = __mlog_bus_num;
-  mlog_handle.header.bus_list = __mlog_table;
+  mlog_handle.header.bus_list = (__mlog_bus_num > 0) ? __mlog_table : RT_NULL;
   /* init param section */
 #if MLOG_ENABLE_PARAM
   mlog_handle.header.num_param_group = param_get_group_count();
@@ -711,9 +711,13 @@ rt_err_t mlog_init(void) {
   /* initialize mlog_handle buffer */
   mlog_handle.buffer.data = __mlog_data_buffer;
 
-  mlog_handle.stats = (mlog_stats_t*)rt_malloc(__mlog_bus_num * sizeof(mlog_stats_t));
-  if (mlog_handle.stats == NULL) {
-    return FMT_ENOMEM;
+  if (__mlog_bus_num > 0) {
+    mlog_handle.stats = (mlog_stats_t*)rt_malloc(__mlog_bus_num * sizeof(mlog_stats_t));
+    if (mlog_handle.stats == NULL) {
+      return FMT_ENOMEM;
+    }
+  } else {
+    mlog_handle.stats = RT_NULL;
   }
 
   if (mlog_handle.buffer.data == NULL) {

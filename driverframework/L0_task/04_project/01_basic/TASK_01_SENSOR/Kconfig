@@ -167,7 +167,7 @@ menuconfig PROJECT_MINIFLY_TASK_SENSOR_EN
         if PROJECT_MINIFLY_TASK_SENSOR_MLOG_EN
             config PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_EN
                 bool "ENABLE: IMU Data Logging"
-                default n
+                default y
                 help
                     Enable mlog (SD card logging) for IMU data in the sensor task.
 
@@ -182,5 +182,14 @@ menuconfig PROJECT_MINIFLY_TASK_SENSOR_EN
                         Lower values reduce log file size but may miss important data.
             endif
         endif
+
+        config PROJECT_MINIFLY_TASK_SENSOR_DEBUGPIN_MLOG_EN
+            bool "DEBUG: Toggle DebugPin around IMU mlog push"
+            default n
+            depends on L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN
+            help
+                Enable a debug pin toggle before and after pushing IMU data to mlog.
+                Useful for measuring latency or profiling the logging path with an
+                oscilloscope or logic analyzer.
 
     endif

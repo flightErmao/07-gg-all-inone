@@ -1,6 +1,6 @@
 #include "aMlogSensorImu.h"
 #include "timestamp.h"
-
+#include "debugPin.h"
 /* Mlog IMU data structure - redesigned */
 typedef struct {
     uint32_t timestamp;
@@ -117,12 +117,21 @@ void mlogImuPushData(uint32_t timestamp) {
   if (Sensor_IMU_ID >= 0 && mlog_push_en) {
 #ifdef PROJECT_MINIFLY_TASK_SENSOR_MLOG_IMU_FREQ
     /* Check if enough time has passed since last log */
-    uint32_t timestamp_current = timestamp_micros();
-    uint32_t elapsed = timestamp_current - mlog_imu_data.timestamp;
+    // uint32_t timestamp_current = timestamp_micros();
+    // uint32_t elapsed = timestamp_current - mlog_imu_data.timestamp;
     mlog_imu_data.timestamp = timestamp;
-    if (elapsed >= mlog_min_interval_us) {
-      mlog_push_msg((uint8_t*)&mlog_imu_data, Sensor_IMU_ID, sizeof(mlogImuData_t));
-    }
+    // if (elapsed >= mlog_min_interval_us) {
+
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_DEBUGPIN_MLOG_EN
+    DEBUG_PIN_DEBUG0_HIGH();
+#endif
+
+    mlog_push_msg((uint8_t*)&mlog_imu_data, Sensor_IMU_ID, sizeof(mlogImuData_t));
+
+#ifdef PROJECT_MINIFLY_TASK_SENSOR_DEBUGPIN_MLOG_EN
+    DEBUG_PIN_DEBUG0_LOW();
+#endif
+
 #else
     /* No frequency control, push immediately */
     mlog_imu_data.timestamp = timestamp;

@@ -187,5 +187,5 @@ static int taskMlogAutoStart(void) {
 
 /* Auto start the task */
 #ifdef TASK_TOOL_02_SD_MLOG
-INIT_APP_EXPORT(taskMlogAutoStart);
+INIT_ENV_EXPORT(taskMlogAutoStart);
 #endif
