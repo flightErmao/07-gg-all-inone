@@ -688,7 +688,7 @@ void RateCtrlAngularVelocity::applyFilterChain(const float input[3], float outpu
 {
   // Debug Pin: 拉高，表示开始滤波处理
 #ifdef PROJECT_BF_RATE_CTRL_DEBUG_PIN_EN
-  DEBUG_PIN_DEBUG0_HIGH();
+  DEBUG_PIN_DEBUG1_HIGH();
 #endif
 
         // 参考 gyro_filter_impl.c 的滤波顺序
@@ -736,7 +736,7 @@ void RateCtrlAngularVelocity::applyFilterChain(const float input[3], float outpu
 
         // Debug Pin: 拉低，表示滤波处理完成
 #ifdef PROJECT_BF_RATE_CTRL_DEBUG_PIN_EN
-  DEBUG_PIN_DEBUG0_LOW();
+        DEBUG_PIN_DEBUG1_LOW();
 #endif
 }
 

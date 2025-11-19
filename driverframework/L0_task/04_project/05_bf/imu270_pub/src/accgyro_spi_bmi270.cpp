@@ -9,7 +9,7 @@
  */
 
 #include "accgyro_spi_bmi270.hpp"
-#include "../mlog/inc/mlog_gyro.hpp"
+// #include "../mlog/inc/mlog_gyro.hpp"  // 已屏蔽：由 testThread 模块负责 mlog 记录
 
 extern "C" {
 #include "timestamp.h"
@@ -202,9 +202,10 @@ rt_err_t BMI270::init(const RuntimeConfig &cfg) {
   }
 
   // 临时测试：初始化 mlog_gyro（使用单例）
-  bf_mlog::MlogGyro* mlog_gyro = bf_mlog::MlogGyro::getInstance();
-  mlog_gyro->init();
-  mlog_gyro->setParamEnabled(true);  // 临时测试：直接使能
+  // 已屏蔽：由 testThread 模块负责 mlog 记录
+  // bf_mlog::MlogGyro* mlog_gyro = bf_mlog::MlogGyro::getInstance();
+  // mlog_gyro->init();
+  // mlog_gyro->setParamEnabled(true);  // 临时测试：直接使能
 
   init_ok_ = true;
   return RT_EOK;
@@ -409,42 +410,44 @@ bool BMI270::readAccelGyro(int16_t acc[3], int16_t gyro[3]) {
 }
 
 void BMI270::publishImu(const int16_t acc[3], const int16_t gyro[3]) {
-  // 临时测试：停止 MCN 发布，改为使用 mlog 记录
-  // imu_raw_msg_t msg{};
-  static rt_uint32_t s_seq = 0;
-
-  // msg.seq = ++s_seq;
-  // msg.accel[0] = ACC_SCALE_16G * static_cast<float>(acc[0]);
-  // msg.accel[1] = ACC_SCALE_16G * static_cast<float>(acc[1]);
-  // msg.accel[2] = ACC_SCALE_16G * static_cast<float>(acc[2]);
-  // msg.gyro[0] = GYRO_SCALE_2000DPS * static_cast<float>(gyro[0]);
-  // msg.gyro[1] = GYRO_SCALE_2000DPS * static_cast<float>(gyro[1]);
-  // msg.gyro[2] = GYRO_SCALE_2000DPS * static_cast<float>(gyro[2]);
-  // mcn_publish(MCN_HUB(imu_raw), &msg);
-
   // 临时测试：使用随机数替代真实数据，记录到 mlog
-  uint32_t seq = ++s_seq;
-  uint32_t timestamp = timestamp_micros();
+  // 已屏蔽：由 testThread 模块负责 mlog 记录
+  // static rt_uint32_t s_seq = 0;
+  // uint32_t seq = ++s_seq;
+  // uint32_t timestamp = timestamp_micros();
 
   // 生成随机陀螺仪数据（范围：-2000 到 +2000 dps）
-  float gyro_raw[3];
-  float gyro_filtered[3];
+  // float gyro_raw[3];
+  // float gyro_filtered[3];
 
   // 使用 rand() 生成 -2000 到 +2000 之间的随机数
   // rand() 返回 0 到 RAND_MAX，我们将其映射到 -2000 到 +2000
-  for (int i = 0; i < 3; i++) {
-    gyro_raw[i] = ((float)rand() / RAND_MAX) * 4000.0f - 2000.0f;
-    gyro_filtered[i] = ((float)rand() / RAND_MAX) * 4000.0f - 2000.0f;
-  }
+  // for (int i = 0; i < 3; i++) {
+  //   gyro_raw[i] = ((float)rand() / RAND_MAX) * 4000.0f - 2000.0f;
+  //   gyro_filtered[i] = ((float)rand() / RAND_MAX) * 4000.0f - 2000.0f;
+  // }
 
   // 调用 mlog 记录数据（使用单例）
-#ifdef PROJECT_BF_BMI270_DEBUG_PIN_EN
-  DEBUG_PIN_DEBUG0_HIGH();
-#endif
-  bf_mlog::MlogGyro::getInstance()->pushGyroData(seq, timestamp, gyro_raw, gyro_filtered);
-#ifdef PROJECT_BF_BMI270_DEBUG_PIN_EN
-  DEBUG_PIN_DEBUG0_LOW();
-#endif
+  // 已屏蔽：由 testThread 模块负责 mlog 记录
+  // #ifdef PROJECT_BF_BMI270_DEBUG_PIN_EN
+  //   DEBUG_PIN_DEBUG0_HIGH();
+  // #endif
+  //   bf_mlog::MlogGyro::getInstance()->pushGyroData(seq, timestamp, gyro_raw, gyro_filtered);
+  // #ifdef PROJECT_BF_BMI270_DEBUG_PIN_EN
+  //   DEBUG_PIN_DEBUG0_LOW();
+  // #endif
+
+  static rt_uint32_t s_seq = 0;
+  imu_raw_msg_t msg{};
+
+  msg.seq = ++s_seq;
+  msg.accel[0] = ACC_SCALE_16G * static_cast<float>(acc[0]);
+  msg.accel[1] = ACC_SCALE_16G * static_cast<float>(acc[1]);
+  msg.accel[2] = ACC_SCALE_16G * static_cast<float>(acc[2]);
+  msg.gyro[0] = GYRO_SCALE_2000DPS * static_cast<float>(gyro[0]);
+  msg.gyro[1] = GYRO_SCALE_2000DPS * static_cast<float>(gyro[1]);
+  msg.gyro[2] = GYRO_SCALE_2000DPS * static_cast<float>(gyro[2]);
+  mcn_publish(MCN_HUB(imu_raw), &msg);
 }
 
 uint8_t BMI270::regRead(uint8_t reg) {

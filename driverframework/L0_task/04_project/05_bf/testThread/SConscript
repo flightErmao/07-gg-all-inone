@@ -1,0 +1,30 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+
+src = Glob("./src/*.cpp")
+
+include_paths = [
+    cwd,
+    os.path.join(cwd, "inc"),
+    os.path.join(cwd, "../imu270_pub/inc"),
+    os.path.join(cwd, "../mlog/inc"),
+    os.path.join(
+        cwd, "..", "..", "..", "..", "L1_middleWare", "01_module", "03_debugPin"
+    ),  # debugPin.h 所在目录
+]
+
+group = DefineGroup(
+    "PROJECT_BF_TEST_THREAD",
+    src,
+    depend=[
+        "PROJECT_BF_TEST_THREAD_EN",
+        "PROJECT_BF_BMI270_EN",  # 需要 imu_raw MCN topic
+        "PROJECT_BF_MLOG_GYRO_EN",  # 需要 mlog_gyro
+    ],
+    CPPPATH=include_paths,
+)
+
+Return("group")
+
