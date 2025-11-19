@@ -1,21 +1,14 @@
 #include "mcnMagShow.h"
 #include "rtconfig.h"
+#include <math.h>
 
-static void mag_format_float(char* out, rt_size_t len, float value) {
-  if (out == RT_NULL || len == 0) {
-    return;
-  }
-  int negative = (value < 0.0f);
-  float abs_val = negative ? -value : value;
-  long integer = (long)abs_val;
-  float fractional = abs_val - (float)integer;
-  long frac = (long)(fractional * 1000.0f + 0.5f);
-  if (frac >= 1000) {
-    integer += 1;
-    frac -= 1000;
-  }
-  rt_snprintf(out, len, "%s%ld.%03ld", negative ? "-" : "", integer, frac);
-}
+#define LOG_TAG "mag_mcn"
+#define LOG_LVL LOG_LVL_INFO
+#include <ulog.h>
+
+#define MAG_REF_FIELD_NT 48909.8f
+#define MAG_REF_FIELD_UT (MAG_REF_FIELD_NT / 1000.0f)
+#define MAG_REF_FIELD_MGS (MAG_REF_FIELD_UT * 10.0f)
 
 /* MCN topic definition */
 MCN_DEFINE(mag, sizeof(mag_report_t));
@@ -31,14 +24,26 @@ static int mag_echo(void* parameter) {
     return -1;
   }
 
-  char value_x_str[16], value_y_str[16], value_z_str[16], timestamp_str[16];
-  mag_format_float(value_x_str, sizeof(value_x_str), mag_data.value_x);
-  mag_format_float(value_y_str, sizeof(value_y_str), mag_data.value_y);
-  mag_format_float(value_z_str, sizeof(value_z_str), mag_data.value_z);
-  rt_snprintf(timestamp_str, sizeof(timestamp_str), "%u", mag_data.timestamp_ms);
+  /* Calculate magnitude (地磁长模长强度) */
+  float magnitude = sqrtf(mag_data.value_x * mag_data.value_x + 
+                         mag_data.value_y * mag_data.value_y + 
+                         mag_data.value_z * mag_data.value_z);
+  
+  float relative_diff_percent = 0.0f;
+  if (MAG_REF_FIELD_UT > 0.0f) {
+    relative_diff_percent = ((magnitude - MAG_REF_FIELD_UT) / MAG_REF_FIELD_UT) * 100.0f;
+  }
 
-  rt_kprintf("MAG[%s]: X=%s Y=%s Z=%s timestamp=%sms\n", TASK_MAG_DEVICE_NAME, value_x_str, value_y_str,
-             value_z_str, timestamp_str);
+  LOG_I(
+      "MAG[%s]: X=%.3f uT Y=%.3f uT Z=%.3f uT Magnitude=%.3f uT Ref=%.3f uT Diff=%.2f%% timestamp=%ums",
+      TASK_MAG_DEVICE_NAME,
+      mag_data.value_x,
+      mag_data.value_y,
+      mag_data.value_z,
+      magnitude,
+      MAG_REF_FIELD_UT,
+      relative_diff_percent,
+      mag_data.timestamp_ms);
 
   return 0;
 }
@@ -47,13 +52,13 @@ static int mag_echo(void* parameter) {
 int mcnMagReportInit(void) {
   rt_err_t result = mcn_advertise(MCN_HUB(mag), mag_echo);
   if (result != RT_EOK) {
-    rt_kprintf("Failed to advertise mag topic: %d\n", result);
+    LOG_E("Failed to advertise mag topic: %d", result);
     return -1;
   }
 
   mag_sub_node = mcn_subscribe(MCN_HUB(mag), RT_NULL, RT_NULL);
   if (mag_sub_node == RT_NULL) {
-    rt_kprintf("Failed to subscribe to mag topic\n");
+    LOG_E("Failed to subscribe to mag topic");
     return -1;
   }
 

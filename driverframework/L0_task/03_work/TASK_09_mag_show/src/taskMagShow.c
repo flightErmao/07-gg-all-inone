@@ -2,6 +2,7 @@
 #include "string.h"
 #include "rtconfig.h"
 #include "mcnMagShow.h"
+#include "timestamp.h"
 
 #define DBG_TAG "task_mag"
 #define DBG_LVL DBG_LOG
@@ -44,12 +45,12 @@ static void task_dev_init(void) {
       mag_dev_t mag_dev = (mag_dev_t)dev_sensor_mag;
       if (mag_dev->config.lsb > 0.0f) {
         mag_lsb = mag_dev->config.lsb;
-        rt_kprintf("[MAG] Device config: range=%dG, ODR=%dHz, LSB=%.3f uT/LSB\n", 
-                   mag_dev->config.range_g, 
-                   mag_dev->config.odr_hz, 
-                   mag_lsb);
+        LOG_I("Device config: range=%dG, ODR=%dHz, LSB=%.3f uT/LSB",
+              mag_dev->config.range_g,
+              mag_dev->config.odr_hz,
+              mag_lsb);
       } else {
-        rt_kprintf("[MAG] Warning: Device LSB not set, using default: %.3f uT/LSB\n", mag_lsb);
+        LOG_W("Device LSB not set, using default: %.3f uT/LSB", mag_lsb);
       }
     }
   }
@@ -62,8 +63,11 @@ static void mag_task_read_data(void) {
     rt_size_t size = rt_device_read(dev_sensor_mag, MAG_RD_REPORT, (void*)&raw_report, 1);
     
     if (size > 0) {
+      /* Get timestamp using timestamp_micros() and convert to milliseconds */
+      uint32_t timestamp_us = timestamp_micros();
+      mag_report.timestamp_ms = timestamp_us / 1000;
+      
       /* Apply LSB scaling: raw values are in LSB units, scale to uT */
-      mag_report.timestamp_ms = raw_report.timestamp_ms;
       mag_report.value_x = raw_report.value_x * mag_lsb;
       mag_report.value_y = raw_report.value_y * mag_lsb;
       mag_report.value_z = raw_report.value_z * mag_lsb;
@@ -75,7 +79,7 @@ static void mag_task_read_data(void) {
     not_found_cnt++;
     if (not_found_cnt > 30) {
       not_found_cnt = 0;
-      rt_kprintf("mag device '%s' not found!\n", TASK_MAG_DEVICE_NAME);
+      LOG_W("mag device '%s' not found!", TASK_MAG_DEVICE_NAME);
     }
   }
 }

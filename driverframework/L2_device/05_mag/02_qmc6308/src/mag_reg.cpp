@@ -1,10 +1,7 @@
-#include "mqc6308_reg.h"
-
 #include <rtthread.h>
 
 #include "mag.h"
-#include "qmc6308.h"
-#include "QMC6308.hpp"
+#include "qmc6308.hpp"
 #include "I2cInterface.h"
 #include "rtdevice.h"
 
@@ -12,9 +9,12 @@
 extern "C" {
 #endif
 
-#define DBG_TAG "mqc6308"
-#define DBG_LVL DBG_LOG
-#include <rtdbg.h>
+#undef LOG_TAG
+#define LOG_TAG "mqc6308"
+#ifndef LOG_LVL
+#define LOG_LVL LOG_LVL_INFO
+#endif
+#include <ulog.h>
 
 static struct mag_device qmc6308_dev;
 static QMC6308* qmc6308_instance = NULL;
@@ -82,12 +82,10 @@ rt_err_t drv_mqc6308_init(const char* i2c_device_name, const char* device_name) 
     qmc6308_dev.config.range_g = config.range_g;
     qmc6308_dev.config.odr_hz = config.odr_hz;
     qmc6308_dev.config.lsb = config.lsb;
-    
-    LOG_I("QMC6308 config: range=%dG, ODR=%dHz, LSB=%.3f uT/LSB", 
-          qmc6308_dev.config.range_g, 
-          qmc6308_dev.config.odr_hz, 
+
+    LOG_I("QMC6308 config: range=%dG, ODR=%dHz, LSB=%.3f uT/LSB", qmc6308_dev.config.range_g, qmc6308_dev.config.odr_hz,
           qmc6308_dev.config.lsb);
-    
+
     RT_ASSERT(hal_mag_register(&qmc6308_dev, device_name, RT_DEVICE_FLAG_RDWR, RT_NULL) == RT_EOK);
   }
 
