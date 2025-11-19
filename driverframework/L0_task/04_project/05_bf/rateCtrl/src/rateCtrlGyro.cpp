@@ -11,28 +11,42 @@ extern "C" {
 
 #include <cstring>
 
-#include "workqueueManage.hpp"
 #include "bfImuFilterInit.h"
 #include "../imu270_pub/inc/accgyro_spi_bmi270.hpp"
 #include "bfSensorAlignment.hpp"
 #include "bfNotchFilter.hpp"
 #include "bfDynNotchFilter.hpp"
 #include "../mlog/inc/mlog_gyro.hpp"
+#include "gyro_filtered_msg.h"
 
 extern "C" {
 #include "param.h"
 #include "bfImuFilterParam.h"
 // #include "rpmFilter.h"  // TODO: RPM 滤波器暂未实现，先注释
 #include "timestamp.h"
+#include "uMCN.h"
 }
+
+/* 定义滤波后陀螺仪数据话题（在本文件内完成定义与发布） */
+MCN_DEFINE(gyro_filtered, sizeof(gyro_filtered_msg_t));
 
 // IMU 采样频率（Hz）- 假设从 IMU 发布频率推算
 #ifndef PROJECT_BF_RATE_CTRL_IMU_SAMPLE_RATE_HZ
 #define PROJECT_BF_RATE_CTRL_IMU_SAMPLE_RATE_HZ 800.0f
 #endif
 
-// 工作队列名称：从 workqueueManage 模块配置中获取，这里不定义宏，直接使用字符串常量
-// 工作队列应该在 workqueueManage 模块中通过 INIT_ENV_EXPORT 自动创建
+// 线程配置（从 Kconfig 获取，如果没有定义则使用默认值）
+#ifndef CONFIG_PROJECT_BF_RATE_CTRL_THREAD_STACK_SIZE
+#define CONFIG_PROJECT_BF_RATE_CTRL_THREAD_STACK_SIZE 2048
+#endif
+
+#ifndef CONFIG_PROJECT_BF_RATE_CTRL_THREAD_PRIORITY
+#define CONFIG_PROJECT_BF_RATE_CTRL_THREAD_PRIORITY 10
+#endif
+
+#ifndef CONFIG_PROJECT_BF_RATE_CTRL_THREAD_TIMESLICE
+#define CONFIG_PROJECT_BF_RATE_CTRL_THREAD_TIMESLICE 5
+#endif
 
 #ifndef CONFIG_PROJECT_BF_RATE_CTRL_GYRO_CALIBRATION_DURATION_MS
 #define CONFIG_PROJECT_BF_RATE_CTRL_GYRO_CALIBRATION_DURATION_MS 1250
@@ -186,7 +200,7 @@ void GyroCalibration::applyZeroOffset(const float gyro_raw[3], float gyro_correc
 }
 
 RateCtrlAngularVelocity::RateCtrlAngularVelocity()
-    : // 从 gyro_t 映射的简单变量初始化（参考 gyro_t 的 FAST_DATA_ZERO_INIT）
+    :  // 从 gyro_t 映射的简单变量初始化（参考 gyro_t 的 FAST_DATA_ZERO_INIT）
       sample_rate_hz_(0),
       target_looptime_us_(0),
       sample_looptime_us_(0),
@@ -211,55 +225,78 @@ RateCtrlAngularVelocity::RateCtrlAngularVelocity()
       gyro_align_(BfSensorAlignment::ALIGN_DEFAULT),
       use_custom_matrix_(false),
       calibration_started_(false),
-      // MCN 订阅相关（需要在简单变量之后初始化）
-      imu_node_(RT_NULL)
-{
+      // 线程相关
+      thread_(RT_NULL),
+      thread_inited_(false),
+      // MCN 订阅和发布相关
+      imu_event_(RT_NULL),
+      imu_node_(RT_NULL),
+      gyro_filtered_hub_(nullptr) {
     // 清零数组
-    std::memset(&latest_imu_, 0, sizeof(latest_imu_));
+    std::memset(&thread_obj_, 0, sizeof(thread_obj_));
+    std::memset(thread_stack_, 0, sizeof(thread_stack_));
     std::memset(gyro_adc_, 0, sizeof(gyro_adc_));
     std::memset(gyro_adcf_, 0, sizeof(gyro_adcf_));
     std::memset(sample_sum_, 0, sizeof(sample_sum_));
     std::memset(rotation_matrix_, 0, sizeof(rotation_matrix_));
-    
-    // 初始化工作队列
-    rt_work_init(&work_, RateCtrlAngularVelocity::workHandler, this);
-    workqueue_ = nullptr;  // 将在 init() 中通过名称查找
 }
 
 rt_err_t RateCtrlAngularVelocity::init()
 {
-    // 通过工作队列管理器实例，根据名称查找工作队列
-    // 工作队列应该已经通过 workqueueManage 模块的 INIT_ENV_EXPORT 自动创建，这里只需要查找
-    // 工作队列名称从 workqueueManage 的 Kconfig 配置中获取（通过宏定义，如果没有则使用默认值）
-    bf_workqueue::WorkqueueManager& wq_mgr = bf_workqueue::WorkqueueManager::instance();
-    wq_mgr.init();  // 确保管理器已初始化
-    
-    // 通过名称查找工作队列（不能创建，只能查找）
-    // 优先使用 Kconfig 定义的名称，如果没有则使用默认值
-#ifdef PROJECT_BF_WORKQUEUE_RATE_CTRL_NAME
-    const char* wq_name = PROJECT_BF_WORKQUEUE_RATE_CTRL_NAME;
-#else
-    const char* wq_name = "wq_rate_ctrl";  // 默认工作队列名称
-#endif
-    
-    workqueue_ = wq_mgr.find(wq_name);
-    if (workqueue_ == nullptr) {
-        LOG_E("find workqueue '%s' failed, make sure it's enabled and created in workqueueManage module", wq_name);
-        return -RT_ERROR;
-    }
-    LOG_I("Found workqueue '%s'", wq_name);
+  if (thread_inited_) {
+    LOG_W("RateCtrlAngularVelocity already initialized");
+    return RT_EOK;
+  }
 
-    imu_node_ = mcn_subscribe(MCN_HUB(imu_raw), RT_NULL, RT_NULL);
-    if (imu_node_ == RT_NULL) {
-        LOG_E("subscribe imu topic failed");
-        return -RT_ERROR;
+  // 创建 MCN 事件信号量（用于 mcn_poll_sync）
+  if (imu_event_ == RT_NULL) {
+    imu_event_ = rt_sem_create("gyro_evt", 0, RT_IPC_FLAG_FIFO);
+    if (imu_event_ == RT_NULL) {
+      LOG_E("create imu event semaphore failed");
+      return -RT_ERROR;
     }
+  }
 
-    rt_err_t ret = mcn_register_async_cb(imu_node_, RateCtrlAngularVelocity::asyncCallback, this);
-    if (ret != RT_EOK) {
-        LOG_E("register imu callback failed (%d)", ret);
-        return ret;
+  // 订阅 imu_raw MCN 节点（传入 event 用于同步等待）
+  imu_node_ = mcn_subscribe(MCN_HUB(imu_raw), imu_event_, RT_NULL);
+  if (imu_node_ == RT_NULL) {
+    LOG_E("subscribe imu_raw topic failed");
+    if (imu_event_ != RT_NULL) {
+      rt_sem_delete(imu_event_);
+      imu_event_ = RT_NULL;
     }
+    return -RT_ERROR;
+  }
+  LOG_I("Subscribed to imu_raw MCN topic");
+
+  // 获取 gyro_filtered MCN hub（用于发布滤波后的数据）
+  gyro_filtered_hub_ = MCN_HUB(gyro_filtered);
+  if (gyro_filtered_hub_ == nullptr) {
+    LOG_E("get gyro_filtered hub failed");
+    if (imu_node_ != RT_NULL) {
+      mcn_unsubscribe(MCN_HUB(imu_raw), imu_node_);
+      imu_node_ = RT_NULL;
+    }
+    if (imu_event_ != RT_NULL) {
+      rt_sem_delete(imu_event_);
+      imu_event_ = RT_NULL;
+    }
+    return -RT_ERROR;
+  }
+
+  // 初始化 mlog_gyro（使用单例）
+  bf_mlog::MlogGyro* mlog_gyro = bf_mlog::MlogGyro::getInstance();
+  mlog_gyro->init();
+  // 从参数系统读取 mlog_gyro_en 参数并设置使能状态
+  uint8_t mlog_gyro_en = 0;
+  if (getParam("mlog_gyro_en", &mlog_gyro_en, sizeof(mlog_gyro_en)) == RT_EOK) {
+    mlog_gyro->setParamEnabled(mlog_gyro_en != 0);
+    LOG_I("Mlog gyro enabled: %u", mlog_gyro_en);
+  } else {
+    // 如果参数不存在，使用默认值（禁用）
+    mlog_gyro->setParamEnabled(false);
+    LOG_W("Mlog gyro parameter not found, disabled by default");
+  }
 
     // 从 BMI270 单例获取 IMU 采样频率和周期（参考 gyro.c 的初始化）
     bf_bmi270::BMI270& bmi270 = bf_bmi270::BMI270::instance();
@@ -309,22 +346,34 @@ rt_err_t RateCtrlAngularVelocity::init()
     // 初始化降采样滤波器（参考 gyro_init.c:262-265）
     initDownsampleFilter();
 
-    // 初始化 mlog 陀螺仪数据记录（参考 aMlogStabilze.c:120）
-    // mlog_gyro_.init();
-
-    // 读取 mlog_gyro_en 参数并设置使能状态
-    // uint8_t mlog_gyro_en = 0;
-    // if (getParam("mlog_gyro_en", &mlog_gyro_en, sizeof(mlog_gyro_en)) == RT_EOK) {
-    //     mlog_gyro_.setParamEnabled(mlog_gyro_en != 0);
-    //     LOG_I("Mlog gyro enabled: %u", mlog_gyro_en);
-    // } else {
-    //     // 如果参数不存在，使用默认值（禁用）
-    //     mlog_gyro_.setParamEnabled(false);
-    //     LOG_W("Mlog gyro parameter not found, disabled by default");
-    // }
-
     // 注意：gyro 零偏值在运行时计算，不保存到参数系统
     // 每次启动时都会重新校准
+
+    // 创建静态线程
+    rt_err_t err =
+        rt_thread_init(&thread_obj_, "rate_ctrl_gyro", RateCtrlAngularVelocity::threadEntry, this, thread_stack_,
+                       CONFIG_PROJECT_BF_RATE_CTRL_THREAD_STACK_SIZE, CONFIG_PROJECT_BF_RATE_CTRL_THREAD_PRIORITY,
+                       CONFIG_PROJECT_BF_RATE_CTRL_THREAD_TIMESLICE);
+
+    if (err != RT_EOK) {
+      LOG_E("RateCtrlAngularVelocity thread init failed: %d", err);
+      if (imu_node_ != RT_NULL) {
+        mcn_unsubscribe(MCN_HUB(imu_raw), imu_node_);
+        imu_node_ = RT_NULL;
+      }
+      if (imu_event_ != RT_NULL) {
+        rt_sem_delete(imu_event_);
+        imu_event_ = RT_NULL;
+      }
+      return err;
+    }
+
+    thread_ = &thread_obj_;
+    thread_inited_ = true;
+
+    // 启动线程
+    rt_thread_startup(thread_);
+    LOG_I("RateCtrlAngularVelocity thread started");
 
     LOG_I("RateCtrlAngularVelocity initialized");
     return RT_EOK;
@@ -539,156 +588,161 @@ void RateCtrlAngularVelocity::setTargetLooptime(uint8_t pid_denom)
     }
 }
 
-void RateCtrlAngularVelocity::workHandler(struct rt_work* work, void* parameter)
-{
-    RT_UNUSED(work);
-    if (parameter == RT_NULL) {
-        return;
-    }
+void RateCtrlAngularVelocity::threadEntry(void* parameter) {
+  if (parameter == RT_NULL) {
+    return;
+  }
 
-    static_cast<RateCtrlAngularVelocity*>(parameter)->handleWork();
+  RateCtrlAngularVelocity* instance = static_cast<RateCtrlAngularVelocity*>(parameter);
+  instance->threadLoop();
 }
 
-void RateCtrlAngularVelocity::asyncCallback(const void* data, void* user_data)
-{
-    if ((data == RT_NULL) || (user_data == RT_NULL)) {
-        return;
-    }
+void RateCtrlAngularVelocity::threadLoop() {
+  imu_raw_msg_t imu_data;
 
-    RateCtrlAngularVelocity* instance = static_cast<RateCtrlAngularVelocity*>(user_data);
-    std::memcpy(&instance->latest_imu_, data, sizeof(instance->latest_imu_));
+  LOG_I("RateCtrlAngularVelocity thread loop started");
 
-    // 通过实例的工作队列，将自己加入到工作队列中
-    if (instance->workqueue_ != nullptr) {
-        rt_err_t ret = bf_workqueue::WorkqueueManager::instance().addWork(
-            instance->workqueue_, &instance->work_);
-        if (ret != RT_EOK) {
-            LOG_E("submit angular velocity work failed (%d)", ret);
-        }
-    } else {
-        LOG_E("workqueue not initialized");
+  while (true) {
+    // 阻塞等待 MCN 发布
+    if (mcn_poll_sync(imu_node_, RT_WAITING_FOREVER) == RT_TRUE) {
+      // 复制数据
+      if (mcn_copy(MCN_HUB(imu_raw), imu_node_, &imu_data) == RT_EOK) {
+        // 处理 IMU 数据
+        processImuData(&imu_data);
+      }
     }
+  }
 }
 
-void RateCtrlAngularVelocity::handleWork()
-{
-    float gyro_raw[3] = {latest_imu_.gyro[0], latest_imu_.gyro[1], latest_imu_.gyro[2]};
-    
-    // 如果没有校准，开始校准
-    if (!calibration_started_ && !gyro_calibration_.isCalibrationComplete()) {
-        // 从 Kconfig 获取校准参数
-        uint32_t calibration_duration_ms = CONFIG_PROJECT_BF_RATE_CTRL_GYRO_CALIBRATION_DURATION_MS;
-        float movement_threshold = static_cast<float>(CONFIG_PROJECT_BF_RATE_CTRL_GYRO_MOVEMENT_THRESHOLD);
-        int16_t yaw_offset = static_cast<int16_t>(CONFIG_PROJECT_BF_RATE_CTRL_GYRO_OFFSET_YAW);
-        
-        gyro_calibration_.startCalibration(
-            sample_rate_hz_ > 0 ? static_cast<float>(sample_rate_hz_) : PROJECT_BF_RATE_CTRL_IMU_SAMPLE_RATE_HZ,
-            calibration_duration_ms,
-            movement_threshold,
-            yaw_offset);
-        calibration_started_ = true;
-        LOG_I("Starting gyro calibration: duration=%u ms, threshold=%.1f", 
-              calibration_duration_ms, movement_threshold);
-    }
-    
-    // 如果正在校准，更新校准
-    if (gyro_calibration_.isCalibrating()) {
-        bool cal_complete = gyro_calibration_.updateCalibration(gyro_raw);
-        
-        if (cal_complete) {
-            // 校准完成，零偏值在运行时使用，不保存到参数系统
-            float gyro_zero[3];
-            gyro_calibration_.getGyroZero(gyro_zero);
-            LOG_I("Gyro calibration complete! Zero=[%.3f, %.3f, %.3f] (runtime only, not saved)", 
-                  gyro_zero[0], gyro_zero[1], gyro_zero[2]);
-        } else {
-            // 校准进行中，显示进度
-            LOG_D("Calibrating... (use raw gyro)");
-            return;  // 校准期间不处理数据
-        }
-    }
-    
-    // 只有校准完成后才进行滤波处理
-    if (!gyro_calibration_.isCalibrationComplete()) {
-        return;
-    }
-    
-    // 步骤1: 应用零偏值校正（去零飘）
-    float gyro_corrected[3];
-    gyro_calibration_.applyZeroOffset(gyro_raw, gyro_corrected);
-    
-    // 步骤2: 应用传感器旋转（如果需要）
-    float gyro_rotated[3];
-    std::memcpy(gyro_rotated, gyro_corrected, sizeof(gyro_corrected));
-    
-    if (use_custom_matrix_) {
-        BfSensorAlignmentUtil::alignViaMatrix(gyro_rotated, rotation_matrix_);
+void RateCtrlAngularVelocity::processImuData(const imu_raw_msg_t* imu_data) {
+  if (imu_data == RT_NULL) {
+    return;
+  }
+
+  float gyro_raw[3] = {imu_data->gyro[0], imu_data->gyro[1], imu_data->gyro[2]};
+
+  // 如果没有校准，开始校准
+  if (!calibration_started_ && !gyro_calibration_.isCalibrationComplete()) {
+    // 从 Kconfig 获取校准参数
+    uint32_t calibration_duration_ms = CONFIG_PROJECT_BF_RATE_CTRL_GYRO_CALIBRATION_DURATION_MS;
+    float movement_threshold = static_cast<float>(CONFIG_PROJECT_BF_RATE_CTRL_GYRO_MOVEMENT_THRESHOLD);
+    int16_t yaw_offset = static_cast<int16_t>(CONFIG_PROJECT_BF_RATE_CTRL_GYRO_OFFSET_YAW);
+
+    gyro_calibration_.startCalibration(
+        sample_rate_hz_ > 0 ? static_cast<float>(sample_rate_hz_) : PROJECT_BF_RATE_CTRL_IMU_SAMPLE_RATE_HZ,
+        calibration_duration_ms, movement_threshold, yaw_offset);
+    calibration_started_ = true;
+    LOG_I("Starting gyro calibration: duration=%u ms, threshold=%.1f", calibration_duration_ms, movement_threshold);
+  }
+
+  // 如果正在校准，更新校准
+  if (gyro_calibration_.isCalibrating()) {
+    bool cal_complete = gyro_calibration_.updateCalibration(gyro_raw);
+
+    if (cal_complete) {
+      // 校准完成，零偏值在运行时使用，不保存到参数系统
+      float gyro_zero[3];
+      gyro_calibration_.getGyroZero(gyro_zero);
+      LOG_I("Gyro calibration complete! Zero=[%.3f, %.3f, %.3f] (runtime only, not saved)", gyro_zero[0], gyro_zero[1],
+            gyro_zero[2]);
     } else {
-        BfSensorAlignmentUtil::alignViaRotation(gyro_rotated, gyro_align_);
+      // 校准进行中，显示进度
+      LOG_D("Calibrating... (use raw gyro)");
+      return;  // 校准期间不处理数据
     }
-    
-    // 步骤3: 降采样（参考 gyro.c:457-468 中的 gyroUpdate 降采样逻辑）
-    // 将旋转后的数据存储到 gyro_adc_（对应 gyro.gyroADC）
-    std::memcpy(gyro_adc_, gyro_rotated, sizeof(gyro_rotated));
-    
-    float gyro_downsampled[3];
-    if (downsample_filter_enabled_) {
-        // 使用 LPF2 滤波器进行降采样（参考 gyro.c:457-461）
-        // gyro.sampleSum[X] = gyro.lowpass2FilterApplyFn((filter_t *)&gyro.lowpass2Filter[X], gyro.gyroADC[X]);
-        if (lpf2_filter_.isEnabled()) {
-            lpf2_filter_.apply(gyro_adc_, gyro_downsampled);
-            // 将滤波结果存储到 sample_sum_（对应 gyro.sampleSum）
-            std::memcpy(sample_sum_, gyro_downsampled, sizeof(gyro_downsampled));
-        } else {
-            std::memcpy(gyro_downsampled, gyro_adc_, sizeof(gyro_adc_));
-        }
+  }
+
+  // 只有校准完成后才进行滤波处理
+  if (!gyro_calibration_.isCalibrationComplete()) {
+    return;
+  }
+
+  // 步骤1: 应用零偏值校正（去零飘）
+  float gyro_corrected[3];
+  gyro_calibration_.applyZeroOffset(gyro_raw, gyro_corrected);
+
+  // 步骤2: 应用传感器旋转（如果需要）
+  float gyro_rotated[3];
+  std::memcpy(gyro_rotated, gyro_corrected, sizeof(gyro_corrected));
+
+  if (use_custom_matrix_) {
+    BfSensorAlignmentUtil::alignViaMatrix(gyro_rotated, rotation_matrix_);
+  } else {
+    BfSensorAlignmentUtil::alignViaRotation(gyro_rotated, gyro_align_);
+  }
+
+  // 步骤3: 降采样（参考 gyro.c:457-468 中的 gyroUpdate 降采样逻辑）
+  // 将旋转后的数据存储到 gyro_adc_（对应 gyro.gyroADC）
+  std::memcpy(gyro_adc_, gyro_rotated, sizeof(gyro_rotated));
+
+  float gyro_downsampled[3];
+  if (downsample_filter_enabled_) {
+    // 使用 LPF2 滤波器进行降采样（参考 gyro.c:457-461）
+    // gyro.sampleSum[X] = gyro.lowpass2FilterApplyFn((filter_t *)&gyro.lowpass2Filter[X], gyro.gyroADC[X]);
+    if (lpf2_filter_.isEnabled()) {
+      lpf2_filter_.apply(gyro_adc_, gyro_downsampled);
+      // 将滤波结果存储到 sample_sum_（对应 gyro.sampleSum）
+      std::memcpy(sample_sum_, gyro_downsampled, sizeof(gyro_downsampled));
     } else {
-        // 使用简单平均值进行降采样（参考 gyro.c:462-467）
-        // gyro.sampleSum[X] += gyro.gyroADC[X];
-        // gyro.sampleCount++;
-        for (int i = 0; i < 3; i++) {
-            sample_sum_[i] += gyro_adc_[i];
-        }
-        sample_count_++;
-        
-        // 这里暂时不进行平均，等待累积到一定数量后再平均
-        // 为了简化，先直接使用当前值
-        std::memcpy(gyro_downsampled, gyro_adc_, sizeof(gyro_adc_));
-        
-        // TODO: 实现累积平均逻辑（参考 gyro_filter_impl.c:39-42）
-        // if (gyro.sampleCount) {
-        //     gyroADCf = gyro.sampleSum[axis] / gyro.sampleCount;
-        // }
+      std::memcpy(gyro_downsampled, gyro_adc_, sizeof(gyro_adc_));
     }
-    
-    // 步骤4: 应用完整的滤波链（参考 gyro_filter_impl.c）
-    // 将结果存储到 gyro_adcf_（对应 gyro.gyroADCf）
-    applyFilterChain(gyro_downsampled, gyro_adcf_);
-    
-    // 重置降采样计数器（参考 gyro_filter_impl.c:86）
-    if (!downsample_filter_enabled_) {
-        sample_count_ = 0;
-        std::memset(sample_sum_, 0, sizeof(sample_sum_));
+  } else {
+    // 使用简单平均值进行降采样（参考 gyro.c:462-467）
+    // gyro.sampleSum[X] += gyro.gyroADC[X];
+    // gyro.sampleCount++;
+    for (int i = 0; i < 3; i++) {
+      sample_sum_[i] += gyro_adc_[i];
     }
+    sample_count_++;
+
+    // 这里暂时不进行平均，等待累积到一定数量后再平均
+    // 为了简化，先直接使用当前值
+    std::memcpy(gyro_downsampled, gyro_adc_, sizeof(gyro_adc_));
+
+    // TODO: 实现累积平均逻辑（参考 gyro_filter_impl.c:39-42）
+    // if (gyro.sampleCount) {
+    //     gyroADCf = gyro.sampleSum[axis] / gyro.sampleCount;
+    // }
+  }
+
+  // 步骤4: 应用完整的滤波链（参考 gyro_filter_impl.c）
+  // 将结果存储到 gyro_adcf_（对应 gyro.gyroADCf）
+  applyFilterChain(gyro_downsampled, gyro_adcf_);
+
+  // 重置降采样计数器（参考 gyro_filter_impl.c:86）
+  if (!downsample_filter_enabled_) {
+    sample_count_ = 0;
+    std::memset(sample_sum_, 0, sizeof(sample_sum_));
+  }
+
+  // 发布滤波后的陀螺仪数据到 MCN
+  gyro_filtered_msg_t filtered_msg;
+  std::memcpy(filtered_msg.gyro_filtered, gyro_adcf_, sizeof(gyro_adcf_));
+  std::memcpy(filtered_msg.gyro_adc, gyro_adc_, sizeof(gyro_adc_));
+  filtered_msg.seq = imu_data->seq;
+
+  if (gyro_filtered_hub_ != nullptr) {
+    mcn_publish(gyro_filtered_hub_, &filtered_msg);
+  }
 
     // 推送陀螺仪数据到 mlog（参考 aMlogStabilze.c:208-216）
     // 记录滤波前后的陀螺仪数据
-    // uint32_t timestamp = timestamp_micros();
-    // mlog_gyro_.pushGyroData(latest_imu_.seq, timestamp, gyro_adc_, gyro_adcf_);
+  uint32_t timestamp = timestamp_micros();
+  bf_mlog::MlogGyro::getInstance()->pushGyroData(imu_data->seq, timestamp, gyro_adc_, gyro_adcf_);
 
-    // Debug log（可选，如果需要的话）
-    // LOG_D("seq:%u angular_velocity(%.3f, %.3f, %.3f)",
-    //     latest_imu_.seq,
-    //     gyro_adcf_[0],
-    //     gyro_adcf_[1],
-    //     gyro_adcf_[2]);
+  // Debug log（可选，如果需要的话）
+  // LOG_D("seq:%u angular_velocity(%.3f, %.3f, %.3f)",
+  //     imu_data->seq,
+  //     gyro_adcf_[0],
+  //     gyro_adcf_[1],
+  //     gyro_adcf_[2]);
 }
 
 void RateCtrlAngularVelocity::applyFilterChain(const float input[3], float output[3])
 {
   // Debug Pin: 拉高，表示开始滤波处理
 #ifdef PROJECT_BF_RATE_CTRL_DEBUG_PIN_EN
-  DEBUG_PIN_DEBUG1_HIGH();
+  DEBUG_PIN_DEBUG0_HIGH();
 #endif
 
         // 参考 gyro_filter_impl.c 的滤波顺序
@@ -736,7 +790,7 @@ void RateCtrlAngularVelocity::applyFilterChain(const float input[3], float outpu
 
         // Debug Pin: 拉低，表示滤波处理完成
 #ifdef PROJECT_BF_RATE_CTRL_DEBUG_PIN_EN
-        DEBUG_PIN_DEBUG1_LOW();
+        DEBUG_PIN_DEBUG0_LOW();
 #endif
 }
 

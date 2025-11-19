@@ -49,5 +49,26 @@ menuconfig PROJECT_BF_RATE_CTRL_EN
             help
                 Enable debug pin to measure filter processing time.
                 The pin will be set HIGH during filter processing and LOW otherwise.
+
+        config PROJECT_BF_RATE_CTRL_THREAD_STACK_SIZE
+            int "Rate Control Thread Stack Size (bytes)"
+            range 1024 8192
+            default 2048
+            help
+                Stack size for the rate control thread in bytes. Default: 2048.
+
+        config PROJECT_BF_RATE_CTRL_THREAD_PRIORITY
+            int "Rate Control Thread Priority"
+            range 1 32
+            default 10
+            help
+                Priority for the rate control thread. Higher number means higher priority. Default: 10.
+
+        config PROJECT_BF_RATE_CTRL_THREAD_TIMESLICE
+            int "Rate Control Thread Time Slice (ticks)"
+            range 1 100
+            default 5
+            help
+                Time slice for the rate control thread in ticks. Default: 5.
     endif
 

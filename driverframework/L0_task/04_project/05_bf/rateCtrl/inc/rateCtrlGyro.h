@@ -3,13 +3,13 @@
 
 #include <rtthread.h>
 #include <uMCN.h>
-#include <ipc/workqueue.h>
 #include <cstdint>
 #include <cmath>
 #include <cstring>
 
 extern "C" {
 #include "imu_raw_msg.h"
+#include "gyro_filtered_msg.h"
 }
 
 #include "bfGyroLpfFilter.hpp"
@@ -113,11 +113,18 @@ public:
         std::memcpy(gyro_adc, gyro_adc_, sizeof(gyro_adc_));
     }
 
-private:
-    static void workHandler(struct rt_work* work, void* parameter);
-    static void asyncCallback(const void* data, void* user_data);
+    // 线程入口函数（静态）
+    static void threadEntry(void* parameter);
 
-    void handleWork();
+private:
+    RateCtrlAngularVelocity(const RateCtrlAngularVelocity&) = delete;
+    RateCtrlAngularVelocity& operator=(const RateCtrlAngularVelocity&) = delete;
+    
+    // 线程主循环
+    void threadLoop();
+    
+    // 处理 IMU 数据（原 handleWork 的逻辑）
+    void processImuData(const imu_raw_msg_t* imu_data);
 
     // ========== 从 gyro_t 映射的简单变量 ==========
     
@@ -188,16 +195,16 @@ private:
     GyroCalibration gyro_calibration_;
     bool calibration_started_;
     
-    // MCN 订阅相关
-    struct rt_work work_;
-    McnNode_t imu_node_;
-    imu_raw_msg_t latest_imu_;
+    // 线程相关
+    rt_thread_t thread_;
+    struct rt_thread thread_obj_;
+    rt_uint8_t thread_stack_[4096];  // 最大栈大小，实际使用大小由 Kconfig 配置
+    bool thread_inited_;
     
-    // 工作队列相关（工作队列在 workqueueManage 模块中创建，这里只查找和使用）
-    struct rt_workqueue* workqueue_;  // 通过名称从 workqueueManage 查找到的工作队列
-
-    // Mlog 数据记录（参考 aMlogStabilze.c）
-    // bf_mlog::MlogGyro mlog_gyro_;
+    // MCN 订阅和发布相关
+    rt_sem_t imu_event_;      // MCN 事件信号量（用于 mcn_poll_sync）
+    McnNode_t imu_node_;      // MCN 订阅节点（imu_raw）
+    McnHub_t gyro_filtered_hub_;  // MCN 发布 hub（gyro_filtered）
 
     // ========== 内部方法 ==========
     

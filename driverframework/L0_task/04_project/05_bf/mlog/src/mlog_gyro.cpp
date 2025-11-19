@@ -10,6 +10,9 @@
 
 extern "C" {
 #include "mlog.h"
+#define LOG_TAG "mlog_gyro"
+#define LOG_LVL LOG_LVL_INFO
+#include <ulog.h>
 }
 
 namespace bf_mlog {
@@ -78,7 +81,13 @@ void MlogGyro::pushGyroData(uint32_t seq, uint32_t timestamp, const float gyro_r
   if (bus_id_ < 0 || !isEnabled()) {
     return;
   }
-
+  static uint32_t timestamp_last = 0;
+  if (timestamp <= timestamp_last) {
+    static uint16_t count = 0;
+    LOG_E("[MlogGyro] Non-monotonic timestamp: current=%u, last=%u, count=%u", timestamp, timestamp_last, count);
+    count++;
+  }
+  timestamp_last = timestamp;
   // 填充数据结构
   mlogGyroData_t gyro_data = {0};
   gyro_data.timestamp = timestamp;
