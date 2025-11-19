@@ -195,10 +195,7 @@ private:
     
     // 工作队列相关（工作队列在 workqueueManage 模块中创建，这里只查找和使用）
     struct rt_workqueue* workqueue_;  // 通过名称从 workqueueManage 查找到的工作队列
-    
-    // Debug Pin（用于测量滤波耗时）
-    uint8_t debug_pin_;  // debugPin 索引 (0-3)，0xFF 表示未配置
-    
+
     // Mlog 数据记录（参考 aMlogStabilze.c）
     bf_mlog::MlogGyro mlog_gyro_;
     

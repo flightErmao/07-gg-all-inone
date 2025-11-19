@@ -46,11 +46,6 @@ extern "C" {
 #define CONFIG_PROJECT_BF_RATE_CTRL_GYRO_OFFSET_YAW 0
 #endif
 
-// Debug Pin 配置
-#ifndef CONFIG_PROJECT_BF_RATE_CTRL_DEBUG_PIN_INDEX
-#define CONFIG_PROJECT_BF_RATE_CTRL_DEBUG_PIN_INDEX 0
-#endif
-
 // RateCtrlAngularVelocity 单例实现
 RateCtrlAngularVelocity& RateCtrlAngularVelocity::instance() {
   static RateCtrlAngularVelocity instance_obj;
@@ -229,9 +224,6 @@ RateCtrlAngularVelocity::RateCtrlAngularVelocity()
     // 初始化工作队列
     rt_work_init(&work_, RateCtrlAngularVelocity::workHandler, this);
     workqueue_ = nullptr;  // 将在 init() 中通过名称查找
-
-    // 初始化 Debug Pin（默认未配置，使用 DEBUG0）
-    debug_pin_ = 0;
 }
 
 rt_err_t RateCtrlAngularVelocity::init()
@@ -308,18 +300,6 @@ rt_err_t RateCtrlAngularVelocity::init()
     gyro_has_overflow_protection_ = true;  // 默认有溢出保护
     gyro_debug_mode_ = 0;  // DEBUG_NONE
 
-    // 初始化 Debug Pin（用于测量滤波耗时）
-#ifdef PROJECT_BF_RATE_CTRL_DEBUG_PIN_EN
-    debug_pin_ = CONFIG_PROJECT_BF_RATE_CTRL_DEBUG_PIN_INDEX;
-    if (debug_pin_ < 4) {
-      LOG_I("Debug pin initialized: debugPin index=%d", debug_pin_);
-    } else {
-      LOG_W("Debug pin index out of range: %d (should be 0-3)", debug_pin_);
-      debug_pin_ = 0xFF;  // 无效索引
-    }
-#else
-    debug_pin_ = 0xFF;  // 未使能，使用无效索引
-#endif
     use_multi_gyro_debugging_ = false;
     gyro_debug_axis_ = 0;  // FD_ROLL (需要根据实际枚举值调整)
     
@@ -693,9 +673,9 @@ void RateCtrlAngularVelocity::handleWork()
 
     // 推送陀螺仪数据到 mlog（参考 aMlogStabilze.c:208-216）
     // 记录滤波前后的陀螺仪数据
-    uint32_t timestamp = timestamp_micros();
-    mlog_gyro_.pushGyroData(latest_imu_.seq, timestamp, gyro_adc_, gyro_adcf_);
-    
+    // uint32_t timestamp = timestamp_micros();
+    // mlog_gyro_.pushGyroData(latest_imu_.seq, timestamp, gyro_adc_, gyro_adcf_);
+
     // Debug log（可选，如果需要的话）
     // LOG_D("seq:%u angular_velocity(%.3f, %.3f, %.3f)",
     //     latest_imu_.seq,

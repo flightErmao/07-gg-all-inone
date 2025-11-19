@@ -4,6 +4,8 @@
  * 基于 Betaflight BMI270 寄存器配置的简化版 RT-Thread C++ 驱动：
  * - 只使用数据就绪中断 + 直接寄存器读取，不使用 FIFO；
  * - 将原始加速度/角速度转换为 float，并通过 imu_raw MCN 话题发布。
+ * - 支持通过 Kconfig 选择触发方式：硬件中断（DRDY 引脚）或软件定时器；
+ * - 支持通过 Kconfig 选择输出数据率（ODR）：800Hz、1600Hz、3200Hz。
  */
 
 #include "accgyro_spi_bmi270.hpp"
@@ -69,14 +71,29 @@ static constexpr uint8_t BMI270_CHIP_ID = 0x24;
 static constexpr uint8_t BMI270_VAL_CMD_SOFTRESET = 0xB6;
 static constexpr uint8_t BMI270_VAL_PWR_CTRL = 0x0E;              // gyro+acc+temp 使能
 static constexpr uint8_t BMI270_VAL_PWR_CONF = 0x02;              // 性能模式
-static constexpr uint8_t BMI270_VAL_ACC_CONF =
-    (0x01u << 7) | (0x01u << 4) | 0x0Bu;                          // 高性能 + osr2 + 800Hz
 static constexpr uint8_t BMI270_VAL_ACC_RANGE_16G = 0x03;
-static constexpr uint8_t BMI270_VAL_GYRO_CONF =
-    (0x01u << 7) | (0x01u << 6) | (0x01u << 4) | 0x0Bu;           // HP filter/noise + OSR2 + 800Hz (临时调试，降低频率)
 static constexpr uint8_t BMI270_VAL_GYRO_RANGE_2000DPS = 0x08;
 static constexpr uint8_t BMI270_VAL_INT_MAP_DATA_DRDY_INT1 = 0x04;
 static constexpr uint8_t BMI270_VAL_INT1_IO_CTRL_PINMODE = 0x0A;  // 高电平、推挽、输出
+
+#if defined(SENSOR_BMI270_BF_ODR_3200HZ)
+static constexpr uint8_t BMI270_VAL_ACC_CONF_ODR_BITS = 0x0D;
+static constexpr uint8_t BMI270_VAL_GYRO_CONF_ODR_BITS = 0x0D;
+static constexpr float BMI270_SELECTED_ODR_HZ = 3200.0f;
+#elif defined(SENSOR_BMI270_BF_ODR_1600HZ)
+static constexpr uint8_t BMI270_VAL_ACC_CONF_ODR_BITS = 0x0C;
+static constexpr uint8_t BMI270_VAL_GYRO_CONF_ODR_BITS = 0x0C;
+static constexpr float BMI270_SELECTED_ODR_HZ = 1600.0f;
+#else  // 默认 800Hz
+static constexpr uint8_t BMI270_VAL_ACC_CONF_ODR_BITS = 0x0B;
+static constexpr uint8_t BMI270_VAL_GYRO_CONF_ODR_BITS = 0x0B;
+static constexpr float BMI270_SELECTED_ODR_HZ = 800.0f;
+#endif
+
+static constexpr uint8_t BMI270_VAL_ACC_CONF =
+    (0x01u << 7) | (0x01u << 4) | BMI270_VAL_ACC_CONF_ODR_BITS;   // 高性能 + osr2 + 选择 ODR
+static constexpr uint8_t BMI270_VAL_GYRO_CONF =
+    (0x01u << 7) | (0x01u << 6) | (0x01u << 4) | BMI270_VAL_GYRO_CONF_ODR_BITS;  // HP filter/noise + OSR2 + 选择 ODR
 
 // 原始值转换系数（从 Betaflight 抽取，与 accgyro_spi_bmi270.c 保持一致）
 // 16G: 32768 -> 16g
@@ -107,8 +124,8 @@ BMI270::BMI270()
       timer_inited_(false),  // 调整顺序，在 worker_inited_ 之前初始化
       worker_thread_(RT_NULL),
       worker_inited_(false),
-      gyro_sample_rate_hz_(800.0f),  // BMI270 陀螺仪配置为 800Hz (临时调试，降低频率)
-      gyro_sample_dt_(1.0f / 800.0f),
+      gyro_sample_rate_hz_(BMI270_SELECTED_ODR_HZ),
+      gyro_sample_dt_(1.0f / BMI270_SELECTED_ODR_HZ),
       gyro_scale_(GYRO_SCALE_2000DPS) {  // BMI270 陀螺仪配置为 2000DPS
   cfg_ = {};
   rt_memset(&timer_, 0, sizeof(timer_));
@@ -237,11 +254,11 @@ bool BMI270::configureSensor() {
   regWrite(BMI270_REG_PWR_CONF, BMI270_VAL_PWR_CONF, 1);
   regWrite(BMI270_REG_PWR_CTRL, BMI270_VAL_PWR_CTRL, 1);
 
-  // 加速度计配置：800Hz，16G
+  // 加速度计配置：由 Kconfig 选择的 ODR，16G
   regWrite(BMI270_REG_ACC_CONF, BMI270_VAL_ACC_CONF, 1);
   regWrite(BMI270_REG_ACC_RANGE, BMI270_VAL_ACC_RANGE_16G, 1);
 
-  // 陀螺仪配置：800Hz，2000dps (临时调试，降低频率)
+  // 陀螺仪配置：由 Kconfig 选择的 ODR，2000dps
   regWrite(BMI270_REG_GYRO_CONF, BMI270_VAL_GYRO_CONF, 1);
   regWrite(BMI270_REG_GYRO_RANGE, BMI270_VAL_GYRO_RANGE_2000DPS, 1);
 
@@ -260,17 +277,18 @@ bool BMI270::configureSensor() {
 bool BMI270::configureInterrupt() {
   disableInterrupt();
 
-  // 临时关闭中断 IO 初始化，使用软件定时器替代（调试用）
-  // 原始中断初始化代码已注释
-  /*
+#ifdef SENSOR_BMI270_BF_TRIGGER_INTERRUPT
+  // 使用硬件中断方式
   if (!cfg_.int_pin_name || cfg_.int_pin_name[0] == '\0') {
+    LOG_E("BMI270 interrupt pin not configured");
     return false;
   }
 
-  // 解析 GPIO 引脚索引（支持 \"PA15\" 之类的字符串配置）
+  // 解析 GPIO 引脚索引（支持 "PA15" 之类的字符串配置）
   int_pin_ = parse_pin_name_from_config(cfg_.int_pin_name);
   if (int_pin_ < 0) {
     int_pin_ = -1;
+    LOG_E("BMI270 failed to parse interrupt pin: %s", cfg_.int_pin_name);
     return false;
   }
 
@@ -281,23 +299,36 @@ bool BMI270::configureInterrupt() {
 
   // 实际硬件为"高电平有效 + 上升沿触发"，使用上升沿 EXTI
   if (rt_pin_attach_irq(int_pin_, PIN_IRQ_MODE_RISING, &BMI270::drdyIsr, this) != RT_EOK) {
+    LOG_E("BMI270 failed to attach interrupt");
     int_pin_ = -1;
     return false;
   }
 
   if (rt_pin_irq_enable(int_pin_, PIN_IRQ_ENABLE) != RT_EOK) {
+    LOG_E("BMI270 failed to enable interrupt");
     rt_pin_detach_irq(int_pin_);
     int_pin_ = -1;
     return false;
   }
-  */
 
-  // 临时使用软件定时器替代中断（周期 1ms，用于调试）
+  LOG_I("BMI270 using hardware interrupt (pin: %s)", cfg_.int_pin_name);
+  return true;
+
+#else  // SENSOR_BMI270_BF_TRIGGER_TIMER
+  // 使用软件定时器方式
   if (!timer_inited_ && event_inited_) {
-    // 创建软件定时器，周期为 1ms (RT_TICK_PER_SECOND / 1000)
+    // 根据选择的 ODR 计算定时器周期（tick）
+    // 定时器周期 = RT_TICK_PER_SECOND / ODR_HZ
+    // 为了确保至少 1 tick，使用最大值
+    rt_tick_t timer_period = RT_TICK_PER_SECOND / static_cast<rt_tick_t>(BMI270_SELECTED_ODR_HZ);
+    if (timer_period < 1) {
+      timer_period = 1;
+    }
+
+    // 创建软件定时器
     // 注意：rt_timer_init 返回 void，不返回错误码
     rt_timer_init(&timer_, "b270_tmr", &BMI270::timerCallback, this,
-                  RT_TICK_PER_SECOND / 1000,  // 1ms = 1000Hz
+                  timer_period,
                   RT_TIMER_FLAG_PERIODIC | RT_TIMER_FLAG_HARD_TIMER);
 
     // 启动定时器
@@ -309,28 +340,30 @@ bool BMI270::configureInterrupt() {
     }
 
     timer_inited_ = true;
-    LOG_I("BMI270 using software timer (1ms) instead of interrupt");
+    LOG_I("BMI270 using software timer (period: %lu ticks, ODR: %.0f Hz)", 
+          timer_period, BMI270_SELECTED_ODR_HZ);
   }
 
   return true;
+#endif
 }
 
 void BMI270::disableInterrupt() {
-  // 临时关闭中断（已注释）
-  /*
+#ifdef SENSOR_BMI270_BF_TRIGGER_INTERRUPT
+  // 禁用硬件中断
   if (int_pin_ >= 0) {
     rt_pin_irq_enable(int_pin_, PIN_IRQ_DISABLE);
     rt_pin_detach_irq(int_pin_);
     int_pin_ = -1;
   }
-  */
-
-  // 停止软件定时器（临时替代中断）
+#else  // SENSOR_BMI270_BF_TRIGGER_TIMER
+  // 停止软件定时器
   if (timer_inited_) {
     rt_timer_stop(&timer_);
     rt_timer_detach(&timer_);
     timer_inited_ = false;
   }
+#endif
 }
 
 bool BMI270::readAccelGyro(int16_t acc[3], int16_t gyro[3]) {
@@ -418,7 +451,7 @@ void BMI270::drdyIsr(void *parameter) {
   rt_event_send(&self->event_, 0x01);
 }
 
-/* 软件定时器回调（临时替代中断，用于调试） */
+/* 软件定时器回调（通过 Kconfig 选择使用定时器模式时调用） */
 void BMI270::timerCallback(void* parameter) {
   auto* self = static_cast<BMI270*>(parameter);
   if (!self || !self->init_ok_ || !self->event_inited_) {

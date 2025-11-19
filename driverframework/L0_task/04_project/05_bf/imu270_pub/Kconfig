@@ -28,6 +28,40 @@ menuconfig PROJECT_BF_BMI270_EN
         string "BMI270 BF interrupt pin"
         default "PA15"
 
+    choice
+        prompt "BMI270 BF output data rate"
+        default SENSOR_BMI270_BF_ODR_800HZ
+        help
+            Select the IMU output data rate (ODR) for both accelerometer and gyro.
+            Higher ODR improves bandwidth but increases CPU load.
+
+    config SENSOR_BMI270_BF_ODR_800HZ
+        bool "800 Hz"
+
+    config SENSOR_BMI270_BF_ODR_1600HZ
+        bool "1600 Hz"
+
+    config SENSOR_BMI270_BF_ODR_3200HZ
+        bool "3200 Hz"
+
+    endchoice
+
+    choice
+        prompt "BMI270 BF trigger mode"
+        default SENSOR_BMI270_BF_TRIGGER_INTERRUPT
+        help
+            Select how to trigger IMU data reading:
+            - Interrupt: Use hardware interrupt (DRDY pin) for accurate timing
+            - Software timer: Use software timer for polling (useful for debugging)
+
+    config SENSOR_BMI270_BF_TRIGGER_INTERRUPT
+        bool "Hardware interrupt (DRDY pin)"
+
+    config SENSOR_BMI270_BF_TRIGGER_TIMER
+        bool "Software timer"
+
+    endchoice
+
     endif
 
 
