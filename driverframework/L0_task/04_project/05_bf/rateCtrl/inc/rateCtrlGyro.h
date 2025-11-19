@@ -197,8 +197,8 @@ private:
     struct rt_workqueue* workqueue_;  // 通过名称从 workqueueManage 查找到的工作队列
 
     // Mlog 数据记录（参考 aMlogStabilze.c）
-    bf_mlog::MlogGyro mlog_gyro_;
-    
+    // bf_mlog::MlogGyro mlog_gyro_;
+
     // ========== 内部方法 ==========
     
     // 初始化滤波器（从参数系统读取配置，参考 gyroInitFilters）

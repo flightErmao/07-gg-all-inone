@@ -7,61 +7,69 @@ menuconfig PROJECT_BF_BMI270_EN
 
     if PROJECT_BF_BMI270_EN
 
-    config SENSOR_SPI_NAME_BMI270_BF
-        string "BMI270 BF SPI bus name"
-        default "spi1"
+        config SENSOR_SPI_NAME_BMI270_BF
+            string "BMI270 BF SPI bus name"
+            default "spi1"
 
-    config SENSOR_SPI_SLAVE_NAME_BMI270_BF
-        string "BMI270 BF SPI device name"
-        default "spi10"
+        config SENSOR_SPI_SLAVE_NAME_BMI270_BF
+            string "BMI270 BF SPI device name"
+            default "spi10"
 
-    config SENSOR_BMI270_BF_SPI_MAX_HZ
-        int "BMI270 BF SPI max frequency (Hz)"
-        default 10000000
-        range 100000 20000000
+        config SENSOR_BMI270_BF_SPI_MAX_HZ
+            int "BMI270 BF SPI max frequency (Hz)"
+            default 10000000
+            range 100000 20000000
 
-    config SENSOR_BMI270_BF_SPI_CS_PIN
-        string "BMI270 BF SPI CS pin"
-        default "PA4"
+        config SENSOR_BMI270_BF_SPI_CS_PIN
+            string "BMI270 BF SPI CS pin"
+            default "PA4"
 
-    config SENSOR_BMI270_BF_INT_PIN
-        string "BMI270 BF interrupt pin"
-        default "PA15"
+        config SENSOR_BMI270_BF_INT_PIN
+            string "BMI270 BF interrupt pin"
+            default "PA15"
 
-    choice
-        prompt "BMI270 BF output data rate"
-        default SENSOR_BMI270_BF_ODR_800HZ
-        help
-            Select the IMU output data rate (ODR) for both accelerometer and gyro.
-            Higher ODR improves bandwidth but increases CPU load.
+        choice
+            prompt "BMI270 BF output data rate"
+            default SENSOR_BMI270_BF_ODR_800HZ
+            help
+                Select the IMU output data rate (ODR) for both accelerometer and gyro.
+                Higher ODR improves bandwidth but increases CPU load.
 
-    config SENSOR_BMI270_BF_ODR_800HZ
-        bool "800 Hz"
+        config SENSOR_BMI270_BF_ODR_800HZ
+            bool "800 Hz"
 
-    config SENSOR_BMI270_BF_ODR_1600HZ
-        bool "1600 Hz"
+        config SENSOR_BMI270_BF_ODR_1600HZ
+            bool "1600 Hz"
 
-    config SENSOR_BMI270_BF_ODR_3200HZ
-        bool "3200 Hz"
+        config SENSOR_BMI270_BF_ODR_3200HZ
+            bool "3200 Hz"
 
-    endchoice
+        endchoice
 
-    choice
-        prompt "BMI270 BF trigger mode"
-        default SENSOR_BMI270_BF_TRIGGER_INTERRUPT
-        help
-            Select how to trigger IMU data reading:
-            - Interrupt: Use hardware interrupt (DRDY pin) for accurate timing
-            - Software timer: Use software timer for polling (useful for debugging)
+        choice
+            prompt "BMI270 BF trigger mode"
+            default SENSOR_BMI270_BF_TRIGGER_INTERRUPT
+            help
+                Select how to trigger IMU data reading:
+                - Interrupt: Use hardware interrupt (DRDY pin) for accurate timing
+                - Software timer: Use software timer for polling (useful for debugging)
 
-    config SENSOR_BMI270_BF_TRIGGER_INTERRUPT
-        bool "Hardware interrupt (DRDY pin)"
+        config SENSOR_BMI270_BF_TRIGGER_INTERRUPT
+            bool "Hardware interrupt (DRDY pin)"
 
-    config SENSOR_BMI270_BF_TRIGGER_TIMER
-        bool "Software timer"
+        config SENSOR_BMI270_BF_TRIGGER_TIMER
+            bool "Software timer"
 
-    endchoice
+        endchoice
 
-    endif
+        config PROJECT_BF_BMI270_DEBUG_PIN_EN
+            bool "Enable Debug Pin for Timing Measurement"
+            default n
+            depends on L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN
+
+
+        endif
+
+
 
 

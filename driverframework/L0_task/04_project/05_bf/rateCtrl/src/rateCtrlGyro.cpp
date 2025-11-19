@@ -308,20 +308,20 @@ rt_err_t RateCtrlAngularVelocity::init()
     
     // 初始化降采样滤波器（参考 gyro_init.c:262-265）
     initDownsampleFilter();
-    
+
     // 初始化 mlog 陀螺仪数据记录（参考 aMlogStabilze.c:120）
-    mlog_gyro_.init();
-    
+    // mlog_gyro_.init();
+
     // 读取 mlog_gyro_en 参数并设置使能状态
-    uint8_t mlog_gyro_en = 0;
-    if (getParam("mlog_gyro_en", &mlog_gyro_en, sizeof(mlog_gyro_en)) == RT_EOK) {
-        mlog_gyro_.setParamEnabled(mlog_gyro_en != 0);
-        LOG_I("Mlog gyro enabled: %u", mlog_gyro_en);
-    } else {
-        // 如果参数不存在，使用默认值（禁用）
-        mlog_gyro_.setParamEnabled(false);
-        LOG_W("Mlog gyro parameter not found, disabled by default");
-    }
+    // uint8_t mlog_gyro_en = 0;
+    // if (getParam("mlog_gyro_en", &mlog_gyro_en, sizeof(mlog_gyro_en)) == RT_EOK) {
+    //     mlog_gyro_.setParamEnabled(mlog_gyro_en != 0);
+    //     LOG_I("Mlog gyro enabled: %u", mlog_gyro_en);
+    // } else {
+    //     // 如果参数不存在，使用默认值（禁用）
+    //     mlog_gyro_.setParamEnabled(false);
+    //     LOG_W("Mlog gyro parameter not found, disabled by default");
+    // }
 
     // 注意：gyro 零偏值在运行时计算，不保存到参数系统
     // 每次启动时都会重新校准
