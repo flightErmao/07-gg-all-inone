@@ -17,7 +17,7 @@ static void bf_mlog_param_default(void *address, uint8_t size);
 static uint8_t mlog_gyro_en;  // 0=禁用, 1=使能
 
 /* 默认值 */
-static const uint8_t mlog_gyro_en_default = 0;  // 默认禁用
+static const uint8_t mlog_gyro_en_default = 1;  // 默认使用
 
 static const param_default_t bf_mlog_defaults[] = {
     {&mlog_gyro_en, &mlog_gyro_en_default},

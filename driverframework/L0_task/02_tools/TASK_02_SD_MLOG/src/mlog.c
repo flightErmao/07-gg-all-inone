@@ -27,9 +27,9 @@
 
 #define TAG "MLog"
 
-#define MLOG_BUFFER_SIZE 64 * 1024
-#define MLOG_SECTOR_SIZE 4096
-#define MLOG_MAX_SECTOR_TO_WRITE 5
+#define MLOG_BUFFER_SIZE (64 * 1024)
+#define MLOG_SECTOR_SIZE (4096 * 2)
+#define MLOG_MAX_SECTOR_TO_WRITE 10
 
 /* Define FMT error codes as RT error codes */
 #define FMT_ERROR -RT_ERROR
