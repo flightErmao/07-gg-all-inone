@@ -16,7 +16,54 @@ extern "C" {
 #include "timestamp.h"
 }
 
-// PID controller class (C++ wrapper for Betaflight PID)
+#define FD_ROLL 0
+#define FD_PITCH 1
+#define FD_YAW 2
+#define XYZ_AXIS_COUNT 3
+
+struct pidf_t {
+  float P;
+  float I;
+  float D;
+  float F;
+  float S;
+};
+
+struct pidProfile_t {
+  pidf_t pid[XYZ_AXIS_COUNT];
+  float pidSumLimit;
+  float pidSumLimitYaw;
+  float itermWindup;
+  float dtermLpfHz;
+  float yawLpfHz;
+};
+
+struct pidCoefficient_t {
+  float Kp;
+  float Ki;
+  float Kd;
+  float Kf;
+};
+
+struct pidAxisData_t {
+  float P;
+  float I;
+  float D;
+  float F;
+  float S;
+  float Sum;
+};
+
+struct pidRuntime_t {
+  float dT;
+  float pidFrequency;
+  bool pidStabilisationEnabled;
+  float previousPidSetpoint[XYZ_AXIS_COUNT];
+  pidCoefficient_t pidCoefficient[XYZ_AXIS_COUNT];
+  float itermLimit;
+  float itermLimitYaw;
+};
+
 class PidBf {
  public:
   // Singleton pattern
@@ -49,32 +96,17 @@ class PidBf {
   float getFeedforward(int axis);
   float getMaxRcRate(int axis);
 
-  // PID runtime data (mapped from pidRuntime_t)
-  struct {
-    float dT;
-    float pidFrequency;
-    bool pidStabilisationEnabled;
-    float previousPidSetpoint[3];
-    // Add more fields as needed from pidRuntime_t
-  } pid_runtime_;
+  struct SimpleLowpass {
+    float state;
+    float alpha;
+    bool enabled;
+  };
 
-  // PID axis data (mapped from pidAxisData_t)
-  struct {
-    float P;
-    float I;
-    float D;
-    float F;
-    float S;
-    float Sum;
-  } pid_data_[3];
-
-  // PID profile (mapped from pidProfile_t)
-  struct {
-    float pid[3][3];  // [axis][P, I, D]
-    float pidSumLimit;
-    float pidSumLimitYaw;
-    // Add more fields as needed from pidProfile_t
-  } pid_profile_;
+  pidRuntime_t pid_runtime_;
+  pidProfile_t pid_profile_;
+  pidAxisData_t pid_data_[XYZ_AXIS_COUNT];
+  SimpleLowpass dterm_lpf_[XYZ_AXIS_COUNT];
+  SimpleLowpass yaw_pterm_lpf_;
 
   // Thread related
   rt_thread_t thread_;
