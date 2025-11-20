@@ -517,6 +517,10 @@
 /* Mlog gyro logging is configured via parameter system (mlog_gyro_en) */
 
 #define PROJECT_BF_MLOG_GYRO_DEBUG_PIN_EN
+#define PROJECT_BF_PID_EN
+#define PROJECT_BF_PID_THREAD_STACK_SIZE 4096
+#define PROJECT_BF_PID_THREAD_PRIORITY 6
+#define PROJECT_BF_PID_THREAD_TIMESLICE 5
 /* end of L0_TASK_CONFIG */
 
 /* L1_MIDDLEWARE_CONFIG */

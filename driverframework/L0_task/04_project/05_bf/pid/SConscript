@@ -7,12 +7,11 @@ src = Glob("./src/*.cpp")
 
 include_paths = [
     cwd,
-    os.path.join(cwd, "inc"),
+    os.path.join(cwd, "inc"),  # param.h (local), pid_setpoint_msg.h, pid_output_msg.h, rc_bf.hpp
     os.path.join(cwd, "../rateCtrl/inc"),  # gyro_filtered_msg.h
     os.path.join(cwd, "../imu270_pub/inc"),
     os.path.join(cwd, "../mlog/inc"),
-    os.path.join(cwd, "..", "..", "01_basic", "TASK_02_STABLIZE", "inc"),  # aMcnStabilize.h
-    os.path.join(cwd, "..", "..", "01_basic", "TASK_05_PARAM", "inc"),  # param.h
+    os.path.join(cwd, "..", "..", "02_fmt", "01_TASK_RC", "inc"),  # taskRc.h, pilot_cmd_bus_t
     os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "01_module", "05_timestamp", "inc"),  # timestamp.h
 ]
 

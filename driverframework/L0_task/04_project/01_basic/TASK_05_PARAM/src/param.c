@@ -9,6 +9,7 @@
 #ifdef PROJECT_MINIFLY_TASK05_PARAM_FLYER_BF_DEFAULT_EN
 #include "bfImuFilterParam.h"
 #include "bfPidParam.h"
+#include "bfRcParam.h"
 #include "bfImuCaliOffsetParam.h"
 #include "bfMlogParam.h"
 #endif
@@ -51,6 +52,7 @@ static void init_param_sources(void) {
 #ifdef PROJECT_MINIFLY_TASK05_PARAM_FLYER_BF_DEFAULT_EN
   register_param_source(bfImuFilterParam_list(), bfImuFilterParam_count());
   register_param_source(bfPidParam_list(), bfPidParam_count());
+  register_param_source(bfRcParam_list(), bfRcParam_count());
   register_param_source(bfImuCaliOffsetParam_list(), bfImuCaliOffsetParam_count());
   register_param_source(bfMlogParam_list(), bfMlogParam_count());
 #endif
@@ -91,6 +93,7 @@ int uparam_data_init(void) {
 #ifdef PROJECT_MINIFLY_TASK05_PARAM_FLYER_BF_DEFAULT_EN
   uparam_add_list(bfImuFilterParam_list(), bfImuFilterParam_count());
   uparam_add_list(bfPidParam_list(), bfPidParam_count());
+  uparam_add_list(bfRcParam_list(), bfRcParam_count());
   uparam_add_list(bfImuCaliOffsetParam_list(), bfImuCaliOffsetParam_count());
   uparam_add_list(bfMlogParam_list(), bfMlogParam_count());
 #endif

@@ -30,10 +30,8 @@ menu "L0_TASK_CONFIG"
 
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/04_px4/imu_pub/Kconfig"
     
-    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/05_bf/imu270_pub/Kconfig"
-    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/05_bf/rateCtrl/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/05_bf/imu/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/05_bf/gyroFilter/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/05_bf/mlog/Kconfig"
-    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/05_bf/workqueueManage/Kconfig"
-    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/05_bf/testThread/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/05_bf/pid/Kconfig"
 endmenu

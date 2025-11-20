@@ -29,7 +29,7 @@ namespace {
 
 constexpr float PI_F = 3.14159265358979323846f;
 
-void lowpassInit(PidBf::SimpleLowpass* filter, float cutoff_hz, float dt) {
+void lowpassInit(SimpleLowpass* filter, float cutoff_hz, float dt) {
   if (!filter) {
     return;
   }
@@ -45,7 +45,7 @@ void lowpassInit(PidBf::SimpleLowpass* filter, float cutoff_hz, float dt) {
   filter->state = 0.0f;
 }
 
-float lowpassApply(PidBf::SimpleLowpass* filter, float input) {
+float lowpassApply(SimpleLowpass* filter, float input) {
   if (!filter || !filter->enabled) {
     if (filter) {
       filter->state = input;

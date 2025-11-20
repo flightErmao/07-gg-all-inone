@@ -11,7 +11,6 @@ extern "C" {
 #include "gyro_filtered_msg.h"
 #include "pid_setpoint_msg.h"
 #include "pid_output_msg.h"
-#include "aMcnStabilize.h"
 #include "param.h"
 #include "timestamp.h"
 }
@@ -64,6 +63,12 @@ struct pidRuntime_t {
   float itermLimitYaw;
 };
 
+struct SimpleLowpass {
+  float state;
+  float alpha;
+  bool enabled;
+};
+
 class PidBf {
  public:
   // Singleton pattern
@@ -95,12 +100,6 @@ class PidBf {
   float getSetpointRate(int axis);
   float getFeedforward(int axis);
   float getMaxRcRate(int axis);
-
-  struct SimpleLowpass {
-    float state;
-    float alpha;
-    bool enabled;
-  };
 
   pidRuntime_t pid_runtime_;
   pidProfile_t pid_profile_;
