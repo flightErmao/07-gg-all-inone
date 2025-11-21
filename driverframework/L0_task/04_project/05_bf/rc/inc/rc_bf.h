@@ -31,6 +31,7 @@ extern "C" {
 #define FD_PITCH 1
 #define FD_YAW 2
 #define XYZ_AXIS_COUNT 3
+#define RP_AXIS_COUNT 2  // Roll and Pitch only
 #define PRIMARY_CHANNEL_COUNT 4  // Roll, Pitch, Yaw, Throttle
 
 // Channel indices
@@ -41,7 +42,9 @@ extern "C" {
 
 // RC smoothing filter data structure
 struct rcSmoothingFilter_t {
-  pt3Filter_t filterSetpoint[PRIMARY_CHANNEL_COUNT];  // For setpoint smoothing
+  pt3Filter_t filterSetpoint[PRIMARY_CHANNEL_COUNT];  // For setpoint smoothing [ROLL, PITCH, YAW, THROTTLE]
+  pt3Filter_t filterRcDeflection[RP_AXIS_COUNT];      // For RC deflection smoothing [ROLL, PITCH] (used in Horizon mode)
+  pt3Filter_t filterFeedforward[XYZ_AXIS_COUNT];      // For feedforward smoothing [ROLL, PITCH, YAW]
   float setpointCutoffFrequency;
   float throttleCutoffFrequency;
   float setpointCutoffSetting;

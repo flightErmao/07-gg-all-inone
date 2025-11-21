@@ -47,6 +47,13 @@ static channel_range_t rc_channel_range_throttle; // Throttle 通道范围 {min,
 #define RC_CHANNEL_MAP_STRING_MAX_LEN 18
 static char rc_channel_map_string[RC_CHANNEL_MAP_STRING_MAX_LEN + 1];  // +1 for null terminator
 
+/* RC Smoothing - RC 平滑滤波参数 */
+static float rc_smoothing_setpoint_cutoff;       // Setpoint 截止频率 (Hz, 0=自动)
+static float rc_smoothing_throttle_cutoff;       // Throttle 截止频率 (Hz, 0=自动)
+static float rc_smoothing_auto_factor_rpy;       // Roll/Pitch/Yaw 自动平滑因子 (0-250, 用于计算 autoSmoothnessFactor)
+static float rc_smoothing_auto_factor_throttle;  // Throttle 自动平滑因子 (0-250, 用于计算 autoSmoothnessFactor)
+static uint8_t rc_smoothing_enabled;             // 是否启用 RC smoothing (0=禁用, 1=启用)
+
 /* 默认值 - Betaflight 典型配置 */
 static const float rc_rate_default[3] = {100.0f, 100.0f, 100.0f};     // Default RC rate [roll, pitch, yaw]
 static const float rc_expo_default[3] = {0.0f, 0.0f, 0.0f};          // No expo by default
@@ -65,6 +72,13 @@ static const channel_range_t rc_channel_range_throttle_default = {1000, 2000};
 /* 默认通道映射 - AETR1234 (Aileron, Elevator, Throttle, Rudder, Aux1, Aux2, Aux3, Aux4) */
 static const char rc_channel_map_string_default[] = "AETR1234";
 
+/* 默认 RC Smoothing 参数 */
+static const float rc_smoothing_setpoint_cutoff_default = 0.0f;       // 0 = 自动
+static const float rc_smoothing_throttle_cutoff_default = 0.0f;       // 0 = 自动
+static const float rc_smoothing_auto_factor_rpy_default = 0.0f;       // 默认值，对应 autoSmoothnessFactor = 1.5
+static const float rc_smoothing_auto_factor_throttle_default = 0.0f;  // 默认值，对应 autoSmoothnessFactor = 1.5
+static const uint8_t rc_smoothing_enabled_default = 1;                // 默认启用
+
 static const param_default_t bf_rc_defaults[] = {
     {rc_rate, rc_rate_default},
     {rc_expo, rc_expo_default},
@@ -77,6 +91,11 @@ static const param_default_t bf_rc_defaults[] = {
     {&rc_channel_range_yaw, &rc_channel_range_yaw_default},
     {&rc_channel_range_throttle, &rc_channel_range_throttle_default},
     {rc_channel_map_string, rc_channel_map_string_default},
+    {&rc_smoothing_setpoint_cutoff, &rc_smoothing_setpoint_cutoff_default},
+    {&rc_smoothing_throttle_cutoff, &rc_smoothing_throttle_cutoff_default},
+    {&rc_smoothing_auto_factor_rpy, &rc_smoothing_auto_factor_rpy_default},
+    {&rc_smoothing_auto_factor_throttle, &rc_smoothing_auto_factor_throttle_default},
+    {&rc_smoothing_enabled, &rc_smoothing_enabled_default},
 };
 
 static void bf_rc_param_default(void *address, uint8_t size) {
@@ -89,17 +108,32 @@ static void bf_rc_param_default(void *address, uint8_t size) {
 }
 
 static param_list bf_rc_params[] = {
-    {(void*)rc_rate, sizeof(rc_rate), "rc_rate", "vf", bf_rc_param_default},           // [roll, pitch, yaw]
-    {(void*)rc_expo, sizeof(rc_expo), "rc_expo", "vf", bf_rc_param_default},           // [roll, pitch, yaw]
-    {(void*)rc_super_rate, sizeof(rc_super_rate), "rc_super_rate", "vf", bf_rc_param_default},  // [roll, pitch, yaw]
-    {(void*)rc_rate_limit, sizeof(rc_rate_limit), "rc_rate_limit", "vf", bf_rc_param_default},  // [roll, pitch, yaw]
-    {(void*)&rc_deadband, sizeof(rc_deadband), "rc_deadband", "f", bf_rc_param_default},
-    {(void*)&rc_yaw_deadband, sizeof(rc_yaw_deadband), "rc_yaw_deadband", "f", bf_rc_param_default},
-    {(void*)&rc_channel_range_roll, sizeof(rc_channel_range_roll), "rc_channel_range_roll", "r", bf_rc_param_default},      // {min, max}
-    {(void*)&rc_channel_range_pitch, sizeof(rc_channel_range_pitch), "rc_channel_range_pitch", "r", bf_rc_param_default},    // {min, max}
-    {(void*)&rc_channel_range_yaw, sizeof(rc_channel_range_yaw), "rc_channel_range_yaw", "r", bf_rc_param_default},        // {min, max}
-    {(void*)&rc_channel_range_throttle, sizeof(rc_channel_range_throttle), "rc_channel_range_throttle", "r", bf_rc_param_default}, // {min, max}
-    {(void*)rc_channel_map_string, sizeof(rc_channel_map_string), "rc_channel_map", "s", bf_rc_param_default},  // Channel mapping string (e.g., "AETR1234")
+    {(void *)rc_rate, sizeof(rc_rate), "rc_rate", "vf", bf_rc_param_default},                    // [roll, pitch, yaw]
+    {(void *)rc_expo, sizeof(rc_expo), "rc_expo", "vf", bf_rc_param_default},                    // [roll, pitch, yaw]
+    {(void *)rc_super_rate, sizeof(rc_super_rate), "rc_super_rate", "vf", bf_rc_param_default},  // [roll, pitch, yaw]
+    {(void *)rc_rate_limit, sizeof(rc_rate_limit), "rc_rate_limit", "vf", bf_rc_param_default},  // [roll, pitch, yaw]
+    {(void *)&rc_deadband, sizeof(rc_deadband), "rc_deadband", "f", bf_rc_param_default},
+    {(void *)&rc_yaw_deadband, sizeof(rc_yaw_deadband), "rc_yaw_deadband", "f", bf_rc_param_default},
+    {(void *)&rc_channel_range_roll, sizeof(rc_channel_range_roll), "rc_channel_range_roll", "r",
+     bf_rc_param_default},  // {min, max}
+    {(void *)&rc_channel_range_pitch, sizeof(rc_channel_range_pitch), "rc_channel_range_pitch", "r",
+     bf_rc_param_default},  // {min, max}
+    {(void *)&rc_channel_range_yaw, sizeof(rc_channel_range_yaw), "rc_channel_range_yaw", "r",
+     bf_rc_param_default},  // {min, max}
+    {(void *)&rc_channel_range_throttle, sizeof(rc_channel_range_throttle), "rc_channel_range_throttle", "r",
+     bf_rc_param_default},  // {min, max}
+    {(void *)rc_channel_map_string, sizeof(rc_channel_map_string), "rc_channel_map", "s",
+     bf_rc_param_default},  // Channel mapping string (e.g., "AETR1234")
+    {(void *)&rc_smoothing_setpoint_cutoff, sizeof(rc_smoothing_setpoint_cutoff), "rc_smoothing_setpoint_cutoff", "f",
+     bf_rc_param_default},  // Setpoint cutoff frequency (Hz, 0=auto)
+    {(void *)&rc_smoothing_throttle_cutoff, sizeof(rc_smoothing_throttle_cutoff), "rc_smoothing_throttle_cutoff", "f",
+     bf_rc_param_default},  // Throttle cutoff frequency (Hz, 0=auto)
+    {(void *)&rc_smoothing_auto_factor_rpy, sizeof(rc_smoothing_auto_factor_rpy), "rc_smoothing_auto_factor_rpy", "f",
+     bf_rc_param_default},  // Auto smoothness factor for RPY (0-250)
+    {(void *)&rc_smoothing_auto_factor_throttle, sizeof(rc_smoothing_auto_factor_throttle),
+     "rc_smoothing_auto_factor_throttle", "f", bf_rc_param_default},  // Auto smoothness factor for throttle (0-250)
+    {(void *)&rc_smoothing_enabled, sizeof(rc_smoothing_enabled), "rc_smoothing_enabled", "u8",
+     bf_rc_param_default},  // Enable RC smoothing (0=disabled, 1=enabled)
 };
 
 param_list *bfRcParam_list(void) { return bf_rc_params; }

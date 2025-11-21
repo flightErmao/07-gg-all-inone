@@ -165,7 +165,7 @@ rt_err_t RcBf::initRcDevice() {
   
   // Get device name from config
 #ifndef CONFIG_PROJECT_BF_RC_DEVICE_NAME
-  const char* default_name = "rc";
+  const char* default_name = "sbus";
 #else
   const char* default_name = CONFIG_PROJECT_BF_RC_DEVICE_NAME;
 #endif
@@ -381,22 +381,69 @@ void RcBf::initRcControlsConfig() {
 
 void RcBf::initSmoothingFilters() {
   float dt = target_looptime_s_;
-  float cutoff_hz = RC_SMOOTHING_CUTOFF_HZ;
-  
-  // Initialize pt3Filter for each channel
-  float k = pt3FilterGain(cutoff_hz, dt);
-  for (int i = 0; i < PRIMARY_CHANNEL_COUNT; i++) {
-    pt3FilterInit(&rc_smoothing_data_.filterSetpoint[i], k);
-  }
-  
+
+  // Load RC smoothing parameters
+  float setpoint_cutoff_setting = 0.0f;
+  float throttle_cutoff_setting = 0.0f;
+  float auto_factor_rpy = 0.0f;
+  float auto_factor_throttle = 0.0f;
+  uint8_t smoothing_enabled = 1;
+
+  // Load from parameters if available
+  getParam("rc_smoothing_setpoint_cutoff", &setpoint_cutoff_setting, sizeof(setpoint_cutoff_setting));
+  getParam("rc_smoothing_throttle_cutoff", &throttle_cutoff_setting, sizeof(throttle_cutoff_setting));
+  getParam("rc_smoothing_auto_factor_rpy", &auto_factor_rpy, sizeof(auto_factor_rpy));
+  getParam("rc_smoothing_auto_factor_throttle", &auto_factor_throttle, sizeof(auto_factor_throttle));
+  getParam("rc_smoothing_enabled", &smoothing_enabled, sizeof(smoothing_enabled));
+
+  // Calculate auto smoothness factors (Betaflight formula)
+  // autoSmoothnessFactor = 1.5 / (1.0 + (auto_factor / 10.0))
+  float autoSmoothnessFactorSetpoint = 1.5f / (1.0f + (auto_factor_rpy / 10.0f));
+  float autoSmoothnessFactorThrottle = 1.5f / (1.0f + (auto_factor_throttle / 10.0f));
+
   // Initialize smoothing data
-  rc_smoothing_data_.setpointCutoffFrequency = cutoff_hz;
-  rc_smoothing_data_.throttleCutoffFrequency = cutoff_hz;
-  rc_smoothing_data_.setpointCutoffSetting = cutoff_hz;
-  rc_smoothing_data_.throttleCutoffSetting = cutoff_hz;
-  rc_smoothing_data_.autoSmoothnessFactorSetpoint = 0.15f;  // Default auto factor
-  rc_smoothing_data_.autoSmoothnessFactorThrottle = 0.15f;
-  rc_smoothing_data_.enabled = true;
+  rc_smoothing_data_.setpointCutoffSetting = setpoint_cutoff_setting;
+  rc_smoothing_data_.throttleCutoffSetting = throttle_cutoff_setting;
+  rc_smoothing_data_.autoSmoothnessFactorSetpoint = autoSmoothnessFactorSetpoint;
+  rc_smoothing_data_.autoSmoothnessFactorThrottle = autoSmoothnessFactorThrottle;
+  rc_smoothing_data_.enabled = (smoothing_enabled != 0);
+
+  // Initialize cutoff frequencies (will be updated dynamically if setpointCutoffSetting is 0)
+  float initial_setpoint_cutoff_hz =
+      (setpoint_cutoff_setting > 0.0f) ? setpoint_cutoff_setting : RC_SMOOTHING_CUTOFF_HZ;
+  float initial_throttle_cutoff_hz =
+      (throttle_cutoff_setting > 0.0f) ? throttle_cutoff_setting : initial_setpoint_cutoff_hz;
+  rc_smoothing_data_.setpointCutoffFrequency = initial_setpoint_cutoff_hz;
+  rc_smoothing_data_.throttleCutoffFrequency = initial_throttle_cutoff_hz;
+
+  // Initialize pt3Filter for setpoint smoothing
+  // filterSetpoint[ROLL/PITCH/YAW] use setpoint cutoff, filterSetpoint[THROTTLE] uses throttle cutoff
+  float pt3k_sp = pt3FilterGain(initial_setpoint_cutoff_hz, dt);
+  float pt3k_thr = pt3FilterGain(initial_throttle_cutoff_hz, dt);
+
+  for (int i = 0; i < PRIMARY_CHANNEL_COUNT; i++) {
+    if (i == THROTTLE) {
+      pt3FilterInit(&rc_smoothing_data_.filterSetpoint[i], pt3k_thr);
+    } else {
+      pt3FilterInit(&rc_smoothing_data_.filterSetpoint[i], pt3k_sp);
+    }
+  }
+
+  // Initialize pt3Filter for RC deflection smoothing (ROLL and PITCH only, used in Horizon mode)
+  for (int i = 0; i < RP_AXIS_COUNT; i++) {
+    pt3FilterInit(&rc_smoothing_data_.filterRcDeflection[i], pt3k_sp);
+  }
+
+  // Initialize pt3Filter for feedforward smoothing (ROLL, PITCH, YAW)
+  for (int i = 0; i < XYZ_AXIS_COUNT; i++) {
+    pt3FilterInit(&rc_smoothing_data_.filterFeedforward[i], pt3k_sp);
+  }
+
+  LOG_I(
+      "RC smoothing initialized: enabled=%d, setpoint_cutoff=%.1f, throttle_cutoff=%.1f, auto_factor_rpy=%.1f, "
+      "auto_factor_throttle=%.1f",
+      rc_smoothing_data_.enabled, setpoint_cutoff_setting, throttle_cutoff_setting, auto_factor_rpy,
+      auto_factor_throttle);
 }
 
 void RcBf::updateSmoothingFilterCutoffs() {
@@ -420,15 +467,25 @@ void RcBf::updateSmoothingFilterCutoffs() {
   // Update filter cutoffs
   float pt3k_sp = pt3FilterGain(setpoint_cutoff, dt);
   float pt3k_thr = pt3FilterGain(throttle_cutoff, dt);
-  
-  // Update setpoint filters for ROLL, PITCH, YAW
+
+  // Update setpoint filters for ROLL, PITCH, YAW (use setpoint cutoff)
   for (int i = FD_ROLL; i <= FD_YAW; i++) {
     pt3FilterUpdateCutoff(&rc_smoothing_data_.filterSetpoint[i], pt3k_sp);
   }
-  
-  // Update throttle filter
+
+  // Update throttle filter (use throttle cutoff)
   pt3FilterUpdateCutoff(&rc_smoothing_data_.filterSetpoint[THROTTLE], pt3k_thr);
-  
+
+  // Update feedforward filters for ROLL, PITCH, YAW (use setpoint cutoff)
+  for (int i = FD_ROLL; i <= FD_YAW; i++) {
+    pt3FilterUpdateCutoff(&rc_smoothing_data_.filterFeedforward[i], pt3k_sp);
+  }
+
+  // Update RC deflection filters for ROLL and PITCH (use setpoint cutoff)
+  for (int i = 0; i < RP_AXIS_COUNT; i++) {
+    pt3FilterUpdateCutoff(&rc_smoothing_data_.filterRcDeflection[i], pt3k_sp);
+  }
+
   rc_smoothing_data_.setpointCutoffFrequency = setpoint_cutoff;
   rc_smoothing_data_.throttleCutoffFrequency = throttle_cutoff;
 }
