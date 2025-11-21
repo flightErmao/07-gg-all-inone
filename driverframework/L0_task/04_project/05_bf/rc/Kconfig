@@ -33,5 +33,17 @@ menuconfig PROJECT_BF_RC_EN
             default 5
             help
                 Time slice for the RC processing thread in ticks. Default: 5.
+
+        config PROJECT_BF_RC_DEBUG_PIN_EN
+            bool "ENABLE: RC Debug Pin"
+            default n
+            depends on L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN
+            help
+                Enable debug pin for RC task monitoring:
+                - DEBUG0: RC thread execution frequency (~100-200Hz)
+                  Toggles at rcThreadEntry() while loop start/end
+                - DEBUG1: subTaskRcCommand execution frequency (~1-4kHz)
+                  Toggles at processRcCommand() start/end (called by PID task)
+                  This covers both processRcCommand() and processRcSmoothingFilter()
     endif
 

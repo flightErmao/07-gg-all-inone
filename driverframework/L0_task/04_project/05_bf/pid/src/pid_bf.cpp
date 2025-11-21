@@ -62,18 +62,7 @@ float lowpassApply(SimpleLowpass* filter, float input) {
 MCN_DEFINE(pid_setpoint, sizeof(pid_setpoint_msg_t));
 MCN_DEFINE(pid_output, sizeof(pid_output_msg_t));
 
-// 线程配置（从 Kconfig 获取，如果没有定义则使用默认值）
-#ifndef CONFIG_PROJECT_BF_PID_THREAD_STACK_SIZE
-#define CONFIG_PROJECT_BF_PID_THREAD_STACK_SIZE 4096
-#endif
-
-#ifndef CONFIG_PROJECT_BF_PID_THREAD_PRIORITY
-#define CONFIG_PROJECT_BF_PID_THREAD_PRIORITY 8
-#endif
-
-#ifndef CONFIG_PROJECT_BF_PID_THREAD_TIMESLICE
-#define CONFIG_PROJECT_BF_PID_THREAD_TIMESLICE 5
-#endif
+// Thread configuration removed - using taskPid.cpp main thread instead
 
 PidBf& PidBf::instance() {
   static PidBf instance_obj;
@@ -81,9 +70,7 @@ PidBf& PidBf::instance() {
 }
 
 PidBf::PidBf()
-    : thread_(RT_NULL),
-      thread_inited_(false),
-      gyro_filtered_event_(RT_NULL),
+    : gyro_filtered_event_(RT_NULL),
       gyro_filtered_node_(RT_NULL),
       setpoint_event_(RT_NULL),
       setpoint_node_(RT_NULL),
@@ -91,8 +78,6 @@ PidBf::PidBf()
       gyro_data_ready_(false),
       setpoint_data_ready_(false),
       target_looptime_us_(0) {
-  std::memset(&thread_obj_, 0, sizeof(thread_obj_));
-  std::memset(thread_stack_, 0, sizeof(thread_stack_));
   std::memset(&gyro_filtered_data_, 0, sizeof(gyro_filtered_data_));
   std::memset(&setpoint_data_, 0, sizeof(setpoint_data_));
   std::memset(&pid_runtime_, 0, sizeof(pid_runtime_));
@@ -122,10 +107,7 @@ PidBf::PidBf()
 PidBf::~PidBf() = default;
 
 rt_err_t PidBf::init() {
-  if (thread_inited_) {
-    LOG_W("PidBf already initialized");
-    return RT_EOK;
-  }
+  // Note: Thread initialization removed - using taskPid.cpp main thread instead
 
   if (gyro_filtered_event_ == RT_NULL) {
     gyro_filtered_event_ = rt_sem_create("pid_gyro_evt", 0, RT_IPC_FLAG_FIFO);
@@ -193,27 +175,7 @@ rt_err_t PidBf::init() {
   initConfig();
   initFilters();
 
-  rt_err_t err = rt_thread_init(&thread_obj_, "pid_bf", PidBf::threadEntry, this, thread_stack_,
-                                CONFIG_PROJECT_BF_PID_THREAD_STACK_SIZE, CONFIG_PROJECT_BF_PID_THREAD_PRIORITY,
-                                CONFIG_PROJECT_BF_PID_THREAD_TIMESLICE);
-
-  if (err != RT_EOK) {
-    LOG_E("PidBf thread init failed: %d", err);
-    if (gyro_filtered_node_ != RT_NULL) {
-      mcn_unsubscribe(MCN_HUB(gyro_filtered), gyro_filtered_node_);
-      gyro_filtered_node_ = RT_NULL;
-    }
-    if (gyro_filtered_event_ != RT_NULL) {
-      rt_sem_delete(gyro_filtered_event_);
-      gyro_filtered_event_ = RT_NULL;
-    }
-    return err;
-  }
-
-  thread_ = &thread_obj_;
-  thread_inited_ = true;
-  rt_thread_startup(thread_);
-  LOG_I("PidBf thread started");
+  LOG_I("PidBf initialized (no thread - using taskPid.cpp main thread)");
   return RT_EOK;
 }
 
@@ -297,45 +259,38 @@ void PidBf::initFilters() {
   LOG_I("PID filters initialized: dterm LPF=%.1f Hz, yaw LPF=%.1f Hz", pid_profile_.dtermLpfHz, pid_profile_.yawLpfHz);
 }
 
-void PidBf::threadEntry(void* parameter) {
-  if (parameter == RT_NULL) {
-    return;
+// Thread entry and loop functions removed - logic moved to processPidController()
+// This function is called from subTaskPidController in taskPid.cpp
+
+void PidBf::processPidController(uint32_t current_time_us) {
+  // Poll for new gyro data (non-blocking)
+  if (mcn_poll_sync(gyro_filtered_node_, RT_WAITING_FOREVER) == RT_TRUE) {
+    if (mcn_copy(MCN_HUB(gyro_filtered), gyro_filtered_node_, &gyro_filtered_data_) == RT_EOK) {
+      gyro_data_ready_ = true;
+    }
   }
 
-  PidBf* instance = static_cast<PidBf*>(parameter);
-  instance->threadLoop();
-}
-
-void PidBf::threadLoop() {
-  LOG_I("PidBf thread loop started");
-
-  while (true) {
-    if (mcn_poll_sync(gyro_filtered_node_, RT_WAITING_FOREVER) == RT_TRUE) {
-      if (mcn_copy(MCN_HUB(gyro_filtered), gyro_filtered_node_, &gyro_filtered_data_) == RT_EOK) {
-        gyro_data_ready_ = true;
+  // Poll for new setpoint data (non-blocking)
+  if (setpoint_node_ != RT_NULL) {
+    if (mcn_poll_sync(setpoint_node_, 0) == RT_TRUE) {
+      if (mcn_copy(MCN_HUB(pid_setpoint), setpoint_node_, &setpoint_data_) == RT_EOK) {
+        setpoint_data_ready_ = true;
       }
     }
-
+  } else {
+    // Try to subscribe if not already subscribed
+    setpoint_node_ = mcn_subscribe(MCN_HUB(pid_setpoint), setpoint_event_, RT_NULL);
     if (setpoint_node_ != RT_NULL) {
-      if (mcn_poll_sync(setpoint_node_, 0) == RT_TRUE) {
-        if (mcn_copy(MCN_HUB(pid_setpoint), setpoint_node_, &setpoint_data_) == RT_EOK) {
-          setpoint_data_ready_ = true;
-        }
-      }
-    } else {
-      setpoint_node_ = mcn_subscribe(MCN_HUB(pid_setpoint), setpoint_event_, RT_NULL);
-      if (setpoint_node_ != RT_NULL) {
-        LOG_I("Successfully subscribed to pid_setpoint topic");
-      }
-      std::memset(&setpoint_data_, 0, sizeof(setpoint_data_));
-      setpoint_data_ready_ = true;
+      LOG_I("Successfully subscribed to pid_setpoint topic");
     }
+    std::memset(&setpoint_data_, 0, sizeof(setpoint_data_));
+    setpoint_data_ready_ = true;
+  }
 
-    if (gyro_data_ready_) {
-      uint32_t current_time_us = timestamp_micros();
-      pidController(current_time_us);
-      gyro_data_ready_ = false;
-    }
+  // Process PID controller if gyro data is ready
+  if (gyro_data_ready_) {
+    pidController(current_time_us);
+    gyro_data_ready_ = false;
   }
 }
 
@@ -416,19 +371,20 @@ float PidBf::getMaxRcRate(int axis) {
 }
 
 // RT-Thread 自动初始化包装函数
-#ifdef PROJECT_BF_PID_EN
-extern "C" {
-static int pid_bf_init_wrapper(void) {
-  PidBf& instance = PidBf::instance();
-  rt_err_t ret = instance.init();
-  if (ret == RT_EOK) {
-    LOG_I("PidBf auto-init success");
-  } else {
-    LOG_E("PidBf auto-init failed: %d", ret);
-  }
-  return (int)ret;
-}
-INIT_APP_EXPORT(pid_bf_init_wrapper);
-}
-#endif
+// NOTE: Disabled - using taskPid.cpp main thread instead
+// #ifdef PROJECT_BF_PID_EN
+// extern "C" {
+// static int pid_bf_init_wrapper(void) {
+//   PidBf& instance = PidBf::instance();
+//   rt_err_t ret = instance.init();
+//   if (ret == RT_EOK) {
+//     LOG_I("PidBf auto-init success");
+//   } else {
+//     LOG_E("PidBf auto-init failed: %d", ret);
+//   }
+//   return (int)ret;
+// }
+// INIT_APP_EXPORT(pid_bf_init_wrapper);
+// }
+// #endif
 #

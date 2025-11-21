@@ -79,15 +79,12 @@ class PidBf {
 
   rt_err_t init();
 
-  // Thread entry function (static)
-  static void threadEntry(void* parameter);
+  // Process PID controller (called from subTaskPidController in taskPid.cpp)
+  void processPidController(uint32_t current_time_us);
 
  private:
   PidBf(const PidBf&) = delete;
   PidBf& operator=(const PidBf&) = delete;
-
-  // Thread main loop
-  void threadLoop();
 
   // Initialize PID filters and configuration
   void initFilters();
@@ -106,12 +103,6 @@ class PidBf {
   pidAxisData_t pid_data_[XYZ_AXIS_COUNT];
   SimpleLowpass dterm_lpf_[XYZ_AXIS_COUNT];
   SimpleLowpass yaw_pterm_lpf_;
-
-  // Thread related
-  rt_thread_t thread_;
-  struct rt_thread thread_obj_;
-  rt_uint8_t thread_stack_[4096];
-  bool thread_inited_;
 
   // MCN subscription and publication
   rt_sem_t gyro_filtered_event_;

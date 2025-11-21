@@ -7,6 +7,9 @@ extern "C" {
 #include "timestamp.h"
 #include "filter.h"  // pt3Filter functions
 #include "param.h"   // getParam function
+#ifdef PROJECT_BF_RC_DEBUG_PIN_EN
+#include "debugPin.h"
+#endif
 #define LOG_TAG "rc_bf"
 #define LOG_LVL LOG_LVL_INFO
 #include <ulog.h>
@@ -633,7 +636,11 @@ void RcBf::processRcCommand(uint32_t current_time_us) {
   if (!is_rc_data_new_) {
     return;  // No new data, skip processing
   }
-  
+
+#ifdef PROJECT_BF_RC_DEBUG_PIN_EN
+  DEBUG_PIN_DEBUG1_HIGH();  // Debug pin: subTaskRcCommand start (monitor PID task call frequency ~1-4kHz)
+#endif
+
   // Update smoothing filter cutoffs if needed
   updateSmoothingFilterCutoffs();
   
@@ -670,6 +677,10 @@ void RcBf::processRcCommand(uint32_t current_time_us) {
   
   // Mark data as processed
   is_rc_data_new_ = false;
+
+#ifdef PROJECT_BF_RC_DEBUG_PIN_EN
+  DEBUG_PIN_DEBUG1_LOW();  // Debug pin: processRcCommand end
+#endif
 }
 
 // PID Task (1-4kHz): Process RC smoothing filter
@@ -683,7 +694,7 @@ void RcBf::processRcSmoothingFilter() {
     }
     return;
   }
-  
+
   // Prepare data to smooth
   float rx_data_to_smooth[PRIMARY_CHANNEL_COUNT];
   for (int i = 0; i < PRIMARY_CHANNEL_COUNT; i++) {
@@ -819,6 +830,9 @@ void RcBf::rcThreadEntry(void* parameter) {
   const uint32_t target_interval_us = 5000;  // 5ms = 200Hz
   
   while (true) {
+#ifdef PROJECT_BF_RC_DEBUG_PIN_EN
+    DEBUG_PIN_DEBUG2_HIGH();  // Debug pin: RC task execution start (monitor RC task frequency ~100-200Hz)
+#endif
     uint32_t current_time_us = timestamp_micros();
     
     // RX Task: Read raw channels and process to rcCommand[]
@@ -829,7 +843,11 @@ void RcBf::rcThreadEntry(void* parameter) {
     
     // Update refresh rate
     instance->updateRcRefreshRate(current_time_us, instance->rx_receiving_signal_);
-    
+
+#ifdef PROJECT_BF_RC_DEBUG_PIN_EN
+    DEBUG_PIN_DEBUG2_LOW();  // Debug pin: RC task execution end
+#endif
+
     // Rate control - maintain 100-200Hz
     uint32_t elapsed = timestamp_micros() - current_time_us;
     if (elapsed < target_interval_us) {

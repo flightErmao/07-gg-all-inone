@@ -4,6 +4,7 @@
 extern "C" {
 #include <rtthread.h>
 #include <rtconfig.h>
+#include "timestamp.h"
 #define LOG_TAG "task_pid"
 #define LOG_LVL LOG_LVL_INFO
 #include <ulog.h>
@@ -65,10 +66,9 @@ static void subTaskRcCommand(uint32_t current_time_us) {
 }
 
 static void subTaskPidController(uint32_t current_time_us) {
-  // PidBf runs in its own thread and processes gyro data
-  // This sub-task can be used for additional PID-related processing if needed
-  // For example: PID output monitoring, logging, etc.
-  (void)current_time_us;
+  // Process PID controller (moved from PidBf::threadLoop)
+  PidBf& pid = PidBf::instance();
+  pid.processPidController(current_time_us);
 }
 
 static void subTaskMotorUpdate(uint32_t current_time_us) {
@@ -122,9 +122,7 @@ static void pidMainLoop(void* parameter) {
 
 // Thread entry function
 static void pidMainThreadEntry(void* parameter) {
-  if (parameter == RT_NULL) {
-    return;
-  }
+  // Note: parameter can be RT_NULL, pidMainLoop handles it
   pidMainLoop(parameter);
 }
 
@@ -137,11 +135,17 @@ rt_err_t pidMainInit(void) {
     return RT_EOK;
   }
 
-  // Note: RcBf and PidBf are initialized separately by their init wrappers
-  // This function only starts the main PID thread
+  // Initialize PidBf instance (without thread)
+  PidBf& pid = PidBf::instance();
+  rt_err_t ret = pid.init();
+  if (ret != RT_EOK) {
+    LOG_E("PidBf init failed: %d", ret);
+    return ret;
+  }
+  LOG_I("PidBf initialized successfully");
 
   // Initialize main thread
-  rt_err_t ret = rt_thread_init(&pid_main_thread_.thread_obj_, "pid_main", pidMainThreadEntry, RT_NULL,
+  ret = rt_thread_init(&pid_main_thread_.thread_obj_, "pid_main", pidMainThreadEntry, RT_NULL,
                        pid_main_thread_.thread_stack_, CONFIG_PROJECT_BF_PID_MAIN_THREAD_STACK_SIZE,
                        CONFIG_PROJECT_BF_PID_MAIN_THREAD_PRIORITY,
                        CONFIG_PROJECT_BF_PID_MAIN_THREAD_TIMESLICE);
@@ -167,12 +171,11 @@ rt_err_t pidMainInit(void) {
 }
 
 // RT-Thread auto initialization wrapper
-// Note: pid_bf_init_wrapper is already exported by pid_bf.cpp
-// This main init should run after pid_bf is initialized
+// Note: pid_bf thread is disabled, using this main PID thread instead
 #ifdef PROJECT_BF_PID_EN
 extern "C" {
 static int pid_main_init_wrapper(void) {
-  // Small delay to ensure pid_bf is initialized first
+  // Small delay to ensure RcBf is initialized first
   rt_thread_mdelay(10);
   
   rt_err_t ret = pidMainInit();
