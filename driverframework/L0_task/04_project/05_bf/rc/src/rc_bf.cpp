@@ -36,12 +36,8 @@ RcBf& RcBf::instance() {
 
 // Constructor
 RcBf::RcBf()
-    : rc_thread_(RT_NULL),
-      rc_thread_stack_(nullptr),
-      thread_inited_(false),
-      rcCommandDivider_(500.0f),       // Will be updated in initRcControlsConfig()
-      rcCommandYawDivider_(500.0f),   // Will be updated in initRcControlsConfig()
-      rc_device_(RT_NULL),
+    : rcCommandDivider_(500.0f),     // Will be updated in initRcControlsConfig()
+      rcCommandYawDivider_(500.0f),  // Will be updated in initRcControlsConfig()
       last_rc_time_us_(0),
       previous_rx_interval_us_(0),
       current_rx_interval_us_(0),
@@ -51,6 +47,10 @@ RcBf::RcBf()
       rx_receiving_signal_(false),
       rx_flight_channels_valid_(false),
       is_rc_data_new_(false),
+      rc_thread_(RT_NULL),
+      rc_thread_stack_(nullptr),
+      thread_inited_(false),
+      rc_device_(RT_NULL),
       channel_count_(MAX_SUPPORTED_RC_CHANNEL_COUNT),
       rc_loss_count_(0),
       seq_(0),
@@ -303,23 +303,53 @@ void RcBf::initRateProfile() {
     rate_profile_.rates[axis] = 0.0f;      // No super rate by default
     rate_profile_.rate_limit[axis] = 720.0f; // Default 720 deg/s limit
   }
-  
-  // Load from parameters if available
-  float rc_rate_roll = rate_profile_.rcRates[FD_ROLL];
-  if (getParam("rc_rate_roll", &rc_rate_roll, sizeof(rc_rate_roll)) == RT_EOK) {
-    rate_profile_.rcRates[FD_ROLL] = rc_rate_roll;
+
+  // Load rc_rate array [roll, pitch, yaw] from parameters
+  float rc_rate_array[XYZ_AXIS_COUNT];
+  if (getParam("rc_rate", rc_rate_array, sizeof(rc_rate_array)) == RT_EOK) {
+    for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
+      rate_profile_.rcRates[axis] = rc_rate_array[axis];
+    }
+    LOG_I("Loaded rc_rate: [%.1f, %.1f, %.1f]", rc_rate_array[FD_ROLL], rc_rate_array[FD_PITCH], rc_rate_array[FD_YAW]);
+  } else {
+    LOG_W("Failed to load rc_rate, using default");
   }
-  
-  float rc_rate_pitch = rate_profile_.rcRates[FD_PITCH];
-  if (getParam("rc_rate_pitch", &rc_rate_pitch, sizeof(rc_rate_pitch)) == RT_EOK) {
-    rate_profile_.rcRates[FD_PITCH] = rc_rate_pitch;
+
+  // Load rc_expo array [roll, pitch, yaw] from parameters
+  float rc_expo_array[XYZ_AXIS_COUNT];
+  if (getParam("rc_expo", rc_expo_array, sizeof(rc_expo_array)) == RT_EOK) {
+    for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
+      rate_profile_.rcExpo[axis] = rc_expo_array[axis];
+    }
+    LOG_I("Loaded rc_expo: [%.1f, %.1f, %.1f]", rc_expo_array[FD_ROLL], rc_expo_array[FD_PITCH], rc_expo_array[FD_YAW]);
+  } else {
+    LOG_W("Failed to load rc_expo, using default");
   }
-  
-  float rc_rate_yaw = rate_profile_.rcRates[FD_YAW];
-  if (getParam("rc_rate_yaw", &rc_rate_yaw, sizeof(rc_rate_yaw)) == RT_EOK) {
-    rate_profile_.rcRates[FD_YAW] = rc_rate_yaw;
+
+  // Load rc_super_rate array [roll, pitch, yaw] from parameters
+  float rc_super_rate_array[XYZ_AXIS_COUNT];
+  if (getParam("rc_super_rate", rc_super_rate_array, sizeof(rc_super_rate_array)) == RT_EOK) {
+    for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
+      rate_profile_.rates[axis] = rc_super_rate_array[axis];
+    }
+    LOG_I("Loaded rc_super_rate: [%.1f, %.1f, %.1f]", rc_super_rate_array[FD_ROLL], rc_super_rate_array[FD_PITCH],
+          rc_super_rate_array[FD_YAW]);
+  } else {
+    LOG_W("Failed to load rc_super_rate, using default");
   }
-  
+
+  // Load rc_rate_limit array [roll, pitch, yaw] from parameters
+  float rc_rate_limit_array[XYZ_AXIS_COUNT];
+  if (getParam("rc_rate_limit", rc_rate_limit_array, sizeof(rc_rate_limit_array)) == RT_EOK) {
+    for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
+      rate_profile_.rate_limit[axis] = rc_rate_limit_array[axis];
+    }
+    LOG_I("Loaded rc_rate_limit: [%.1f, %.1f, %.1f]", rc_rate_limit_array[FD_ROLL], rc_rate_limit_array[FD_PITCH],
+          rc_rate_limit_array[FD_YAW]);
+  } else {
+    LOG_W("Failed to load rc_rate_limit, using default");
+  }
+
   // Calculate max RC rates for each axis
   for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
     maxRcRate_[axis] = applyBetaflightRates(axis, 1.0f, 1.0f);
