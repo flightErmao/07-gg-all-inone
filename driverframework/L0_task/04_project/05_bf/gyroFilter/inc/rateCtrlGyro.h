@@ -16,7 +16,7 @@ extern "C" {
 #include "bfSensorAlignment.hpp"
 #include "bfNotchFilter.hpp"
 #include "bfDynNotchFilter.hpp"
-#include "../mlog/inc/mlog_gyro.hpp"
+#include "../log/inc/mlog_gyro.hpp"
 
 #define USE_DYN_LPF
 

@@ -21,6 +21,12 @@
 
 #include <stdint.h>
 
+// Include common maths.h for vector operations and sensor calibration functions
+// These functions are now implemented in 06_bf_lib/common/src/maths.c
+#ifdef L1_MIDDLEWARE_06_BF_LIB_COMMON_EN
+#include "../../06_bf_lib/common/inc/maths.h"
+#endif
+
 
 #ifndef sq
 #define sq(x) ((x)*(x))
@@ -138,16 +144,8 @@ typedef struct filterWithBufferState_s {
     filterWithBufferSample_t * samples;
 } filterWithBufferState_t;
 
-typedef struct {
-    float XtY[4];
-    float XtX[4][4];
-} sensorCalibrationState_t;
-
-void sensorCalibrationResetState(sensorCalibrationState_t * state);
-void sensorCalibrationPushSampleForOffsetCalculation(sensorCalibrationState_t * state, int32_t sample[3]);
-void sensorCalibrationPushSampleForScaleCalculation(sensorCalibrationState_t * state, int axis, int32_t sample[3], int target);
-void sensorCalibrationSolveForOffset(sensorCalibrationState_t * state, float result[3]);
-void sensorCalibrationSolveForScale(sensorCalibrationState_t * state, float result[3]);
+// sensorCalibrationState_t and related functions moved to 06_bf_lib/common/inc/maths.h
+// Include it above if L1_MIDDLEWARE_06_BF_LIB_COMMON_EN is defined
 
 int gcd(int num, int denom);
 int32_t applyDeadband(int32_t value, int32_t deadband);
@@ -165,10 +163,8 @@ float degreesToRadians(int16_t degrees);
 int scaleRange(int x, int srcMin, int srcMax, int destMin, int destMax);
 float scaleRangef(float x, float srcMin, float srcMax, float destMin, float destMax);
 
-void normalizeV(struct fp_vector *src, struct fp_vector *dest);
-
-void rotateV(struct fp_vector *v, fp_angles_t *delta);
-void buildRotationMatrix(fp_angles_t *delta, float matrix[3][3]);
+// normalizeV, rotateV, buildRotationMatrix moved to 06_bf_lib/common/inc/maths.h
+// Include it above if L1_MIDDLEWARE_06_BF_LIB_COMMON_EN is defined
 
 int32_t wrap_18000(int32_t angle);
 int32_t wrap_36000(int32_t angle);
@@ -197,6 +193,7 @@ float acos_approx(float x);
 
 void arraySubInt32(int32_t *dest, int32_t *array1, int32_t *array2, int count);
 
-float bellCurve(const float x, const float curveWidth);
+// bellCurve moved to 06_bf_lib/common/inc/maths.h
+// Include it above if L1_MIDDLEWARE_06_BF_LIB_COMMON_EN is defined
 
 //#endif

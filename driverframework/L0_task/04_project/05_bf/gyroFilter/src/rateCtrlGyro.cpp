@@ -12,11 +12,11 @@ extern "C" {
 #include <cstring>
 
 #include "bfImuFilterInit.h"
-#include "../imu270_pub/inc/accgyro_spi_bmi270.hpp"
+#include "../imu/inc/accgyro_spi_bmi270.hpp"
 #include "bfSensorAlignment.hpp"
 #include "bfNotchFilter.hpp"
 #include "bfDynNotchFilter.hpp"
-#include "../mlog/inc/mlog_gyro.hpp"
+#include "../log/inc/mlog_gyro.hpp"
 #include "gyro_filtered_msg.h"
 
 extern "C" {

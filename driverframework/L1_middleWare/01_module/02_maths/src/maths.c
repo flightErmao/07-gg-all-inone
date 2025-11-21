@@ -159,6 +159,9 @@ float applyDeadbandf(float value, float deadband)
 //         return amt;
 // }
 
+// constrainf is now defined as static inline in 06_bf_lib/common/inc/maths.h
+// Remove this definition to avoid redefinition error
+#if 0
 float constrainf(float amt, float low, float high)
 {
     if (amt < low)
@@ -168,6 +171,7 @@ float constrainf(float amt, float low, float high)
     else
         return amt;
 }
+#endif
 
 void devClear(stdev_t *dev)
 {
@@ -215,60 +219,7 @@ float scaleRangef(float x, float srcMin, float srcMax, float destMin, float dest
     return ((a / b) + destMin);
 }
 
-// Normalize a vector
-void normalizeV(struct fp_vector *src, struct fp_vector *dest)
-{
-    float length;
-
-    length = sqrtf(src->X * src->X + src->Y * src->Y + src->Z * src->Z);
-    if (length != 0) {
-        dest->X = src->X / length;
-        dest->Y = src->Y / length;
-        dest->Z = src->Z / length;
-    }
-}
-
-void buildRotationMatrix(fp_angles_t *delta, float matrix[3][3])
-{
-    float cosx, sinx, cosy, siny, cosz, sinz;
-    float coszcosx, sinzcosx, coszsinx, sinzsinx;
-
-    cosx = cos_approx(delta->angles.roll);
-    sinx = sin_approx(delta->angles.roll);
-    cosy = cos_approx(delta->angles.pitch);
-    siny = sin_approx(delta->angles.pitch);
-    cosz = cos_approx(delta->angles.yaw);
-    sinz = sin_approx(delta->angles.yaw);
-
-    coszcosx = cosz * cosx;
-    sinzcosx = sinz * cosx;
-    coszsinx = sinx * cosz;
-    sinzsinx = sinx * sinz;
-
-    matrix[0][X] = cosz * cosy;
-    matrix[0][Y] = -cosy * sinz;
-    matrix[0][Z] = siny;
-    matrix[1][X] = sinzcosx + (coszsinx * siny);
-    matrix[1][Y] = coszcosx - (sinzsinx * siny);
-    matrix[1][Z] = -sinx * cosy;
-    matrix[2][X] = (sinzsinx) - (coszcosx * siny);
-    matrix[2][Y] = (coszsinx) + (sinzcosx * siny);
-    matrix[2][Z] = cosy * cosx;
-}
-
-// Rotate a vector *v by the euler angles defined by the 3-vector *delta.
-void rotateV(struct fp_vector *v, fp_angles_t *delta)
-{
-    struct fp_vector v_tmp = *v;
-
-    float matrix[3][3];
-
-    buildRotationMatrix(delta, matrix);
-
-    v->X = v_tmp.X * matrix[0][X] + v_tmp.Y * matrix[1][X] + v_tmp.Z * matrix[2][X];
-    v->Y = v_tmp.X * matrix[0][Y] + v_tmp.Y * matrix[1][Y] + v_tmp.Z * matrix[2][Y];
-    v->Z = v_tmp.X * matrix[0][Z] + v_tmp.Y * matrix[1][Z] + v_tmp.Z * matrix[2][Z];
-}
+// normalizeV, buildRotationMatrix, rotateV moved to 06_bf_lib/common/src/maths.c
 
 // Quick median filter implementation
 // (c) N. Devillard - 1998
@@ -276,7 +227,7 @@ void rotateV(struct fp_vector *v, fp_angles_t *delta)
 #define QMF_SORT(type,a,b) { if ((a)>(b)) QMF_SWAP(type, (a),(b)); }
 #define QMF_SWAP(type,a,b) { type temp=(a);(a)=(b);(b)=temp; }
 
-int32_t quickMedianFilter3(int32_t * v)
+int32_t quickMedianFilter3(const int32_t * v)
 {
     int32_t p[3];
     memcpy(p, v, sizeof(p));
@@ -294,7 +245,7 @@ int16_t quickMedianFilter3_16(int16_t * v)
     return p[1];
 }
 
-int32_t quickMedianFilter5(int32_t * v)
+int32_t quickMedianFilter5(const int32_t * v)
 {
     int32_t p[5];
     memcpy(p, v, sizeof(p));
@@ -316,7 +267,7 @@ int16_t quickMedianFilter5_16(int16_t * v)
     return p[2];
 }
 
-int32_t quickMedianFilter7(int32_t * v)
+int32_t quickMedianFilter7(const int32_t * v)
 {
     int32_t p[7];
     memcpy(p, v, sizeof(p));
@@ -329,7 +280,7 @@ int32_t quickMedianFilter7(int32_t * v)
     return p[3];
 }
 
-int32_t quickMedianFilter9(int32_t * v)
+int32_t quickMedianFilter9(const int32_t * v)
 {
     int32_t p[9];
     memcpy(p, v, sizeof(p));
@@ -344,150 +295,11 @@ int32_t quickMedianFilter9(int32_t * v)
     return p[4];
 }
 
-void arraySubInt32(int32_t *dest, int32_t *array1, int32_t *array2, int count)
+void arraySubInt32(int32_t *dest, const int32_t *array1, const int32_t *array2, int count)
 {
     for (int i = 0; i < count; i++) {
         dest[i] = array1[i] - array2[i];
     }
 }
 
-/**
- * Sensor offset calculation code based on Freescale's AN4246
- * Initial implementation by @HaukeRa
- * Modified to be re-usable by @DigitalEntity
- */
-void sensorCalibrationResetState(sensorCalibrationState_t * state)
-{
-    for (int i = 0; i < 4; i++){
-        for (int j = 0; j < 4; j++){
-            state->XtX[i][j] = 0;
-        }
-
-        state->XtY[i] = 0;
-    }
-}
-
-void sensorCalibrationPushSampleForOffsetCalculation(sensorCalibrationState_t * state, int32_t sample[3])
-{
-    state->XtX[0][0] += (float)sample[0] * sample[0];
-    state->XtX[0][1] += (float)sample[0] * sample[1];
-    state->XtX[0][2] += (float)sample[0] * sample[2];
-    state->XtX[0][3] += (float)sample[0];
-
-    state->XtX[1][0] += (float)sample[1] * sample[0];
-    state->XtX[1][1] += (float)sample[1] * sample[1];
-    state->XtX[1][2] += (float)sample[1] * sample[2];
-    state->XtX[1][3] += (float)sample[1];
-
-    state->XtX[2][0] += (float)sample[2] * sample[0];
-    state->XtX[2][1] += (float)sample[2] * sample[1];
-    state->XtX[2][2] += (float)sample[2] * sample[2];
-    state->XtX[2][3] += (float)sample[2];
-
-    state->XtX[3][0] += (float)sample[0];
-    state->XtX[3][1] += (float)sample[1];
-    state->XtX[3][2] += (float)sample[2];
-    state->XtX[3][3] += 1;
-
-    float squareSum = ((float)sample[0] * sample[0]) + ((float)sample[1] * sample[1]) + ((float)sample[2] * sample[2]);
-    state->XtY[0] += sample[0] * squareSum;
-    state->XtY[1] += sample[1] * squareSum;
-    state->XtY[2] += sample[2] * squareSum;
-    state->XtY[3] += squareSum;
-}
-
-void sensorCalibrationPushSampleForScaleCalculation(sensorCalibrationState_t * state, int axis, int32_t sample[3], int target)
-{
-    for (int i = 0; i < 3; i++) {
-        float scaledSample = (float)sample[i] / (float)target;
-        state->XtX[axis][i] += scaledSample * scaledSample;
-        state->XtX[3][i] += scaledSample * scaledSample;
-    }
-
-    state->XtX[axis][3] += 1;
-    state->XtY[axis] += 1;
-    state->XtY[3] += 1;
-}
-
-static void sensorCalibration_gaussLR(float mat[4][4]) {
-    uint8_t n = 4;
-    int i, j, k;
-    for (i = 0; i < 4; i++) {
-        // Determine R
-        for (j = i; j < 4; j++) {
-            for (k = 0; k < i; k++) {
-                mat[i][j] -= mat[i][k] * mat[k][j];
-            }
-        }
-        // Determine L
-        for (j = i + 1; j < n; j++) {
-            for (k = 0; k < i; k++) {
-                mat[j][i] -= mat[j][k] * mat[k][i];
-            }
-            mat[j][i] /= mat[i][i];
-        }
-    }
-}
-
-void sensorCalibration_ForwardSubstitution(float LR[4][4], float y[4], float b[4]) {
-    int i, k;
-    for (i = 0; i < 4; ++i) {
-        y[i] = b[i];
-        for (k = 0; k < i; ++k) {
-            y[i] -= LR[i][k] * y[k];
-        }
-        //y[i] /= MAT_ELEM_AT(LR,i,i); //Do not use, LR(i,i) is 1 anyways and not stored in this matrix
-    }
-}
-
-void sensorCalibration_BackwardSubstitution(float LR[4][4], float x[4], float y[4]) {
-    int i, k;
-    for (i = 3 ; i >= 0; --i) {
-        x[i] = y[i];
-        for (k = i + 1; k < 4; ++k) {
-            x[i] -= LR[i][k] * x[k];
-        }
-        x[i] /= LR[i][i];
-    }
-}
-
-// solve linear equation
-// https://en.wikipedia.org/wiki/Gaussian_elimination
-static void sensorCalibration_SolveLGS(float A[4][4], float x[4], float b[4]) {
-    int i;
-    float y[4];
-
-    sensorCalibration_gaussLR(A);
-
-    for (i = 0; i < 4; ++i) {
-        y[i] = 0;
-    }
-
-    sensorCalibration_ForwardSubstitution(A, y, b);
-    sensorCalibration_BackwardSubstitution(A, x, y);
-}
-
-void sensorCalibrationSolveForOffset(sensorCalibrationState_t * state, float result[3])
-{
-    float beta[4];
-    sensorCalibration_SolveLGS(state->XtX, beta, state->XtY);
-
-    for (int i = 0; i < 3; i++) {
-        result[i] = beta[i] / 2;
-    }
-}
-
-void sensorCalibrationSolveForScale(sensorCalibrationState_t * state, float result[3])
-{
-    float beta[4];
-    sensorCalibration_SolveLGS(state->XtX, beta, state->XtY);
-
-    for (int i = 0; i < 3; i++) {
-        result[i] = sqrtf(beta[i]);
-    }
-}
-
-float bellCurve(const float x, const float curveWidth)
-{
-    return powf(M_Ef, -sq(x) / (2.0f * sq(curveWidth)));
-}
+// sensorCalibration* and bellCurve functions moved to 06_bf_lib/common/src/maths.c

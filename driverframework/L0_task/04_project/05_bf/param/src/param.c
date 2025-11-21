@@ -3,15 +3,12 @@
 #include <string.h>
 #include "rtdef.h"
 #include "uparam.h"
-#include "flyerPidDefParam.h"
-#include "imuFilterParam.h"
-#include "imuCaliParam.h"
 #ifdef PROJECT_MINIFLY_TASK05_PARAM_FLYER_BF_DEFAULT_EN
-#include "../../05_bf/param/inc/bfImuFilterParam.h"
-#include "../../05_bf/param/inc/bfPidParam.h"
-#include "../../05_bf/param/inc/bfRcParam.h"
-#include "../../05_bf/param/inc/bfImuCaliOffsetParam.h"
-#include "../../05_bf/param/inc/bfMlogParam.h"
+#include "bfImuFilterParam.h"
+#include "bfPidParam.h"
+#include "bfRcParam.h"
+#include "bfImuCaliOffsetParam.h"
+#include "bfMlogParam.h"
 #endif
 
 #ifdef PKG_USING_MIXER
@@ -28,7 +25,7 @@ typedef struct {
 static param_source_t g_param_sources[PARAM_SOURCE_MAX];
 static size_t g_param_source_size = 0;
 
-#if defined(PROJECT_MINIFLY_TASK05_PARAM_FLYER_DEFAULT_EN) || defined(PROJECT_MINIFLY_TASK05_PARAM_FLYER_BF_DEFAULT_EN)
+#ifdef PROJECT_MINIFLY_TASK05_PARAM_FLYER_BF_DEFAULT_EN
 static void register_param_source(param_list* list, size_t count) {
   if ((list == RT_NULL) || (count == 0)) {
     return;
@@ -44,11 +41,6 @@ static void init_param_sources(void) {
   if (g_param_source_size > 0) {
     return;
   }
-#ifdef PROJECT_MINIFLY_TASK05_PARAM_FLYER_DEFAULT_EN
-  register_param_source(flyerPidDefParam_list(), flyerPidDefParam_count());
-  register_param_source(imuFilterParam_list(), imuFilterParam_count());
-  register_param_source(imuCaliParam_list(), imuCaliParam_count());
-#endif
 #ifdef PROJECT_MINIFLY_TASK05_PARAM_FLYER_BF_DEFAULT_EN
   register_param_source(bfImuFilterParam_list(), bfImuFilterParam_count());
   register_param_source(bfPidParam_list(), bfPidParam_count());
@@ -85,11 +77,6 @@ static size_t aggregate_param_count(void) {
 
 int uparam_data_init(void) {
   init_param_sources();
-#ifdef PROJECT_MINIFLY_TASK05_PARAM_FLYER_DEFAULT_EN
-  uparam_add_list(flyerPidDefParam_list(), flyerPidDefParam_count());
-  uparam_add_list(imuFilterParam_list(), imuFilterParam_count());
-  uparam_add_list(imuCaliParam_list(), imuCaliParam_count());
-#endif
 #ifdef PROJECT_MINIFLY_TASK05_PARAM_FLYER_BF_DEFAULT_EN
   uparam_add_list(bfImuFilterParam_list(), bfImuFilterParam_count());
   uparam_add_list(bfPidParam_list(), bfPidParam_count());
@@ -172,3 +159,4 @@ float load_param_float(const char* name) {
   RT_ASSERT(getParam(name, &value, sizeof(value)) == RT_EOK);
   return value;
 }
+

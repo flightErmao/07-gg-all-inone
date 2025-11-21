@@ -1,0 +1,6 @@
+menuconfig L1_MIDDLEWARE_06_BF_LIB_COMMON_EN
+    bool "ENABLE: L1_MIDDLEWARE_06_BF_LIB_COMMON_EN"
+    default y
+    help
+        Enable Betaflight common library support (filter, maths, etc.).
+

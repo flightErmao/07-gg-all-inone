@@ -7,23 +7,22 @@ src = Glob("./src/*.cpp")
 
 include_paths = [
     cwd,
-    os.path.join(cwd, "inc"),  # pid_setpoint_msg.h, pid_output_msg.h, rc_bf.hpp
+    os.path.join(cwd, "inc"),  # rc_bf.h
+    os.path.join(cwd, "../pid/inc"),  # pid_setpoint_msg.h
     os.path.join(cwd, "../param/inc"),  # param.h (getParam function)
-    os.path.join(cwd, "../rateCtrl/inc"),  # gyro_filtered_msg.h
-    os.path.join(cwd, "../imu270_pub/inc"),
-    os.path.join(cwd, "../log/inc"),
     os.path.join(cwd, "..", "..", "02_fmt", "01_TASK_RC", "inc"),  # taskRc.h, pilot_cmd_bus_t
     os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "01_module", "05_timestamp", "inc"),  # timestamp.h
+    os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "06_bf_lib", "common", "inc"),  # filter.h, pt3Filter_t
 ]
 
 group = DefineGroup(
-    "PROJECT_BF_PID_EN",
+    "PROJECT_BF_RC_EN",
     src,
     depend=[
-        "PROJECT_BF_PID_EN",
-        "PROJECT_BF_RATE_CTRL_EN",  # Depends on rate control for gyro_filtered data
+        "PROJECT_BF_RC_EN",
+        "PROJECT_BF_RATE_CTRL_EN",  # RC is part of rate control system
         "PROJECT_BF_PARAM_EN",  # getParam function
-        "PROJECT_MINIFLY_TASK05_PARAM_FLYER_BF_DEFAULT_EN",
+        "L1_MIDDLEWARE_06_BF_LIB_COMMON_EN",  # pt3Filter functions
     ],
     CPPPATH=include_paths,
 )

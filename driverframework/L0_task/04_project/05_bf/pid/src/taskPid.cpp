@@ -1,4 +1,4 @@
-#include "rc_bf.hpp"
+#include "rc_bf.h"
 #include "pid_bf.hpp"
 
 extern "C" {
@@ -52,8 +52,16 @@ static PidMainThread pid_main_thread_;
 
 // Sub-tasks
 static void subTaskRcCommand(uint32_t current_time_us) {
+  // PID Task (1-4kHz): Process RC command and smoothing filter
   RcBf& rc = RcBf::instance();
+  
+  // Step 1: Process RC command - rcCommand[] → applyRates() → rawSetpoint[]
   rc.processRcCommand(current_time_us);
+  
+  // Step 2: Process RC smoothing filter
+  // Input: rcCommand[THROTTLE] or rawSetpoint[ROLL/PITCH/YAW]
+  // Output: rcCommand[THROTTLE] (in-place update), setpointRate[ROLL/PITCH/YAW] (new array)
+  rc.processRcSmoothingFilter();
 }
 
 static void subTaskPidController(uint32_t current_time_us) {

@@ -1,0 +1,25 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+
+src = Glob("./src/*.c")
+
+include_paths = [
+    cwd,
+    os.path.join(cwd, "inc"),  # param.h, bfRcParam.h, bfPidParam.h, etc.
+    os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "03_package", "uparam"),  # uparam.h
+]
+
+group = DefineGroup(
+    "PROJECT_BF_PARAM_EN",
+    src,
+    depend=[
+        "PROJECT_BF_PARAM_EN",
+        "PROJECT_BF_RATE_CTRL_EN",
+    ],
+    CPPPATH=include_paths,
+)
+
+Return("group")
+

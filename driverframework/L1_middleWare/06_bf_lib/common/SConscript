@@ -1,0 +1,23 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+
+src = Glob("./src/*.c")
+# Exclude stopwatch.c as it requires Betaflight-specific time functions that are not available
+src = [s for s in src if not str(s).endswith("stopwatch.c")]
+
+include_paths = [
+    cwd,
+    os.path.join(cwd, "inc"),
+]
+
+group = DefineGroup(
+    "L1_MIDDLEWARE_06_BF_LIB_COMMON_EN",
+    src,
+    depend=["L1_MIDDLEWARE_06_BF_LIB_COMMON_EN"],
+    CPPPATH=include_paths,
+)
+
+Return("group")
+

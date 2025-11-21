@@ -49,3 +49,4 @@ param_list *bfImuCaliOffsetParam_list(void) { return bf_imu_cali_offset_params; 
 size_t bfImuCaliOffsetParam_count(void) {
     return sizeof(bf_imu_cali_offset_params) / sizeof(bf_imu_cali_offset_params[0]);
 }
+

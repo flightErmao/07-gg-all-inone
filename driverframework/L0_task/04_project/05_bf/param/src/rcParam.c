@@ -29,6 +29,24 @@ static float rc_rate_limit[3];
 static float rc_deadband;      // Roll/Pitch 死区
 static float rc_yaw_deadband;  // Yaw 死区
 
+/* Channel Range - 每个通道的范围配置 (min, max) */
+/* 使用与 rc_bf.h 中相同的结构体定义 */
+typedef struct {
+    uint16_t min;
+    uint16_t max;
+} channel_range_t;
+
+static channel_range_t rc_channel_range_roll;    // Roll 通道范围 {min, max}
+static channel_range_t rc_channel_range_pitch;   // Pitch 通道范围 {min, max}
+static channel_range_t rc_channel_range_yaw;     // Yaw 通道范围 {min, max}
+static channel_range_t rc_channel_range_throttle; // Throttle 通道范围 {min, max}
+
+/* Channel Mapping - 通道映射字符串 (如 "AETR1234" 或 "TAER1234") */
+/* A = Aileron (Roll), E = Elevator (Pitch), T = Throttle, R = Rudder (Yaw) */
+/* 1,2,3,4... = Aux channels */
+#define RC_CHANNEL_MAP_STRING_MAX_LEN 18
+static char rc_channel_map_string[RC_CHANNEL_MAP_STRING_MAX_LEN + 1];  // +1 for null terminator
+
 /* 默认值 - Betaflight 典型配置 */
 static const float rc_rate_default[3] = {100.0f, 100.0f, 100.0f};     // Default RC rate [roll, pitch, yaw]
 static const float rc_expo_default[3] = {0.0f, 0.0f, 0.0f};          // No expo by default
@@ -38,6 +56,15 @@ static const float rc_rate_limit_default[3] = {720.0f, 720.0f, 720.0f};  // Defa
 static const float rc_deadband_default = 0.0f;       // No deadband by default
 static const float rc_yaw_deadband_default = 0.0f;   // No yaw deadband by default
 
+/* 默认通道范围 - 1000-2000 (PWM_RANGE_MIN to PWM_RANGE_MAX) */
+static const channel_range_t rc_channel_range_roll_default = {1000, 2000};
+static const channel_range_t rc_channel_range_pitch_default = {1000, 2000};
+static const channel_range_t rc_channel_range_yaw_default = {1000, 2000};
+static const channel_range_t rc_channel_range_throttle_default = {1000, 2000};
+
+/* 默认通道映射 - AETR1234 (Aileron, Elevator, Throttle, Rudder, Aux1, Aux2, Aux3, Aux4) */
+static const char rc_channel_map_string_default[] = "AETR1234";
+
 static const param_default_t bf_rc_defaults[] = {
     {rc_rate, rc_rate_default},
     {rc_expo, rc_expo_default},
@@ -45,6 +72,11 @@ static const param_default_t bf_rc_defaults[] = {
     {rc_rate_limit, rc_rate_limit_default},
     {&rc_deadband, &rc_deadband_default},
     {&rc_yaw_deadband, &rc_yaw_deadband_default},
+    {&rc_channel_range_roll, &rc_channel_range_roll_default},
+    {&rc_channel_range_pitch, &rc_channel_range_pitch_default},
+    {&rc_channel_range_yaw, &rc_channel_range_yaw_default},
+    {&rc_channel_range_throttle, &rc_channel_range_throttle_default},
+    {rc_channel_map_string, rc_channel_map_string_default},
 };
 
 static void bf_rc_param_default(void *address, uint8_t size) {
@@ -63,6 +95,11 @@ static param_list bf_rc_params[] = {
     {(void*)rc_rate_limit, sizeof(rc_rate_limit), "rc_rate_limit", "vf", bf_rc_param_default},  // [roll, pitch, yaw]
     {(void*)&rc_deadband, sizeof(rc_deadband), "rc_deadband", "f", bf_rc_param_default},
     {(void*)&rc_yaw_deadband, sizeof(rc_yaw_deadband), "rc_yaw_deadband", "f", bf_rc_param_default},
+    {(void*)&rc_channel_range_roll, sizeof(rc_channel_range_roll), "rc_channel_range_roll", "r", bf_rc_param_default},      // {min, max}
+    {(void*)&rc_channel_range_pitch, sizeof(rc_channel_range_pitch), "rc_channel_range_pitch", "r", bf_rc_param_default},    // {min, max}
+    {(void*)&rc_channel_range_yaw, sizeof(rc_channel_range_yaw), "rc_channel_range_yaw", "r", bf_rc_param_default},        // {min, max}
+    {(void*)&rc_channel_range_throttle, sizeof(rc_channel_range_throttle), "rc_channel_range_throttle", "r", bf_rc_param_default}, // {min, max}
+    {(void*)rc_channel_map_string, sizeof(rc_channel_map_string), "rc_channel_map", "s", bf_rc_param_default},  // Channel mapping string (e.g., "AETR1234")
 };
 
 param_list *bfRcParam_list(void) { return bf_rc_params; }
