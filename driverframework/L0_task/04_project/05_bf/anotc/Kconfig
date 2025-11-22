@@ -1,0 +1,70 @@
+menuconfig PROJECT_BF_ANOTC_EN
+    bool "ENABLE: PROJECT_BF_ANOTC_EN"
+    default n
+    help
+        Enable ANOTC telemetry with thread support.
+
+    if PROJECT_BF_ANOTC_EN
+        config PROJECT_BF_ANOTC_DEVICE_DEFAULT
+            string "the default of send device"
+            default "uart2"
+            help
+                "the default of send device"
+
+        config PROJECT_BF_ANOTC_BAUD_RATE
+            int "the baud rate of send device"
+            default 1000000
+            help
+                "the baud rate of send device"
+
+        config PROJECT_BF_ANOTC_REC_THREAD_STACK_SIZE
+            int "ANOTC Rec Thread Stack Size (bytes)"
+            range 2048 8192
+            default 2048
+            help
+                Stack size for the ANOTC receive thread in bytes. Default: 2048.
+
+        config PROJECT_BF_ANOTC_REC_THREAD_PRIORITY
+            int "ANOTC Rec Thread Priority"
+            range 1 32
+            default 25
+            help
+                Priority for the ANOTC receive thread. Higher number means higher priority.
+                Default: 25.
+
+        config PROJECT_BF_ANOTC_REC_THREAD_TIMESLICE
+            int "ANOTC Rec Thread Time Slice (ticks)"
+            range 1 100
+            default 5
+            help
+                Time slice for the ANOTC receive thread in ticks. Default: 5.
+
+        config PROJECT_BF_ANOTC_SEND_THREAD_STACK_SIZE
+            int "ANOTC Send Thread Stack Size (bytes)"
+            range 2048 8192
+            default 2048
+            help
+                Stack size for the ANOTC send thread in bytes. Default: 2048.
+
+        config PROJECT_BF_ANOTC_SEND_THREAD_PRIORITY
+            int "ANOTC Send Thread Priority"
+            range 1 32
+            default 24
+            help
+                Priority for the ANOTC send thread. Higher number means higher priority.
+                Default: 24.
+
+        config PROJECT_BF_ANOTC_SEND_THREAD_TIMESLICE
+            int "ANOTC Send Thread Time Slice (ticks)"
+            range 1 100
+            default 5
+            help
+                Time slice for the ANOTC send thread in ticks. Default: 5.
+
+        config PROJECT_BF_ANOTC_CUT_DEV
+            bool "ENABLE: PROJECT_BF_ANOTC_CUT_DEV"
+            default n
+            help
+                Enable shell command to switch output device.
+    endif
+

@@ -77,6 +77,7 @@ PidBf::PidBf()
       pid_output_hub_(nullptr),
       gyro_data_ready_(false),
       setpoint_data_ready_(false),
+      rc_smoothing_filter_(nullptr),
       target_looptime_us_(0) {
   std::memset(&gyro_filtered_data_, 0, sizeof(gyro_filtered_data_));
   std::memset(&setpoint_data_, 0, sizeof(setpoint_data_));
@@ -128,19 +129,10 @@ rt_err_t PidBf::init() {
   }
   LOG_I("Subscribed to gyro MCN topic");
 
-  if (setpoint_event_ == RT_NULL) {
-    setpoint_event_ = rt_sem_create("pid_setpoint_evt", 0, RT_IPC_FLAG_FIFO);
-    if (setpoint_event_ == RT_NULL) {
-      LOG_E("create setpoint event semaphore failed");
-    }
-  }
-
-  setpoint_node_ = mcn_subscribe(MCN_HUB(pid_setpoint), setpoint_event_, RT_NULL);
-  if (setpoint_node_ == RT_NULL) {
-    LOG_W("pid_setpoint topic not available yet, will use default setpoint");
-  } else {
-    LOG_I("Subscribed to pid_setpoint MCN topic");
-  }
+  // Note: setpoint data is now directly written by processRcSmoothingFilter() in subTaskRcCommand()
+  // No need to subscribe to pid_setpoint MCN topic anymore
+  setpoint_node_ = RT_NULL;
+  setpoint_event_ = RT_NULL;
 
   pid_output_hub_ = MCN_HUB(pid_output);
   if (pid_output_hub_ == nullptr) {
@@ -270,27 +262,15 @@ void PidBf::processPidController(uint32_t current_time_us) {
     }
   }
 
-  // Poll for new setpoint data (non-blocking)
-  if (setpoint_node_ != RT_NULL) {
-    if (mcn_poll_sync(setpoint_node_, 0) == RT_TRUE) {
-      if (mcn_copy(MCN_HUB(pid_setpoint), setpoint_node_, &setpoint_data_) == RT_EOK) {
-        setpoint_data_ready_ = true;
-      }
-    }
-  } else {
-    // Try to subscribe if not already subscribed
-    setpoint_node_ = mcn_subscribe(MCN_HUB(pid_setpoint), setpoint_event_, RT_NULL);
-    if (setpoint_node_ != RT_NULL) {
-      LOG_I("Successfully subscribed to pid_setpoint topic");
-    }
-    std::memset(&setpoint_data_, 0, sizeof(setpoint_data_));
-    setpoint_data_ready_ = true;
-  }
+  // Note: setpoint data is now directly written by processRcSmoothingFilter() in subTaskRcCommand()
+  // No need to subscribe to pid_setpoint MCN topic anymore
+  // setpoint_data_ready_ is set to true by subTaskRcCommand() after calling processRcSmoothingFilter()
 
-  // Process PID controller if gyro data is ready
-  if (gyro_data_ready_) {
+  // Process PID controller if gyro data is ready and setpoint data is ready
+  if (gyro_data_ready_ && setpoint_data_ready_) {
     pidController(current_time_us);
     gyro_data_ready_ = false;
+    setpoint_data_ready_ = false;  // Reset flag, will be set again by subTaskRcCommand()
   }
 }
 

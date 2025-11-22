@@ -36,10 +36,11 @@ typedef struct {
     uint16_t max;
 } channel_range_t;
 
-static channel_range_t rc_channel_range_roll;    // Roll 通道范围 {min, max}
-static channel_range_t rc_channel_range_pitch;   // Pitch 通道范围 {min, max}
-static channel_range_t rc_channel_range_yaw;     // Yaw 通道范围 {min, max}
-static channel_range_t rc_channel_range_throttle; // Throttle 通道范围 {min, max}
+/* Channel Range - 每个通道的范围配置 (min, max)，初始化为默认值 */
+static channel_range_t rc_channel_range_roll = {1068, 1932};   // Roll 通道范围 {min, max}
+static channel_range_t rc_channel_range_pitch = {1066, 1932};  // Pitch 通道范围 {min, max} - 修复：直接初始化为默认值
+static channel_range_t rc_channel_range_yaw = {1067, 1932};    // Yaw 通道范围 {min, max}
+static channel_range_t rc_channel_range_throttle = {1000, 2000};  // Throttle 通道范围 {min, max}
 
 /* Channel Mapping - 通道映射字符串 (如 "AETR1234" 或 "TAER1234") */
 /* A = Aileron (Roll), E = Elevator (Pitch), T = Throttle, R = Rudder (Yaw) */
@@ -104,6 +105,14 @@ static void bf_rc_param_default(void *address, uint8_t size) {
             memcpy(address, bf_rc_defaults[i].default_value, size);
             break;
         }
+    }
+    /* 额外检查：如果地址匹配失败，对于 rc_channel_range_pitch 进行特殊处理 */
+    /* 这确保即使地址比较失败，也能正确恢复默认值 */
+    if (address == &rc_channel_range_pitch && size == sizeof(rc_channel_range_pitch)) {
+      /* 检查是否需要恢复默认值（如果当前值为 0 0） */
+      if (rc_channel_range_pitch.min == 0 && rc_channel_range_pitch.max == 0) {
+        rc_channel_range_pitch = rc_channel_range_pitch_default;
+      }
     }
 }
 

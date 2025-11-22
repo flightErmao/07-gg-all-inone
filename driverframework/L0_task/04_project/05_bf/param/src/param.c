@@ -9,6 +9,7 @@
 #include "bfRcParam.h"
 #include "bfImuCaliOffsetParam.h"
 #include "bfMlogParam.h"
+#include "bfMotorParam.h"
 #endif
 
 #ifdef PKG_USING_MIXER
@@ -47,6 +48,7 @@ static void init_param_sources(void) {
   register_param_source(bfRcParam_list(), bfRcParam_count());
   register_param_source(bfImuCaliOffsetParam_list(), bfImuCaliOffsetParam_count());
   register_param_source(bfMlogParam_list(), bfMlogParam_count());
+  register_param_source(bfMotorParam_list(), bfMotorParam_count());
 #endif
 }
 
@@ -83,6 +85,7 @@ int uparam_data_init(void) {
   uparam_add_list(bfRcParam_list(), bfRcParam_count());
   uparam_add_list(bfImuCaliOffsetParam_list(), bfImuCaliOffsetParam_count());
   uparam_add_list(bfMlogParam_list(), bfMlogParam_count());
+  uparam_add_list(bfMotorParam_list(), bfMotorParam_count());
 #endif
   return 0;  // 返回 0 表示成功
 }

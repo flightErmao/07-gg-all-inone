@@ -1,0 +1,24 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+
+src = Glob("./src/*.cpp")
+
+include_paths = [
+    cwd,
+    os.path.join(cwd, "inc"),  # anotc_bf.h, protocolAtkpInterface.h, etc.
+    os.path.join(cwd, "..", "..", "..", "..", "L3_peripheral", "11_uartConfig"),  # uartConfig.h
+]
+
+group = DefineGroup(
+    "PROJECT_BF_ANOTC_EN",
+    src,
+    depend=[
+        "PROJECT_BF_ANOTC_EN",
+    ],
+    CPPPATH=include_paths,
+)
+
+Return("group")
+

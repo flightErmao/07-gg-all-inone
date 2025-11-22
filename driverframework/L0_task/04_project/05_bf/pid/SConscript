@@ -11,9 +11,10 @@ include_paths = [
     os.path.join(cwd, "../rc/inc"),  # rc_bf.h
     os.path.join(cwd, "../param/inc"),  # param.h (getParam function)
     os.path.join(cwd, "../gyroFilter/inc"),  # gyro_filtered_msg.h
-    os.path.join(cwd, "../imu270_pub/inc"),
-    os.path.join(cwd, "../log/inc"),
-    os.path.join(cwd, "..", "..", "02_fmt", "01_TASK_RC", "inc"),  # taskRc.h, pilot_cmd_bus_t
+    os.path.join(cwd, "../anotc/inc"),  # anotc_bf.h, protocolAtkpInterface.h
+    os.path.join(cwd, "../motor/inc"),  # motor_bf.h (for subTaskMotorUpdate)
+    os.path.join(cwd, "../imu/inc"),
+    os.path.join(cwd, "../log/inc"),    
     os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "01_module", "05_timestamp", "inc"),  # timestamp.h
 ]
 
@@ -25,7 +26,8 @@ group = DefineGroup(
         "PROJECT_BF_GYRO_FILTER_EN",  # Depends on gyro filter for gyro_filtered data
         "PROJECT_BF_RC_EN",  # Depends on RC module for RcBf class
         "PROJECT_BF_PARAM_EN",  # getParam function
-        "PROJECT_MINIFLY_TASK05_PARAM_FLYER_BF_DEFAULT_EN",
+        "PROJECT_BF_ANOTC_EN",  # Depends on ANOTC for logging functions (sendUserDatafloat6, etc.)
+        # Note: PROJECT_BF_MOTOR_EN dependency is optional (handled by #ifdef in code)
     ],
     CPPPATH=include_paths,
 )

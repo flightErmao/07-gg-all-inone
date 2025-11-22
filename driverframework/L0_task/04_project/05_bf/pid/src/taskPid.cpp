@@ -1,4 +1,5 @@
 #include "rc_bf.h"
+#include "rc_smoothing_filter.h"
 #include "pid_bf.hpp"
 
 extern "C" {
@@ -13,7 +14,6 @@ extern "C" {
 
 #include <cstring>
 #include "rc_setpoint_msg.h"
-
 
 // Target loop time (8kHz default)
 #ifndef CONFIG_PROJECT_BF_PID_MAIN_LOOPTIME_US
@@ -46,7 +46,14 @@ static void subTaskRcCommand(uint32_t current_time_us) {
   // PID Task (8kHz): Process RC smoothing filter
   // Note: processRcCommand is now in RC thread (100-200Hz), data passed via MCN to avoid data tearing
   RcBf& rc = RcBf::instance();
-  
+  PidBf& pid = PidBf::instance();
+
+  // Get RC smoothing filter instance from PID
+  RcSmoothingFilter* smoothing_filter = pid.getRcSmoothingFilter();
+  if (smoothing_filter == nullptr) {
+    return;  // RC smoothing filter not initialized yet
+  }
+
   // Subscribe to rc MCN topic (non-blocking poll)
   rc_setpoint_msg_t setpoint_msg;
   const rc_setpoint_msg_t* msg_to_use = nullptr;
@@ -61,11 +68,18 @@ static void subTaskRcCommand(uint32_t current_time_us) {
       }
     }
   }
-  
+
+  // Get PID setpoint data reference for direct write
+  pid_setpoint_msg_t* pid_setpoint_out = &pid.getSetpointDataRef();
+
   // Process RC smoothing filter with MCN data (always run at PID frequency, even if no new RC data)
   // If no new data, use nullptr to use cached data (filter will maintain state)
   // Note: This is called at PID frequency (8kHz) even if RC data is at 100Hz
-  rc.processRcSmoothingFilter(msg_to_use);
+  // The filtered setpoint is directly written to PID singleton's setpoint_data_ member
+  smoothing_filter->processFilter(msg_to_use, pid_setpoint_out);
+
+  // Mark setpoint data as ready
+  pid.setSetpointDataReady(true);
 }
 
 static void subTaskPidController(uint32_t current_time_us) {
@@ -75,9 +89,8 @@ static void subTaskPidController(uint32_t current_time_us) {
 }
 
 static void subTaskMotorUpdate(uint32_t current_time_us) {
-  // TODO: Implement motor mixer
-  // This will take PID output and convert to motor commands
-  // For now, it's empty
+  // Motor mixer is now handled in motor thread independently
+  // PID thread only publishes pid_output to MCN
   (void)current_time_us;
 }
 

@@ -8,12 +8,10 @@
 #include <cstring>
 
 extern "C" {
-#include "pid_setpoint_msg.h"
 #include "rc_setpoint_msg.h"
 #include "timestamp.h"
 #include "taskRc.h"  // pilot_cmd_bus_t
 #include "param.h"
-#include "filter.h"  // pt3Filter_t
 }
 
 // Constants from rx.h
@@ -40,20 +38,6 @@ extern "C" {
 #define PITCH 1
 #define YAW 2
 #define THROTTLE 3
-
-// RC smoothing filter data structure
-struct rcSmoothingFilter_t {
-  pt3Filter_t filterSetpoint[PRIMARY_CHANNEL_COUNT];  // For setpoint smoothing [ROLL, PITCH, YAW, THROTTLE]
-  pt3Filter_t filterRcDeflection[RP_AXIS_COUNT];      // For RC deflection smoothing [ROLL, PITCH] (used in Horizon mode)
-  pt3Filter_t filterFeedforward[XYZ_AXIS_COUNT];      // For feedforward smoothing [ROLL, PITCH, YAW]
-  float setpointCutoffFrequency;
-  float throttleCutoffFrequency;
-  float setpointCutoffSetting;
-  float throttleCutoffSetting;
-  float autoSmoothnessFactorSetpoint;
-  float autoSmoothnessFactorThrottle;
-  bool enabled;
-};
 
 // Rate profile structure
 struct rateProfile_t {
@@ -92,20 +76,17 @@ class RcBf {
 
   rt_err_t init();
   
-  // Get setpoint rate for PID (smoothed if enabled)
-  float getSetpointRate(int axis) const;
+  // Initialize MCN (called from init())
+  rt_err_t initMcn();
   
-  // Get feedforward value
-  float getFeedforward(int axis) const;
+  // Publish setpoint to MCN (called from processRcCommand())
+  void publishSetpointToMcn(uint32_t current_time_us);
   
   // Get max RC rate
   float getMaxRcRate(int axis) const;
   
   // Get RC setpoint MCN node (for PID thread to subscribe)
   McnNode_t getRcSetpointNode() const { return rc_setpoint_node_; }
-  
-  // Get last rc_setpoint message (for smoothing filter when no new data)
-  const rc_setpoint_msg_t* getLastRcSetpointMsg() const { return &last_rc_setpoint_msg_; }
   
   // Get RC command value
   float getRcCommand(int channel) const;
@@ -121,11 +102,6 @@ class RcBf {
   // PID task functions (1-4kHz)
   // Process RC command: rcCommand[] → applyRates() → rawSetpoint[]
   void processRcCommand(uint32_t current_time_us);
-  
-  // Process RC smoothing filter: rcCommand[THROTTLE] or rawSetpoint[ROLL/PITCH/YAW] → smoothed output
-  // Input: rc_setpoint_msg_t from MCN (to avoid data tearing between threads)
-  // Output: rcCommand[THROTTLE] (in-place update), setpointRate[ROLL/PITCH/YAW] (new array)
-  void processRcSmoothingFilter(const rc_setpoint_msg_t* setpoint_msg);
   
   // MCN echo function (called by MCN echo callback)
   // Prints detailed debug information and basic info
@@ -176,12 +152,6 @@ class RcBf {
   
   // Update RC refresh rate
   void updateRcRefreshRate(uint32_t current_time_us, bool rxReceivingSignal);
-  
-  // Initialize smoothing filters (pt3Filter)
-  void initSmoothingFilters();
-  
-  // Update smoothing filter cutoffs based on RX rate
-  void updateSmoothingFilterCutoffs();
   
   // Helper: apply deadband
   float applyDeadband(float value, float deadband) const;
@@ -238,9 +208,6 @@ class RcBf {
   // Raw setpoint from RC input (before smoothing)
   float rawSetpoint_[XYZ_AXIS_COUNT];
   
-  // Smoothed setpoint rate (after smoothing filter)
-  float setpointRate_[XYZ_AXIS_COUNT];
-  
   // RC deflection [-1.0, 1.0]
   float rcDeflection_[XYZ_AXIS_COUNT];
   float rcDeflectionAbs_[XYZ_AXIS_COUNT];
@@ -262,10 +229,7 @@ class RcBf {
   bool rx_receiving_signal_;
   bool rx_flight_channels_valid_;
   
-  // RC smoothing filter data
-  rcSmoothingFilter_t rc_smoothing_data_;
-  
-  // Flag to indicate new RC data available for smoothing
+  // Flag to indicate new RC data available
   bool is_rc_data_new_;
   
   // Thread handle
@@ -298,9 +262,6 @@ class RcBf {
   // MCN node for subscribing rc_setpoint data (for PID thread)
   rt_sem_t rc_setpoint_event_;
   McnNode_t rc_setpoint_node_;
-  
-  // Last rc_setpoint message (cached for smoothing filter when no new data)
-  rc_setpoint_msg_t last_rc_setpoint_msg_;
 };
 
 #endif /* RC_BF_H__ */

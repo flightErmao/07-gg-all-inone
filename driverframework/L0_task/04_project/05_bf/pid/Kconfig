@@ -27,5 +27,41 @@ menuconfig PROJECT_BF_PID_EN
             default 5
             help
                 Time slice for the PID controller thread in ticks. Default: 5.
+
+        # ======== DEBUG: ANOTC (ATKP) ========
+        menuconfig PROJECT_BF_PID_ANOTC_LOG_EN
+            bool "DEBUG: ANOTC (ATKP) Logging"
+            default n
+            depends on PROJECT_BF_ANOTC_EN
+            help
+                Enable ANOTC telemetry logging for PID rate setpoint and actual rate.
+
+            if PROJECT_BF_PID_ANOTC_LOG_EN
+
+                menuconfig PROJECT_BF_PID_ANOTC_LOG_ANGULAR_RATE_EN
+                    bool "DEBUG: ANOTC (ATKP) Angular Rate Logging"
+                    default n
+                    depends on PROJECT_BF_ANOTC_EN
+                    help
+                        Enable ANOTC telemetry logging for PID angular rate setpoint and actual rate.
+                    
+                    if PROJECT_BF_PID_ANOTC_LOG_ANGULAR_RATE_EN
+                        config PROJECT_BF_PID_ANOTC_LOG_ANGULAR_RATE_GROUP
+                            int "Log Group ID for Angular Rate Setpoint/Actual"
+                            range 1 99
+                            default 6
+                            help
+                                Set the group ID for angular rate setpoint/actual logging (1-99).
+                                Default: 6.
+
+                        config PROJECT_BF_PID_ANOTC_LOG_ANGULAR_RATE_PERIOD_MS
+                            int "Angular Rate Log Period (ms)"
+                            range 1 1000
+                            default 20
+                            help
+                                Period (in milliseconds) for angular rate setpoint/actual logging. Default: 20ms.
+                endif
+
+            endif
     endif
 

@@ -1,4 +1,9 @@
 #include "rc_bf.h"
+#include "rc_smoothing_filter.h"
+
+#ifdef PROJECT_BF_PID_EN
+#include "../pid/inc/pid_bf.hpp"
+#endif
 
 extern "C" {
 #include <rtthread.h>
@@ -13,35 +18,10 @@ extern "C" {
 #define LOG_TAG "rc_bf"
 #define LOG_LVL LOG_LVL_INFO
 #include <ulog.h>
-#include "uMCN.h"
 }
 
 #include <cmath>
 #include <cstring>
-#include "rc_setpoint_msg.h"
-// #include "rc_setpoint_debug.h"
-
-/* 定义 RC setpoint MCN 话题（在本文件内完成定义与发布） */
-MCN_DEFINE(rc, sizeof(rc_setpoint_msg_t));
-
-// MCN echo 函数（用于调试）- 调用 RcBf 成员函数
-// 需要使用 C 链接以便 MCN 调用，但实际逻辑在对象成员函数中
-extern "C" {
-static int rc_setpoint_echo(void* parameter) {
-  rc_setpoint_msg_t setpoint_data;
-
-  if (mcn_copy_from_hub((McnHub*)parameter, &setpoint_data) != RT_EOK) {
-    return -1;
-  }
-
-  // Call RcBf member function to print debug information
-  // This keeps the logic in the object while maintaining C linkage for MCN
-  RcBf& rc = RcBf::instance();
-  rc.echoSetpoint(&setpoint_data);
-
-  return 0;
-}
-}
 
 // Constants
 #define MAX_INVALID_PULSE_TIME_MS 300
@@ -91,7 +71,6 @@ RcBf::RcBf()
   std::memset(rc_data_, 0, sizeof(rc_data_));
   std::memset(rc_command_, 0, sizeof(rc_command_));
   std::memset(rawSetpoint_, 0, sizeof(rawSetpoint_));
-  std::memset(setpointRate_, 0, sizeof(setpointRate_));
   std::memset(rcDeflection_, 0, sizeof(rcDeflection_));
   std::memset(rcDeflectionAbs_, 0, sizeof(rcDeflectionAbs_));
   std::memset(maxRcRate_, 0, sizeof(maxRcRate_));
@@ -104,8 +83,6 @@ RcBf::RcBf()
   std::memset(channel_range_configs_, 0, sizeof(channel_range_configs_));
   std::memset(rcmap_, 0, sizeof(rcmap_));
   std::memset(failsafe_configs_, 0, sizeof(failsafe_configs_));
-  std::memset(&rc_smoothing_data_, 0, sizeof(rc_smoothing_data_));
-  std::memset(&last_rc_setpoint_msg_, 0, sizeof(last_rc_setpoint_msg_));
 
   // Initialize default values
   for (int i = 0; i < MAX_SUPPORTED_RC_CHANNEL_COUNT; i++) {
@@ -134,43 +111,32 @@ rt_err_t RcBf::init() {
   initFailsafeConfigs();
   initRateProfile();
   initRcControlsConfig();
-  initSmoothingFilters();
 
-  // Get rc_setpoint MCN hub（用于发布 setpoint 数据）
-  rc_setpoint_hub_ = MCN_HUB(rc);
-  if (rc_setpoint_hub_ == nullptr) {
-    LOG_E("get rc_setpoint hub failed");
-    return -RT_ERROR;
+  // Initialize RC smoothing filter singleton
+  // Note: This is called from RC thread initialization
+  RcSmoothingFilter& smoothing_filter = RcSmoothingFilter::instance();
+  rt_err_t ret = smoothing_filter.init(target_looptime_s_, smoothed_rx_rate_hz_);
+  if (ret != RT_EOK) {
+    LOG_E("RC smoothing filter init failed");
+    return ret;
   }
 
-  // 激活 rc_setpoint MCN 主题（必须调用，否则 mcn_publish 会失败）
-  rt_err_t advertise_ret = mcn_advertise(rc_setpoint_hub_, rc_setpoint_echo);
-  if (advertise_ret != RT_EOK && advertise_ret != -RT_EBUSY) {
-    LOG_E("rc_setpoint advertise failed: %d", advertise_ret);
-    return advertise_ret;
-  }
-  LOG_I("rc MCN topic advertised");
+  // Pass smoothing filter pointer to PidBf singleton
+#ifdef PROJECT_BF_PID_EN
+  PidBf& pid = PidBf::instance();
+  pid.setRcSmoothingFilter(&smoothing_filter);
+  LOG_I("RC smoothing filter pointer passed to PidBf");
+#endif
 
-  // Subscribe to rc MCN topic (for PID thread to use)
-  rc_setpoint_event_ = rt_sem_create("rc_setpoint_evt", 0, RT_IPC_FLAG_FIFO);
-  if (rc_setpoint_event_ == RT_NULL) {
-    LOG_E("create rc_setpoint event semaphore failed");
-    return -RT_ERROR;
+  // Initialize MCN
+  ret = initMcn();
+  if (ret != RT_EOK) {
+    LOG_E("MCN init failed");
+    return ret;
   }
-
-  rc_setpoint_node_ = mcn_subscribe(rc_setpoint_hub_, rc_setpoint_event_, RT_NULL);
-  if (rc_setpoint_node_ == RT_NULL) {
-    LOG_E("subscribe rc topic failed");
-    if (rc_setpoint_event_ != RT_NULL) {
-      rt_sem_delete(rc_setpoint_event_);
-      rc_setpoint_event_ = RT_NULL;
-    }
-    return -RT_ERROR;
-  }
-  LOG_I("Subscribed to rc MCN topic");
 
   // Initialize RC device
-  rt_err_t ret = initRcDevice();
+  ret = initRcDevice();
   if (ret != RT_EOK) {
     LOG_E("RC device init failed");
     return ret;
@@ -430,117 +396,6 @@ void RcBf::initRcControlsConfig() {
   }
 }
 
-void RcBf::initSmoothingFilters() {
-  float dt = target_looptime_s_;
-
-  // Load RC smoothing parameters
-  float setpoint_cutoff_setting = 0.0f;
-  float throttle_cutoff_setting = 0.0f;
-  float auto_factor_rpy = 0.0f;
-  float auto_factor_throttle = 0.0f;
-  uint8_t smoothing_enabled = 1;
-
-  // Load from parameters if available
-  getParam("rc_smoothing_setpoint_cutoff", &setpoint_cutoff_setting, sizeof(setpoint_cutoff_setting));
-  getParam("rc_smoothing_throttle_cutoff", &throttle_cutoff_setting, sizeof(throttle_cutoff_setting));
-  getParam("rc_smoothing_auto_factor_rpy", &auto_factor_rpy, sizeof(auto_factor_rpy));
-  getParam("rc_smoothing_auto_factor_throttle", &auto_factor_throttle, sizeof(auto_factor_throttle));
-  getParam("rc_smoothing_enabled", &smoothing_enabled, sizeof(smoothing_enabled));
-
-  // Calculate auto smoothness factors (Betaflight formula)
-  // autoSmoothnessFactor = 1.5 / (1.0 + (auto_factor / 10.0))
-  float autoSmoothnessFactorSetpoint = 1.5f / (1.0f + (auto_factor_rpy / 10.0f));
-  float autoSmoothnessFactorThrottle = 1.5f / (1.0f + (auto_factor_throttle / 10.0f));
-
-  // Initialize smoothing data
-  rc_smoothing_data_.setpointCutoffSetting = setpoint_cutoff_setting;
-  rc_smoothing_data_.throttleCutoffSetting = throttle_cutoff_setting;
-  rc_smoothing_data_.autoSmoothnessFactorSetpoint = autoSmoothnessFactorSetpoint;
-  rc_smoothing_data_.autoSmoothnessFactorThrottle = autoSmoothnessFactorThrottle;
-  rc_smoothing_data_.enabled = (smoothing_enabled != 0);
-
-  // Initialize cutoff frequencies (will be updated dynamically if setpointCutoffSetting is 0)
-  float initial_setpoint_cutoff_hz =
-      (setpoint_cutoff_setting > 0.0f) ? setpoint_cutoff_setting : RC_SMOOTHING_CUTOFF_HZ;
-  float initial_throttle_cutoff_hz =
-      (throttle_cutoff_setting > 0.0f) ? throttle_cutoff_setting : initial_setpoint_cutoff_hz;
-  rc_smoothing_data_.setpointCutoffFrequency = initial_setpoint_cutoff_hz;
-  rc_smoothing_data_.throttleCutoffFrequency = initial_throttle_cutoff_hz;
-
-  // Initialize pt3Filter for setpoint smoothing
-  // filterSetpoint[ROLL/PITCH/YAW] use setpoint cutoff, filterSetpoint[THROTTLE] uses throttle cutoff
-  float pt3k_sp = pt3FilterGain(initial_setpoint_cutoff_hz, dt);
-  float pt3k_thr = pt3FilterGain(initial_throttle_cutoff_hz, dt);
-
-  for (int i = 0; i < PRIMARY_CHANNEL_COUNT; i++) {
-    if (i == THROTTLE) {
-      pt3FilterInit(&rc_smoothing_data_.filterSetpoint[i], pt3k_thr);
-    } else {
-      pt3FilterInit(&rc_smoothing_data_.filterSetpoint[i], pt3k_sp);
-    }
-  }
-
-  // Initialize pt3Filter for RC deflection smoothing (ROLL and PITCH only, used in Horizon mode)
-  for (int i = 0; i < RP_AXIS_COUNT; i++) {
-    pt3FilterInit(&rc_smoothing_data_.filterRcDeflection[i], pt3k_sp);
-  }
-
-  // Initialize pt3Filter for feedforward smoothing (ROLL, PITCH, YAW)
-  for (int i = 0; i < XYZ_AXIS_COUNT; i++) {
-    pt3FilterInit(&rc_smoothing_data_.filterFeedforward[i], pt3k_sp);
-  }
-
-  LOG_I(
-      "RC smoothing initialized: enabled=%d, setpoint_cutoff=%.1f, throttle_cutoff=%.1f, auto_factor_rpy=%.1f, "
-      "auto_factor_throttle=%.1f",
-      rc_smoothing_data_.enabled, setpoint_cutoff_setting, throttle_cutoff_setting, auto_factor_rpy,
-      auto_factor_throttle);
-}
-
-void RcBf::updateSmoothingFilterCutoffs() {
-  if (!rc_smoothing_data_.enabled) {
-    return;
-  }
-  
-  const float min_cutoff_hz = 15.0f;
-  float dt = target_looptime_s_;
-  
-  // Calculate setpoint cutoff (auto if setting is 0, otherwise use manual value)
-  float setpoint_cutoff = rc_smoothing_data_.setpointCutoffSetting == 0
-      ? std::max(min_cutoff_hz, smoothed_rx_rate_hz_ * rc_smoothing_data_.autoSmoothnessFactorSetpoint)
-      : rc_smoothing_data_.setpointCutoffSetting;
-  
-  // Calculate throttle cutoff (auto if setting is 0, otherwise use manual value)
-  float throttle_cutoff = rc_smoothing_data_.throttleCutoffSetting == 0
-      ? std::max(min_cutoff_hz, smoothed_rx_rate_hz_ * rc_smoothing_data_.autoSmoothnessFactorThrottle)
-      : rc_smoothing_data_.throttleCutoffSetting;
-  
-  // Update filter cutoffs
-  float pt3k_sp = pt3FilterGain(setpoint_cutoff, dt);
-  float pt3k_thr = pt3FilterGain(throttle_cutoff, dt);
-
-  // Update setpoint filters for ROLL, PITCH, YAW (use setpoint cutoff)
-  for (int i = FD_ROLL; i <= FD_YAW; i++) {
-    pt3FilterUpdateCutoff(&rc_smoothing_data_.filterSetpoint[i], pt3k_sp);
-  }
-
-  // Update throttle filter (use throttle cutoff)
-  pt3FilterUpdateCutoff(&rc_smoothing_data_.filterSetpoint[THROTTLE], pt3k_thr);
-
-  // Update feedforward filters for ROLL, PITCH, YAW (use setpoint cutoff)
-  for (int i = FD_ROLL; i <= FD_YAW; i++) {
-    pt3FilterUpdateCutoff(&rc_smoothing_data_.filterFeedforward[i], pt3k_sp);
-  }
-
-  // Update RC deflection filters for ROLL and PITCH (use setpoint cutoff)
-  for (int i = 0; i < RP_AXIS_COUNT; i++) {
-    pt3FilterUpdateCutoff(&rc_smoothing_data_.filterRcDeflection[i], pt3k_sp);
-  }
-
-  rc_smoothing_data_.setpointCutoffFrequency = setpoint_cutoff;
-  rc_smoothing_data_.throttleCutoffFrequency = throttle_cutoff;
-}
-
 void RcBf::readRawRcChannels() {
   if (rc_device_ == RT_NULL) {
     return;
@@ -684,9 +539,10 @@ void RcBf::processRcCommand(uint32_t current_time_us) {
     return;  // No new data, skip processing
   }
 
-  // Update smoothing filter cutoffs if needed
-  updateSmoothingFilterCutoffs();
-  
+  // Update smoothing filter cutoffs if needed (now handled by RcSmoothingFilter singleton)
+  RcSmoothingFilter& smoothing_filter = RcSmoothingFilter::instance();
+  smoothing_filter.updateFilterCutoffs(target_looptime_s_, smoothed_rx_rate_hz_);
+
   // Calculate setpoint rates from rcCommand
   // Normalize rcCommand to [-1.0, 1.0] range using dividers adjusted by deadband
   for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
@@ -719,93 +575,10 @@ void RcBf::processRcCommand(uint32_t current_time_us) {
   }
 
   // Publish rawSetpoint data to MCN for PID thread (avoid data tearing)
-  if (rc_setpoint_hub_ != nullptr) {
-    rc_setpoint_msg_t setpoint_msg;
-    std::memcpy(setpoint_msg.rawSetpoint, rawSetpoint_, sizeof(rawSetpoint_));
-    setpoint_msg.rcCommandThrottle = rc_command_[THROTTLE];
-    std::memcpy(setpoint_msg.feedforward, feedforward_, sizeof(feedforward_));
-    std::memcpy(setpoint_msg.rcDeflection, rcDeflection_, sizeof(rcDeflection_));
-    std::memcpy(setpoint_msg.rcDeflectionAbs, rcDeflectionAbs_, sizeof(rcDeflectionAbs_));
-    setpoint_msg.smoothedRxRateHz = smoothed_rx_rate_hz_;
-    setpoint_msg.seq = seq_++;
-    setpoint_msg.timestamp = current_time_us;
-
-    rt_err_t publish_result = mcn_publish(rc_setpoint_hub_, &setpoint_msg);
-    if (publish_result != RT_EOK) {
-      LOG_E("Failed to publish rc_setpoint data: %d", publish_result);
-    }
-  }
+  publishSetpointToMcn(current_time_us);
 
   // Mark data as processed
   is_rc_data_new_ = false;
-}
-
-// PID Task (1-4kHz): Process RC smoothing filter
-// Input: rc_setpoint_msg_t from MCN (to avoid data tearing between threads)
-// Output: rcCommand[THROTTLE] (in-place update), setpointRate[ROLL/PITCH/YAW] (new array)
-void RcBf::processRcSmoothingFilter(const rc_setpoint_msg_t* setpoint_msg) {
-  // Use cached data if setpoint_msg is null (for PID thread frequency update)
-  const rc_setpoint_msg_t* msg_to_use = setpoint_msg;
-  if (msg_to_use == nullptr) {
-    msg_to_use = &last_rc_setpoint_msg_;
-    // If no cached data yet, skip processing
-    if (msg_to_use->seq == 0 && msg_to_use->timestamp == 0) {
-      return;
-    }
-  } else {
-    // Cache the new data
-    std::memcpy(&last_rc_setpoint_msg_, setpoint_msg, sizeof(rc_setpoint_msg_t));
-  }
-
-  if (!rc_smoothing_data_.enabled) {
-    // If smoothing is disabled, just copy rawSetpoint to setpointRate
-    for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
-      setpointRate_[axis] = msg_to_use->rawSetpoint[axis];
-    }
-    // Update throttle command from MCN data
-    rc_command_[THROTTLE] = msg_to_use->rcCommandThrottle;
-    // Update feedforward and deflection from MCN data
-    std::memcpy(feedforward_, msg_to_use->feedforward, sizeof(feedforward_));
-    std::memcpy(rcDeflection_, msg_to_use->rcDeflection, sizeof(rcDeflection_));
-    std::memcpy(rcDeflectionAbs_, msg_to_use->rcDeflectionAbs, sizeof(rcDeflectionAbs_));
-    return;
-  }
-
-  // Prepare data to smooth (from MCN data to avoid data tearing)
-  float rx_data_to_smooth[PRIMARY_CHANNEL_COUNT];
-  for (int i = 0; i < PRIMARY_CHANNEL_COUNT; i++) {
-    if (i == THROTTLE) {
-      rx_data_to_smooth[i] = msg_to_use->rcCommandThrottle;
-    } else {
-      rx_data_to_smooth[i] = msg_to_use->rawSetpoint[i];
-    }
-  }
-
-#ifdef PROJECT_BF_RC_DEBUG_PIN_EN
-  DEBUG_PIN_DEBUG1_HIGH();  // Debug pin: processRcSmoothingFilter start (monitor PID task call frequency ~8kHz)
-#endif
-
-  // Apply pt3Filter smoothing
-  for (int i = 0; i < PRIMARY_CHANNEL_COUNT; i++) {
-    float smoothed = pt3FilterApply(&rc_smoothing_data_.filterSetpoint[i], rx_data_to_smooth[i]);
-    
-    if (i == THROTTLE) {
-      // Output: rcCommand[THROTTLE] (in-place update)
-      rc_command_[THROTTLE] = smoothed;
-    } else {
-      // Output: setpointRate[ROLL/PITCH/YAW] (new array)
-      setpointRate_[i] = smoothed;
-    }
-  }
-
-  // Update feedforward and deflection from MCN data
-  std::memcpy(feedforward_, msg_to_use->feedforward, sizeof(feedforward_));
-  std::memcpy(rcDeflection_, msg_to_use->rcDeflection, sizeof(rcDeflection_));
-  std::memcpy(rcDeflectionAbs_, msg_to_use->rcDeflectionAbs, sizeof(rcDeflectionAbs_));
-
-#ifdef PROJECT_BF_RC_DEBUG_PIN_EN
-  DEBUG_PIN_DEBUG1_LOW();  // Debug pin: processRcSmoothingFilter end
-#endif
 }
 
 void RcBf::updateRcRefreshRate(uint32_t current_time_us, bool rxReceivingSignal) {
@@ -855,20 +628,6 @@ float RcBf::applyBetaflightRates(int axis, float rcCommandf, float rcCommandfAbs
   return angle_rate;
 }
 
-float RcBf::getSetpointRate(int axis) const {
-  if (axis >= 0 && axis < XYZ_AXIS_COUNT) {
-    return setpointRate_[axis];
-  }
-  return 0.0f;
-}
-
-float RcBf::getFeedforward(int axis) const {
-  if (axis >= 0 && axis < XYZ_AXIS_COUNT) {
-    return feedforward_[axis];
-  }
-  return 0.0f;
-}
-
 float RcBf::getMaxRcRate(int axis) const {
   if (axis >= 0 && axis < XYZ_AXIS_COUNT) {
     return maxRcRate_[axis];
@@ -881,16 +640,6 @@ float RcBf::getRcCommand(int channel) const {
     return rc_command_[channel];  // Return smoothed value (THROTTLE) or original (ROLL/PITCH/YAW)
   }
   return 0.0f;
-}
-
-void RcBf::echoSetpoint(const rc_setpoint_msg_t* setpoint_data) {
-  // Print detailed debug information by default
-  printDebugInfo(setpoint_data);
-
-  // Always print basic info
-  LOG_I("seq: %lu, rawSetpoint: %.2f, %.2f, %.2f, throttle: %.0f, rxRate: %.1f Hz", setpoint_data->seq,
-        setpoint_data->rawSetpoint[0], setpoint_data->rawSetpoint[1], setpoint_data->rawSetpoint[2],
-        setpoint_data->rcCommandThrottle, setpoint_data->smoothedRxRateHz);
 }
 
 void RcBf::printDebugInfo(const rc_setpoint_msg_t* setpoint_msg) const {

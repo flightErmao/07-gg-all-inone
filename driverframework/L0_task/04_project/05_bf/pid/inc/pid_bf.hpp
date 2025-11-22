@@ -15,6 +15,9 @@ extern "C" {
 #include "timestamp.h"
 }
 
+// Forward declaration
+class RcSmoothingFilter;
+
 #define FD_ROLL 0
 #define FD_PITCH 1
 #define FD_YAW 2
@@ -79,8 +82,20 @@ class PidBf {
 
   rt_err_t init();
 
+  // Set RC smoothing filter instance (called from RC init)
+  void setRcSmoothingFilter(RcSmoothingFilter* filter) { rc_smoothing_filter_ = filter; }
+  RcSmoothingFilter* getRcSmoothingFilter() { return rc_smoothing_filter_; }
+
   // Process PID controller (called from subTaskPidController in taskPid.cpp)
   void processPidController(uint32_t current_time_us);
+
+  // Get current data (for logging/debugging)
+  const gyro_filtered_msg_t& getGyroFilteredData() const { return gyro_filtered_data_; }
+  const pid_setpoint_msg_t& getSetpointData() const { return setpoint_data_; }
+  pid_setpoint_msg_t& getSetpointDataRef() { return setpoint_data_; }
+  bool isGyroDataReady() const { return gyro_data_ready_; }
+  bool isSetpointDataReady() const { return setpoint_data_ready_; }
+  void setSetpointDataReady(bool ready) { setpoint_data_ready_ = ready; }
 
  private:
   PidBf(const PidBf&) = delete;
@@ -116,6 +131,9 @@ class PidBf {
   pid_setpoint_msg_t setpoint_data_;
   bool gyro_data_ready_;
   bool setpoint_data_ready_;
+
+  // RC smoothing filter instance (set by RC thread during initialization)
+  RcSmoothingFilter* rc_smoothing_filter_;
 
   // Target looptime (from pid_process_denom)
   uint32_t target_looptime_us_;

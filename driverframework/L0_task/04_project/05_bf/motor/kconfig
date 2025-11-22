@@ -1,0 +1,72 @@
+menuconfig PROJECT_BF_MOTOR_EN
+    bool "ENABLE: PROJECT_BF_MOTOR_EN"
+    default n
+    depends on PROJECT_BF_PID_EN
+    depends on PROJECT_BF_RC_EN
+    help
+        Enable Betaflight-style motor mixer and motor control thread.
+        This module handles motor mixing from PID output and RC throttle,
+        publishes mixed motor values via MCN, and writes to motor device.
+
+    if PROJECT_BF_MOTOR_EN
+        config PROJECT_BF_MOTOR_THREAD_STACK_SIZE
+            int "Motor Thread Stack Size (bytes)"
+            range 2048 8192
+            default 4096
+            help
+                Stack size for the motor control thread in bytes. Default: 4096.
+
+        config PROJECT_BF_MOTOR_THREAD_PRIORITY
+            int "Motor Thread Priority"
+            range 1 32
+            default 6
+            help
+                Priority for the motor control thread. Higher number means higher priority. 
+                Should be lower than PID thread. Default: 6.
+
+        config PROJECT_BF_MOTOR_THREAD_TIMESLICE
+            int "Motor Thread Time Slice (ticks)"
+            range 1 100
+            default 5
+            help
+                Time slice for the motor control thread in ticks. Default: 5.
+
+        config PROJECT_BF_MOTOR_DEVICE_NAME
+            string "Motor Device Name"
+            default "dshot"
+            help
+                Device name for motor output (e.g., "dshot", "pwm"). Default: "dshot".
+
+        # ======== DEBUG: ANOTC (ATKP) ========
+        menuconfig PROJECT_BF_MOTOR_ANOTC_LOG_EN
+            bool "DEBUG: ANOTC (ATKP) Logging"
+            default n
+            depends on PROJECT_BF_ANOTC_EN
+            help
+                Enable ANOTC telemetry logging for motor output values.
+
+            if PROJECT_BF_MOTOR_ANOTC_LOG_EN
+                config PROJECT_BF_MOTOR_ANOTC_LOG_GROUP
+                    int "Log Group ID for Motor Output"
+                    range 1 99
+                    default 8
+                    help
+                        Set the group ID for motor output logging (1-99). Default: 8.
+
+                config PROJECT_BF_MOTOR_ANOTC_LOG_PERIOD_MS
+                    int "Motor Output Log Period (ms)"
+                    range 1 1000
+                    default 20
+                    help
+                        Period (in milliseconds) for motor output logging. Default: 20ms.
+            endif
+
+        # ======== DEBUG: MLOG (SD Card) ========
+        menuconfig PROJECT_BF_MOTOR_MLOG_EN
+            bool "DEBUG: MLOG (SD Card) Logging"
+            default n
+            help
+                Enable mlog (SD card logging) for motor output data.
+
+    endif
+

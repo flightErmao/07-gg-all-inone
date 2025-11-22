@@ -297,15 +297,32 @@ rt_err_t RateCtrlAngularVelocity::init() {
   float sample_rate_hz = 0.0f;
   float sample_dt = 0.0f;
 
-  if (bmi270.initialized()) {
+  // 等待 BMI270 初始化完成（可能 gyro 启动比 bmi270 早，需要等待）
+  const uint32_t wait_interval_ms = 100;  // 每次等待 100ms
+  const uint32_t max_wait_count = 10;     // 最多等待 10 次（即 1 秒）
+  uint32_t wait_count = 0;
+  bool bmi270_ready = false;
+
+  while (wait_count < max_wait_count) {
+    if (bmi270.initialized()) {
+      bmi270_ready = true;
+      break;
+    }
+    wait_count++;
+    LOG_I("Waiting for BMI270 initialization... (%u/%u)", wait_count, max_wait_count);
+    rt_thread_mdelay(wait_interval_ms);
+  }
+
+  if (bmi270_ready) {
     sample_rate_hz = bmi270.getGyroSampleRateHz();
     sample_dt = bmi270.getGyroSampleDt();
     LOG_I("IMU sample rate: %.1f Hz, dt: %.6f s", sample_rate_hz, sample_dt);
   } else {
-    // 如果 BMI270 未初始化，使用默认值
+    // 如果等待 10 次后 BMI270 仍未初始化，使用默认值
     sample_rate_hz = PROJECT_BF_GYRO_FILTER_IMU_SAMPLE_RATE_HZ;
     sample_dt = 1.0f / sample_rate_hz;
-    LOG_W("BMI270 not initialized, using default sample rate: %.1f Hz", sample_rate_hz);
+    LOG_W("BMI270 not initialized after waiting %u ms, using default sample rate: %.1f Hz",
+          wait_count * wait_interval_ms, sample_rate_hz);
   }
 
   // 初始化 gyro_t 映射的变量（参考 gyro.c 中的初始化逻辑）
