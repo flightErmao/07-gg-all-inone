@@ -17,7 +17,7 @@ typedef struct {
   rt_uint32_t seq;
 } imu_raw_msg_t;
 
-MCN_DECLARE(imu_raw);
+MCN_DECLARE(imu);
 
 #endif /* IMU_RAW_MSG_H__ */
 

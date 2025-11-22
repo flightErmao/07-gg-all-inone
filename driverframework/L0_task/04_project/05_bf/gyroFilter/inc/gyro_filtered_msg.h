@@ -17,6 +17,6 @@ typedef struct {
   rt_uint32_t seq;         // 序列号（与 imu_raw 对应）
 } gyro_filtered_msg_t;
 
-MCN_DECLARE(gyro_filtered);
+MCN_DECLARE(gyro);
 
 #endif /* GYRO_FILTERED_MSG_H__ */

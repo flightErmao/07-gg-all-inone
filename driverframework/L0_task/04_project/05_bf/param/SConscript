@@ -16,7 +16,6 @@ group = DefineGroup(
     src,
     depend=[
         "PROJECT_BF_PARAM_EN",
-        "PROJECT_BF_RATE_CTRL_EN",
     ],
     CPPPATH=include_paths,
 )

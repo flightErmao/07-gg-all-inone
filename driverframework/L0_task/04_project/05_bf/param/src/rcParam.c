@@ -60,13 +60,13 @@ static const float rc_expo_default[3] = {0.0f, 0.0f, 0.0f};          // No expo 
 static const float rc_super_rate_default[3] = {0.0f, 0.0f, 0.0f};    // No super rate by default
 static const float rc_rate_limit_default[3] = {720.0f, 720.0f, 720.0f};  // Default 720 deg/s limit
 
-static const float rc_deadband_default = 0.0f;       // No deadband by default
-static const float rc_yaw_deadband_default = 0.0f;   // No yaw deadband by default
+static const float rc_deadband_default = 10.0f;     // No deadband by default
+static const float rc_yaw_deadband_default = 2.0f;  // No yaw deadband by default
 
 /* 默认通道范围 - 1000-2000 (PWM_RANGE_MIN to PWM_RANGE_MAX) */
-static const channel_range_t rc_channel_range_roll_default = {1000, 2000};
-static const channel_range_t rc_channel_range_pitch_default = {1000, 2000};
-static const channel_range_t rc_channel_range_yaw_default = {1000, 2000};
+static const channel_range_t rc_channel_range_roll_default = {1068, 1932};
+static const channel_range_t rc_channel_range_pitch_default = {1066, 1932};
+static const channel_range_t rc_channel_range_yaw_default = {1067, 1932};
 static const channel_range_t rc_channel_range_throttle_default = {1000, 2000};
 
 /* 默认通道映射 - AETR1234 (Aileron, Elevator, Throttle, Rudder, Aux1, Aux2, Aux3, Aux4) */
@@ -114,14 +114,14 @@ static param_list bf_rc_params[] = {
     {(void *)rc_rate_limit, sizeof(rc_rate_limit), "rc_rate_limit", "vf", bf_rc_param_default},  // [roll, pitch, yaw]
     {(void *)&rc_deadband, sizeof(rc_deadband), "rc_deadband", "f", bf_rc_param_default},
     {(void *)&rc_yaw_deadband, sizeof(rc_yaw_deadband), "rc_yaw_deadband", "f", bf_rc_param_default},
-    {(void *)&rc_channel_range_roll, sizeof(rc_channel_range_roll), "rc_channel_range_roll", "r",
-     bf_rc_param_default},  // {min, max}
-    {(void *)&rc_channel_range_pitch, sizeof(rc_channel_range_pitch), "rc_channel_range_pitch", "r",
-     bf_rc_param_default},  // {min, max}
-    {(void *)&rc_channel_range_yaw, sizeof(rc_channel_range_yaw), "rc_channel_range_yaw", "r",
-     bf_rc_param_default},  // {min, max}
-    {(void *)&rc_channel_range_throttle, sizeof(rc_channel_range_throttle), "rc_channel_range_throttle", "r",
-     bf_rc_param_default},  // {min, max}
+    {(void *)&rc_channel_range_roll, sizeof(rc_channel_range_roll), "rc_channel_range_roll", "vw",
+     bf_rc_param_default},  // {min, max} - word vector (2 uint16_t)
+    {(void *)&rc_channel_range_pitch, sizeof(rc_channel_range_pitch), "rc_channel_range_pitch", "vw",
+     bf_rc_param_default},  // {min, max} - word vector (2 uint16_t)
+    {(void *)&rc_channel_range_yaw, sizeof(rc_channel_range_yaw), "rc_channel_range_yaw", "vw",
+     bf_rc_param_default},  // {min, max} - word vector (2 uint16_t)
+    {(void *)&rc_channel_range_throttle, sizeof(rc_channel_range_throttle), "rc_channel_range_throttle", "vw",
+     bf_rc_param_default},  // {min, max} - word vector (2 uint16_t)
     {(void *)rc_channel_map_string, sizeof(rc_channel_map_string), "rc_channel_map", "s",
      bf_rc_param_default},  // Channel mapping string (e.g., "AETR1234")
     {(void *)&rc_smoothing_setpoint_cutoff, sizeof(rc_smoothing_setpoint_cutoff), "rc_smoothing_setpoint_cutoff", "f",

@@ -24,10 +24,10 @@ include_paths = [
 ]
 
 group = DefineGroup(
-    "PROJECT_BF_RATE_CTRL_EN",
+    "PROJECT_BF_GYRO_FILTER_EN",
     src,
     depend=[
-        "PROJECT_BF_RATE_CTRL_EN",
+        "PROJECT_BF_GYRO_FILTER_EN",
         "PROJECT_BF_PARAM_EN",  # getParam function
         "PROJECT_MINIFLY_TASK05_PARAM_FLYER_BF_DEFAULT_EN",
         "L1_MIDDLEWARE_06_BF_LIB_FILTER_IMU_EN",

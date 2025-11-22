@@ -8,8 +8,9 @@ src = Glob("./src/*.cpp")
 include_paths = [
     cwd,
     os.path.join(cwd, "inc"),  # pid_setpoint_msg.h, pid_output_msg.h, rc_bf.hpp
+    os.path.join(cwd, "../rc/inc"),  # rc_bf.h
     os.path.join(cwd, "../param/inc"),  # param.h (getParam function)
-    os.path.join(cwd, "../rateCtrl/inc"),  # gyro_filtered_msg.h
+    os.path.join(cwd, "../gyroFilter/inc"),  # gyro_filtered_msg.h
     os.path.join(cwd, "../imu270_pub/inc"),
     os.path.join(cwd, "../log/inc"),
     os.path.join(cwd, "..", "..", "02_fmt", "01_TASK_RC", "inc"),  # taskRc.h, pilot_cmd_bus_t
@@ -21,7 +22,8 @@ group = DefineGroup(
     src,
     depend=[
         "PROJECT_BF_PID_EN",
-        "PROJECT_BF_RATE_CTRL_EN",  # Depends on rate control for gyro_filtered data
+        "PROJECT_BF_GYRO_FILTER_EN",  # Depends on gyro filter for gyro_filtered data
+        "PROJECT_BF_RC_EN",  # Depends on RC module for RcBf class
         "PROJECT_BF_PARAM_EN",  # getParam function
         "PROJECT_MINIFLY_TASK05_PARAM_FLYER_BF_DEFAULT_EN",
     ],

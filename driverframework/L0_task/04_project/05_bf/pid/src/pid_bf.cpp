@@ -117,16 +117,16 @@ rt_err_t PidBf::init() {
     }
   }
 
-  gyro_filtered_node_ = mcn_subscribe(MCN_HUB(gyro_filtered), gyro_filtered_event_, RT_NULL);
+  gyro_filtered_node_ = mcn_subscribe(MCN_HUB(gyro), gyro_filtered_event_, RT_NULL);
   if (gyro_filtered_node_ == RT_NULL) {
-    LOG_E("subscribe gyro_filtered topic failed");
+    LOG_E("subscribe gyro topic failed");
     if (gyro_filtered_event_ != RT_NULL) {
       rt_sem_delete(gyro_filtered_event_);
       gyro_filtered_event_ = RT_NULL;
     }
     return -RT_ERROR;
   }
-  LOG_I("Subscribed to gyro_filtered MCN topic");
+  LOG_I("Subscribed to gyro MCN topic");
 
   if (setpoint_event_ == RT_NULL) {
     setpoint_event_ = rt_sem_create("pid_setpoint_evt", 0, RT_IPC_FLAG_FIFO);
@@ -146,7 +146,7 @@ rt_err_t PidBf::init() {
   if (pid_output_hub_ == nullptr) {
     LOG_E("get pid_output hub failed");
     if (gyro_filtered_node_ != RT_NULL) {
-      mcn_unsubscribe(MCN_HUB(gyro_filtered), gyro_filtered_node_);
+      mcn_unsubscribe(MCN_HUB(gyro), gyro_filtered_node_);
       gyro_filtered_node_ = RT_NULL;
     }
     if (gyro_filtered_event_ != RT_NULL) {
@@ -265,7 +265,7 @@ void PidBf::initFilters() {
 void PidBf::processPidController(uint32_t current_time_us) {
   // Poll for new gyro data (non-blocking)
   if (mcn_poll_sync(gyro_filtered_node_, RT_WAITING_FOREVER) == RT_TRUE) {
-    if (mcn_copy(MCN_HUB(gyro_filtered), gyro_filtered_node_, &gyro_filtered_data_) == RT_EOK) {
+    if (mcn_copy(MCN_HUB(gyro), gyro_filtered_node_, &gyro_filtered_data_) == RT_EOK) {
       gyro_data_ready_ = true;
     }
   }

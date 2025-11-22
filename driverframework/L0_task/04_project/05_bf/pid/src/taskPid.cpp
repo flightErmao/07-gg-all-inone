@@ -5,25 +5,15 @@ extern "C" {
 #include <rtthread.h>
 #include <rtconfig.h>
 #include "timestamp.h"
+#include "uMCN.h"
 #define LOG_TAG "task_pid"
 #define LOG_LVL LOG_LVL_INFO
 #include <ulog.h>
 }
 
 #include <cstring>
+#include "rc_setpoint_msg.h"
 
-// Thread configuration
-#ifndef CONFIG_PROJECT_BF_PID_MAIN_THREAD_STACK_SIZE
-#define CONFIG_PROJECT_BF_PID_MAIN_THREAD_STACK_SIZE 4096
-#endif
-
-#ifndef CONFIG_PROJECT_BF_PID_MAIN_THREAD_PRIORITY
-#define CONFIG_PROJECT_BF_PID_MAIN_THREAD_PRIORITY 8
-#endif
-
-#ifndef CONFIG_PROJECT_BF_PID_MAIN_THREAD_TIMESLICE
-#define CONFIG_PROJECT_BF_PID_MAIN_THREAD_TIMESLICE 5
-#endif
 
 // Target loop time (8kHz default)
 #ifndef CONFIG_PROJECT_BF_PID_MAIN_LOOPTIME_US
@@ -36,7 +26,7 @@ namespace {
 struct PidMainThread {
   rt_thread_t thread_;
   struct rt_thread thread_obj_;
-  rt_uint8_t thread_stack_[CONFIG_PROJECT_BF_PID_MAIN_THREAD_STACK_SIZE];
+  rt_uint8_t thread_stack_[PROJECT_BF_PID_THREAD_STACK_SIZE];
   bool thread_inited_;
   uint32_t target_looptime_us_;
 
@@ -53,16 +43,29 @@ static PidMainThread pid_main_thread_;
 
 // Sub-tasks
 static void subTaskRcCommand(uint32_t current_time_us) {
-  // PID Task (1-4kHz): Process RC command and smoothing filter
+  // PID Task (8kHz): Process RC smoothing filter
+  // Note: processRcCommand is now in RC thread (100-200Hz), data passed via MCN to avoid data tearing
   RcBf& rc = RcBf::instance();
   
-  // Step 1: Process RC command - rcCommand[] → applyRates() → rawSetpoint[]
-  rc.processRcCommand(current_time_us);
+  // Subscribe to rc MCN topic (non-blocking poll)
+  rc_setpoint_msg_t setpoint_msg;
+  const rc_setpoint_msg_t* msg_to_use = nullptr;
   
-  // Step 2: Process RC smoothing filter
-  // Input: rcCommand[THROTTLE] or rawSetpoint[ROLL/PITCH/YAW]
-  // Output: rcCommand[THROTTLE] (in-place update), setpointRate[ROLL/PITCH/YAW] (new array)
-  rc.processRcSmoothingFilter();
+  // Poll for new rc_setpoint data (non-blocking, use latest data if available)
+  McnNode_t rc_setpoint_node = rc.getRcSetpointNode();
+  if (rc_setpoint_node != RT_NULL) {
+    if (mcn_poll_sync(rc_setpoint_node, 0) == RT_TRUE) {
+      if (mcn_copy(MCN_HUB(rc), rc_setpoint_node, &setpoint_msg) == RT_EOK) {
+        // New data available, use it
+        msg_to_use = &setpoint_msg;
+      }
+    }
+  }
+  
+  // Process RC smoothing filter with MCN data (always run at PID frequency, even if no new RC data)
+  // If no new data, use nullptr to use cached data (filter will maintain state)
+  // Note: This is called at PID frequency (8kHz) even if RC data is at 100Hz
+  rc.processRcSmoothingFilter(msg_to_use);
 }
 
 static void subTaskPidController(uint32_t current_time_us) {
@@ -146,9 +149,9 @@ rt_err_t pidMainInit(void) {
 
   // Initialize main thread
   ret = rt_thread_init(&pid_main_thread_.thread_obj_, "pid_main", pidMainThreadEntry, RT_NULL,
-                       pid_main_thread_.thread_stack_, CONFIG_PROJECT_BF_PID_MAIN_THREAD_STACK_SIZE,
-                       CONFIG_PROJECT_BF_PID_MAIN_THREAD_PRIORITY,
-                       CONFIG_PROJECT_BF_PID_MAIN_THREAD_TIMESLICE);
+                       pid_main_thread_.thread_stack_, PROJECT_BF_PID_THREAD_STACK_SIZE,
+                       PROJECT_BF_PID_THREAD_PRIORITY,
+                       PROJECT_BF_PID_THREAD_TIMESLICE);
 
   if (ret != RT_EOK) {
     LOG_E("PidMain thread init failed: %d", ret);

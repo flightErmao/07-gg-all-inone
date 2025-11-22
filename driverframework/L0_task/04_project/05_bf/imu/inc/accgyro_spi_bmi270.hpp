@@ -107,7 +107,7 @@ class BMI270 {
   float gyro_scale_;           // 陀螺仪比例因子（dps/lsb）
 };
 
-/** 使用 Kconfig 默认参数做一次全局初始化，并开始发布 imu_raw MCN 数据 */
+/** 使用 Kconfig 默认参数做一次全局初始化，并开始发布 imu MCN 数据 */
 rt_err_t bf_bmi270_init_default();
 
 }  // namespace bf_bmi270

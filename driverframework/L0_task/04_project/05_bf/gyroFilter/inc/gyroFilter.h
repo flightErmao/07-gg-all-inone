@@ -1,5 +1,5 @@
-#ifndef RATE_CTRL_GYRO__
-#define RATE_CTRL_GYRO__
+#ifndef GYRO_FILTER_H__
+#define GYRO_FILTER_H__
 
 #include <rtthread.h>
 #include <uMCN.h>
@@ -219,4 +219,4 @@ class RateCtrlAngularVelocity {
   void setTargetLooptime(uint8_t pid_denom);
 };
 
-#endif /* RATE_CTRL_ANGULAR_VELOCITY_H__ */
+#endif /* GYRO_FILTER_H__ */

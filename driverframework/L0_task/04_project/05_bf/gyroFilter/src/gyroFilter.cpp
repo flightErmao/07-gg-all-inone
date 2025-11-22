@@ -3,7 +3,7 @@
 extern "C" {
 #include <rtthread.h>
 #include <rtconfig.h>
-#define LOG_TAG "rate_ang_vel"
+#define LOG_TAG "gyro_filter"
 #define LOG_LVL LOG_LVL_INFO
 #include <ulog.h>
 #include "debugPin.h"
@@ -28,36 +28,25 @@ extern "C" {
 }
 
 /* 定义滤波后陀螺仪数据话题（在本文件内完成定义与发布） */
-MCN_DEFINE(gyro_filtered, sizeof(gyro_filtered_msg_t));
+MCN_DEFINE(gyro, sizeof(gyro_filtered_msg_t));
+
+// MCN echo 函数（参考 accgyro_spi_bmi270.cpp 中的 imu_raw_echo）
+static int gyro_filtered_echo(void* parameter) {
+  gyro_filtered_msg_t gyro_data;
+
+  if (mcn_copy_from_hub((McnHub*)parameter, &gyro_data) != RT_EOK) {
+    return -1;
+  }
+
+  LOG_I("seq: %lu, gyro_filtered: %.2f, %.2f, %.2f, gyro_adc: %.2f, %.2f, %.2f", gyro_data.seq,
+        gyro_data.gyro_filtered[0], gyro_data.gyro_filtered[1], gyro_data.gyro_filtered[2], gyro_data.gyro_adc[0],
+        gyro_data.gyro_adc[1], gyro_data.gyro_adc[2]);
+  return 0;
+}
 
 // IMU 采样频率（Hz）- 假设从 IMU 发布频率推算
-#ifndef PROJECT_BF_RATE_CTRL_IMU_SAMPLE_RATE_HZ
-#define PROJECT_BF_RATE_CTRL_IMU_SAMPLE_RATE_HZ 800.0f
-#endif
-
-// 线程配置（从 Kconfig 获取，如果没有定义则使用默认值）
-#ifndef CONFIG_PROJECT_BF_RATE_CTRL_THREAD_STACK_SIZE
-#define CONFIG_PROJECT_BF_RATE_CTRL_THREAD_STACK_SIZE 2048
-#endif
-
-#ifndef CONFIG_PROJECT_BF_RATE_CTRL_THREAD_PRIORITY
-#define CONFIG_PROJECT_BF_RATE_CTRL_THREAD_PRIORITY 10
-#endif
-
-#ifndef CONFIG_PROJECT_BF_RATE_CTRL_THREAD_TIMESLICE
-#define CONFIG_PROJECT_BF_RATE_CTRL_THREAD_TIMESLICE 5
-#endif
-
-#ifndef CONFIG_PROJECT_BF_RATE_CTRL_GYRO_CALIBRATION_DURATION_MS
-#define CONFIG_PROJECT_BF_RATE_CTRL_GYRO_CALIBRATION_DURATION_MS 1250
-#endif
-
-#ifndef CONFIG_PROJECT_BF_RATE_CTRL_GYRO_MOVEMENT_THRESHOLD
-#define CONFIG_PROJECT_BF_RATE_CTRL_GYRO_MOVEMENT_THRESHOLD 48
-#endif
-
-#ifndef CONFIG_PROJECT_BF_RATE_CTRL_GYRO_OFFSET_YAW
-#define CONFIG_PROJECT_BF_RATE_CTRL_GYRO_OFFSET_YAW 0
+#ifndef PROJECT_BF_GYRO_FILTER_IMU_SAMPLE_RATE_HZ
+#define PROJECT_BF_GYRO_FILTER_IMU_SAMPLE_RATE_HZ 800.0f
 #endif
 
 // RateCtrlAngularVelocity 单例实现
@@ -242,24 +231,24 @@ rt_err_t RateCtrlAngularVelocity::init() {
     }
   }
 
-  // 订阅 imu_raw MCN 节点（传入 event 用于同步等待）
-  imu_node_ = mcn_subscribe(MCN_HUB(imu_raw), imu_event_, RT_NULL);
+  // 订阅 imu MCN 节点（传入 event 用于同步等待）
+  imu_node_ = mcn_subscribe(MCN_HUB(imu), imu_event_, RT_NULL);
   if (imu_node_ == RT_NULL) {
-    LOG_E("subscribe imu_raw topic failed");
+    LOG_E("subscribe imu topic failed");
     if (imu_event_ != RT_NULL) {
       rt_sem_delete(imu_event_);
       imu_event_ = RT_NULL;
     }
     return -RT_ERROR;
   }
-  LOG_I("Subscribed to imu_raw MCN topic");
+  LOG_I("Subscribed to imu MCN topic");
 
-  // 获取 gyro_filtered MCN hub（用于发布滤波后的数据）
-  gyro_filtered_hub_ = MCN_HUB(gyro_filtered);
+  // 获取 gyro MCN hub（用于发布滤波后的数据）
+  gyro_filtered_hub_ = MCN_HUB(gyro);
   if (gyro_filtered_hub_ == nullptr) {
-    LOG_E("get gyro_filtered hub failed");
+    LOG_E("get gyro hub failed");
     if (imu_node_ != RT_NULL) {
-      mcn_unsubscribe(MCN_HUB(imu_raw), imu_node_);
+      mcn_unsubscribe(MCN_HUB(imu), imu_node_);
       imu_node_ = RT_NULL;
     }
     if (imu_event_ != RT_NULL) {
@@ -268,6 +257,26 @@ rt_err_t RateCtrlAngularVelocity::init() {
     }
     return -RT_ERROR;
   }
+
+  // 激活 gyro MCN 主题（必须调用，否则 mcn_publish 会失败）
+  // 参考 accgyro_spi_bmi270.cpp:544 的 imu 主题激活方式
+  rt_err_t advertise_ret = mcn_advertise(gyro_filtered_hub_, gyro_filtered_echo);
+  if (advertise_ret != RT_EOK && advertise_ret != -RT_EBUSY) {
+    // RT_EOK: 成功激活
+    // -RT_EBUSY: 已经激活过了（可以忽略）
+    // 其他值: 激活失败（内存不足等）
+    LOG_E("gyro_filtered advertise failed: %d", advertise_ret);
+    if (imu_node_ != RT_NULL) {
+      mcn_unsubscribe(MCN_HUB(imu), imu_node_);
+      imu_node_ = RT_NULL;
+    }
+    if (imu_event_ != RT_NULL) {
+      rt_sem_delete(imu_event_);
+      imu_event_ = RT_NULL;
+    }
+    return advertise_ret;
+  }
+  LOG_I("gyro MCN topic advertised");
 
   // 初始化 mlog_gyro（使用单例）
   bf_mlog::MlogGyro* mlog_gyro = bf_mlog::MlogGyro::getInstance();
@@ -294,7 +303,7 @@ rt_err_t RateCtrlAngularVelocity::init() {
     LOG_I("IMU sample rate: %.1f Hz, dt: %.6f s", sample_rate_hz, sample_dt);
   } else {
     // 如果 BMI270 未初始化，使用默认值
-    sample_rate_hz = PROJECT_BF_RATE_CTRL_IMU_SAMPLE_RATE_HZ;
+    sample_rate_hz = PROJECT_BF_GYRO_FILTER_IMU_SAMPLE_RATE_HZ;
     sample_dt = 1.0f / sample_rate_hz;
     LOG_W("BMI270 not initialized, using default sample rate: %.1f Hz", sample_rate_hz);
   }
@@ -335,15 +344,14 @@ rt_err_t RateCtrlAngularVelocity::init() {
   // 每次启动时都会重新校准
 
   // 创建静态线程
-  rt_err_t err =
-      rt_thread_init(&thread_obj_, "rate_ctrl_gyro", RateCtrlAngularVelocity::threadEntry, this, thread_stack_,
-                     CONFIG_PROJECT_BF_RATE_CTRL_THREAD_STACK_SIZE, CONFIG_PROJECT_BF_RATE_CTRL_THREAD_PRIORITY,
-                     CONFIG_PROJECT_BF_RATE_CTRL_THREAD_TIMESLICE);
+  rt_err_t err = rt_thread_init(&thread_obj_, "gyro_filter", RateCtrlAngularVelocity::threadEntry, this, thread_stack_,
+                                PROJECT_BF_GYRO_FILTER_THREAD_STACK_SIZE, PROJECT_BF_GYRO_FILTER_THREAD_PRIORITY,
+                                PROJECT_BF_GYRO_FILTER_THREAD_TIMESLICE);
 
   if (err != RT_EOK) {
     LOG_E("RateCtrlAngularVelocity thread init failed: %d", err);
     if (imu_node_ != RT_NULL) {
-      mcn_unsubscribe(MCN_HUB(imu_raw), imu_node_);
+      mcn_unsubscribe(MCN_HUB(imu), imu_node_);
       imu_node_ = RT_NULL;
     }
     if (imu_event_ != RT_NULL) {
@@ -370,7 +378,7 @@ void RateCtrlAngularVelocity::initFilters() {
 
   // 如果无效，使用默认值
   if (sample_rate_hz <= 0.0f) {
-    sample_rate_hz = PROJECT_BF_RATE_CTRL_IMU_SAMPLE_RATE_HZ;
+    sample_rate_hz = PROJECT_BF_GYRO_FILTER_IMU_SAMPLE_RATE_HZ;
     sample_rate_hz_ = static_cast<uint16_t>(sample_rate_hz);
   }
 
@@ -587,16 +595,10 @@ void RateCtrlAngularVelocity::threadLoop() {
     // 阻塞等待 MCN 发布
     if (mcn_poll_sync(imu_node_, RT_WAITING_FOREVER) == RT_TRUE) {
       // 复制数据
-      if (mcn_copy(MCN_HUB(imu_raw), imu_node_, &imu_data) == RT_EOK) {
+      if (mcn_copy(MCN_HUB(imu), imu_node_, &imu_data) == RT_EOK) {
         // 处理 IMU 数据
-#ifdef PROJECT_BF_RATE_CTRL_DEBUG_PIN_EN
-        DEBUG_PIN_DEBUG0_HIGH();
-#endif
         processImuData(&imu_data);
         // Debug Pin: 拉低，表示滤波处理完成
-#ifdef PROJECT_BF_RATE_CTRL_DEBUG_PIN_EN
-        DEBUG_PIN_DEBUG0_LOW();
-#endif
       }
     }
   }
@@ -606,18 +608,20 @@ void RateCtrlAngularVelocity::processImuData(const imu_raw_msg_t* imu_data) {
   if (imu_data == RT_NULL) {
     return;
   }
-
+#ifdef PROJECT_BF_GYRO_FILTER_DEBUG_PIN_EN
+  DEBUG_PIN_DEBUG0_HIGH();
+#endif
   float gyro_raw[3] = {imu_data->gyro[0], imu_data->gyro[1], imu_data->gyro[2]};
 
   // 如果没有校准，开始校准
   if (!calibration_started_ && !gyro_calibration_.isCalibrationComplete()) {
     // 从 Kconfig 获取校准参数
-    uint32_t calibration_duration_ms = CONFIG_PROJECT_BF_RATE_CTRL_GYRO_CALIBRATION_DURATION_MS;
-    float movement_threshold = static_cast<float>(CONFIG_PROJECT_BF_RATE_CTRL_GYRO_MOVEMENT_THRESHOLD);
-    int16_t yaw_offset = static_cast<int16_t>(CONFIG_PROJECT_BF_RATE_CTRL_GYRO_OFFSET_YAW);
+    uint32_t calibration_duration_ms = PROJECT_BF_GYRO_FILTER_CALIBRATION_DURATION_MS;
+    float movement_threshold = static_cast<float>(PROJECT_BF_GYRO_FILTER_MOVEMENT_THRESHOLD);
+    int16_t yaw_offset = static_cast<int16_t>(PROJECT_BF_GYRO_FILTER_OFFSET_YAW);
 
     gyro_calibration_.startCalibration(
-        sample_rate_hz_ > 0 ? static_cast<float>(sample_rate_hz_) : PROJECT_BF_RATE_CTRL_IMU_SAMPLE_RATE_HZ,
+        sample_rate_hz_ > 0 ? static_cast<float>(sample_rate_hz_) : PROJECT_BF_GYRO_FILTER_IMU_SAMPLE_RATE_HZ,
         calibration_duration_ms, movement_threshold, yaw_offset);
     calibration_started_ = true;
     LOG_I("Starting gyro calibration: duration=%u ms, threshold=%.1f", calibration_duration_ms, movement_threshold);
@@ -633,15 +637,17 @@ void RateCtrlAngularVelocity::processImuData(const imu_raw_msg_t* imu_data) {
       gyro_calibration_.getGyroZero(gyro_zero);
       LOG_I("Gyro calibration complete! Zero=[%.3f, %.3f, %.3f] (runtime only, not saved)", gyro_zero[0], gyro_zero[1],
             gyro_zero[2]);
+      // 校准完成后，继续执行后续的处理和发布逻辑
     } else {
-      // 校准进行中，显示进度
-      LOG_D("Calibrating... (use raw gyro)");
-      return;  // 校准期间不处理数据
+      // 校准进行中，不处理数据也不发布，直接返回
+      LOG_D("Calibrating... (no data published during calibration)");
+      return;  // 校准期间不发布数据
     }
   }
 
-  // 只有校准完成后才进行滤波处理
+  // 只有校准完成后才进行滤波处理和发布
   if (!gyro_calibration_.isCalibrationComplete()) {
+    // 如果还未开始校准或校准未完成，不发布数据
     return;
   }
 
@@ -696,6 +702,9 @@ void RateCtrlAngularVelocity::processImuData(const imu_raw_msg_t* imu_data) {
   // 步骤4: 应用完整的滤波链（参考 gyro_filter_impl.c）
   // 将结果存储到 gyro_adcf_（对应 gyro.gyroADCf）
   applyFilterChain(gyro_downsampled, gyro_adcf_);
+#ifdef PROJECT_BF_GYRO_FILTER_DEBUG_PIN_EN
+  DEBUG_PIN_DEBUG0_LOW();
+#endif
 
   // 重置降采样计数器（参考 gyro_filter_impl.c:86）
   if (!downsample_filter_enabled_) {
@@ -710,7 +719,12 @@ void RateCtrlAngularVelocity::processImuData(const imu_raw_msg_t* imu_data) {
   filtered_msg.seq = imu_data->seq;
 
   if (gyro_filtered_hub_ != nullptr) {
-    mcn_publish(gyro_filtered_hub_, &filtered_msg);
+    rt_err_t publish_result = mcn_publish(gyro_filtered_hub_, &filtered_msg);
+    if (publish_result != RT_EOK) {
+      LOG_E("Failed to publish gyro_filtered data: %d", publish_result);
+    }
+  } else {
+    LOG_E("gyro hub is null, cannot publish data");
   }
 
   // 推送陀螺仪数据到 mlog（参考 aMlogStabilze.c:208-216）
@@ -772,18 +786,18 @@ void RateCtrlAngularVelocity::applyFilterChain(const float input[3], float outpu
 }
 
 // RT-Thread 自动初始化包装函数
-#ifdef PROJECT_BF_RATE_CTRL_EN
+#ifdef PROJECT_BF_GYRO_FILTER_EN
 extern "C" {
-static int rate_ctrl_angular_velocity_init_wrapper(void) {
+static int gyro_filter_init_wrapper(void) {
   RateCtrlAngularVelocity& instance = RateCtrlAngularVelocity::instance();
   rt_err_t ret = instance.init();
   if (ret == RT_EOK) {
-    LOG_I("RateCtrlAngularVelocity auto-init success");
+    LOG_I("GyroFilter auto-init success");
   } else {
-    LOG_E("RateCtrlAngularVelocity auto-init failed: %d", ret);
+    LOG_E("GyroFilter auto-init failed: %d", ret);
   }
   return (int)ret;
 }
-INIT_APP_EXPORT(rate_ctrl_angular_velocity_init_wrapper);
+INIT_APP_EXPORT(gyro_filter_init_wrapper);
 }
 #endif

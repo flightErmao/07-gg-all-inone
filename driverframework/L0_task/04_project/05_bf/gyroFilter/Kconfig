@@ -1,18 +1,18 @@
-menuconfig PROJECT_BF_RATE_CTRL_EN
-    bool "ENABLE: PROJECT_BF_RATE_CTRL_EN"
+menuconfig PROJECT_BF_GYRO_FILTER_EN
+    bool "ENABLE: PROJECT_BF_GYRO_FILTER_EN"
     default n
     help
-        Enable Betaflight-style rate control with angular velocity processing.
+        Enable Betaflight-style gyro filter with angular velocity processing.
 
-    if PROJECT_BF_RATE_CTRL_EN
-        config PROJECT_BF_RATE_CTRL_GYRO_CALIBRATION_DURATION_MS
+    if PROJECT_BF_GYRO_FILTER_EN
+        config PROJECT_BF_GYRO_FILTER_CALIBRATION_DURATION_MS
             int "Gyro Calibration Duration (ms)"
             range 500 5000
             default 1250
             help
                 Duration in milliseconds for gyro calibration. Default: 1250ms (1.25 seconds).
 
-        config PROJECT_BF_RATE_CTRL_GYRO_MOVEMENT_THRESHOLD
+        config PROJECT_BF_GYRO_FILTER_MOVEMENT_THRESHOLD
             int "Gyro Movement Calibration Threshold"
             range 0 200
             default 48
@@ -20,7 +20,7 @@ menuconfig PROJECT_BF_RATE_CTRL_EN
                 Standard deviation threshold for detecting movement during calibration. 
                 If exceeded, calibration will restart. Set to 0 to disable movement detection.
 
-        config PROJECT_BF_RATE_CTRL_GYRO_OFFSET_YAW
+        config PROJECT_BF_GYRO_FILTER_OFFSET_YAW
             int "Gyro Yaw Offset (centidegrees)"
             range -10000 10000
             default 0
@@ -28,21 +28,21 @@ menuconfig PROJECT_BF_RATE_CTRL_EN
                 Manual yaw axis offset in centidegrees. This value is subtracted from 
                 the calibrated yaw zero point.
 
-        config PROJECT_BF_RATE_CTRL_ANGULAR_VELOCITY_FILTER_SAMPLE_FREQ
+        config PROJECT_BF_GYRO_FILTER_ANGULAR_VELOCITY_FILTER_SAMPLE_FREQ
             int "Angular Velocity Filter Sample Frequency (Hz)"
             range 100 1000
             default 333
             help
                 Sample frequency for angular velocity low-pass filter in Hz.
 
-        config PROJECT_BF_RATE_CTRL_ANGULAR_VELOCITY_FILTER_CUTOFF_FREQ
+        config PROJECT_BF_GYRO_FILTER_ANGULAR_VELOCITY_FILTER_CUTOFF_FREQ
             int "Angular Velocity Filter Cutoff Frequency (Hz)"
             range 10 200
             default 50
             help
                 Cutoff frequency for angular velocity low-pass filter in Hz.
 
-        config PROJECT_BF_RATE_CTRL_DEBUG_PIN_EN
+        config PROJECT_BF_GYRO_FILTER_DEBUG_PIN_EN
             bool "Enable Debug Pin for Filter Timing Measurement"
             default n
             depends on L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN
@@ -50,25 +50,25 @@ menuconfig PROJECT_BF_RATE_CTRL_EN
                 Enable debug pin to measure filter processing time.
                 The pin will be set HIGH during filter processing and LOW otherwise.
 
-        config PROJECT_BF_RATE_CTRL_THREAD_STACK_SIZE
-            int "Rate Control Thread Stack Size (bytes)"
+        config PROJECT_BF_GYRO_FILTER_THREAD_STACK_SIZE
+            int "Gyro Filter Thread Stack Size (bytes)"
             range 1024 8192
             default 2048
             help
-                Stack size for the rate control thread in bytes. Default: 2048.
+                Stack size for the gyro filter thread in bytes. Default: 2048.
 
-        config PROJECT_BF_RATE_CTRL_THREAD_PRIORITY
-            int "Rate Control Thread Priority"
+        config PROJECT_BF_GYRO_FILTER_THREAD_PRIORITY
+            int "Gyro Filter Thread Priority"
             range 1 32
             default 10
             help
-                Priority for the rate control thread. Higher number means higher priority. Default: 10.
+                Priority for the gyro filter thread. Higher number means higher priority. Default: 10.
 
-        config PROJECT_BF_RATE_CTRL_THREAD_TIMESLICE
-            int "Rate Control Thread Time Slice (ticks)"
+        config PROJECT_BF_GYRO_FILTER_THREAD_TIMESLICE
+            int "Gyro Filter Thread Time Slice (ticks)"
             range 1 100
             default 5
             help
-                Time slice for the rate control thread in ticks. Default: 5.
+                Time slice for the gyro filter thread in ticks. Default: 5.
     endif
 

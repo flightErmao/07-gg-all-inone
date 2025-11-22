@@ -13,10 +13,35 @@ extern "C" {
 #define LOG_TAG "rc_bf"
 #define LOG_LVL LOG_LVL_INFO
 #include <ulog.h>
+#include "uMCN.h"
 }
 
 #include <cmath>
 #include <cstring>
+#include "rc_setpoint_msg.h"
+// #include "rc_setpoint_debug.h"
+
+/* 定义 RC setpoint MCN 话题（在本文件内完成定义与发布） */
+MCN_DEFINE(rc, sizeof(rc_setpoint_msg_t));
+
+// MCN echo 函数（用于调试）- 调用 RcBf 成员函数
+// 需要使用 C 链接以便 MCN 调用，但实际逻辑在对象成员函数中
+extern "C" {
+static int rc_setpoint_echo(void* parameter) {
+  rc_setpoint_msg_t setpoint_data;
+
+  if (mcn_copy_from_hub((McnHub*)parameter, &setpoint_data) != RT_EOK) {
+    return -1;
+  }
+
+  // Call RcBf member function to print debug information
+  // This keeps the logic in the object while maintaining C linkage for MCN
+  RcBf& rc = RcBf::instance();
+  rc.echoSetpoint(&setpoint_data);
+
+  return 0;
+}
+}
 
 // Constants
 #define MAX_INVALID_PULSE_TIME_MS 300
@@ -57,7 +82,10 @@ RcBf::RcBf()
       channel_count_(MAX_SUPPORTED_RC_CHANNEL_COUNT),
       rc_loss_count_(0),
       seq_(0),
-      target_looptime_s_(0.000125f) {  // 8kHz default
+      target_looptime_s_(0.000125f),  // 8kHz default
+      rc_setpoint_hub_(nullptr),
+      rc_setpoint_event_(RT_NULL),
+      rc_setpoint_node_(RT_NULL) {
   std::memset(rc_raw_channels_, 0, sizeof(rc_raw_channels_));
   std::memset(rc_raw_, 0, sizeof(rc_raw_));
   std::memset(rc_data_, 0, sizeof(rc_data_));
@@ -77,7 +105,8 @@ RcBf::RcBf()
   std::memset(rcmap_, 0, sizeof(rcmap_));
   std::memset(failsafe_configs_, 0, sizeof(failsafe_configs_));
   std::memset(&rc_smoothing_data_, 0, sizeof(rc_smoothing_data_));
-  
+  std::memset(&last_rc_setpoint_msg_, 0, sizeof(last_rc_setpoint_msg_));
+
   // Initialize default values
   for (int i = 0; i < MAX_SUPPORTED_RC_CHANNEL_COUNT; i++) {
     rc_data_[i] = PWM_RANGE_MIDDLE;  // Default to middle
@@ -106,19 +135,49 @@ rt_err_t RcBf::init() {
   initRateProfile();
   initRcControlsConfig();
   initSmoothingFilters();
-  
+
+  // Get rc_setpoint MCN hub（用于发布 setpoint 数据）
+  rc_setpoint_hub_ = MCN_HUB(rc);
+  if (rc_setpoint_hub_ == nullptr) {
+    LOG_E("get rc_setpoint hub failed");
+    return -RT_ERROR;
+  }
+
+  // 激活 rc_setpoint MCN 主题（必须调用，否则 mcn_publish 会失败）
+  rt_err_t advertise_ret = mcn_advertise(rc_setpoint_hub_, rc_setpoint_echo);
+  if (advertise_ret != RT_EOK && advertise_ret != -RT_EBUSY) {
+    LOG_E("rc_setpoint advertise failed: %d", advertise_ret);
+    return advertise_ret;
+  }
+  LOG_I("rc MCN topic advertised");
+
+  // Subscribe to rc MCN topic (for PID thread to use)
+  rc_setpoint_event_ = rt_sem_create("rc_setpoint_evt", 0, RT_IPC_FLAG_FIFO);
+  if (rc_setpoint_event_ == RT_NULL) {
+    LOG_E("create rc_setpoint event semaphore failed");
+    return -RT_ERROR;
+  }
+
+  rc_setpoint_node_ = mcn_subscribe(rc_setpoint_hub_, rc_setpoint_event_, RT_NULL);
+  if (rc_setpoint_node_ == RT_NULL) {
+    LOG_E("subscribe rc topic failed");
+    if (rc_setpoint_event_ != RT_NULL) {
+      rt_sem_delete(rc_setpoint_event_);
+      rc_setpoint_event_ = RT_NULL;
+    }
+    return -RT_ERROR;
+  }
+  LOG_I("Subscribed to rc MCN topic");
+
   // Initialize RC device
   rt_err_t ret = initRcDevice();
   if (ret != RT_EOK) {
     LOG_E("RC device init failed");
     return ret;
   }
-  
+
   // Allocate thread stack
-#ifndef CONFIG_PROJECT_BF_RC_THREAD_STACK_SIZE
-#define CONFIG_PROJECT_BF_RC_THREAD_STACK_SIZE 2048
-#endif
-  size_t stack_size = CONFIG_PROJECT_BF_RC_THREAD_STACK_SIZE;
+  size_t stack_size = PROJECT_BF_RC_THREAD_STACK_SIZE;
   rc_thread_stack_ = new rt_uint8_t[stack_size];
   if (rc_thread_stack_ == nullptr) {
     LOG_E("Failed to allocate thread stack");
@@ -127,20 +186,9 @@ rt_err_t RcBf::init() {
   std::memset(rc_thread_stack_, 0, stack_size);
   
   // Initialize thread
-  ret = rt_thread_init(&rc_thread_obj_, "rc_bf", rcThreadEntry, this,
-                       rc_thread_stack_, stack_size,
-#ifndef CONFIG_PROJECT_BF_RC_THREAD_PRIORITY
-                       RT_THREAD_PRIORITY_MAX / 2,
-#else
-                       CONFIG_PROJECT_BF_RC_THREAD_PRIORITY,
-#endif
-#ifndef CONFIG_PROJECT_BF_RC_THREAD_TIMESLICE
-                       5
-#else
-                       CONFIG_PROJECT_BF_RC_THREAD_TIMESLICE
-#endif
-                       );
-  
+  ret = rt_thread_init(&rc_thread_obj_, "rc_bf", rcThreadEntry, this, rc_thread_stack_, stack_size,
+                       PROJECT_BF_RC_THREAD_PRIORITY, PROJECT_BF_RC_THREAD_TIMESLICE);
+
   if (ret != RT_EOK) {
     LOG_E("RC thread init failed: %d", ret);
     delete[] rc_thread_stack_;
@@ -167,10 +215,10 @@ rt_err_t RcBf::initRcDevice() {
   char rc_name[RT_NAME_MAX];
   
   // Get device name from config
-#ifndef CONFIG_PROJECT_BF_RC_DEVICE_NAME
+#ifndef PROJECT_BF_RC_DEVICE_NAME
   const char* default_name = "sbus";
 #else
-  const char* default_name = CONFIG_PROJECT_BF_RC_DEVICE_NAME;
+  const char* default_name = PROJECT_BF_RC_DEVICE_NAME;
 #endif
   
   rt_strncpy(rc_name, default_name, RT_NAME_MAX);
@@ -631,15 +679,10 @@ void RcBf::updateRcCommands() {
   is_rc_data_new_ = true;
 }
 
-// PID Task (1-4kHz): Process RC command and calculate setpoint rates
 void RcBf::processRcCommand(uint32_t current_time_us) {
   if (!is_rc_data_new_) {
     return;  // No new data, skip processing
   }
-
-#ifdef PROJECT_BF_RC_DEBUG_PIN_EN
-  DEBUG_PIN_DEBUG1_HIGH();  // Debug pin: subTaskRcCommand start (monitor PID task call frequency ~1-4kHz)
-#endif
 
   // Update smoothing filter cutoffs if needed
   updateSmoothingFilterCutoffs();
@@ -664,47 +707,84 @@ void RcBf::processRcCommand(uint32_t current_time_us) {
     
     // Apply rates to get angle rate: rcCommand[] → applyRates() → rawSetpoint[]
     float angle_rate = applyBetaflightRates(axis, rc_commandf, rc_commandf_abs);
-    
-    // Limit setpoint
-    rawSetpoint_[axis] = constrainf(angle_rate, -rate_profile_.rate_limit[axis], 
-                                     rate_profile_.rate_limit[axis]);
-    
+
+    // Limit setpoint (match Betaflight: -1.0f * rate_limit to 1.0f * rate_limit)
+    rawSetpoint_[axis] =
+        constrainf(angle_rate, -1.0f * rate_profile_.rate_limit[axis], 1.0f * rate_profile_.rate_limit[axis]);
+
     // Calculate feedforward (setpoint delta)
     float setpoint_delta = rawSetpoint_[axis] - prevSetpoint_[axis];
     feedforward_[axis] = setpoint_delta * smoothed_rx_rate_hz_;
     prevSetpoint_[axis] = rawSetpoint_[axis];
   }
-  
+
+  // Publish rawSetpoint data to MCN for PID thread (avoid data tearing)
+  if (rc_setpoint_hub_ != nullptr) {
+    rc_setpoint_msg_t setpoint_msg;
+    std::memcpy(setpoint_msg.rawSetpoint, rawSetpoint_, sizeof(rawSetpoint_));
+    setpoint_msg.rcCommandThrottle = rc_command_[THROTTLE];
+    std::memcpy(setpoint_msg.feedforward, feedforward_, sizeof(feedforward_));
+    std::memcpy(setpoint_msg.rcDeflection, rcDeflection_, sizeof(rcDeflection_));
+    std::memcpy(setpoint_msg.rcDeflectionAbs, rcDeflectionAbs_, sizeof(rcDeflectionAbs_));
+    setpoint_msg.smoothedRxRateHz = smoothed_rx_rate_hz_;
+    setpoint_msg.seq = seq_++;
+    setpoint_msg.timestamp = current_time_us;
+
+    rt_err_t publish_result = mcn_publish(rc_setpoint_hub_, &setpoint_msg);
+    if (publish_result != RT_EOK) {
+      LOG_E("Failed to publish rc_setpoint data: %d", publish_result);
+    }
+  }
+
   // Mark data as processed
   is_rc_data_new_ = false;
-
-#ifdef PROJECT_BF_RC_DEBUG_PIN_EN
-  DEBUG_PIN_DEBUG1_LOW();  // Debug pin: processRcCommand end
-#endif
 }
 
 // PID Task (1-4kHz): Process RC smoothing filter
-// Input: rcCommand[THROTTLE] or rawSetpoint[ROLL/PITCH/YAW]
+// Input: rc_setpoint_msg_t from MCN (to avoid data tearing between threads)
 // Output: rcCommand[THROTTLE] (in-place update), setpointRate[ROLL/PITCH/YAW] (new array)
-void RcBf::processRcSmoothingFilter() {
+void RcBf::processRcSmoothingFilter(const rc_setpoint_msg_t* setpoint_msg) {
+  // Use cached data if setpoint_msg is null (for PID thread frequency update)
+  const rc_setpoint_msg_t* msg_to_use = setpoint_msg;
+  if (msg_to_use == nullptr) {
+    msg_to_use = &last_rc_setpoint_msg_;
+    // If no cached data yet, skip processing
+    if (msg_to_use->seq == 0 && msg_to_use->timestamp == 0) {
+      return;
+    }
+  } else {
+    // Cache the new data
+    std::memcpy(&last_rc_setpoint_msg_, setpoint_msg, sizeof(rc_setpoint_msg_t));
+  }
+
   if (!rc_smoothing_data_.enabled) {
     // If smoothing is disabled, just copy rawSetpoint to setpointRate
     for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
-      setpointRate_[axis] = rawSetpoint_[axis];
+      setpointRate_[axis] = msg_to_use->rawSetpoint[axis];
     }
+    // Update throttle command from MCN data
+    rc_command_[THROTTLE] = msg_to_use->rcCommandThrottle;
+    // Update feedforward and deflection from MCN data
+    std::memcpy(feedforward_, msg_to_use->feedforward, sizeof(feedforward_));
+    std::memcpy(rcDeflection_, msg_to_use->rcDeflection, sizeof(rcDeflection_));
+    std::memcpy(rcDeflectionAbs_, msg_to_use->rcDeflectionAbs, sizeof(rcDeflectionAbs_));
     return;
   }
 
-  // Prepare data to smooth
+  // Prepare data to smooth (from MCN data to avoid data tearing)
   float rx_data_to_smooth[PRIMARY_CHANNEL_COUNT];
   for (int i = 0; i < PRIMARY_CHANNEL_COUNT; i++) {
     if (i == THROTTLE) {
-      rx_data_to_smooth[i] = rc_command_[THROTTLE];
+      rx_data_to_smooth[i] = msg_to_use->rcCommandThrottle;
     } else {
-      rx_data_to_smooth[i] = rawSetpoint_[i];
+      rx_data_to_smooth[i] = msg_to_use->rawSetpoint[i];
     }
   }
-  
+
+#ifdef PROJECT_BF_RC_DEBUG_PIN_EN
+  DEBUG_PIN_DEBUG1_HIGH();  // Debug pin: processRcSmoothingFilter start (monitor PID task call frequency ~8kHz)
+#endif
+
   // Apply pt3Filter smoothing
   for (int i = 0; i < PRIMARY_CHANNEL_COUNT; i++) {
     float smoothed = pt3FilterApply(&rc_smoothing_data_.filterSetpoint[i], rx_data_to_smooth[i]);
@@ -717,6 +797,15 @@ void RcBf::processRcSmoothingFilter() {
       setpointRate_[i] = smoothed;
     }
   }
+
+  // Update feedforward and deflection from MCN data
+  std::memcpy(feedforward_, msg_to_use->feedforward, sizeof(feedforward_));
+  std::memcpy(rcDeflection_, msg_to_use->rcDeflection, sizeof(rcDeflection_));
+  std::memcpy(rcDeflectionAbs_, msg_to_use->rcDeflectionAbs, sizeof(rcDeflectionAbs_));
+
+#ifdef PROJECT_BF_RC_DEBUG_PIN_EN
+  DEBUG_PIN_DEBUG1_LOW();  // Debug pin: processRcSmoothingFilter end
+#endif
 }
 
 void RcBf::updateRcRefreshRate(uint32_t current_time_us, bool rxReceivingSignal) {
@@ -745,9 +834,11 @@ float RcBf::applyBetaflightRates(int axis, float rcCommandf, float rcCommandfAbs
   }
   
   // Calculate RC rate
-  float rc_rate = rate_profile_.rcRates[axis] / 100.0f;
+  float rc_rate_raw = rate_profile_.rcRates[axis] / 100.0f;
+  float rc_rate = rc_rate_raw;
   if (rc_rate > 2.0f) {
-    rc_rate += RC_RATE_INCREMENTAL * (rc_rate - 2.0f);
+    float rc_rate_incremental = RC_RATE_INCREMENTAL * (rc_rate - 2.0f);
+    rc_rate += rc_rate_incremental;
   }
   
   // Calculate angle rate
@@ -755,11 +846,12 @@ float RcBf::applyBetaflightRates(int axis, float rcCommandf, float rcCommandfAbs
   
   // Apply super rate
   if (rate_profile_.rates[axis] > 0.0f) {
-    const float rc_superfactor = 1.0f / 
-        constrainf(1.0f - (rcCommandfAbs * (rate_profile_.rates[axis] / 100.0f)), 0.01f, 1.00f);
+    float super_rate_percent = rate_profile_.rates[axis] / 100.0f;
+    float denominator = 1.0f - (rcCommandfAbs * super_rate_percent);
+    float rc_superfactor = 1.0f / constrainf(denominator, 0.01f, 1.00f);
     angle_rate *= rc_superfactor;
   }
-  
+
   return angle_rate;
 }
 
@@ -789,6 +881,104 @@ float RcBf::getRcCommand(int channel) const {
     return rc_command_[channel];  // Return smoothed value (THROTTLE) or original (ROLL/PITCH/YAW)
   }
   return 0.0f;
+}
+
+void RcBf::echoSetpoint(const rc_setpoint_msg_t* setpoint_data) {
+  // Print detailed debug information by default
+  printDebugInfo(setpoint_data);
+
+  // Always print basic info
+  LOG_I("seq: %lu, rawSetpoint: %.2f, %.2f, %.2f, throttle: %.0f, rxRate: %.1f Hz", setpoint_data->seq,
+        setpoint_data->rawSetpoint[0], setpoint_data->rawSetpoint[1], setpoint_data->rawSetpoint[2],
+        setpoint_data->rcCommandThrottle, setpoint_data->smoothedRxRateHz);
+}
+
+void RcBf::printDebugInfo(const rc_setpoint_msg_t* setpoint_msg) const {
+  if (setpoint_msg == nullptr) {
+    return;
+  }
+
+  LOG_I("=== RC Debug Info ===");
+  LOG_I("Raw channels: Roll=%d, Pitch=%d, Yaw=%d, Throttle=%d", (int)rc_data_[ROLL], (int)rc_data_[PITCH],
+        (int)rc_data_[YAW], (int)rc_data_[THROTTLE]);
+  LOG_I("rcCommand: Roll=%.1f, Pitch=%.1f, Yaw=%.1f, Throttle=%.1f", rc_command_[ROLL], rc_command_[PITCH],
+        rc_command_[YAW], rc_command_[THROTTLE]);
+  LOG_I("Channel Range Config - Roll: [%u, %u], Pitch: [%u, %u], Yaw: [%u, %u], Throttle: [%u, %u]",
+        channel_range_configs_[ROLL].min, channel_range_configs_[ROLL].max, channel_range_configs_[PITCH].min,
+        channel_range_configs_[PITCH].max, channel_range_configs_[YAW].min, channel_range_configs_[YAW].max,
+        channel_range_configs_[THROTTLE].min, channel_range_configs_[THROTTLE].max);
+  LOG_I("Dividers: rcCommandDivider=%.1f, rcCommandYawDivider=%.1f (calculated from deadband)", rcCommandDivider_,
+        rcCommandYawDivider_);
+  LOG_I("Rate Profile - rcRates: [%.1f, %.1f, %.1f], rcExpo: [%.1f, %.1f, %.1f]", rate_profile_.rcRates[FD_ROLL],
+        rate_profile_.rcRates[FD_PITCH], rate_profile_.rcRates[FD_YAW], rate_profile_.rcExpo[FD_ROLL],
+        rate_profile_.rcExpo[FD_PITCH], rate_profile_.rcExpo[FD_YAW]);
+  LOG_I("Rate Profile - rates (super): [%.1f, %.1f, %.1f], rate_limit: [%.1f, %.1f, %.1f]",
+        rate_profile_.rates[FD_ROLL], rate_profile_.rates[FD_PITCH], rate_profile_.rates[FD_YAW],
+        rate_profile_.rate_limit[FD_ROLL], rate_profile_.rate_limit[FD_PITCH], rate_profile_.rate_limit[FD_YAW]);
+  LOG_I("Note: Base angle_rate = 200.0 * rc_rate * rc_commandf");
+  LOG_I("      - 200.0 is a FIXED constant from Betaflight (not adjustable)");
+  LOG_I("      - To get higher rates, increase rcRates parameter (default 100)");
+  LOG_I("      - Example: rcRates=360 gives max angle_rate = 200 * 3.6 * 1.0 = 720 deg/s");
+
+  // Print detailed calculation for each axis
+  const char* axis_names[] = {"Roll", "Pitch", "Yaw"};
+  const int channel_idx[] = {ROLL, PITCH, YAW};
+
+  for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
+    LOG_I("--- %s Axis ---", axis_names[axis]);
+    LOG_I("  rc_data[%s]=%.1f (raw input, mapped from [%u, %u] -> [1000, 2000])", axis_names[axis],
+          rc_data_[channel_idx[axis]], channel_range_configs_[channel_idx[axis]].min,
+          channel_range_configs_[channel_idx[axis]].max);
+    LOG_I("  rc_command[%s]=%.1f (after deadband, should be in [1000, 2000])", axis_names[axis],
+          rc_command_[channel_idx[axis]]);
+
+    // Calculate rc_commandf (same as in processRcCommand)
+    float rc_commandf = 0.0f;
+    if (axis == FD_ROLL) {
+      rc_commandf = (rc_command_[ROLL] - PWM_RANGE_MIDDLE) / rcCommandDivider_;
+    } else if (axis == FD_PITCH) {
+      rc_commandf = (rc_command_[PITCH] - PWM_RANGE_MIDDLE) / rcCommandDivider_;
+    } else if (axis == FD_YAW) {
+      rc_commandf = (rc_command_[YAW] - PWM_RANGE_MIDDLE) / rcCommandYawDivider_;
+    }
+    rc_commandf = constrainf(rc_commandf, -1.0f, 1.0f);
+    float rc_commandf_abs = std::abs(rc_commandf);
+
+    // Calculate theoretical max rc_commandf based on channel range
+    float max_possible_rc = std::max((channel_range_configs_[channel_idx[axis]].max - PWM_RANGE_MIDDLE) /
+                                         (axis == FD_YAW ? rcCommandYawDivider_ : rcCommandDivider_),
+                                     std::abs((channel_range_configs_[channel_idx[axis]].min - PWM_RANGE_MIDDLE) /
+                                              (axis == FD_YAW ? rcCommandYawDivider_ : rcCommandDivider_)));
+
+    LOG_I("  rc_commandf=%.4f (normalized from rc_command, range: [-1.0, 1.0], abs=%.4f)", rc_commandf,
+          rc_commandf_abs);
+    LOG_I("    -> Max possible rc_commandf with current range = %.4f (should be ~1.0 for full range)", max_possible_rc);
+
+    // Recalculate angle_rate to show before limit (same calculation as in processRcCommand)
+    float angle_rate = applyBetaflightRates(axis, rc_commandf, rc_commandf_abs);
+    float angle_rate_limited =
+        constrainf(angle_rate, -1.0f * rate_profile_.rate_limit[axis], 1.0f * rate_profile_.rate_limit[axis]);
+
+    LOG_I("  angle_rate=%.2f deg/s (before limit, calculated)", angle_rate);
+    LOG_I("  rate_limit=%.1f deg/s", rate_profile_.rate_limit[axis]);
+    LOG_I("  rawSetpoint=%.2f deg/s (final, limited by rate_limit, from msg)", setpoint_msg->rawSetpoint[axis]);
+
+    // Show if angle_rate was limited
+    if (std::abs(angle_rate) > rate_profile_.rate_limit[axis]) {
+      LOG_I("    -> angle_rate was limited from %.2f to %.2f deg/s", angle_rate, angle_rate_limited);
+    }
+
+    // Warning if rc_commandf is not reaching full range
+    if (rc_commandf_abs < 0.95f) {
+      LOG_W("  WARNING: rc_commandf (%.4f) is not reaching ±1.0! Channel range needs calibration.", rc_commandf);
+      LOG_W("  Problem: rc_data[%s]=%.1f is not mapped to full [1000, 2000] range", axis_names[axis],
+            rc_data_[channel_idx[axis]]);
+      LOG_W("  Solution: Set rc_channel_range_%s parameter to actual min/max values",
+            (axis == FD_ROLL ? "roll" : (axis == FD_PITCH ? "pitch" : "yaw")));
+      LOG_W("            Example: If roll channel range is [1068, 1932], set: par set 27 0 1068 1932");
+      LOG_W("            This will map [1068, 1932] -> [1000, 2000], allowing rc_commandf to reach ±1.0");
+    }
+  }
 }
 
 float RcBf::constrainf(float x, float min, float max) const {
@@ -828,21 +1018,26 @@ void RcBf::rcThreadEntry(void* parameter) {
   
   // Target frequency: 100-200Hz (5-10ms interval)
   const uint32_t target_interval_us = 5000;  // 5ms = 200Hz
-  
+
   while (true) {
-#ifdef PROJECT_BF_RC_DEBUG_PIN_EN
-    DEBUG_PIN_DEBUG2_HIGH();  // Debug pin: RC task execution start (monitor RC task frequency ~100-200Hz)
-#endif
     uint32_t current_time_us = timestamp_micros();
     
     // RX Task: Read raw channels and process to rcCommand[]
     instance->readRawRcChannels();
+
+#ifdef PROJECT_BF_RC_DEBUG_PIN_EN
+    DEBUG_PIN_DEBUG2_HIGH();  // Debug pin: RC task execution start (monitor RC task frequency ~100-200Hz)
+#endif
     instance->applyRangeScaling();
     instance->applyFailsafeAndConstraints(current_time_us);
     instance->updateRcCommands();  // rcData[] → rcCommand[]
     
     // Update refresh rate
     instance->updateRcRefreshRate(current_time_us, instance->rx_receiving_signal_);
+
+    // Process RC command and publish to MCN (in RC thread)
+    // This calculates rawSetpoint[] from rcCommand[] and publishes to MCN for PID thread
+    instance->processRcCommand(current_time_us);
 
 #ifdef PROJECT_BF_RC_DEBUG_PIN_EN
     DEBUG_PIN_DEBUG2_LOW();  // Debug pin: RC task execution end

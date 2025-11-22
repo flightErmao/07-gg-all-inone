@@ -9,6 +9,7 @@
 
 extern "C" {
 #include "pid_setpoint_msg.h"
+#include "rc_setpoint_msg.h"
 #include "timestamp.h"
 #include "taskRc.h"  // pilot_cmd_bus_t
 #include "param.h"
@@ -100,6 +101,12 @@ class RcBf {
   // Get max RC rate
   float getMaxRcRate(int axis) const;
   
+  // Get RC setpoint MCN node (for PID thread to subscribe)
+  McnNode_t getRcSetpointNode() const { return rc_setpoint_node_; }
+  
+  // Get last rc_setpoint message (for smoothing filter when no new data)
+  const rc_setpoint_msg_t* getLastRcSetpointMsg() const { return &last_rc_setpoint_msg_; }
+  
   // Get RC command value
   float getRcCommand(int channel) const;
   
@@ -108,13 +115,21 @@ class RcBf {
   const float* getRcRaw() const { return rc_raw_; }
   const float* getRcCommandArray() const { return rc_command_; }
   
+  // Print detailed debug information (called from MCN echo function)
+  void printDebugInfo(const rc_setpoint_msg_t* setpoint_msg) const;
+  
   // PID task functions (1-4kHz)
   // Process RC command: rcCommand[] → applyRates() → rawSetpoint[]
   void processRcCommand(uint32_t current_time_us);
   
   // Process RC smoothing filter: rcCommand[THROTTLE] or rawSetpoint[ROLL/PITCH/YAW] → smoothed output
+  // Input: rc_setpoint_msg_t from MCN (to avoid data tearing between threads)
   // Output: rcCommand[THROTTLE] (in-place update), setpointRate[ROLL/PITCH/YAW] (new array)
-  void processRcSmoothingFilter();
+  void processRcSmoothingFilter(const rc_setpoint_msg_t* setpoint_msg);
+  
+  // MCN echo function (called by MCN echo callback)
+  // Prints detailed debug information and basic info
+  void echoSetpoint(const rc_setpoint_msg_t* setpoint_data);
 
  private:
   RcBf(const RcBf&) = delete;
@@ -276,6 +291,16 @@ class RcBf {
   
   // Target loop time (for smoothing filter calculation)
   float target_looptime_s_;  // in seconds
+  
+  // MCN hub for publishing rc_setpoint data
+  McnHub_t rc_setpoint_hub_;
+  
+  // MCN node for subscribing rc_setpoint data (for PID thread)
+  rt_sem_t rc_setpoint_event_;
+  McnNode_t rc_setpoint_node_;
+  
+  // Last rc_setpoint message (cached for smoothing filter when no new data)
+  rc_setpoint_msg_t last_rc_setpoint_msg_;
 };
 
 #endif /* RC_BF_H__ */

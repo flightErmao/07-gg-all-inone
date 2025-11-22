@@ -3,7 +3,7 @@
  *
  * 基于 Betaflight BMI270 寄存器配置的简化版 RT-Thread C++ 驱动：
  * - 只使用数据就绪中断 + 直接寄存器读取，不使用 FIFO；
- * - 将原始加速度/角速度转换为 float，并通过 imu_raw MCN 话题发布。
+ * - 将原始加速度/角速度转换为 float，并通过 imu MCN 话题发布。
  * - 支持通过 Kconfig 选择触发方式：硬件中断（DRDY 引脚）或软件定时器；
  * - 支持通过 Kconfig 选择输出数据率（ODR）：800Hz、1600Hz、3200Hz。
  */
@@ -21,9 +21,9 @@ extern "C" {
 }
 
 /* 定义 IMU 原始数据话题（在本文件内完成定义与发布）
- * 类型 imu_raw_msg_t 和 MCN_DECLARE(imu_raw) 在 accgyro_spi_bmi270.hpp 中定义
+ * 类型 imu_raw_msg_t 和 MCN_DECLARE(imu) 在 accgyro_spi_bmi270.hpp 中定义
  */
-MCN_DEFINE(imu_raw, sizeof(imu_raw_msg_t));
+MCN_DEFINE(imu, sizeof(imu_raw_msg_t));
 
 #undef LOG_TAG
 #define LOG_TAG "bmi270_bf"
@@ -447,7 +447,7 @@ void BMI270::publishImu(const int16_t acc[3], const int16_t gyro[3]) {
   msg.gyro[0] = GYRO_SCALE_2000DPS * static_cast<float>(gyro[0]);
   msg.gyro[1] = GYRO_SCALE_2000DPS * static_cast<float>(gyro[1]);
   msg.gyro[2] = GYRO_SCALE_2000DPS * static_cast<float>(gyro[2]);
-  mcn_publish(MCN_HUB(imu_raw), &msg);
+  mcn_publish(MCN_HUB(imu), &msg);
 }
 
 uint8_t BMI270::regRead(uint8_t reg) {
@@ -539,11 +539,11 @@ rt_err_t bf_bmi270_init_default() {
   cfg.int_pin_name = SENSOR_BMI270_BF_INT_PIN;
   cfg.spi_max_hz = SENSOR_BMI270_BF_SPI_MAX_HZ;
 
-  // MCN 话题 imu_raw 的广告发布（重复调用返回 -RT_EBUSY 视为成功）
+  // MCN 话题 imu 的广告发布（重复调用返回 -RT_EBUSY 视为成功）
   // 参考 aMcnSensorImu.c，使用 echo 函数来打印数据
-  rt_err_t ret = mcn_advertise(MCN_HUB(imu_raw), imu_raw_echo);
+  rt_err_t ret = mcn_advertise(MCN_HUB(imu), imu_raw_echo);
   if (ret != RT_EOK && ret != -RT_EBUSY) {
-    LOG_E("imu_raw advertise failed: %d", ret);
+    LOG_E("imu advertise failed: %d", ret);
     return ret;
   }
 
