@@ -1,4 +1,4 @@
-#include "rateCtrlGyro.h"
+#include "gyroFilter.h"
 
 extern "C" {
 #include <rtthread.h>
