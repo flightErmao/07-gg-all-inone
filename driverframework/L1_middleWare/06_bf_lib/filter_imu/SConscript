@@ -10,13 +10,14 @@ src += Glob("./src/dyn_notch_filter_stub.c")
 include_paths = [
     cwd,
     os.path.join(cwd, "inc"),
-    os.path.join(cwd, "..", "..", "..", "L0_task", "04_project", "01_basic", "TASK_05_PARAM", "inc"),
 ]
 
 group = DefineGroup(
     "L1_MIDDLEWARE_06_BF_LIB_FILTER_IMU_EN",
     src,
-    depend=["L1_MIDDLEWARE_06_BF_LIB_FILTER_IMU_EN"],
+    depend=[
+        "L1_MIDDLEWARE_06_BF_LIB_FILTER_IMU_EN",
+    ],
     CPPPATH=include_paths,
 )
 
