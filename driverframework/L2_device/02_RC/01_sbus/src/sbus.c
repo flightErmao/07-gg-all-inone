@@ -1,4 +1,5 @@
 #include <rtthread.h>
+#include <rtconfig.h>
 #include <rtdevice.h>
 #include "sbusProtocol.h"
 #include "uartConfig.h"
@@ -7,10 +8,6 @@
 #if defined(RC_SBUS_DEBUGPIN_EN) && defined(L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN)
 #include "debugPin.h"
 #endif
-
-#define THREAD_PRIORITY 7
-#define THREAD_STACK_SIZE 2048
-#define THREAD_TIMESLICE 5
 
 static sbus_decoder_t g_sbus_decoder_;
 static rt_device_t sbus_uart_ = RT_NULL;
@@ -118,10 +115,10 @@ static rt_err_t sbus_register_rc(void) {
 
 static rt_err_t sbus_start_thread(void) {
   static struct rt_thread sbus_thread;
-  static rt_uint8_t sbus_thread_stack[THREAD_STACK_SIZE];
+  static rt_uint8_t sbus_thread_stack[RC_SBUS_THREAD_STACK_SIZE];
 
-  rt_thread_init(&sbus_thread, "sbus", sbus_thread_entry, RT_NULL, sbus_thread_stack, THREAD_STACK_SIZE,
-                 THREAD_PRIORITY, THREAD_TIMESLICE);
+  rt_thread_init(&sbus_thread, "sbus", sbus_thread_entry, RT_NULL, sbus_thread_stack, RC_SBUS_THREAD_STACK_SIZE,
+                 RC_SBUS_THREAD_PRIORITY, RC_SBUS_THREAD_TIMESLICE);
   rt_thread_startup(&sbus_thread);
   return RT_EOK;
 }

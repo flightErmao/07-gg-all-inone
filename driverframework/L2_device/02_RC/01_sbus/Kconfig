@@ -36,5 +36,26 @@ config RC_USING_SBUS
             help
                 Enable debug pin toggling inside SBUS RX/TX paths.
 
+        config RC_SBUS_THREAD_STACK_SIZE
+            int "SBUS Thread Stack Size (bytes)"
+            range 1024 8192
+            default 2048
+            help
+                Stack size for the SBUS thread in bytes. Default: 2048.
+
+        config RC_SBUS_THREAD_PRIORITY
+            int "SBUS Thread Priority"
+            range 1 32
+            default 7
+            help
+                Priority for the SBUS thread. Higher number means higher priority. Default: 7.
+
+        config RC_SBUS_THREAD_TIMESLICE
+            int "SBUS Thread Time Slice (ticks)"
+            range 1 100
+            default 5
+            help
+                Time slice for the SBUS thread in ticks. Default: 5.
+
     endif
 
