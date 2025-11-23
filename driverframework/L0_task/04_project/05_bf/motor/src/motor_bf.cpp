@@ -150,12 +150,13 @@ void MotorBf::initMixerConfig() {
 
 
 void MotorBf::mixTable(const pid_output_msg_t* pid_output, const rc_setpoint_msg_t* rc_setpoint, float* motor_output) {
-  if (pid_output == nullptr || rc_setpoint == nullptr || motor_output == nullptr) {
+  if (pid_output == nullptr || motor_output == nullptr) {
     return;
   }
   
+  // Use smoothed throttle from PID output (same as Betaflight: rcCommand[THROTTLE] is smoothed)
   // Convert throttle from PWM range (1000-2000) to normalized (0.0-1.0)
-  float throttle = constrainf((rc_setpoint->rcCommandThrottle - 1000.0f) / 1000.0f, 0.0f, 1.0f);
+  float throttle = constrainf((pid_output->smoothed_throttle - 1000.0f) / 1000.0f, 0.0f, 1.0f);
 
   // Scale PID outputs (same as Betaflight)
   // PID sum is already in deg/s range, we need to scale it for mixer
@@ -350,17 +351,11 @@ void MotorBf::motorThreadEntry(void* parameter) {
           continue;  // Skip motor mixing when disarmed
         }
 
-        // Try to get latest RC setpoint (non-blocking)
-        rc_setpoint_msg_t rc_setpoint = {0};
-        bool rc_data_available = instance->updateRcSetpointData(rc_setpoint_node, &rc_setpoint);
-        
-        // If no new RC data, skip this iteration (wait for next PID output)
-        if (!rc_data_available) {
-          continue;
-        }
-
         // Perform motor mixing (only when armed)
-        instance->mixTable(&pid_output, &rc_setpoint, motor_output_array);
+        // Note: throttle is now from PID output (smoothed), so we don't need RC setpoint for throttle
+        // But we still need RC setpoint for other data if needed in the future
+        // For now, pass nullptr for rc_setpoint since mixTable only uses pid_output->smoothed_throttle
+        instance->mixTable(&pid_output, nullptr, motor_output_array);
 
         // Write motors to device
         instance->writeMotors(motor_output_array, motor_device);

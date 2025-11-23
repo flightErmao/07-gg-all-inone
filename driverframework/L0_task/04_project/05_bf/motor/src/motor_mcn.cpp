@@ -95,18 +95,3 @@ bool MotorBf::updateAuxData(McnNode_t rc_aux_node, rc_aux_msg_t* aux_data, bool*
   }
   return false;  // No new data, but cached data may still be valid
 }
-
-bool MotorBf::updateRcSetpointData(McnNode_t rc_setpoint_node, rc_setpoint_msg_t* rc_setpoint) {
-  if (rc_setpoint_node == RT_NULL || rc_setpoint == nullptr) {
-    return false;
-  }
-
-  // Try to get latest RC setpoint (non-blocking)
-  if (mcn_poll(rc_setpoint_node) == RT_TRUE) {
-    if (mcn_copy(MCN_HUB(rc), rc_setpoint_node, rc_setpoint) == RT_EOK) {
-      return true;  // New data available
-    }
-  }
-  return false;  // No new data
-}
-

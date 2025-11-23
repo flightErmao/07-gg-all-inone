@@ -17,6 +17,7 @@ typedef struct {
   float pid_i[3];    // I term
   float pid_d[3];    // D term
   float pid_f[3];    // F term (feedforward)
+  float smoothed_throttle;  // Smoothed throttle value (from RC smoothing filter, in PWM range 1000-2000)
   uint32_t timestamp;
   uint32_t seq;
 } pid_output_msg_t;

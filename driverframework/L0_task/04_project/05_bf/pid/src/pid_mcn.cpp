@@ -187,7 +187,7 @@ void PidBf::echoPidOutput(const pid_output_msg_t* output_data) {
   }
 
   // Print PID output information
-  LOG_I("PID Output: seq=%u, ts=%u us", output_data->seq, output_data->timestamp);
+  LOG_I("PID Output: seq=%u, ts=%u us, throttle=%.0f", output_data->seq, output_data->timestamp, output_data->smoothed_throttle);
   LOG_I("  Roll:  P=%.2f, I=%.2f, D=%.2f, F=%.2f, Sum=%.2f",
         output_data->pid_p[0], output_data->pid_i[0], output_data->pid_d[0],
         output_data->pid_f[0], output_data->pid_sum[0]);

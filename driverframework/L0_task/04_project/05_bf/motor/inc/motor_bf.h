@@ -66,6 +66,7 @@ class MotorBf {
   void initMixerConfig();
 
   // Motor mixing functions
+  // Note: rc_setpoint parameter is kept for future use, but throttle now comes from pid_output->smoothed_throttle
   void mixTable(const pid_output_msg_t* pid_output, const rc_setpoint_msg_t* rc_setpoint, float* motor_output);
   void applyMixerAdjustment(float* motorMix, float motorMixMin, float motorMixMax);
   void applyMixToMotors(const float* motorMix, const motorMixer_t* activeMixer, float throttle, float* motor_output);

@@ -13,6 +13,7 @@ extern "C" {
 }
 
 #include "rc_aux_msg.h"
+#include "rc_smoothing_filter.h"  // For RcSmoothingFilter::getSmoothedThrottle()
 
 #include <cmath>
 #include <cstring>
@@ -276,6 +277,13 @@ void PidBf::pidController(uint32_t current_time_us) {
       output_msg.pid_f[axis] = 0.0f;
     }
 
+    // Get smoothed throttle from RC smoothing filter (even when disarmed, for consistency)
+    if (rc_smoothing_filter_ != nullptr) {
+      output_msg.smoothed_throttle = rc_smoothing_filter_->getSmoothedThrottle();
+    } else {
+      output_msg.smoothed_throttle = 0.0f;
+    }
+
     // Reset previous setpoint and D term history
     for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
       pid_runtime_.previousPidSetpoint[axis] = 0.0f;
@@ -306,6 +314,13 @@ void PidBf::pidController(uint32_t current_time_us) {
       output_msg.pid_i[axis] = 0.0f;
       output_msg.pid_d[axis] = 0.0f;
       output_msg.pid_f[axis] = 0.0f;
+    }
+
+    // Get smoothed throttle from RC smoothing filter
+    if (rc_smoothing_filter_ != nullptr) {
+      output_msg.smoothed_throttle = rc_smoothing_filter_->getSmoothedThrottle();
+    } else {
+      output_msg.smoothed_throttle = 0.0f;
     }
 
     publishPidOutput(output_msg);
@@ -356,6 +371,13 @@ void PidBf::pidController(uint32_t current_time_us) {
     output_msg.pid_i[axis] = pid_data_[axis].I;
     output_msg.pid_d[axis] = pid_data_[axis].D;
     output_msg.pid_f[axis] = pid_data_[axis].F;
+  }
+
+  // Get smoothed throttle from RC smoothing filter (same as Betaflight: rcCommand[THROTTLE] is smoothed)
+  if (rc_smoothing_filter_ != nullptr) {
+    output_msg.smoothed_throttle = rc_smoothing_filter_->getSmoothedThrottle();
+  } else {
+    output_msg.smoothed_throttle = 0.0f;
   }
 
   publishPidOutput(output_msg);
