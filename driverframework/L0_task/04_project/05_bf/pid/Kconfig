@@ -60,6 +60,30 @@ menuconfig PROJECT_BF_PID_EN
                             default 20
                             help
                                 Period (in milliseconds) for angular rate setpoint/actual logging. Default: 20ms.
+
+                menuconfig PROJECT_BF_PID_ANOTC_LOG_PITCH_PIDF_EN
+                    bool "DEBUG: ANOTC (ATKP) Pitch PIDF Logging"
+                    default n
+                    depends on PROJECT_BF_ANOTC_EN
+                    help
+                        Enable ANOTC telemetry logging for pitch axis PIDF (P, I, D, F) and sum data.
+                    
+                    if PROJECT_BF_PID_ANOTC_LOG_PITCH_PIDF_EN
+                        config PROJECT_BF_PID_ANOTC_LOG_PITCH_PIDF_GROUP
+                            int "Log Group ID for Pitch PIDF Data"
+                            range 1 99
+                            default 7
+                            help
+                                Set the group ID for pitch PIDF data logging (1-99).
+                                Default: 7.
+
+                        config PROJECT_BF_PID_ANOTC_LOG_PITCH_PIDF_PERIOD_MS
+                            int "Pitch PIDF Log Period (ms)"
+                            range 1 1000
+                            default 20
+                            help
+                                Period (in milliseconds) for pitch PIDF data logging. Default: 20ms.
+                    endif
                 endif
 
             endif

@@ -1,6 +1,6 @@
-#include "rc_bf.h"
-#include "rc_smoothing_filter.h"
-#include "pid_bf.hpp"
+#include "rc_class.hpp"
+#include "rc_smooth.h"
+#include "pid_class.h"
 
 extern "C" {
 #include <rtthread.h>
@@ -13,12 +13,7 @@ extern "C" {
 }
 
 #include <cstring>
-#include "rc_setpoint_msg.h"
-
-// Target loop time (8kHz default)
-#ifndef CONFIG_PROJECT_BF_PID_MAIN_LOOPTIME_US
-#define CONFIG_PROJECT_BF_PID_MAIN_LOOPTIME_US 125
-#endif
+#include "rc_mcn.h"
 
 namespace {
 
@@ -57,7 +52,7 @@ static void subTaskRcCommand(uint32_t current_time_us) {
   // This polls MCN topic using mcn_poll (non-blocking) and always returns valid data pointer
   // Returns new data if available, otherwise cached historical data
   // This ensures smoothing filter can process RC data at PID frequency (3.2kHz) even when RC frequency is only 65Hz
-  const rc_setpoint_msg_t* rc_command_msg = pid.updateRcCommandFromMcn();
+  const rc_command_msg_t* rc_command_msg = pid.updateRcCommandFromMcn();
 
   // Step 2: Process smoothing filter with RC command data
   // Get PID setpoint data reference for direct write (filter will write filtered data here)

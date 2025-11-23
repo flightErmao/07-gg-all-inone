@@ -1,4 +1,4 @@
-#include "pid_bf.hpp"
+#include "pid_class.h"
 
 extern "C" {
 #include <rtthread.h>
@@ -6,17 +6,12 @@ extern "C" {
 #define LOG_TAG "pid_mcn"
 #define LOG_LVL LOG_LVL_INFO
 #include <ulog.h>
-#include "pid_setpoint_msg.h"
-#include "pid_output_msg.h"
-#include "rc_setpoint_msg.h"
+#include "pid_mcn.h"
+#include "rc_mcn.h"  // For rc_command_msg_t
 }
 
 #include <cstring>
 
-MCN_DECLARE(pid_setpoint);
-MCN_DECLARE(pid);
-/* 定义 PID 消息 MCN */
-MCN_DEFINE(pid_setpoint, sizeof(pid_setpoint_msg_t));
 MCN_DEFINE(pid, sizeof(pid_output_msg_t));
 
 extern "C" {
@@ -122,7 +117,7 @@ void PidBf::cleanupMcnSubscriptions() {
 }
 
 // 从MCN更新RC命令数据
-const rc_setpoint_msg_t* PidBf::updateRcCommandFromMcn() {
+const rc_command_msg_t* PidBf::updateRcCommandFromMcn() {
   // 轮询新的RC命令数据（非阻塞）
   // 这遵循Betaflight模式：PID频率(3.2kHz) >> RC频率(65Hz)
   // 所以我们需要始终返回有效数据：如果有新数据则返回新数据，否则返回缓存的历史数据

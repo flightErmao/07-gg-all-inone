@@ -1,4 +1,4 @@
-#include "pid_bf.hpp"
+#include "pid_class.h"
 
 extern "C" {
 #include <rtthread.h>
@@ -16,8 +16,6 @@ extern "C" {
 }
 
 #ifdef PROJECT_BF_PID_ANOTC_LOG_EN
-
-// Static function to send rate setpoint and actual rate
 static void sendRateSetpointActual(uint16_t count_ms) {
   if (!(count_ms % PROJECT_BF_PID_ANOTC_LOG_ANGULAR_RATE_PERIOD_MS)) {
     // Get data directly from singleton instances
@@ -40,12 +38,46 @@ static void sendRateSetpointActual(uint16_t count_ms) {
     );
   }
 }
+#endif  // PROJECT_BF_PID_ANOTC_LOG_ANGULAR_RATE_EN
+
+#ifdef PROJECT_BF_PID_ANOTC_LOG_PITCH_PIDF_EN
+// Static function to send pitch axis PIDF and sum data
+static void sendPitchPidfData(uint16_t count_ms) {
+  if (!(count_ms % PROJECT_BF_PID_ANOTC_LOG_PITCH_PIDF_PERIOD_MS)) {
+    // Get data directly from PidBf singleton (same as sendRateSetpointActual)
+    PidBf& pid = PidBf::instance();
+    const pidAxisData_t* pid_data = pid.getPidData();
+
+    if (pid_data != nullptr) {
+      // Pitch axis is index 1 (FD_PITCH = 1)
+      const pidAxisData_t& pitch_data = pid_data[1];
+
+      // Send pitch axis PIDF and sum data
+      // Format: [P, I, D, F, Sum]
+      float pitch_pidf_data[5] = {
+          pitch_data.P,   // Pitch P term
+          pitch_data.I,   // Pitch I term
+          pitch_data.D,   // Pitch D term
+          pitch_data.F,   // Pitch F term (feedforward)
+          pitch_data.Sum  // Pitch Sum
+      };
+      sendUserDatafloatN(PROJECT_BF_PID_ANOTC_LOG_PITCH_PIDF_GROUP, pitch_pidf_data, 5);
+    }
+  }
+}
+#endif  // PROJECT_BF_PID_ANOTC_LOG_PITCH_PIDF_EN
 
 int addPeriodFunListPid(void) {
 #ifdef PROJECT_BF_PID_ANOTC_LOG_ANGULAR_RATE_EN
   anotcTelemAddSensorFunc(sendRateSetpointActual);
   LOG_I("anotcPid: Added rate setpoint/actual logging function");
 #endif
+
+#ifdef PROJECT_BF_PID_ANOTC_LOG_PITCH_PIDF_EN
+  anotcTelemAddSensorFunc(sendPitchPidfData);
+  LOG_I("anotcPid: Added pitch PIDF logging function");
+#endif
+
   return 0;
 }
 
@@ -54,6 +86,3 @@ INIT_APP_EXPORT(addPeriodFunListPid);
 #endif
 
 #endif  // PROJECT_BF_PID_ANOTC_LOG_EN
-
-#endif  // PROJECT_BF_ANOTC_EN
-
