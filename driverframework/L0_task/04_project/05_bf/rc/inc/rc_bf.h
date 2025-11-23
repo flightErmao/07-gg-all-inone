@@ -86,9 +86,6 @@ class RcBf {
   // Get max RC rate
   float getMaxRcRate(int axis) const;
   
-  // Get RC setpoint MCN node (for PID thread to subscribe)
-  McnNode_t getRcSetpointNode() const { return rc_setpoint_node_; }
-  
   // Get RC command value
   float getRcCommand(int channel) const;
   

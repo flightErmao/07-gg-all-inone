@@ -21,7 +21,7 @@ typedef struct {
   uint32_t seq;
 } pid_output_msg_t;
 
-MCN_DECLARE(pid_output);
+MCN_DECLARE(pid);
 
 #endif /* PID_OUTPUT_MSG_H__ */
 

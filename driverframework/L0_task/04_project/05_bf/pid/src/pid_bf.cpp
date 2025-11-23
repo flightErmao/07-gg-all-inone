@@ -9,6 +9,7 @@ extern "C" {
 #include "pid_setpoint_msg.h"
 #include "pid_output_msg.h"
 #include "bfPidParam.h"
+#include "rc_setpoint_msg.h"  // For MCN_DECLARE(rc)
 }
 
 #include "rc_aux_msg.h"
@@ -60,9 +61,7 @@ float lowpassApply(SimpleLowpass* filter, float input) {
 
 }  // namespace
 
-/* 定义 PID 消息 MCN */
-MCN_DEFINE(pid_setpoint, sizeof(pid_setpoint_msg_t));
-MCN_DEFINE(pid_output, sizeof(pid_output_msg_t));
+/* PID 消息 MCN 定义已移动到 pid_mcn.cpp */
 
 // Thread configuration removed - using taskPid.cpp main thread instead
 
@@ -72,16 +71,20 @@ PidBf& PidBf::instance() {
 }
 
 PidBf::PidBf()
-    :       gyro_filtered_event_(RT_NULL),
+    : gyro_filtered_event_(RT_NULL),
       gyro_filtered_node_(RT_NULL),
       setpoint_event_(RT_NULL),
       setpoint_node_(RT_NULL),
       pid_output_hub_(nullptr),
       rc_aux_node_(RT_NULL),
+      rc_command_node_(RT_NULL),
+      rc_command_data_valid_(false),
       rc_smoothing_filter_(nullptr),
       target_looptime_us_(0) {
   std::memset(&gyro_filtered_data_, 0, sizeof(gyro_filtered_data_));
   std::memset(&setpoint_data_, 0, sizeof(setpoint_data_));
+  std::memset(&rc_command_data_, 0, sizeof(rc_command_data_));
+  std::memset(&rc_command_data_cached_, 0, sizeof(rc_command_data_cached_));
   std::memset(&pid_runtime_, 0, sizeof(pid_runtime_));
   std::memset(pid_data_, 0, sizeof(pid_data_));
   std::memset(&pid_profile_, 0, sizeof(pid_profile_));
@@ -106,57 +109,22 @@ PidBf::PidBf()
   pid_profile_.yawLpfHz = 90.0f;
 }
 
-PidBf::~PidBf() = default;
+PidBf::~PidBf() { cleanupMcnSubscriptions(); }
 
 rt_err_t PidBf::init() {
   // Note: Thread initialization removed - using taskPid.cpp main thread instead
 
-  if (gyro_filtered_event_ == RT_NULL) {
-    gyro_filtered_event_ = rt_sem_create("pid_gyro_evt", 0, RT_IPC_FLAG_FIFO);
-    if (gyro_filtered_event_ == RT_NULL) {
-      LOG_E("create gyro_filtered event semaphore failed");
-      return -RT_ERROR;
-    }
+  // 初始化MCN订阅
+  rt_err_t ret = initMcnSubscriptions();
+  if (ret != RT_EOK) {
+    LOG_E("MCN subscriptions initialization failed");
+    return ret;
   }
-
-  gyro_filtered_node_ = mcn_subscribe(MCN_HUB(gyro), gyro_filtered_event_, RT_NULL);
-  if (gyro_filtered_node_ == RT_NULL) {
-    LOG_E("subscribe gyro topic failed");
-    if (gyro_filtered_event_ != RT_NULL) {
-      rt_sem_delete(gyro_filtered_event_);
-      gyro_filtered_event_ = RT_NULL;
-    }
-    return -RT_ERROR;
-  }
-  LOG_I("Subscribed to gyro MCN topic");
 
   // Note: setpoint data is now directly written by processRcSmoothingFilter() in subTaskRcCommand()
   // No need to subscribe to pid_setpoint MCN topic anymore
   setpoint_node_ = RT_NULL;
   setpoint_event_ = RT_NULL;
-
-  pid_output_hub_ = MCN_HUB(pid_output);
-  if (pid_output_hub_ == nullptr) {
-    LOG_E("get pid_output hub failed");
-    if (gyro_filtered_node_ != RT_NULL) {
-      mcn_unsubscribe(MCN_HUB(gyro), gyro_filtered_node_);
-      gyro_filtered_node_ = RT_NULL;
-    }
-    if (gyro_filtered_event_ != RT_NULL) {
-      rt_sem_delete(gyro_filtered_event_);
-      gyro_filtered_event_ = RT_NULL;
-    }
-    return -RT_ERROR;
-  }
-
-  // Subscribe to RC auxiliary channels MCN topic (non-blocking, wait time 0)
-  rc_aux_node_ = mcn_subscribe(MCN_HUB(aux), RT_NULL, RT_NULL);
-  if (rc_aux_node_ == RT_NULL) {
-    LOG_W("subscribe aux topic failed, continuing without aux channel support");
-    // Not critical, continue without aux channel support
-  } else {
-    LOG_I("Subscribed to aux MCN topic");
-  }
 
   uint8_t pid_process_denom = 1;
   if (getParam("pid_process_denom", &pid_process_denom, sizeof(pid_process_denom)) != RT_EOK) {
@@ -264,29 +232,16 @@ void PidBf::initFilters() {
 // Thread entry and loop functions removed - logic moved to processPidController()
 // This function is called from subTaskPidController in taskPid.cpp
 
-void PidBf::processPidController(uint32_t current_time_us) {
-  // Poll for new auxiliary channels data (non-blocking, wait time 0)
-  // Check if MCN is published before copying
-  // Use mcn_poll instead of mcn_poll_sync for non-blocking check (no event semaphore needed)
-  if (rc_aux_node_ != RT_NULL) {
-    if (mcn_poll(rc_aux_node_) == RT_TRUE) {
-      // New aux channels data available, copy it
-      if (mcn_copy(MCN_HUB(aux), rc_aux_node_, &aux_channels_data_) == RT_EOK) {
-        // Aux channels data updated successfully
-        // This data is available for use in PID control logic
-      }
-    }
-  }
+// MCN相关方法已移动到 pid_mcn.cpp
 
-  // Poll for new gyro data (blocking - will wait until data is available)
-  // Since we're using RT_WAITING_FOREVER, once we get data, it's guaranteed to be valid
-  if (mcn_poll_sync(gyro_filtered_node_, RT_WAITING_FOREVER) == RT_TRUE) {
-    if (mcn_copy(MCN_HUB(gyro), gyro_filtered_node_, &gyro_filtered_data_) == RT_EOK) {
-      // Gyro data is ready, setpoint data is already written by processRcSmoothingFilter() in subTaskRcCommand()
-      // Aux channels data is already updated above (if available)
-      // Process PID controller directly
-      pidController(current_time_us);
-    }
+void PidBf::processPidController(uint32_t current_time_us) {
+  // 获取新的陀螺仪数据（阻塞 - 将等待直到数据可用）
+  // 注意：RC设定值和辅助通道数据在subTaskRcCommand()中通过updateRcDataFromMcn()更新
+  if (updateGyroDataFromMcn()) {
+    // 陀螺仪数据准备就绪，设定值数据已由subTaskRcCommand()中的processRcSmoothingFilter()写入
+    // 辅助通道数据已在subTaskRcCommand()中通过updateRcDataFromMcn()更新
+    // 直接处理PID控制器
+    pidController(current_time_us);
   }
 }
 
@@ -297,6 +252,67 @@ void PidBf::pidController(uint32_t current_time_us) {
     return;
   }
 
+  // Check arm status from aux channels data
+  // If disarmed, zero all PID outputs (Betaflight behavior)
+  bool is_armed = (aux_channels_data_.armed != 0);
+  if (!is_armed) {
+    // Disarmed: zero all PID outputs and reset I term
+    pid_output_msg_t output_msg;
+    output_msg.timestamp = current_time_us;
+    output_msg.seq = gyro_filtered_data_.seq;
+
+    for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
+      pid_data_[axis].P = 0.0f;
+      pid_data_[axis].I = 0.0f;  // Reset I term when disarmed
+      pid_data_[axis].D = 0.0f;
+      pid_data_[axis].F = 0.0f;
+      pid_data_[axis].S = 0.0f;
+      pid_data_[axis].Sum = 0.0f;
+
+      output_msg.pid_sum[axis] = 0.0f;
+      output_msg.pid_p[axis] = 0.0f;
+      output_msg.pid_i[axis] = 0.0f;
+      output_msg.pid_d[axis] = 0.0f;
+      output_msg.pid_f[axis] = 0.0f;
+    }
+
+    // Reset previous setpoint and D term history
+    for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
+      pid_runtime_.previousPidSetpoint[axis] = 0.0f;
+      previousGyroRateDterm[axis] = 0.0f;
+    }
+
+    // Publish zero output
+    publishPidOutput(output_msg);
+    return;
+  }
+
+  // Armed: process PID controller
+  // Check flight mode (currently only Rate mode is supported)
+  // Mode 0 = Rate mode (角速度模式) - use rate PID
+  // Mode 1 = Angle mode (角度模式) - not implemented yet
+  // Mode 2 = Altitude mode (高度模式) - not implemented yet
+  uint8_t flight_mode = aux_channels_data_.flight_mode;
+  if (flight_mode != 0) {
+    // Currently only Rate mode (mode 0) is supported
+    // For other modes, zero output for now (will be implemented later)
+    pid_output_msg_t output_msg;
+    output_msg.timestamp = current_time_us;
+    output_msg.seq = gyro_filtered_data_.seq;
+
+    for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
+      output_msg.pid_sum[axis] = 0.0f;
+      output_msg.pid_p[axis] = 0.0f;
+      output_msg.pid_i[axis] = 0.0f;
+      output_msg.pid_d[axis] = 0.0f;
+      output_msg.pid_f[axis] = 0.0f;
+    }
+
+    publishPidOutput(output_msg);
+    return;
+  }
+
+  // Rate mode (角速度模式): process rate PID controller
   float gyroRate[XYZ_AXIS_COUNT];
   std::memcpy(gyroRate, gyro_filtered_data_.gyro_filtered, sizeof(gyroRate));
 
@@ -342,9 +358,7 @@ void PidBf::pidController(uint32_t current_time_us) {
     output_msg.pid_f[axis] = pid_data_[axis].F;
   }
 
-  if (pid_output_hub_ != nullptr) {
-    mcn_publish(pid_output_hub_, &output_msg);
-  }
+  publishPidOutput(output_msg);
 }
 
 float PidBf::getSetpointRate(int axis) {
@@ -384,3 +398,4 @@ float PidBf::getMaxRcRate(int axis) {
 // }
 // #endif
 #
+

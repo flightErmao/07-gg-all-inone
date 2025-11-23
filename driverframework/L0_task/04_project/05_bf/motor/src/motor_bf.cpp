@@ -7,6 +7,9 @@ extern "C" {
 #define LOG_TAG "motor_bf"
 #define LOG_LVL LOG_LVL_INFO
 #include <ulog.h>
+#include "pid_output_msg.h"
+#include "rc_setpoint_msg.h"
+#include "uMCN.h"
 }
 
 #include <cmath>
@@ -39,10 +42,11 @@ MotorBf::MotorBf()
     : mixer_mode_(MIXER_QUADX),
       mixer_type_(MIXER_LEGACY),
       motor_count_(4),
-      motor_output_hub_(nullptr),
+      pid_output_event_(RT_NULL),
       motor_output_node_(RT_NULL),
       pid_output_node_(RT_NULL),
       rc_setpoint_node_(RT_NULL),
+      rc_aux_node_(RT_NULL),
       motor_thread_(RT_NULL),
       motor_thread_stack_(nullptr),
       thread_inited_(false),
@@ -59,11 +63,12 @@ MotorBf::~MotorBf() {
   if (motor_thread_stack_ != nullptr) {
     delete[] motor_thread_stack_;
   }
-  if (pid_output_node_ != RT_NULL) {
-    mcn_unsubscribe(MCN_HUB(pid_output), pid_output_node_);
-  }
-  if (rc_setpoint_node_ != RT_NULL) {
-    mcn_unsubscribe(MCN_HUB(rc), rc_setpoint_node_);
+  // Unsubscribe from MCN topics
+  unsubscribeMcnTopics();
+  // Delete event semaphore
+  if (pid_output_event_ != RT_NULL) {
+    rt_sem_delete(pid_output_event_);
+    pid_output_event_ = RT_NULL;
   }
 }
 
@@ -113,17 +118,7 @@ rt_err_t MotorBf::init() {
   return RT_EOK;
 }
 
-rt_err_t MotorBf::initMcn() {
-  // Declare motor_output hub (for optional publishing, currently not used)
-  motor_output_hub_ = MCN_HUB(motor_output);
-  if (motor_output_hub_ == nullptr) {
-    LOG_E("Failed to get motor_output hub");
-    return -RT_ERROR;
-  }
-
-  LOG_I("Motor MCN initialized (subscriptions will be created in thread)");
-  return RT_EOK;
-}
+// initMcn() is now in motor_mcn.cpp
 
 void MotorBf::initMixerConfig() {
   // Load mixer parameters
@@ -266,6 +261,35 @@ void MotorBf::writeMotors(const float* motor_output, rt_device_t motor_device) {
   rt_device_write(motor_device, 0, motor_values, motor_count_ * sizeof(uint16_t));
 }
 
+// Motor thread initialization helpers
+rt_device_t MotorBf::initMotorDevice() {
+#ifndef PROJECT_BF_MOTOR_DEVICE_NAME
+  const char* device_name = "dshot";
+#else
+  const char* device_name = PROJECT_BF_MOTOR_DEVICE_NAME;
+#endif
+  rt_device_t motor_device = rt_device_find(device_name);
+  if (motor_device == nullptr) {
+    LOG_E("Motor device %s not found", device_name);
+    return nullptr;
+  }
+
+  rt_err_t ret = rt_device_open(motor_device, RT_DEVICE_OFLAG_WRONLY);
+  if (ret != RT_EOK) {
+    LOG_E("Failed to open motor device: %d", ret);
+    return nullptr;
+  }
+
+  LOG_I("Motor device opened successfully");
+  return motor_device;
+}
+
+void MotorBf::cleanupMotorDevice(rt_device_t motor_device) {
+  if (motor_device != nullptr) {
+    rt_device_close(motor_device);
+  }
+}
+
 // Motor thread entry point - subscribes to PID output and RC setpoint, performs mixing, and writes to device
 void MotorBf::motorThreadEntry(void* parameter) {
   MotorBf* instance = static_cast<MotorBf*>(parameter);
@@ -275,73 +299,67 @@ void MotorBf::motorThreadEntry(void* parameter) {
 
   LOG_I("Motor thread started");
 
-  // Get motor device
-#ifndef PROJECT_BF_MOTOR_DEVICE_NAME
-  const char* device_name = "dshot";
-#else
-  const char* device_name = PROJECT_BF_MOTOR_DEVICE_NAME;
-#endif
-  rt_device_t motor_device = rt_device_find(device_name);
+  // Initialize motor device
+  rt_device_t motor_device = initMotorDevice();
   if (motor_device == nullptr) {
-    LOG_E("Motor device %s not found", device_name);
     return;
   }
 
-  rt_err_t ret = rt_device_open(motor_device, RT_DEVICE_OFLAG_WRONLY);
+  // Subscribe to MCN topics
+  McnNode_t pid_output_node = RT_NULL;
+  McnNode_t rc_setpoint_node = RT_NULL;
+  McnNode_t rc_aux_node = RT_NULL;
+
+  rt_err_t ret = instance->subscribeMcnTopics(&pid_output_node, &rc_setpoint_node, &rc_aux_node);
   if (ret != RT_EOK) {
-    LOG_E("Failed to open motor device: %d", ret);
-    return;
-  }
-
-  LOG_I("Motor device opened successfully");
-
-  // Subscribe to PID output MCN topic
-  McnNode_t pid_output_node = mcn_subscribe(MCN_HUB(pid_output), RT_NULL, RT_NULL);
-  if (pid_output_node == RT_NULL) {
-    LOG_E("Failed to subscribe to pid_output");
-    rt_device_close(motor_device);
-    return;
-  }
-
-  // Subscribe to RC setpoint MCN topic (for throttle)
-  McnNode_t rc_setpoint_node = mcn_subscribe(MCN_HUB(rc), RT_NULL, RT_NULL);
-  if (rc_setpoint_node == RT_NULL) {
-    LOG_E("Failed to subscribe to rc");
-    mcn_unsubscribe(MCN_HUB(pid_output), pid_output_node);
-    rt_device_close(motor_device);
+    LOG_E("Failed to subscribe to MCN topics");
+    cleanupMotorDevice(motor_device);
     return;
   }
 
   // Store nodes for cleanup
   instance->pid_output_node_ = pid_output_node;
   instance->rc_setpoint_node_ = rc_setpoint_node;
-
-  LOG_I("Motor thread subscriptions ready");
+  instance->rc_aux_node_ = rc_aux_node;
 
   // Motor output array (normalized values 0.0-1.0)
   float motor_output_array[MAX_SUPPORTED_MOTORS];
 
+  // Cached aux data for arm status (non-blocking poll)
+  // Use cached data to ensure we always have arm status even when no new data available
+  rc_aux_msg_t aux_data = {0};
+  bool aux_data_valid = false;
+
   while (true) {
-    // Wait for PID output data (blocking)
+    // Wait for PID output data (blocking) - this releases CPU when waiting
+    // This ensures CPU is released even when disarmed
     if (mcn_poll_sync(pid_output_node, RT_WAITING_FOREVER) == RT_TRUE) {
       pid_output_msg_t pid_output;
-      if (mcn_copy(MCN_HUB(pid_output), pid_output_node, &pid_output) == RT_EOK) {
-        // Try to get latest RC setpoint (non-blocking, use cached if available)
-        rc_setpoint_msg_t rc_setpoint = {0};
-        bool rc_data_available = false;
-        
-        if (mcn_poll(rc_setpoint_node) == RT_TRUE) {
-          if (mcn_copy(MCN_HUB(rc), rc_setpoint_node, &rc_setpoint) == RT_EOK) {
-            rc_data_available = true;
+      if (mcn_copy(MCN_HUB(pid), pid_output_node, &pid_output) == RT_EOK) {
+        // Update aux data (non-blocking)
+        instance->updateAuxData(rc_aux_node, &aux_data, &aux_data_valid);
+
+        // Safety: If disarmed or no aux data available (assume disarmed for safety), stop motors
+        // Betaflight behavior: motors must be stopped when disarmed
+        if (!aux_data_valid || aux_data.armed == 0) {
+          // Disarmed or no data: stop all motors immediately
+          for (int i = 0; i < instance->motor_count_; i++) {
+            motor_output_array[i] = 0.0f;
           }
+          instance->writeMotors(motor_output_array, motor_device);
+          continue;  // Skip motor mixing when disarmed
         }
+
+        // Try to get latest RC setpoint (non-blocking)
+        rc_setpoint_msg_t rc_setpoint = {0};
+        bool rc_data_available = instance->updateRcSetpointData(rc_setpoint_node, &rc_setpoint);
         
         // If no new RC data, skip this iteration (wait for next PID output)
         if (!rc_data_available) {
           continue;
         }
 
-        // Perform motor mixing
+        // Perform motor mixing (only when armed)
         instance->mixTable(&pid_output, &rc_setpoint, motor_output_array);
 
         // Write motors to device

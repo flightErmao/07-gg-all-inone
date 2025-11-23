@@ -28,12 +28,10 @@ struct PidMainThread {
   struct rt_thread thread_obj_;
   rt_uint8_t thread_stack_[PROJECT_BF_PID_THREAD_STACK_SIZE];
   bool thread_inited_;
-  uint32_t target_looptime_us_;
 
   PidMainThread()
       : thread_(RT_NULL),
-        thread_inited_(false),
-        target_looptime_us_(CONFIG_PROJECT_BF_PID_MAIN_LOOPTIME_US) {
+        thread_inited_(false) {
     std::memset(&thread_obj_, 0, sizeof(thread_obj_));
     std::memset(thread_stack_, 0, sizeof(thread_stack_));
   }
@@ -45,7 +43,8 @@ static PidMainThread pid_main_thread_;
 static void subTaskRcCommand(uint32_t current_time_us) {
   // PID Task (8kHz): Process RC smoothing filter
   // Note: processRcCommand is now in RC thread (100-200Hz), data passed via MCN to avoid data tearing
-  RcBf& rc = RcBf::instance();
+  (void)current_time_us;
+
   PidBf& pid = PidBf::instance();
 
   // Get RC smoothing filter instance from PID
@@ -54,29 +53,26 @@ static void subTaskRcCommand(uint32_t current_time_us) {
     return;  // RC smoothing filter not initialized yet
   }
 
-  // Subscribe to rc MCN topic (non-blocking poll)
-  rc_setpoint_msg_t setpoint_msg;
-  const rc_setpoint_msg_t* msg_to_use = nullptr;
-  
-  // Poll for new rc_setpoint data (non-blocking, use latest data if available)
-  McnNode_t rc_setpoint_node = rc.getRcSetpointNode();
-  if (rc_setpoint_node != RT_NULL) {
-    if (mcn_poll_sync(rc_setpoint_node, 0) == RT_TRUE) {
-      if (mcn_copy(MCN_HUB(rc), rc_setpoint_node, &setpoint_msg) == RT_EOK) {
-        // New data available, use it
-        msg_to_use = &setpoint_msg;
-      }
-    }
-  }
+  // Step 1: Get RC command data from MCN (for smoothing filter)
+  // This polls MCN topic using mcn_poll (non-blocking) and always returns valid data pointer
+  // Returns new data if available, otherwise cached historical data
+  // This ensures smoothing filter can process RC data at PID frequency (3.2kHz) even when RC frequency is only 65Hz
+  const rc_setpoint_msg_t* rc_command_msg = pid.updateRcCommandFromMcn();
 
-  // Get PID setpoint data reference for direct write
+  // Step 2: Process smoothing filter with RC command data
+  // Get PID setpoint data reference for direct write (filter will write filtered data here)
   pid_setpoint_msg_t* pid_setpoint_out = &pid.getSetpointDataRef();
 
-  // Process RC smoothing filter with MCN data (always run at PID frequency, even if no new RC data)
-  // If no new data, use nullptr to use cached data (filter will maintain state)
-  // Note: This is called at PID frequency (8kHz) even if RC data is at 100Hz
+  // Process RC smoothing filter: rc_command_msg → filtered → pid_setpoint_out
+  // rc_command_msg is always valid (new data or cached historical data)
+  // Filter will process RC command data at PID frequency (3.2kHz) even when RC frequency is only 65Hz
   // The filtered setpoint is directly written to PID singleton's setpoint_data_ member
-  smoothing_filter->processFilter(msg_to_use, pid_setpoint_out);
+  smoothing_filter->processFilter(rc_command_msg, pid_setpoint_out);
+
+  // Step 3: Get RC aux channels data from MCN
+  // This polls MCN topic and updates internal aux_channels_data_ in PID module
+  pid.updateRcAuxFromMcn();
+
 }
 
 static void subTaskPidController(uint32_t current_time_us) {
@@ -85,51 +81,16 @@ static void subTaskPidController(uint32_t current_time_us) {
   pid.processPidController(current_time_us);
 }
 
-static void subTaskMotorUpdate(uint32_t current_time_us) {
-  // Motor mixer is now handled in motor thread independently
-  // PID thread only publishes pid_output to MCN
-  (void)current_time_us;
-}
-
-static void subTaskPidSubprocesses(uint32_t current_time_us) {
-  // TODO: Additional PID subprocesses
-  // For example: attitude estimation updates, sensor fusion, etc.
-  (void)current_time_us;
-}
-
 // Main PID loop
 static void pidMainLoop(void* parameter) {
   (void)parameter;
 
   LOG_I("PidMain loop started");
 
-  uint32_t last_time_us = timestamp_micros();
-  uint32_t loop_count = 0;
-
   while (true) {
     uint32_t current_time_us = timestamp_micros();
-    uint32_t loop_time_us = current_time_us - last_time_us;
-
-    // Run sub-tasks
     subTaskRcCommand(current_time_us);
     subTaskPidController(current_time_us);
-    subTaskMotorUpdate(current_time_us);
-    subTaskPidSubprocesses(current_time_us);
-
-    // Rate control - sleep to maintain target loop time
-    if (loop_time_us < pid_main_thread_.target_looptime_us_) {
-      uint32_t sleep_us = pid_main_thread_.target_looptime_us_ - loop_time_us;
-      rt_thread_mdelay(sleep_us / 1000);  // Convert to milliseconds
-    }
-
-    last_time_us = current_time_us;
-    loop_count++;
-
-    // Log every second (at 8kHz, that's 8000 loops)
-    if (loop_count >= 8000) {
-      LOG_D("PidMain loop running at ~%d Hz", 8000000 / pid_main_thread_.target_looptime_us_);
-      loop_count = 0;
-    }
   }
 }
 
@@ -178,8 +139,6 @@ rt_err_t pidMainInit(void) {
     return ret;
   }
 
-  LOG_I("PidMain thread started, target looptime: %u us (~%d Hz)", pid_main_thread_.target_looptime_us_,
-        8000000 / pid_main_thread_.target_looptime_us_);
   return RT_EOK;
 }
 

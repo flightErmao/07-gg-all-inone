@@ -108,14 +108,12 @@ rt_err_t RcBf::initMcn() {
 
 void RcBf::publishSetpointToMcn(uint32_t current_time_us) {
   // Publish rawSetpoint data to MCN for PID thread (avoid data tearing)
+  // Only publish data needed by smoothing filter
   if (rc_setpoint_hub_ != nullptr) {
     rc_setpoint_msg_t setpoint_msg;
     std::memcpy(setpoint_msg.rawSetpoint, rawSetpoint_, sizeof(rawSetpoint_));
     setpoint_msg.rcCommandThrottle = rc_command_[THROTTLE];
     std::memcpy(setpoint_msg.feedforward, feedforward_, sizeof(feedforward_));
-    std::memcpy(setpoint_msg.rcDeflection, rcDeflection_, sizeof(rcDeflection_));
-    std::memcpy(setpoint_msg.rcDeflectionAbs, rcDeflectionAbs_, sizeof(rcDeflectionAbs_));
-    setpoint_msg.smoothedRxRateHz = smoothed_rx_rate_hz_;
     setpoint_msg.seq = seq_++;
     setpoint_msg.timestamp = current_time_us;
 
@@ -128,6 +126,7 @@ void RcBf::publishSetpointToMcn(uint32_t current_time_us) {
 
 void RcBf::publishAuxChannelsToMcn(uint32_t current_time_us) {
   // Publish auxiliary channels data to MCN for PID thread and other consumers
+  // Includes arm status and flight mode for PID and motor control
   if (rc_aux_hub_ != nullptr) {
     rc_aux_msg_t aux_msg;
     
@@ -145,6 +144,12 @@ void RcBf::publishAuxChannelsToMcn(uint32_t current_time_us) {
     aux_msg.aux_channel_count = aux_count;
     aux_msg.rx_receiving_signal = rx_receiving_signal_ ? 1 : 0;
     aux_msg.rx_flight_channels_valid = rx_flight_channels_valid_ ? 1 : 0;
+    
+    // Get arm status and flight mode from RcControls
+    RcControls& rc_controls = RcControls::instance();
+    aux_msg.armed = rc_controls.isArmed() ? 1 : 0;
+    aux_msg.flight_mode = rc_controls.getFlightMode();
+    
     aux_msg.seq = seq_++;
     aux_msg.timestamp = current_time_us;
 

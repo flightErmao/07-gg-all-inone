@@ -15,13 +15,11 @@
 #define PRIMARY_CHANNEL_COUNT 4  // Roll, Pitch, Yaw, Throttle
 
 /* RC setpoint message type */
+/* This message contains only the data needed by smoothing filter */
 typedef struct {
   float rawSetpoint[XYZ_AXIS_COUNT];  // Raw setpoint rates [roll, pitch, yaw] (deg/s)
   float rcCommandThrottle;            // RC command throttle (1000-2000)
   float feedforward[XYZ_AXIS_COUNT];  // Feedforward values [roll, pitch, yaw]
-  float rcDeflection[XYZ_AXIS_COUNT]; // RC deflection [-1.0, 1.0] [roll, pitch, yaw]
-  float rcDeflectionAbs[XYZ_AXIS_COUNT]; // RC deflection absolute value [roll, pitch, yaw]
-  float smoothedRxRateHz;             // Smoothed RX rate (Hz)
   rt_uint32_t seq;                    // Sequence number
   rt_uint32_t timestamp;              // Timestamp in microseconds
 } rc_setpoint_msg_t;

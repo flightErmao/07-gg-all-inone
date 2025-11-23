@@ -12,9 +12,12 @@ extern "C" {
 #include "pid_setpoint_msg.h"
 #include "pid_output_msg.h"
 #include "rc_aux_msg.h"
+#include "rc_setpoint_msg.h"
 #include "param.h"
 #include "timestamp.h"
 }
+
+#include "pid_mcn.hpp"
 
 // Forward declaration
 class RcSmoothingFilter;
@@ -96,6 +99,29 @@ class PidBf {
   pid_setpoint_msg_t& getSetpointDataRef() { return setpoint_data_; }
   const rc_aux_msg_t& getAuxChannelsData() const { return aux_channels_data_; }
 
+  // MCN 相关操作方法
+  rt_err_t initMcnSubscriptions();
+  void cleanupMcnSubscriptions();
+  
+  // Update RC command data from MCN (called from subTaskRcCommand)
+  // This method polls MCN topic and updates internal data
+  // Always returns valid data pointer: new data if available, otherwise cached historical data
+  // This ensures PID can always use RC data for smoothing filter even when RC frequency (65Hz) < PID frequency (3.2kHz)
+  const rc_setpoint_msg_t* updateRcCommandFromMcn();
+
+  // Update RC aux channels data from MCN (called from subTaskRcCommand)
+  // This method polls MCN topic and updates internal aux_channels_data_
+  void updateRcAuxFromMcn();
+  
+  // Update gyro data from MCN (blocking)
+  bool updateGyroDataFromMcn();
+  
+  // Publish PID output to MCN
+  void publishPidOutput(const pid_output_msg_t& output_msg);
+
+  // Echo PID output data (for MCN echo callback)
+  void echoPidOutput(const pid_output_msg_t* output_data);
+
  private:
   PidBf(const PidBf&) = delete;
   PidBf& operator=(const PidBf&) = delete;
@@ -128,8 +154,19 @@ class PidBf {
   // MCN subscription for RC auxiliary channels
   McnNode_t rc_aux_node_;
 
+  // MCN subscription for RC command (independent subscription for PID thread)
+  McnNode_t rc_command_node_;
+
   // Current auxiliary channels data
   rc_aux_msg_t aux_channels_data_;
+
+  // Current RC command data (from MCN)
+  rc_setpoint_msg_t rc_command_data_;
+
+  // Cached RC command data (for historical data when no new data available)
+  // This ensures PID can always use RC data for smoothing filter even when RC frequency < PID frequency
+  rc_setpoint_msg_t rc_command_data_cached_;
+  bool rc_command_data_valid_;  // Flag to indicate if cached data is valid
 
   // Current data
   gyro_filtered_msg_t gyro_filtered_data_;

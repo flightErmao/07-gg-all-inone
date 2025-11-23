@@ -10,6 +10,7 @@ extern "C" {
 #include "motor_output_msg.h"
 #include "pid_output_msg.h"
 #include "rc_setpoint_msg.h"
+#include "rc_aux_msg.h"
 #include "timestamp.h"
 #include "param.h"
 }
@@ -53,6 +54,14 @@ class MotorBf {
   // Initialize MCN
   rt_err_t initMcn();
 
+  // MCN subscription management
+  rt_err_t subscribeMcnTopics(McnNode_t* pid_output_node, McnNode_t* rc_setpoint_node, McnNode_t* rc_aux_node);
+  void unsubscribeMcnTopics();
+
+  // MCN data update helpers
+  bool updateAuxData(McnNode_t rc_aux_node, rc_aux_msg_t* aux_data, bool* aux_data_valid);
+  bool updateRcSetpointData(McnNode_t rc_setpoint_node, rc_setpoint_msg_t* rc_setpoint);
+
   // Initialize mixer configuration
   void initMixerConfig();
 
@@ -71,6 +80,10 @@ class MotorBf {
   // Motor thread entry point
   static void motorThreadEntry(void* parameter);
 
+  // Motor thread initialization helpers
+  static rt_device_t initMotorDevice();
+  static void cleanupMotorDevice(rt_device_t motor_device);
+
   // Mixer configuration
   uint8_t mixer_mode_;          // Mixer mode (MIXER_QUADX, etc.)
   uint8_t mixer_type_;          // Mixer type (MIXER_LEGACY, etc.)
@@ -80,11 +93,12 @@ class MotorBf {
   // Motor output values
   float motor_[MAX_SUPPORTED_MOTORS];
 
-  // MCN hubs and nodes
-  McnHub_t motor_output_hub_;
+  // MCN nodes and events
+  rt_sem_t pid_output_event_;  // Event semaphore for pid (required for mcn_poll_sync)
   McnNode_t motor_output_node_;
   McnNode_t pid_output_node_;
   McnNode_t rc_setpoint_node_;
+  McnNode_t rc_aux_node_;  // For arm status and flight mode
 
   // Thread
   rt_thread_t motor_thread_;
