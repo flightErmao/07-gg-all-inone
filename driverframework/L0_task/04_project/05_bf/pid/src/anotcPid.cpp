@@ -23,11 +23,6 @@ static void sendRateSetpointActual(uint16_t count_ms) {
     // Get data directly from singleton instances
     PidBf& pid = PidBf::instance();
     
-    // Check if data is ready
-    // if (!pid.isGyroDataReady() || !pid.isSetpointDataReady()) {
-    //   return;  // Data not ready yet, skip this iteration
-    // }
-    
     // Get data directly from PidBf singleton
     const gyro_filtered_msg_t& gyro_data = pid.getGyroFilteredData();
     const pid_setpoint_msg_t& setpoint_data = pid.getSetpointData();

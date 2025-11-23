@@ -9,6 +9,7 @@
 
 extern "C" {
 #include "rc_setpoint_msg.h"
+#include "rc_aux_msg.h"
 #include "timestamp.h"
 #include "taskRc.h"  // pilot_cmd_bus_t
 #include "param.h"
@@ -106,6 +107,10 @@ class RcBf {
   // MCN echo function (called by MCN echo callback)
   // Prints detailed debug information and basic info
   void echoSetpoint(const rc_setpoint_msg_t* setpoint_data);
+  void echoAux(const rc_aux_msg_t* aux_data);
+
+  // Publish auxiliary channels data to MCN
+  void publishAuxChannelsToMcn(uint32_t current_time_us);
 
  private:
   RcBf(const RcBf&) = delete;
@@ -258,10 +263,13 @@ class RcBf {
   
   // MCN hub for publishing rc_setpoint data
   McnHub_t rc_setpoint_hub_;
-  
+
   // MCN node for subscribing rc_setpoint data (for PID thread)
   rt_sem_t rc_setpoint_event_;
   McnNode_t rc_setpoint_node_;
+
+  // MCN hub for publishing rc_aux data
+  McnHub_t rc_aux_hub_;
 };
 
 #endif /* RC_BF_H__ */

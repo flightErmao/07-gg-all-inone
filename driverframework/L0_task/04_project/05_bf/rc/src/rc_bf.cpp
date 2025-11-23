@@ -1,5 +1,6 @@
 #include "rc_bf.h"
 #include "rc_smoothing_filter.h"
+#include "rc_controls_bf.h"
 
 #ifdef PROJECT_BF_PID_EN
 #include "../pid/inc/pid_bf.hpp"
@@ -127,6 +128,15 @@ rt_err_t RcBf::init() {
   pid.setRcSmoothingFilter(&smoothing_filter);
   LOG_I("RC smoothing filter pointer passed to PidBf");
 #endif
+
+  // Initialize RC controls singleton
+  RcControls& rc_controls = RcControls::instance();
+  ret = rc_controls.init();
+  if (ret != RT_EOK) {
+    LOG_E("RC controls init failed");
+    return ret;
+  }
+  LOG_I("RC controls initialized");
 
   // Initialize MCN
   ret = initMcn();
@@ -787,6 +797,16 @@ void RcBf::rcThreadEntry(void* parameter) {
     // Process RC command and publish to MCN (in RC thread)
     // This calculates rawSetpoint[] from rcCommand[] and publishes to MCN for PID thread
     instance->processRcCommand(current_time_us);
+
+    // Process auxiliary channels with RcControls (including failsafe protection)
+    // This handles stick positions, arming/disarming, and flight mode switching
+#ifdef PROJECT_BF_RC_EN
+    RcControls& rc_controls = RcControls::instance();
+    rc_controls.processRcStickPositions(instance->rc_data_, current_time_us);
+#endif
+
+    // Publish auxiliary channels data to MCN (after failsafe protection)
+    instance->publishAuxChannelsToMcn(current_time_us);
 
 #ifdef PROJECT_BF_RC_DEBUG_PIN_EN
     DEBUG_PIN_DEBUG2_LOW();  // Debug pin: RC task execution end

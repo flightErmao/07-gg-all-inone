@@ -77,9 +77,6 @@ static void subTaskRcCommand(uint32_t current_time_us) {
   // Note: This is called at PID frequency (8kHz) even if RC data is at 100Hz
   // The filtered setpoint is directly written to PID singleton's setpoint_data_ member
   smoothing_filter->processFilter(msg_to_use, pid_setpoint_out);
-
-  // Mark setpoint data as ready
-  pid.setSetpointDataReady(true);
 }
 
 static void subTaskPidController(uint32_t current_time_us) {

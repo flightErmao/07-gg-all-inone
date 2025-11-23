@@ -11,6 +11,8 @@ extern "C" {
 #include "bfPidParam.h"
 }
 
+#include "rc_aux_msg.h"
+
 #include <cmath>
 #include <cstring>
 
@@ -70,13 +72,12 @@ PidBf& PidBf::instance() {
 }
 
 PidBf::PidBf()
-    : gyro_filtered_event_(RT_NULL),
+    :       gyro_filtered_event_(RT_NULL),
       gyro_filtered_node_(RT_NULL),
       setpoint_event_(RT_NULL),
       setpoint_node_(RT_NULL),
       pid_output_hub_(nullptr),
-      gyro_data_ready_(false),
-      setpoint_data_ready_(false),
+      rc_aux_node_(RT_NULL),
       rc_smoothing_filter_(nullptr),
       target_looptime_us_(0) {
   std::memset(&gyro_filtered_data_, 0, sizeof(gyro_filtered_data_));
@@ -146,6 +147,15 @@ rt_err_t PidBf::init() {
       gyro_filtered_event_ = RT_NULL;
     }
     return -RT_ERROR;
+  }
+
+  // Subscribe to RC auxiliary channels MCN topic (non-blocking, wait time 0)
+  rc_aux_node_ = mcn_subscribe(MCN_HUB(aux), RT_NULL, RT_NULL);
+  if (rc_aux_node_ == RT_NULL) {
+    LOG_W("subscribe aux topic failed, continuing without aux channel support");
+    // Not critical, continue without aux channel support
+  } else {
+    LOG_I("Subscribed to aux MCN topic");
   }
 
   uint8_t pid_process_denom = 1;
@@ -255,22 +265,28 @@ void PidBf::initFilters() {
 // This function is called from subTaskPidController in taskPid.cpp
 
 void PidBf::processPidController(uint32_t current_time_us) {
-  // Poll for new gyro data (non-blocking)
-  if (mcn_poll_sync(gyro_filtered_node_, RT_WAITING_FOREVER) == RT_TRUE) {
-    if (mcn_copy(MCN_HUB(gyro), gyro_filtered_node_, &gyro_filtered_data_) == RT_EOK) {
-      gyro_data_ready_ = true;
+  // Poll for new auxiliary channels data (non-blocking, wait time 0)
+  // Check if MCN is published before copying
+  // Use mcn_poll instead of mcn_poll_sync for non-blocking check (no event semaphore needed)
+  if (rc_aux_node_ != RT_NULL) {
+    if (mcn_poll(rc_aux_node_) == RT_TRUE) {
+      // New aux channels data available, copy it
+      if (mcn_copy(MCN_HUB(aux), rc_aux_node_, &aux_channels_data_) == RT_EOK) {
+        // Aux channels data updated successfully
+        // This data is available for use in PID control logic
+      }
     }
   }
 
-  // Note: setpoint data is now directly written by processRcSmoothingFilter() in subTaskRcCommand()
-  // No need to subscribe to pid_setpoint MCN topic anymore
-  // setpoint_data_ready_ is set to true by subTaskRcCommand() after calling processRcSmoothingFilter()
-
-  // Process PID controller if gyro data is ready and setpoint data is ready
-  if (gyro_data_ready_ && setpoint_data_ready_) {
-    pidController(current_time_us);
-    gyro_data_ready_ = false;
-    setpoint_data_ready_ = false;  // Reset flag, will be set again by subTaskRcCommand()
+  // Poll for new gyro data (blocking - will wait until data is available)
+  // Since we're using RT_WAITING_FOREVER, once we get data, it's guaranteed to be valid
+  if (mcn_poll_sync(gyro_filtered_node_, RT_WAITING_FOREVER) == RT_TRUE) {
+    if (mcn_copy(MCN_HUB(gyro), gyro_filtered_node_, &gyro_filtered_data_) == RT_EOK) {
+      // Gyro data is ready, setpoint data is already written by processRcSmoothingFilter() in subTaskRcCommand()
+      // Aux channels data is already updated above (if available)
+      // Process PID controller directly
+      pidController(current_time_us);
+    }
   }
 }
 
@@ -332,14 +348,14 @@ void PidBf::pidController(uint32_t current_time_us) {
 }
 
 float PidBf::getSetpointRate(int axis) {
-  if (setpoint_data_ready_ && axis >= 0 && axis < XYZ_AXIS_COUNT) {
+  if (axis >= 0 && axis < XYZ_AXIS_COUNT) {
     return setpoint_data_.rate[axis];
   }
   return 0.0f;
 }
 
 float PidBf::getFeedforward(int axis) {
-  if (setpoint_data_ready_ && axis >= 0 && axis < XYZ_AXIS_COUNT) {
+  if (axis >= 0 && axis < XYZ_AXIS_COUNT) {
     return setpoint_data_.feedforward[axis];
   }
   return 0.0f;

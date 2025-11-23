@@ -11,6 +11,7 @@ extern "C" {
 #include "gyro_filtered_msg.h"
 #include "pid_setpoint_msg.h"
 #include "pid_output_msg.h"
+#include "rc_aux_msg.h"
 #include "param.h"
 #include "timestamp.h"
 }
@@ -93,9 +94,7 @@ class PidBf {
   const gyro_filtered_msg_t& getGyroFilteredData() const { return gyro_filtered_data_; }
   const pid_setpoint_msg_t& getSetpointData() const { return setpoint_data_; }
   pid_setpoint_msg_t& getSetpointDataRef() { return setpoint_data_; }
-  bool isGyroDataReady() const { return gyro_data_ready_; }
-  bool isSetpointDataReady() const { return setpoint_data_ready_; }
-  void setSetpointDataReady(bool ready) { setpoint_data_ready_ = ready; }
+  const rc_aux_msg_t& getAuxChannelsData() const { return aux_channels_data_; }
 
  private:
   PidBf(const PidBf&) = delete;
@@ -126,11 +125,15 @@ class PidBf {
   McnNode_t setpoint_node_;
   McnHub_t pid_output_hub_;
 
+  // MCN subscription for RC auxiliary channels
+  McnNode_t rc_aux_node_;
+
+  // Current auxiliary channels data
+  rc_aux_msg_t aux_channels_data_;
+
   // Current data
   gyro_filtered_msg_t gyro_filtered_data_;
   pid_setpoint_msg_t setpoint_data_;
-  bool gyro_data_ready_;
-  bool setpoint_data_ready_;
 
   // RC smoothing filter instance (set by RC thread during initialization)
   RcSmoothingFilter* rc_smoothing_filter_;
