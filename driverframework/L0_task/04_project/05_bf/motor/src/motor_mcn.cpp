@@ -1,4 +1,4 @@
-#include "motor_bf.h"
+#include "motor_class.h"
 
 extern "C" {
 #include <rtthread.h>

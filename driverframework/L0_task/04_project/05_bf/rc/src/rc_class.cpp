@@ -3,7 +3,7 @@
 #include "rc_aux.h"
 
 #ifdef PROJECT_BF_PID_EN
-#include "../pid/inc/pid_bf.hpp"
+#include "../pid/inc/pid_class.h"
 #endif
 
 extern "C" {
@@ -31,11 +31,25 @@ extern "C" {
 #define RX_INTERVAL_MAX_US 65500
 #define RC_RATE_INCREMENTAL 14.54f
 #define RC_SMOOTHING_CUTOFF_HZ 3200.0f  // 3.2kHz cutoff for smoothing filter
+#define PPM_RCVR_TIMEOUT 0  // PPM receiver timeout value (invalid pulse)
 
 // Helper macros
 #define RXFAIL_STEP_TO_CHANNEL_VALUE(step) (PWM_PULSE_MIN + 25 * step)
 #define CHANNEL_VALUE_TO_RXFAIL_STEP(channelValue) \
   ((constrainf(channelValue, PWM_PULSE_MIN, PWM_PULSE_MAX) - PWM_PULSE_MIN) / 25)
+
+// Helper function: constrain float value
+static inline float constrainf(float x, float min, float max) {
+  if (x < min) return min;
+  if (x > max) return max;
+  return x;
+}
+
+// Constants
+#define MAX_SUPPORTED_RC_CHANNEL_COUNT 16
+#define ROLL 0
+#define PITCH 1
+#define YAW 2
 
 // Singleton instance
 RcBf& RcBf::instance() {
@@ -45,30 +59,31 @@ RcBf& RcBf::instance() {
 
 // Constructor
 RcBf::RcBf()
-    : rcCommandDivider_(500.0f),     // Will be updated in initRcControlsConfig()
-      rcCommandYawDivider_(500.0f),  // Will be updated in initRcControlsConfig()
+    : rate_profile_(),
+      rc_controls_config_(),
+      rc_data_new_(false),
+      rx_receiving_signal_(false),
       last_rc_time_us_(0),
       previous_rx_interval_us_(0),
       current_rx_interval_us_(0),
       current_rx_rate_hz_(100.0f),
       smoothed_rx_rate_hz_(100.0f),
       is_rx_rate_valid_(false),
-      rx_receiving_signal_(false),
-      rx_flight_channels_valid_(false),
-      is_rc_data_new_(false),
       rc_thread_(RT_NULL),
-      rc_thread_stack_(nullptr),
       thread_inited_(false),
-      rc_device_(RT_NULL),
-      channel_count_(MAX_SUPPORTED_RC_CHANNEL_COUNT),
-      rc_loss_count_(0),
-      seq_(0),
-      target_looptime_s_(0.0003125f),  // 3.2kHz default
       rc_setpoint_hub_(nullptr),
       rc_setpoint_event_(RT_NULL),
-      rc_setpoint_node_(RT_NULL) {
+      rc_setpoint_node_(RT_NULL),
+      seq_(0),
+      target_looptime_s_(0.0003125f),  // 3.2kHz default
+      channel_count_(16),  // Default to 16 channels
+      rx_flight_channels_valid_(false),
+      is_rc_data_new_(false),
+      rc_device_(RT_NULL),
+      rcCommandDivider_(500.0f),
+      rcCommandYawDivider_(500.0f),
+      rc_loss_count_(0) {
   std::memset(rc_raw_channels_, 0, sizeof(rc_raw_channels_));
-  std::memset(rc_raw_, 0, sizeof(rc_raw_));
   std::memset(rc_data_, 0, sizeof(rc_data_));
   std::memset(rc_command_, 0, sizeof(rc_command_));
   std::memset(rawSetpoint_, 0, sizeof(rawSetpoint_));
@@ -77,16 +92,16 @@ RcBf::RcBf()
   std::memset(maxRcRate_, 0, sizeof(maxRcRate_));
   std::memset(feedforward_, 0, sizeof(feedforward_));
   std::memset(prevSetpoint_, 0, sizeof(prevSetpoint_));
-  std::memset(valid_rx_signal_timeout_, 0, sizeof(valid_rx_signal_timeout_));
   std::memset(&rc_thread_obj_, 0, sizeof(rc_thread_obj_));
-  std::memset(&rate_profile_, 0, sizeof(rate_profile_));
-  std::memset(&rc_controls_config_, 0, sizeof(rc_controls_config_));
+  std::memset(rc_thread_stack_, 0, sizeof(rc_thread_stack_));
   std::memset(channel_range_configs_, 0, sizeof(channel_range_configs_));
   std::memset(rcmap_, 0, sizeof(rcmap_));
   std::memset(failsafe_configs_, 0, sizeof(failsafe_configs_));
+  std::memset(valid_rx_signal_timeout_, 0, sizeof(valid_rx_signal_timeout_));
+  std::memset(rc_raw_, 0, sizeof(rc_raw_));
 
   // Initialize default values
-  for (int i = 0; i < MAX_SUPPORTED_RC_CHANNEL_COUNT; i++) {
+  for (int i = 0; i < 16; i++) {
     rc_data_[i] = PWM_RANGE_MIDDLE;  // Default to middle
     valid_rx_signal_timeout_[i] = MAX_INVALID_PULSE_TIME_MS;
   }
@@ -97,12 +112,7 @@ RcBf::~RcBf() {
   if (thread_inited_ && rc_thread_ != RT_NULL) {
     rt_thread_delete(rc_thread_);
   }
-  if (rc_thread_stack_ != nullptr) {
-    delete[] rc_thread_stack_;
-  }
-  if (rc_device_ != RT_NULL) {
-    rt_device_close(rc_device_);
-  }
+  // rc_thread_stack_ is a fixed-size array, no need to delete
 }
 
 rt_err_t RcBf::init() {
@@ -145,21 +155,8 @@ rt_err_t RcBf::init() {
     return ret;
   }
 
-  // Initialize RC device
-  ret = initRcDevice();
-  if (ret != RT_EOK) {
-    LOG_E("RC device init failed");
-    return ret;
-  }
-
-  // Allocate thread stack
-  size_t stack_size = PROJECT_BF_RC_THREAD_STACK_SIZE;
-  rc_thread_stack_ = new rt_uint8_t[stack_size];
-  if (rc_thread_stack_ == nullptr) {
-    LOG_E("Failed to allocate thread stack");
-    return -RT_ENOMEM;
-  }
-  std::memset(rc_thread_stack_, 0, stack_size);
+  // Initialize thread (rc_thread_stack_ is a fixed-size array, not dynamically allocated)
+  size_t stack_size = RC_THREAD_STACK_SIZE;
   
   // Initialize thread
   ret = rt_thread_init(&rc_thread_obj_, "rc_bf", rcThreadEntry, this, rc_thread_stack_, stack_size,
@@ -167,8 +164,6 @@ rt_err_t RcBf::init() {
 
   if (ret != RT_EOK) {
     LOG_E("RC thread init failed: %d", ret);
-    delete[] rc_thread_stack_;
-    rc_thread_stack_ = nullptr;
     return ret;
   }
   
@@ -448,7 +443,7 @@ void RcBf::applyRangeScaling() {
     if (channel < NON_AUX_CHANNEL_COUNT) {
       const rxChannelRangeConfig_t* range = &channel_range_configs_[channel];
       if (sample != PPM_RCVR_TIMEOUT) {
-        sample = scaleRangef(sample, range->min, range->max, PWM_RANGE_MIN, PWM_RANGE_MAX);
+        sample = this->scaleRangef(sample, range->min, range->max, PWM_RANGE_MIN, PWM_RANGE_MAX);
       }
     }
     
@@ -464,7 +459,7 @@ void RcBf::applyFailsafeAndConstraints(uint32_t current_time_us) {
   
   for (int channel = 0; channel < channel_count_; channel++) {
     float sample = rc_raw_[channel];
-    bool this_channel_valid = rx_flight_channels_valid_ && isPulseValid(sample);
+    bool this_channel_valid = rx_flight_channels_valid_ && this->isPulseValid(static_cast<uint16_t>(sample));
     
     if (this_channel_valid) {
       valid_rx_signal_timeout_[channel] = current_time_ms + MAX_INVALID_PULSE_TIME_MS;
@@ -473,7 +468,7 @@ void RcBf::applyFailsafeAndConstraints(uint32_t current_time_us) {
     // Apply failsafe logic
     if (!rx_receiving_signal_) {
       // Signal lost - apply failsafe
-      const rxFailsafeChannelConfig_t* failsafe = &failsafe_configs_[channel];
+      const rxFailsafeConfig_t* failsafe = &failsafe_configs_[channel];
       
       if (failsafe->mode == 0) {  // Auto
         if (channel == THROTTLE) {
@@ -498,7 +493,7 @@ void RcBf::applyFailsafeAndConstraints(uint32_t current_time_us) {
         if (channel < NON_AUX_CHANNEL_COUNT) {
           rx_flight_channels_valid_ = false;
         }
-        const rxFailsafeChannelConfig_t* failsafe = &failsafe_configs_[channel];
+        const rxFailsafeConfig_t* failsafe = &failsafe_configs_[channel];
         if (failsafe->mode == 2) {
           sample = RXFAIL_STEP_TO_CHANNEL_VALUE(failsafe->step);
         } else {
@@ -521,8 +516,8 @@ void RcBf::updateRcCommands() {
   for (int axis = 0; axis < 3; axis++) {
     float rc = constrainf(rc_data_[axis] - midrc, -500.0f, 500.0f);
     float rc_deadband = 0.0f;
-    
-    if (axis == ROLL || axis == PITCH) {
+
+    if (axis == FD_ROLL || axis == FD_PITCH) {
       rc_deadband = rc_controls_config_.deadband;
     } else {
       rc_deadband = rc_controls_config_.yaw_deadband;
@@ -530,7 +525,7 @@ void RcBf::updateRcCommands() {
         rc = -rc;
       }
     }
-    
+
     rc_command_[axis] = applyDeadband(rc, rc_deadband) + midrc;  // Convert back to 1000-2000 range
   }
   
@@ -559,11 +554,11 @@ void RcBf::processRcCommand(uint32_t current_time_us) {
     float rc_commandf = 0.0f;
     
     if (axis == FD_ROLL) {
-      rc_commandf = (rc_command_[ROLL] - PWM_RANGE_MIDDLE) / rcCommandDivider_;
+      rc_commandf = (rc_command_[FD_ROLL] - PWM_RANGE_MIDDLE) / rcCommandDivider_;
     } else if (axis == FD_PITCH) {
-      rc_commandf = (rc_command_[PITCH] - PWM_RANGE_MIDDLE) / rcCommandDivider_;
+      rc_commandf = (rc_command_[FD_PITCH] - PWM_RANGE_MIDDLE) / rcCommandDivider_;
     } else if (axis == FD_YAW) {
-      rc_commandf = (rc_command_[YAW] - PWM_RANGE_MIDDLE) / rcCommandYawDivider_;
+      rc_commandf = (rc_command_[FD_YAW] - PWM_RANGE_MIDDLE) / rcCommandYawDivider_;
     }
     
     rc_commandf = constrainf(rc_commandf, -1.0f, 1.0f);
@@ -681,7 +676,7 @@ void RcBf::printDebugInfo(const rc_command_msg_t* setpoint_msg) const {
 
   // Print detailed calculation for each axis
   const char* axis_names[] = {"Roll", "Pitch", "Yaw"};
-  const int channel_idx[] = {ROLL, PITCH, YAW};
+  const int channel_idx[] = {FD_ROLL, FD_PITCH, FD_YAW};
 
   for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
     LOG_I("--- %s Axis ---", axis_names[axis]);
@@ -694,11 +689,11 @@ void RcBf::printDebugInfo(const rc_command_msg_t* setpoint_msg) const {
     // Calculate rc_commandf (same as in processRcCommand)
     float rc_commandf = 0.0f;
     if (axis == FD_ROLL) {
-      rc_commandf = (rc_command_[ROLL] - PWM_RANGE_MIDDLE) / rcCommandDivider_;
+      rc_commandf = (rc_command_[FD_ROLL] - PWM_RANGE_MIDDLE) / rcCommandDivider_;
     } else if (axis == FD_PITCH) {
-      rc_commandf = (rc_command_[PITCH] - PWM_RANGE_MIDDLE) / rcCommandDivider_;
+      rc_commandf = (rc_command_[FD_PITCH] - PWM_RANGE_MIDDLE) / rcCommandDivider_;
     } else if (axis == FD_YAW) {
-      rc_commandf = (rc_command_[YAW] - PWM_RANGE_MIDDLE) / rcCommandYawDivider_;
+      rc_commandf = (rc_command_[FD_YAW] - PWM_RANGE_MIDDLE) / rcCommandYawDivider_;
     }
     rc_commandf = constrainf(rc_commandf, -1.0f, 1.0f);
     float rc_commandf_abs = std::abs(rc_commandf);
@@ -800,10 +795,8 @@ void RcBf::rcThreadEntry(void* parameter) {
 
     // Process auxiliary channels with RcControls (including failsafe protection)
     // This handles stick positions, arming/disarming, and flight mode switching
-#ifdef PROJECT_BF_RC_EN
     RcControls& rc_controls = RcControls::instance();
     rc_controls.processRcStickPositions(instance->rc_data_, current_time_us);
-#endif
 
     // Publish auxiliary channels data to MCN (after failsafe protection)
     instance->publishAuxChannelsToMcn(current_time_us);

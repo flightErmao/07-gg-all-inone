@@ -12,6 +12,7 @@ extern "C" {
 #include <cstring>
 #include "rc_mcn.h"
 #include "rc_aux.h"
+#include "rc_smooth.h"  // For THROTTLE definition
 
 /* 定义 RC setpoint MCN 话题（在本文件内完成定义与发布） */
 MCN_DEFINE(rc, sizeof(rc_command_msg_t));

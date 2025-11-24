@@ -12,7 +12,7 @@ extern "C" {
 #include "rc_mcn.h"  // For MCN_DECLARE(rc), rc_command_msg_t, rc_aux_msg_t
 }
 
-#include "rc_smooth.h"  // For RcSmoothingFilter::getSmoothedThrottle()
+#include "rc_smooth.h"  // For RcSmoothingFilter
 
 #include <cmath>
 #include <cstring>
@@ -80,7 +80,9 @@ PidBf::PidBf()
       rc_command_node_(RT_NULL),
       rc_command_data_valid_(false),
       rc_smoothing_filter_(nullptr),
-      target_looptime_us_(0) {
+      target_looptime_us_(0),
+      main_thread_(RT_NULL),
+      main_thread_inited_(false) {
   std::memset(&gyro_filtered_data_, 0, sizeof(gyro_filtered_data_));
   std::memset(&setpoint_data_, 0, sizeof(setpoint_data_));
   std::memset(&rc_command_data_, 0, sizeof(rc_command_data_));
@@ -88,6 +90,8 @@ PidBf::PidBf()
   std::memset(&pid_runtime_, 0, sizeof(pid_runtime_));
   std::memset(pid_data_, 0, sizeof(pid_data_));
   std::memset(&pid_profile_, 0, sizeof(pid_profile_));
+  std::memset(&main_thread_obj_, 0, sizeof(main_thread_obj_));
+  std::memset(main_thread_stack_, 0, sizeof(main_thread_stack_));
 
   pid_runtime_.pidStabilisationEnabled = true;
   pid_runtime_.dT = 0.0f;
@@ -276,12 +280,8 @@ void PidBf::pidController(uint32_t current_time_us) {
       output_msg.pid_f[axis] = 0.0f;
     }
 
-    // Get smoothed throttle from RC smoothing filter (even when disarmed, for consistency)
-    if (rc_smoothing_filter_ != nullptr) {
-      output_msg.smoothed_throttle = rc_smoothing_filter_->getSmoothedThrottle();
-    } else {
-      output_msg.smoothed_throttle = 0.0f;
-    }
+    // Get smoothed throttle from setpoint data (already filtered by RC smoothing filter)
+    output_msg.smoothed_throttle = setpoint_data_.smoothed_throttle;
 
     // Reset previous setpoint and D term history
     for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
@@ -315,12 +315,8 @@ void PidBf::pidController(uint32_t current_time_us) {
       output_msg.pid_f[axis] = 0.0f;
     }
 
-    // Get smoothed throttle from RC smoothing filter
-    if (rc_smoothing_filter_ != nullptr) {
-      output_msg.smoothed_throttle = rc_smoothing_filter_->getSmoothedThrottle();
-    } else {
-      output_msg.smoothed_throttle = 0.0f;
-    }
+    // Get smoothed throttle from setpoint data (already filtered by RC smoothing filter)
+    output_msg.smoothed_throttle = setpoint_data_.smoothed_throttle;
 
     publishPidOutput(output_msg);
     return;
@@ -375,12 +371,9 @@ void PidBf::pidController(uint32_t current_time_us) {
     output_msg.pid_f[axis] = pid_data_[axis].F;
   }
 
-  // Get smoothed throttle from RC smoothing filter (same as Betaflight: rcCommand[THROTTLE] is smoothed)
-  if (rc_smoothing_filter_ != nullptr) {
-    output_msg.smoothed_throttle = rc_smoothing_filter_->getSmoothedThrottle();
-  } else {
-    output_msg.smoothed_throttle = 0.0f;
-  }
+  // Get smoothed throttle from setpoint data (already filtered by RC smoothing filter)
+  // Same as Betaflight: rcCommand[THROTTLE] is smoothed and stored in setpoint_data_
+  output_msg.smoothed_throttle = setpoint_data_.smoothed_throttle;
 
   publishPidOutput(output_msg);
 }
@@ -404,22 +397,111 @@ float PidBf::getMaxRcRate(int axis) {
   return 720.0f;
 }
 
+void PidBf::subTaskRcCommand(uint32_t current_time_us) {
+  // PID Task (8kHz): Process RC smoothing filter
+  // Note: processRcCommand is now in RC thread (100-200Hz), data passed via MCN to avoid data tearing
+  (void)current_time_us;
+
+  // Get RC smoothing filter instance from PID
+  RcSmoothingFilter* smoothing_filter = getRcSmoothingFilter();
+  if (smoothing_filter == nullptr) {
+    return;  // RC smoothing filter not initialized yet
+  }
+
+  // Step 1: Get RC command data from MCN (for smoothing filter)
+  // This polls MCN topic using mcn_poll (non-blocking) and always returns valid data pointer
+  // Returns new data if available, otherwise cached historical data
+  // This ensures smoothing filter can process RC data at PID frequency (3.2kHz) even when RC frequency is only 65Hz
+  const rc_command_msg_t* rc_command_msg = updateRcCommandFromMcn();
+
+  // Step 2: Process smoothing filter with RC command data
+  // Get PID setpoint data reference for direct write (filter will write filtered data here)
+  pid_setpoint_msg_t* pid_setpoint_out = &getSetpointDataRef();
+
+  // Process RC smoothing filter: rc_command_msg → filtered → pid_setpoint_out
+  // rc_command_msg is always valid (new data or cached historical data)
+  // Filter will process RC command data at PID frequency (3.2kHz) even when RC frequency is only 65Hz
+  // The filtered setpoint is directly written to PID singleton's setpoint_data_ member
+  smoothing_filter->processFilter(rc_command_msg, pid_setpoint_out);
+
+  // Step 3: Get RC aux channels data from MCN
+  // This polls MCN topic and updates internal aux_channels_data_ in PID module
+  updateRcAuxFromMcn();
+}
+
+void PidBf::pidMainLoop() {
+  LOG_I("PidMain loop started");
+
+  while (true) {
+    uint32_t current_time_us = timestamp_micros();
+    subTaskRcCommand(current_time_us);
+    processPidController(current_time_us);
+  }
+}
+
+void PidBf::workerEntry(void* parameter) {
+  auto* self = static_cast<PidBf*>(parameter);
+  if (!self) {
+    return;
+  }
+  self->pidMainLoop();
+}
+
+rt_err_t PidBf::startMainThread() {
+  if (main_thread_inited_) {
+    LOG_W("PidMain already initialized");
+    return RT_EOK;
+  }
+
+  // Initialize main thread
+  rt_err_t ret = rt_thread_init(&main_thread_obj_, "pid_main", workerEntry, this,
+                                 main_thread_stack_, PROJECT_BF_PID_THREAD_STACK_SIZE,
+                                 PROJECT_BF_PID_THREAD_PRIORITY,
+                                 PROJECT_BF_PID_THREAD_TIMESLICE);
+
+  if (ret != RT_EOK) {
+    LOG_E("PidMain thread init failed: %d", ret);
+    return ret;
+  }
+
+  main_thread_ = &main_thread_obj_;
+  main_thread_inited_ = true;
+
+  ret = rt_thread_startup(main_thread_);
+  if (ret != RT_EOK) {
+    LOG_E("PidMain thread startup failed: %d", ret);
+    main_thread_inited_ = false;
+    return ret;
+  }
+
+  return RT_EOK;
+}
+
 // RT-Thread 自动初始化包装函数
-// NOTE: Disabled - using taskPid.cpp main thread instead
-// #ifdef PROJECT_BF_PID_EN
-// extern "C" {
-// static int pid_bf_init_wrapper(void) {
-//   PidBf& instance = PidBf::instance();
-//   rt_err_t ret = instance.init();
-//   if (ret == RT_EOK) {
-//     LOG_I("PidBf auto-init success");
-//   } else {
-//     LOG_E("PidBf auto-init failed: %d", ret);
-//   }
-//   return (int)ret;
-// }
-// INIT_APP_EXPORT(pid_bf_init_wrapper);
-// }
-// #endif
-#
+#ifdef PROJECT_BF_PID_EN
+extern "C" {
+static int pid_main_init_wrapper(void) {
+  // Small delay to ensure RcBf is initialized first
+  rt_thread_mdelay(10);
+  
+  PidBf& pid = PidBf::instance();
+  rt_err_t ret = pid.init();
+  if (ret != RT_EOK) {
+    LOG_E("PidBf init failed: %d", ret);
+    return (int)ret;
+  }
+  LOG_I("PidBf initialized successfully");
+
+  ret = pid.startMainThread();
+  if (ret == RT_EOK) {
+    LOG_I("PidMain auto-init success");
+  } else {
+    LOG_E("PidMain auto-init failed: %d", ret);
+  }
+  return (int)ret;
+}
+INIT_APP_EXPORT(pid_main_init_wrapper);
+}
+#endif
+
 

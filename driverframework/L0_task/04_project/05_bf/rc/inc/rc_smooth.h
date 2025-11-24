@@ -7,10 +7,12 @@
 
 extern "C" {
 #include "rc_mcn.h"  // For rc_command_msg_t
-#include "pid_setpoint_msg.h"
 #include "filter.h"  // pt3Filter_t
 #include "param.h"
 }
+
+// Forward declaration (defined in pid_class.h)
+struct pid_setpoint_msg_t;
 
 // Constants
 #define PRIMARY_CHANNEL_COUNT 4  // Roll, Pitch, Yaw, Throttle
@@ -54,7 +56,7 @@ class RcSmoothingFilter {
   // Input: rc_command_msg_t from MCN (to avoid data tearing between threads)
   // Output: pid_setpoint_msg_t (filtered setpoint for PID)
   // Called from PID thread at high frequency (8kHz)
-  void processFilter(const rc_command_msg_t* setpoint_msg, pid_setpoint_msg_t* pid_setpoint_out);
+  void processFilter(const rc_command_msg_t* rc_command_msg, pid_setpoint_msg_t* pid_setpoint_out);
 
   // Get last cached rc_setpoint message (for smoothing filter when no new data)
   const rc_command_msg_t* getLastRcSetpointMsg() const { return &last_rc_setpoint_msg_; }

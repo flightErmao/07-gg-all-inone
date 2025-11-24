@@ -1,4 +1,5 @@
 #include "rc_smooth.h"
+#include "../pid/inc/pid_class.h"  // For pid_setpoint_msg_t
 
 extern "C" {
 #include <rtthread.h>
@@ -154,15 +155,15 @@ void RcSmoothingFilter::updateFilterCutoffs(float target_looptime_s, float smoot
   smoothing_data_.throttleCutoffFrequency = throttle_cutoff;
 }
 
-void RcSmoothingFilter::processFilter(const rc_command_msg_t* setpoint_msg, pid_setpoint_msg_t* pid_setpoint_out) {
+void RcSmoothingFilter::processFilter(const rc_command_msg_t* rc_command_msg, pid_setpoint_msg_t* pid_setpoint_out) {
   if (!initialized_ || pid_setpoint_out == nullptr) {
     return;
   }
 #ifdef PROJECT_BF_RC_DEBUG_PIN_EN
     DEBUG_PIN_DEBUG1_LOW();  // Debug pin: RC task execution end
 #endif
-  // Use cached data if setpoint_msg is null (for PID thread frequency update)
-  const rc_command_msg_t* msg_to_use = setpoint_msg;
+  // Use cached data if rc_command_msg is null (for PID thread frequency update)
+  const rc_command_msg_t* msg_to_use = rc_command_msg;
   if (msg_to_use == nullptr) {
     msg_to_use = &last_rc_setpoint_msg_;
     // If no cached data yet, skip processing
@@ -171,7 +172,7 @@ void RcSmoothingFilter::processFilter(const rc_command_msg_t* setpoint_msg, pid_
     }
   } else {
     // Cache the new data
-    std::memcpy(&last_rc_setpoint_msg_, setpoint_msg, sizeof(rc_command_msg_t));
+    std::memcpy(&last_rc_setpoint_msg_, rc_command_msg, sizeof(rc_command_msg_t));
   }
 
   // Prepare output data
@@ -224,6 +225,8 @@ void RcSmoothingFilter::processFilter(const rc_command_msg_t* setpoint_msg, pid_
   }
   // Copy smoothed feedforward values (same as Betaflight: use feedforwardSmoothed)
   std::memcpy(pid_setpoint_out->feedforward, feedforward_smoothed_, sizeof(feedforward_smoothed_));
+  // Copy smoothed throttle value
+  pid_setpoint_out->smoothed_throttle = smoothed_throttle_;
   // Copy timestamp and sequence
   pid_setpoint_out->timestamp = output_timestamp;
   pid_setpoint_out->seq = output_seq;

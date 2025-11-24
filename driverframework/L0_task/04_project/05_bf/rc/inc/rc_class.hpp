@@ -8,28 +8,48 @@
 #include <cstring>
 
 extern "C" {
-#include "pid_setpoint_msg.h"
+#include "rc_mcn.h"
 #include "timestamp.h"
 #include "taskRc.h"  // pilot_cmd_bus_t
 #include "param.h"
 }
 
-// Forward declarations
-struct rc_command_msg_t;
-struct rc_aux_msg_t;
+// Forward declarations (rc_command_msg_t and rc_aux_msg_t are typedefs defined in rc_mcn.h)
 
-// Simple lowpass filter structure (same as in pid_bf.hpp)
+// Simple lowpass filter structure (shared with pid_class.h)
+#ifndef SIMPLE_LOWPASS_DEFINED
+#define SIMPLE_LOWPASS_DEFINED
 struct SimpleLowpass {
   float state;
   float alpha;
   bool enabled;
 };
+#endif
 
 #define FD_ROLL 0
 #define FD_PITCH 1
 #define FD_YAW 2
 #define XYZ_AXIS_COUNT 3
 #define PRIMARY_CHANNEL_COUNT 4  // Roll, Pitch, Yaw, Throttle
+#define ROLL 0
+#define PITCH 1
+#define YAW 2
+#define NON_AUX_CHANNEL_COUNT 4  // Roll, Pitch, Yaw, Throttle
+
+// Channel range configuration
+struct rxChannelRangeConfig_t {
+  uint16_t min;
+  uint16_t max;
+};
+
+// Channel mapping array type
+typedef uint8_t rcmap_t[16];
+
+// Failsafe configuration
+struct rxFailsafeConfig_t {
+  uint8_t mode;  // 0=auto, 1=hold
+  uint8_t step;  // Step value for failsafe
+};
 
 // Rate profile structure
 struct rateProfile_t {
@@ -76,6 +96,12 @@ class RcBf {
   // Get RC data and command arrays (for echo functions)
   const float* getRcData() const { return rc_data_; }
   const float* getRcCommandArray() const { return rc_command_; }
+  
+  // Get RC command for a specific channel
+  float getRcCommand(int channel) const;
+  
+  // Print debug information
+  void printDebugInfo(const rc_command_msg_t* setpoint_msg) const;
 
  private:
   RcBf(const RcBf&) = delete;
@@ -99,8 +125,38 @@ class RcBf {
   // Initialize RC controls config from parameters
   void initRcControlsConfig();
   
+  // Initialize RC device
+  rt_err_t initRcDevice();
+  
+  // Initialize channel range configurations
+  void initChannelRangeConfigs();
+  
+  // Initialize channel mapping
+  void initChannelMapping();
+  
+  // Parse channel mapping string
+  void parseChannelMapping(const char* map_string);
+  
+  // Initialize failsafe configurations
+  void initFailsafeConfigs();
+  
+  // Apply range scaling
+  void applyRangeScaling();
+  
+  // Apply failsafe and constraints
+  void applyFailsafeAndConstraints(uint32_t current_time_us);
+  
   // Apply rates calculation (Betaflight style)
   float applyBetaflightRates(int axis, float rcCommandf, float rcCommandfAbs) const;
+  
+  // Helper: constrain float
+  float constrainf(float x, float min, float max) const;
+  
+  // Helper: scale range
+  float scaleRangef(float x, float in_min, float in_max, float out_min, float out_max) const;
+  
+  // Helper: check if pulse is valid
+  bool isPulseValid(uint16_t pulseDuration) const;
   
   // Update RC refresh rate
   void updateRcRefreshRate(uint32_t current_time_us, bool rxReceivingSignal);
@@ -191,6 +247,31 @@ class RcBf {
   uint8_t channel_count_;  // Number of RC channels
   bool rx_flight_channels_valid_;  // Flight channels valid status
   bool is_rc_data_new_;  // Flag indicating new RC data available
+  
+  // RC device handle
+  rt_device_t rc_device_;
+  
+  // Command dividers for normalization
+  float rcCommandDivider_;
+  float rcCommandYawDivider_;
+  
+  // Channel range configurations
+  rxChannelRangeConfig_t channel_range_configs_[16];
+  
+  // Channel mapping (logical to physical)
+  rcmap_t rcmap_;
+  
+  // Failsafe configurations
+  rxFailsafeConfig_t failsafe_configs_[16];
+  
+  // RC loss count
+  uint32_t rc_loss_count_;
+  
+  // Valid RX signal timeout (per channel)
+  uint32_t valid_rx_signal_timeout_[16];
+  
+  // Raw RC data (before processing)
+  uint16_t rc_raw_[16];
 };
 
 #endif /* RC_BF_HPP__ */

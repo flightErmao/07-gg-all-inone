@@ -8,11 +8,16 @@ src = Glob("./src/*.cpp")
 include_paths = [
     cwd,
     os.path.join(cwd, "inc"),  # rc_bf.h
-    os.path.join(cwd, "../pid/inc"),  # pid_setpoint_msg.h
     os.path.join(cwd, "../param/inc"),  # param.h (getParam function)
-    os.path.join(cwd, "..", "..", "02_fmt", "01_TASK_RC", "inc"),  # taskRc.h, pilot_cmd_bus_t
-    os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "01_module", "05_timestamp", "inc"),  # timestamp.h
-    os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "06_bf_lib", "common", "inc"),  # filter.h, pt3Filter_t
+    os.path.join(
+        cwd, "..", "..", "02_fmt", "01_TASK_RC", "inc"
+    ),  # taskRc.h, pilot_cmd_bus_t
+    os.path.join(
+        cwd, "..", "..", "..", "..", "L1_middleWare", "01_module", "05_timestamp", "inc"
+    ),  # timestamp.h
+    os.path.join(
+        cwd, "..", "..", "..", "..", "L1_middleWare", "06_bf_lib", "common", "inc"
+    ),  # filter.h, pt3Filter_t
     os.path.join(
         cwd, "..", "..", "..", "..", "L1_middleWare", "01_module", "03_debugPin"
     ),  # debugPin.h 所在目录
@@ -30,4 +35,3 @@ group = DefineGroup(
 )
 
 Return("group")
-

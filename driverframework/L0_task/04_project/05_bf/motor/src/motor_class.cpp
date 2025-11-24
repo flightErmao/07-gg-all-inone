@@ -1,3 +1,5 @@
+#include "motor_class.h"
+
 extern "C" {
 #include <rtthread.h>
 #include <rtconfig.h>

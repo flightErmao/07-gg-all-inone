@@ -17,6 +17,17 @@ extern "C" {
 // Forward declaration
 class RcSmoothingFilter;
 
+// SimpleLowpass structure (defined in rc_class.hpp, forward declare here to avoid circular dependency)
+// If rc_class.hpp is included, this will be a duplicate definition, so we use a guard
+#ifndef SIMPLE_LOWPASS_DEFINED
+#define SIMPLE_LOWPASS_DEFINED
+struct SimpleLowpass {
+  float state;
+  float alpha;
+  bool enabled;
+};
+#endif
+
 #define FD_ROLL 0
 #define FD_PITCH 1
 #define FD_YAW 2
@@ -65,10 +76,14 @@ struct pidRuntime_t {
   float itermLimitYaw;
 };
 
-struct SimpleLowpass {
-  float state;
-  float alpha;
-  bool enabled;
+/* PID setpoint message type (internal to PID module) */
+/* This message contains filtered setpoint data from RC smoothing filter */
+struct pid_setpoint_msg_t {
+  float rate[3];            // Filtered setpoint rates [roll, pitch, yaw] (deg/s)
+  float feedforward[3];     // Feedforward values [roll, pitch, yaw]
+  float smoothed_throttle; // Smoothed throttle value (from RC smoothing filter, in PWM range 1000-2000)
+  uint32_t timestamp;      // Timestamp in microseconds
+  uint32_t seq;            // Sequence number
 };
 
 class PidBf {
@@ -85,8 +100,11 @@ class PidBf {
   void setRcSmoothingFilter(RcSmoothingFilter* filter) { rc_smoothing_filter_ = filter; }
   RcSmoothingFilter* getRcSmoothingFilter() { return rc_smoothing_filter_; }
 
-  // Process PID controller (called from subTaskPidController in taskPid.cpp)
+  // Process PID controller (called from main thread loop)
   void processPidController(uint32_t current_time_us);
+
+  // Start main PID thread (replaces pidMainInit)
+  rt_err_t startMainThread();
 
   // Get current data (for logging/debugging)
   const gyro_filtered_msg_t& getGyroFilteredData() const { return gyro_filtered_data_; }
@@ -128,6 +146,11 @@ class PidBf {
 
   // PID controller main function
   void pidController(uint32_t current_time_us);
+
+  // Main thread functions
+  void subTaskRcCommand(uint32_t current_time_us);
+  void pidMainLoop();
+  static void workerEntry(void* parameter);
 
   // Helper functions
   float getSetpointRate(int axis);
@@ -173,6 +196,12 @@ class PidBf {
 
   // Target looptime (from pid_process_denom)
   uint32_t target_looptime_us_;
+
+  // Main thread instance
+  rt_thread_t main_thread_;
+  struct rt_thread main_thread_obj_;
+  rt_uint8_t main_thread_stack_[PROJECT_BF_PID_THREAD_STACK_SIZE];
+  bool main_thread_inited_;
 };
 
 #endif /* PID_BF_HPP__ */

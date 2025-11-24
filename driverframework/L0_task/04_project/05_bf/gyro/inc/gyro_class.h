@@ -9,7 +9,7 @@
 
 extern "C" {
 #include "imu_mcn.h"
-#include "gyro_filtered_msg.h"
+#include "gyro_mcn.h"
 }
 
 #include "bfGyroLpfFilter.hpp"
