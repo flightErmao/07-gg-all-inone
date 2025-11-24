@@ -88,7 +88,7 @@ class RcBf {
 
   // MCN related functions
   rt_err_t initMcn();
-  void publishSetpointToMcn(uint32_t current_time_us);
+  void publishRcCommandToMcn(uint32_t current_time_us);
   void publishAuxChannelsToMcn(uint32_t current_time_us);
   void echoSetpoint(const rc_command_msg_t* setpoint_data);
   void echoAux(const rc_aux_msg_t* aux_data);
@@ -96,10 +96,7 @@ class RcBf {
   // Get RC data and command arrays (for echo functions)
   const float* getRcData() const { return rc_data_; }
   const float* getRcCommandArray() const { return rc_command_; }
-  
-  // Get RC command for a specific channel
-  float getRcCommand(int channel) const;
-  
+
   // Print debug information
   void printDebugInfo(const rc_command_msg_t* setpoint_msg) const;
 
@@ -231,10 +228,9 @@ class RcBf {
   McnHub_t pid_setpoint_hub_;
   
   // MCN hubs and nodes for RC setpoint and aux channels
-  McnHub_t rc_setpoint_hub_;
+  McnHub_t rc_command_hub_;
   McnHub_t rc_aux_hub_;
   rt_sem_t rc_setpoint_event_;
-  McnNode_t rc_setpoint_node_;
 
   // Sequence counter
   uint32_t seq_;

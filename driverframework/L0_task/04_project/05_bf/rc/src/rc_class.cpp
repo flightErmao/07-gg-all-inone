@@ -71,12 +71,11 @@ RcBf::RcBf()
       is_rx_rate_valid_(false),
       rc_thread_(RT_NULL),
       thread_inited_(false),
-      rc_setpoint_hub_(nullptr),
+      rc_command_hub_(nullptr),
       rc_setpoint_event_(RT_NULL),
-      rc_setpoint_node_(RT_NULL),
       seq_(0),
       target_looptime_s_(0.0003125f),  // 3.2kHz default
-      channel_count_(16),  // Default to 16 channels
+      channel_count_(16),              // Default to 16 channels
       rx_flight_channels_valid_(false),
       is_rc_data_new_(false),
       rc_device_(RT_NULL),
@@ -122,6 +121,8 @@ rt_err_t RcBf::init() {
   initFailsafeConfigs();
   initRateProfile();
   initRcControlsConfig();
+
+  initRcDevice();
 
   // Initialize RC smoothing filter singleton
   // Note: This is called from RC thread initialization
@@ -580,7 +581,7 @@ void RcBf::processRcCommand(uint32_t current_time_us) {
   }
 
   // Publish rawSetpoint data to MCN for PID thread (avoid data tearing)
-  publishSetpointToMcn(current_time_us);
+  publishRcCommandToMcn(current_time_us);
 
   // Mark data as processed
   is_rc_data_new_ = false;
@@ -638,13 +639,6 @@ float RcBf::getMaxRcRate(int axis) const {
     return maxRcRate_[axis];
   }
   return 720.0f;
-}
-
-float RcBf::getRcCommand(int channel) const {
-  if (channel >= 0 && channel < PRIMARY_CHANNEL_COUNT) {
-    return rc_command_[channel];  // Return smoothed value (THROTTLE) or original (ROLL/PITCH/YAW)
-  }
-  return 0.0f;
 }
 
 void RcBf::printDebugInfo(const rc_command_msg_t* setpoint_msg) const {

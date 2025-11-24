@@ -23,7 +23,7 @@ MCN_DEFINE(aux, sizeof(rc_aux_msg_t));
 // MCN echo 函数（用于调试）- 调用 RcBf 成员函数
 // 需要使用 C 链接以便 MCN 调用，但实际逻辑在对象成员函数中
 extern "C" {
-__attribute__((used)) static int rc_setpoint_echo(void* parameter) {
+__attribute__((used)) static int echo_rc_setpoint(void* parameter) {
   rc_command_msg_t setpoint_data;
 
   if (mcn_copy_from_hub((McnHub*)parameter, &setpoint_data) != RT_EOK) {
@@ -38,7 +38,7 @@ __attribute__((used)) static int rc_setpoint_echo(void* parameter) {
   return 0;
 }
 
-__attribute__((used)) static int aux_echo(void* parameter) {
+__attribute__((used)) static int echo_rc_aux(void* parameter) {
   rc_aux_msg_t aux_data;
 
   if (mcn_copy_from_hub((McnHub*)parameter, &aux_data) != RT_EOK) {
@@ -56,37 +56,19 @@ __attribute__((used)) static int aux_echo(void* parameter) {
 
 rt_err_t RcBf::initMcn() {
   // Get rc_setpoint MCN hub（用于发布 setpoint 数据）
-  rc_setpoint_hub_ = MCN_HUB(rc);
-  if (rc_setpoint_hub_ == nullptr) {
+  rc_command_hub_ = MCN_HUB(rc);
+  if (rc_command_hub_ == nullptr) {
     LOG_E("get rc_setpoint hub failed");
     return -RT_ERROR;
   }
 
   // 激活 rc_setpoint MCN 主题（必须调用，否则 mcn_publish 会失败）
-  rt_err_t advertise_ret = mcn_advertise(rc_setpoint_hub_, rc_setpoint_echo);
+  rt_err_t advertise_ret = mcn_advertise(rc_command_hub_, echo_rc_setpoint);
   if (advertise_ret != RT_EOK && advertise_ret != -RT_EBUSY) {
     LOG_E("rc_setpoint advertise failed: %d", advertise_ret);
     return advertise_ret;
   }
   LOG_I("rc MCN topic advertised");
-
-  // Subscribe to rc MCN topic (for PID thread to use)
-  rc_setpoint_event_ = rt_sem_create("rc_setpoint_evt", 0, RT_IPC_FLAG_FIFO);
-  if (rc_setpoint_event_ == RT_NULL) {
-    LOG_E("create rc_setpoint event semaphore failed");
-    return -RT_ERROR;
-  }
-
-  rc_setpoint_node_ = mcn_subscribe(rc_setpoint_hub_, rc_setpoint_event_, RT_NULL);
-  if (rc_setpoint_node_ == RT_NULL) {
-    LOG_E("subscribe rc topic failed");
-    if (rc_setpoint_event_ != RT_NULL) {
-      rt_sem_delete(rc_setpoint_event_);
-      rc_setpoint_event_ = RT_NULL;
-    }
-    return -RT_ERROR;
-  }
-  LOG_I("Subscribed to rc MCN topic");
 
   // Get aux MCN hub（用于发布辅助通道数据）
   rc_aux_hub_ = MCN_HUB(aux);
@@ -96,7 +78,7 @@ rt_err_t RcBf::initMcn() {
   }
 
   // 激活 aux MCN 主题（必须调用，否则 mcn_publish 会失败）
-  rt_err_t advertise_aux_ret = mcn_advertise(rc_aux_hub_, aux_echo);
+  rt_err_t advertise_aux_ret = mcn_advertise(rc_aux_hub_, echo_rc_aux);
   if (advertise_aux_ret != RT_EOK && advertise_aux_ret != -RT_EBUSY) {
     LOG_E("aux advertise failed: %d", advertise_aux_ret);
     return advertise_aux_ret;
@@ -106,18 +88,18 @@ rt_err_t RcBf::initMcn() {
   return RT_EOK;
 }
 
-void RcBf::publishSetpointToMcn(uint32_t current_time_us) {
+void RcBf::publishRcCommandToMcn(uint32_t current_time_us) {
   // Publish rawSetpoint data to MCN for PID thread (avoid data tearing)
   // Only publish data needed by smoothing filter
-  if (rc_setpoint_hub_ != nullptr) {
-    rc_command_msg_t setpoint_msg;
-    std::memcpy(setpoint_msg.rawSetpoint, rawSetpoint_, sizeof(rawSetpoint_));
-    setpoint_msg.rcCommandThrottle = rc_command_[THROTTLE];
-    std::memcpy(setpoint_msg.feedforward, feedforward_, sizeof(feedforward_));
-    setpoint_msg.seq = seq_++;
-    setpoint_msg.timestamp = current_time_us;
+  if (rc_command_hub_ != nullptr) {
+    rc_command_msg_t rcCommand_msg;
+    std::memcpy(rcCommand_msg.rawSetpoint, rawSetpoint_, sizeof(rawSetpoint_));
+    rcCommand_msg.rcCommandThrottle = rc_command_[THROTTLE];
+    std::memcpy(rcCommand_msg.feedforward, feedforward_, sizeof(feedforward_));
+    rcCommand_msg.seq = seq_++;
+    rcCommand_msg.timestamp = current_time_us;
 
-    rt_err_t publish_result = mcn_publish(rc_setpoint_hub_, &setpoint_msg);
+    rt_err_t publish_result = mcn_publish(rc_command_hub_, &rcCommand_msg);
     if (publish_result != RT_EOK) {
       LOG_E("Failed to publish rc_setpoint data: %d", publish_result);
     }
