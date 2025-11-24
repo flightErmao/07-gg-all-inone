@@ -13,6 +13,7 @@ include_paths = [
     os.path.join(cwd, "../param/inc"),  # param.h (getParam function)
     os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "01_module", "05_timestamp", "inc"),  # timestamp.h
     os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "03_package", "uMCN-latest", "inc"),  # uMCN.h
+    os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "01_module", "03_debugPin"),  # debugPin.h 所在目录
 ]
 
 group = DefineGroup(
@@ -23,6 +24,7 @@ group = DefineGroup(
         "PROJECT_BF_PID_EN",  # Depends on PID module for pid_output data
         "PROJECT_BF_RC_EN",  # Depends on RC module for rc_aux (arm status) data
         "PROJECT_BF_PARAM_EN",  # getParam function for mixer configuration
+        "L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN",  # Required when PROJECT_BF_MOTOR_DEBUG_PIN_EN is enabled
     ],
     CPPPATH=include_paths,
 )

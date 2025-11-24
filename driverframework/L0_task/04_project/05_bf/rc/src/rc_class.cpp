@@ -774,7 +774,7 @@ void RcBf::rcThreadEntry(void* parameter) {
     instance->readRawRcChannels();
 
 #ifdef PROJECT_BF_RC_DEBUG_PIN_EN
-    DEBUG_PIN_DEBUG2_HIGH();  // Debug pin: RC task execution start (monitor RC task frequency ~100-200Hz)
+    DEBUG_PIN_DEBUG3_HIGH();  // Debug pin: RC task execution start (monitor RC task frequency ~100-200Hz)
 #endif
     instance->applyRangeScaling();
     instance->applyFailsafeAndConstraints(current_time_us);
@@ -796,7 +796,7 @@ void RcBf::rcThreadEntry(void* parameter) {
     instance->publishAuxChannelsToMcn(current_time_us);
 
 #ifdef PROJECT_BF_RC_DEBUG_PIN_EN
-    DEBUG_PIN_DEBUG2_LOW();  // Debug pin: RC task execution end
+    DEBUG_PIN_DEBUG3_LOW();  // Debug pin: RC task execution end
 #endif
 
     // Rate control - maintain 100-200Hz

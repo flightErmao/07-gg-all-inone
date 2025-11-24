@@ -10,6 +10,9 @@ extern "C" {
 #include "pid_mcn.h"
 #include "uMCN.h"
 #include "rc_mcn.h"  // For PWM_RANGE_MIN and PWM_RANGE constants (if defined there)
+#ifdef PROJECT_BF_MOTOR_DEBUG_PIN_EN
+#include "debugPin.h"
+#endif
 }
 
 #include <cmath>
@@ -359,6 +362,9 @@ void MotorBf::motorThreadEntry(void* parameter) {
     // Wait for PID output data (blocking) - this releases CPU when waiting
     // This ensures CPU is released even when disarmed
     if (mcn_poll_sync(instance->pid_output_node_, RT_WAITING_FOREVER) == RT_TRUE) {
+#ifdef PROJECT_BF_MOTOR_DEBUG_PIN_EN
+      DEBUG_PIN_DEBUG2_HIGH();  // Debug pin: Motor task execution start
+#endif
       pid_output_msg_t pid_output;
       if (mcn_copy(MCN_HUB(pid), instance->pid_output_node_, &pid_output) == RT_EOK) {
         // Update aux data (non-blocking)
@@ -372,6 +378,9 @@ void MotorBf::motorThreadEntry(void* parameter) {
             motor_output_array[i] = 0.0f;
           }
           instance->writeMotors(motor_output_array, motor_device);
+#ifdef PROJECT_BF_MOTOR_DEBUG_PIN_EN
+          DEBUG_PIN_DEBUG2_LOW();  // Debug pin: Motor task execution end
+#endif
           continue;  // Skip motor mixing when disarmed
         }
 
@@ -383,6 +392,9 @@ void MotorBf::motorThreadEntry(void* parameter) {
         instance->writeMotors(motor_output_array, motor_device);
       }
     }
+#ifdef PROJECT_BF_MOTOR_DEBUG_PIN_EN
+    DEBUG_PIN_DEBUG2_LOW();  // Debug pin: Motor task execution end
+#endif
   }
 }
 

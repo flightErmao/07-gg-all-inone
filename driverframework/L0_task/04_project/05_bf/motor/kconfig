@@ -37,6 +37,15 @@ menuconfig PROJECT_BF_MOTOR_EN
             help
                 Device name for motor output (e.g., "dshot", "pwm"). Default: "dshot".
 
+        config PROJECT_BF_MOTOR_DEBUG_PIN_EN
+            bool "ENABLE: Motor Debug Pin"
+            default n
+            depends on L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN
+            help
+                Enable debug pin for motor task monitoring:
+                - DEBUG2: Motor thread execution frequency
+                  Toggles at motorThreadEntry() while loop start/end
+
         # ======== DEBUG: ANOTC (ATKP) ========
         menuconfig PROJECT_BF_MOTOR_ANOTC_LOG_EN
             bool "DEBUG: ANOTC (ATKP) Logging"
