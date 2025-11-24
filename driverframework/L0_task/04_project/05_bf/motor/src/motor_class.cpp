@@ -294,7 +294,7 @@ void MotorBf::writeMotors(const float* motor_output, rt_device_t motor_device) {
   }
 
   // Write motor values to device
-  rt_device_write(motor_device, 0, motor_values, motor_count_ * sizeof(uint16_t));
+  rt_device_write(motor_device, 0x0F, motor_values, motor_count_ * sizeof(uint16_t));
 }
 
 // Motor thread initialization helpers
