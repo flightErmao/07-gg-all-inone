@@ -37,6 +37,15 @@ menuconfig PROJECT_BF_PID_EN
                 - DEBUG1: PID thread execution frequency (~3.2kHz)
                   Toggles at pidMainLoop() while loop start/end
 
+        config PROJECT_BF_PID_D_MAX_EN
+            bool "ENABLE: D_MAX (Dynamic D-term Gain Boost)"
+            default n
+            help
+                Enable D_MAX feature for dynamic D-term gain boost.
+                D_MAX increases D-term gain when rapid changes are detected
+                (e.g., propwash), helping to suppress oscillations.
+                This feature is useful for improving stability during aggressive maneuvers.
+
         # ======== DEBUG: ANOTC (ATKP) ========
         menuconfig PROJECT_BF_PID_ANOTC_LOG_EN
             bool "DEBUG: ANOTC (ATKP) Logging"

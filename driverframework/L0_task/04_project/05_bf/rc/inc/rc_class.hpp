@@ -76,15 +76,6 @@ class RcBf {
 
   rt_err_t init();
   void updateRcCommand(uint32_t current_time_us);
-  
-  // Get setpoint rate for PID (smoothed if enabled)
-  float getSetpointRate(int axis) const;
-  
-  // Get feedforward value
-  float getFeedforward(int axis) const;
-  
-  // Get max RC rate
-  float getMaxRcRate(int axis) const;
 
   // MCN related functions
   rt_err_t initMcn();

@@ -8,10 +8,12 @@
 #include <cstring>
 
 extern "C" {
+#include <rtconfig.h>  // For PROJECT_BF_PID_D_MAX_EN and other config macros
 #include "gyro_mcn.h"
 #include "pid_mcn.h"
 #include "rc_mcn.h"  // For rc_aux_msg_t, rc_command_msg_t, rc_armed_status_t
 #include "timestamp.h"
+#include "filter.h"  // For biquadFilter_t, pt1Filter_t, pt2Filter_t, pt3Filter_t, filterApplyFnPtr, lowpassFilterType_e
 }
 
 // Forward declaration
@@ -41,13 +43,53 @@ struct pidf_t {
   float S;
 };
 
+// Dterm lowpass filter union (same as Betaflight)
+// Can be PT1, BIQUAD, PT2, or PT3 filter type
+typedef union dtermLowpass_u {
+  pt1Filter_t pt1Filter;
+  biquadFilter_t biquadFilter;
+  pt2Filter_t pt2Filter;
+  pt3Filter_t pt3Filter;
+} dtermLowpass_t;
+
+// Dynamic LPF filter type (same as Betaflight)
+typedef enum {
+  DYN_LPF_NONE = 0,
+  DYN_LPF_PT1,
+  DYN_LPF_BIQUAD,
+  DYN_LPF_PT2,
+  DYN_LPF_PT3,
+} dynLpfFilterType_e;
+
 struct pidProfile_t {
   pidf_t pid[XYZ_AXIS_COUNT];
   float pidSumLimit;
   float pidSumLimitYaw;
   float itermWindup;
-  float dtermLpfHz;
-  float yawLpfHz;
+  
+  // Dterm filter parameters (same as Betaflight)
+  uint16_t dterm_notch_hz;              // Dterm notch filter center frequency (Hz)
+  uint16_t dterm_notch_cutoff;          // Dterm notch filter cutoff frequency (Hz)
+  uint16_t dterm_lpf1_static_hz;        // Dterm lowpass filter 1 static cutoff (Hz)
+  uint8_t dterm_lpf1_type;              // Dterm lowpass filter 1 type (FILTER_PT1, FILTER_BIQUAD, FILTER_PT2, FILTER_PT3)
+  uint16_t dterm_lpf2_static_hz;        // Dterm lowpass filter 2 static cutoff (Hz)
+  uint8_t dterm_lpf2_type;              // Dterm lowpass filter 2 type (FILTER_PT1, FILTER_BIQUAD, FILTER_PT2, FILTER_PT3)
+  
+  // Dynamic LPF parameters (same as Betaflight)
+  uint16_t dterm_lpf1_dyn_min_hz;       // Dterm lowpass filter 1 min hz when in dynamic mode
+  uint16_t dterm_lpf1_dyn_max_hz;       // Dterm lowpass filter 1 max hz when in dynamic mode
+  uint8_t dterm_lpf1_dyn_expo;          // Set the curve for dynamic dterm lowpass filter
+  
+#ifdef PROJECT_BF_PID_D_MAX_EN
+  // D_MAX parameters (same as Betaflight)
+  uint8_t d_max[XYZ_AXIS_COUNT];        // Maximum D value on each axis
+  uint8_t d_max_gain;                   // Gain factor for amount of gyro / setpoint activity required to boost D
+  uint8_t d_max_advance;                // Percentage multiplier for setpoint input to boost algorithm
+#endif
+  
+  // Yaw P term filter parameters
+  uint16_t yaw_lowpass_hz;              // Yaw P term lowpass filter cutoff (Hz) - replaces yawLpfHz
+  float yawLpfHz;                       // Legacy: kept for backward compatibility, maps to yaw_lowpass_hz
 };
 
 struct pidCoefficient_t {
@@ -74,6 +116,36 @@ struct pidRuntime_t {
   pidCoefficient_t pidCoefficient[XYZ_AXIS_COUNT];
   float itermLimit;
   float itermLimitYaw;
+  
+  // Dterm filters (same pattern as Betaflight)
+  filterApplyFnPtr dtermNotchApplyFn;          // Dterm notch filter apply function pointer
+  biquadFilter_t dtermNotch[XYZ_AXIS_COUNT];   // Dterm notch filter state
+  
+  filterApplyFnPtr dtermLowpassApplyFn;        // Dterm lowpass filter 1 apply function pointer
+  dtermLowpass_t dtermLowpass[XYZ_AXIS_COUNT]; // Dterm lowpass filter 1 state (union of PT1/BIQUAD/PT2/PT3)
+  
+  filterApplyFnPtr dtermLowpass2ApplyFn;       // Dterm lowpass filter 2 apply function pointer
+  dtermLowpass_t dtermLowpass2[XYZ_AXIS_COUNT]; // Dterm lowpass filter 2 state (union of PT1/BIQUAD/PT2/PT3)
+  
+  filterApplyFnPtr ptermYawLowpassApplyFn;     // Yaw P term lowpass filter apply function pointer
+  pt1Filter_t ptermYawLowpass;                 // Yaw P term lowpass filter state
+  
+  // Dynamic LPF parameters (same as Betaflight)
+  dynLpfFilterType_e dynLpfFilter;            // Dynamic LPF filter type
+  uint16_t dynLpfMin;                         // Dynamic LPF minimum frequency (Hz)
+  uint16_t dynLpfMax;                         // Dynamic LPF maximum frequency (Hz)
+  uint8_t dynLpfCurveExpo;                    // Dynamic LPF curve exponent
+  
+#ifdef PROJECT_BF_PID_D_MAX_EN
+  // D_MAX runtime parameters (same as Betaflight)
+  pt2Filter_t dMaxRange[XYZ_AXIS_COUNT];       // PT2 filter for D_MAX range detection
+  pt2Filter_t dMaxLowpass[XYZ_AXIS_COUNT];    // PT2 filter for D_MAX multiplier smoothing
+  float dMaxPercent[XYZ_AXIS_COUNT];          // D_MAX percentage multiplier (dMax / D)
+  float dMaxGyroGain;                         // D_MAX gyro gain factor
+  float dMaxSetpointGain;                     // D_MAX setpoint gain factor
+#endif
+  
+  float previousGyroRateDterm[XYZ_AXIS_COUNT]; // Previous gyro rate for Dterm calculation
 };
 
 /* PID setpoint message type (internal to PID module) */
@@ -143,6 +215,10 @@ class PidBf {
   // Initialize PID filters
   void initFilters();
   
+  // Initialize Dterm filters (called from initFilters, but can be called separately after parameter changes)
+  // This function is in pid_init.cpp and initializes filter function pointers based on parameters
+  void initDtermFilters();
+  
   // Load PID parameters from param system
   void loadPidParameters();
   
@@ -171,7 +247,7 @@ class PidBf {
   pidRuntime_t pid_runtime_;
   pidProfile_t pid_profile_;
   pidAxisData_t pid_data_[XYZ_AXIS_COUNT];
-  SimpleLowpass dterm_lpf_[XYZ_AXIS_COUNT];
+  // Legacy: SimpleLowpass for yaw P term (kept for backward compatibility, will be replaced by ptermYawLowpass)
   SimpleLowpass yaw_pterm_lpf_;
 
   // MCN subscription and publication

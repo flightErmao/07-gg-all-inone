@@ -95,7 +95,7 @@ rt_err_t AnotcBf::init() {
   std::memset(mq_send_thread_stack_, 0, send_stack_size);
 
   // Initialize rec thread
-  ret = rt_thread_init(&mq_rec_thread_obj_, "anotc_rec", mqRecThreadEntry, this, mq_rec_thread_stack_, rec_stack_size,
+  ret = rt_thread_init(&mq_rec_thread_obj_, "anotc_push", mqRecThreadEntry, this, mq_rec_thread_stack_, rec_stack_size,
                        PROJECT_BF_ANOTC_REC_THREAD_PRIORITY, PROJECT_BF_ANOTC_REC_THREAD_TIMESLICE);
   if (ret != RT_EOK) {
     LOG_E("Rec thread init failed: %d", ret);

@@ -10,6 +10,7 @@ extern "C" {
 #include "pid_mcn.h"
 #include "bfPidParam.h"
 #include "rc_mcn.h"  // For MCN_DECLARE(rc), rc_command_msg_t, rc_aux_msg_t
+#include "filter.h"  // For filter functions: pt1FilterInit, pt2FilterInit, pt3FilterInit, biquadFilterInit, etc.
 #ifdef PROJECT_BF_PID_DEBUG_PIN_EN
 #include "debugPin.h"
 #endif
@@ -99,21 +100,83 @@ PidBf::PidBf()
   pid_runtime_.pidStabilisationEnabled = true;
   pid_runtime_.dT = 0.0f;
   pid_runtime_.pidFrequency = 0.0f;
+
+  // Initialize filter function pointers (will be set in initFilters)
+  pid_runtime_.dtermNotchApplyFn = nullFilterApply;
+  pid_runtime_.dtermLowpassApplyFn = nullFilterApply;
+  pid_runtime_.dtermLowpass2ApplyFn = nullFilterApply;
+  pid_runtime_.ptermYawLowpassApplyFn = nullFilterApply;
+
+  // Initialize Dynamic LPF (same as Betaflight)
+  pid_runtime_.dynLpfFilter = DYN_LPF_NONE;
+  pid_runtime_.dynLpfMin = 0;
+  pid_runtime_.dynLpfMax = 0;
+  pid_runtime_.dynLpfCurveExpo = 0;
+
+#ifdef PROJECT_BF_PID_D_MAX_EN
+  // Initialize D_MAX (same as Betaflight)
+  for (int axis = 0; axis < XYZ_AXIS_COUNT; ++axis) {
+    std::memset(&pid_runtime_.dMaxRange[axis], 0, sizeof(pt2Filter_t));
+    std::memset(&pid_runtime_.dMaxLowpass[axis], 0, sizeof(pt2Filter_t));
+    pid_runtime_.dMaxPercent[axis] = 1.0f;
+  }
+  pid_runtime_.dMaxGyroGain = 0.0f;
+  pid_runtime_.dMaxSetpointGain = 0.0f;
+#endif
+
+  // Initialize filter states
   for (int axis = 0; axis < XYZ_AXIS_COUNT; ++axis) {
     pid_runtime_.previousPidSetpoint[axis] = 0.0f;
-    dterm_lpf_[axis].state = 0.0f;
-    dterm_lpf_[axis].alpha = 1.0f;
-    dterm_lpf_[axis].enabled = false;
+    pid_runtime_.previousGyroRateDterm[axis] = 0.0f;
+
+    // Initialize dtermNotch (biquadFilter_t)
+    std::memset(&pid_runtime_.dtermNotch[axis], 0, sizeof(biquadFilter_t));
+
+    // Initialize dtermLowpass (union - initialize as pt1Filter)
+    std::memset(&pid_runtime_.dtermLowpass[axis], 0, sizeof(dtermLowpass_t));
+
+    // Initialize dtermLowpass2 (union - initialize as pt1Filter)
+    std::memset(&pid_runtime_.dtermLowpass2[axis], 0, sizeof(dtermLowpass_t));
   }
+
+  // Initialize ptermYawLowpass (pt1Filter_t)
+  std::memset(&pid_runtime_.ptermYawLowpass, 0, sizeof(pt1Filter_t));
+
+  // Legacy: SimpleLowpass for yaw P term (kept for backward compatibility)
   yaw_pterm_lpf_.state = 0.0f;
   yaw_pterm_lpf_.alpha = 1.0f;
   yaw_pterm_lpf_.enabled = false;
 
+  // Initialize profile defaults
   pid_profile_.pidSumLimit = PIDSUM_LIMIT;
   pid_profile_.pidSumLimitYaw = PIDSUM_LIMIT_YAW;
   pid_profile_.itermWindup = 80.0f;
-  pid_profile_.dtermLpfHz = 120.0f;
-  pid_profile_.yawLpfHz = 90.0f;
+
+  // Dterm filter defaults (same as Betaflight)
+  pid_profile_.dterm_notch_hz = 0;
+  pid_profile_.dterm_notch_cutoff = 0;
+  pid_profile_.dterm_lpf1_static_hz = 100;  // Betaflight default
+  pid_profile_.dterm_lpf1_type = FILTER_PT1;
+  pid_profile_.dterm_lpf2_static_hz = 0;  // Disabled by default
+  pid_profile_.dterm_lpf2_type = FILTER_PT1;
+
+  // Dynamic LPF defaults (same as Betaflight)
+  pid_profile_.dterm_lpf1_dyn_min_hz = 0;  // Disabled by default
+  pid_profile_.dterm_lpf1_dyn_max_hz = 0;  // Disabled by default
+  pid_profile_.dterm_lpf1_dyn_expo = 5;    // Default expo (0.5)
+
+#ifdef PROJECT_BF_PID_D_MAX_EN
+  // D_MAX defaults (same as Betaflight)
+  pid_profile_.d_max[FD_ROLL] = 40;   // Default D_MAX for roll
+  pid_profile_.d_max[FD_PITCH] = 46;  // Default D_MAX for pitch
+  pid_profile_.d_max[FD_YAW] = 0;     // Default D_MAX for yaw (disabled)
+  pid_profile_.d_max_gain = 37;       // Default D_MAX gain
+  pid_profile_.d_max_advance = 20;    // Default D_MAX advance
+#endif
+
+  // Yaw P term filter defaults
+  pid_profile_.yaw_lowpass_hz = 90;
+  pid_profile_.yawLpfHz = 90.0f;  // Legacy: kept for backward compatibility
 }
 
 PidBf::~PidBf() { cleanupMcnSubscriptions(); }
@@ -152,12 +215,15 @@ void PidBf::initConfig() {
 }
 
 void PidBf::initFilters() {
-  for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
-    lowpassInit(&dterm_lpf_[axis], pid_profile_.dtermLpfHz, pid_runtime_.dT);
-  }
+  // Initialize all Dterm filters and Yaw P term filter (same pattern as Betaflight)
+  // initDtermFilters() is now in pid_init.cpp
+  initDtermFilters();
+
+  // Initialize legacy Yaw P term SimpleLowpass filter (for backward compatibility)
+  // This is only used if ptermYawLowpassApplyFn is nullFilterApply
   lowpassInit(&yaw_pterm_lpf_, pid_profile_.yawLpfHz, pid_runtime_.dT);
 
-  LOG_I("PID filters initialized: dterm LPF=%.1f Hz, yaw LPF=%.1f Hz", pid_profile_.dtermLpfHz, pid_profile_.yawLpfHz);
+  LOG_I("PID filters initialized");
 }
 
 // Thread entry and loop functions removed - logic moved to processPidController()
@@ -177,8 +243,6 @@ void PidBf::processPidController(uint32_t current_time_us) {
 }
 
 void PidBf::pidController(uint32_t current_time_us) {
-  static float previousGyroRateDterm[XYZ_AXIS_COUNT] = {0.0f};
-
   if (!pid_runtime_.pidStabilisationEnabled) {
     return;
   }
@@ -213,7 +277,7 @@ void PidBf::pidController(uint32_t current_time_us) {
     // Reset previous setpoint and D term history
     for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
       pid_runtime_.previousPidSetpoint[axis] = 0.0f;
-      previousGyroRateDterm[axis] = 0.0f;
+      pid_runtime_.previousGyroRateDterm[axis] = 0.0f;
     }
 
     // Publish zero output
@@ -263,7 +327,13 @@ void PidBf::pidController(uint32_t current_time_us) {
 
     float pTerm = pid_runtime_.pidCoefficient[axis].Kp * errorRate;
     if (axis == FD_YAW) {
-      pTerm = lowpassApply(&yaw_pterm_lpf_, pTerm);
+      // Apply Yaw P term lowpass filter (same as Betaflight)
+      if (pid_runtime_.ptermYawLowpassApplyFn != nullFilterApply) {
+        pTerm = pid_runtime_.ptermYawLowpassApplyFn((filter_t*)&pid_runtime_.ptermYawLowpass, pTerm);
+      } else {
+        // Fallback to legacy SimpleLowpass for backward compatibility
+        pTerm = lowpassApply(&yaw_pterm_lpf_, pTerm);
+      }
     }
     pid_data_[axis].P = pTerm;
 
@@ -271,10 +341,66 @@ void PidBf::pidController(uint32_t current_time_us) {
     const float iTermChange = pid_runtime_.pidCoefficient[axis].Ki * pid_runtime_.dT * errorRate;
     pid_data_[axis].I = CLAMPF(pid_data_[axis].I + iTermChange, -itermLimit, itermLimit);
 
-    float gyroForD = lowpassApply(&dterm_lpf_[axis], gyroRate[axis]);
-    float delta = -(gyroForD - previousGyroRateDterm[axis]) * pid_runtime_.pidFrequency;
-    previousGyroRateDterm[axis] = gyroForD;
-    pid_data_[axis].D = pid_runtime_.pidCoefficient[axis].Kd * delta;
+    // Apply Dterm filters (same pattern as Betaflight)
+    // Reference: ref/pid.c pidController()
+    // Step 1: Get raw gyro rate
+    float gyroRateDterm = gyroRate[axis];
+
+    // Step 2: Apply Dterm notch filter (if enabled)
+    gyroRateDterm = pid_runtime_.dtermNotchApplyFn((filter_t*)&pid_runtime_.dtermNotch[axis], gyroRateDterm);
+
+    // Step 3: Apply 1st Dterm lowpass filter (if enabled)
+    gyroRateDterm = pid_runtime_.dtermLowpassApplyFn((filter_t*)&pid_runtime_.dtermLowpass[axis], gyroRateDterm);
+
+    // Step 4: Apply 2nd Dterm lowpass filter (if enabled)
+    gyroRateDterm = pid_runtime_.dtermLowpass2ApplyFn((filter_t*)&pid_runtime_.dtermLowpass2[axis], gyroRateDterm);
+
+    // Step 5: Calculate delta (rate change) for D term
+    // Divide rate change by dT to get differential (ie dr/dt)
+    // dT is fixed and calculated from the target PID loop time
+    // This is done to avoid DTerm spikes that occur with dynamically
+    // calculated deltaT whenever another task causes the PID
+    // loop execution to be delayed (same as Betaflight)
+    const float delta = -(gyroRateDterm - pid_runtime_.previousGyroRateDterm[axis]) * pid_runtime_.pidFrequency;
+    pid_runtime_.previousGyroRateDterm[axis] = gyroRateDterm;
+
+    // Step 6: Calculate D term (before D_MAX and TPA)
+    float preTpaD = pid_runtime_.pidCoefficient[axis].Kd * delta;
+
+#ifdef PROJECT_BF_PID_D_MAX_EN
+    // Apply D_MAX multiplier (same as Betaflight)
+    // Reference: ref/pid.c pidController()
+    float dMaxMultiplier = 1.0f;
+    if (pid_runtime_.dMaxPercent[axis] > 1.0f) {
+      // Calculate D_MAX boost based on gyro rate change and setpoint change
+      float dMaxGyroFactor = pt2FilterApply(&pid_runtime_.dMaxRange[axis], delta);
+      dMaxGyroFactor = std::fabs(dMaxGyroFactor) * pid_runtime_.dMaxGyroGain;
+
+      // Get setpoint delta for D_MAX calculation
+      float pidSetpointDelta = getFeedforward(axis);  // Use feedforward as setpoint delta
+      const float dMaxSetpointFactor = std::fabs(pidSetpointDelta) * pid_runtime_.dMaxSetpointGain;
+
+      // Use the maximum of gyro factor and setpoint factor
+      const float dMaxBoost = std::fmax(dMaxGyroFactor, dMaxSetpointFactor);
+
+      // dMaxBoost starts at zero, and by 1.0 we get Dmax, but it can exceed 1.
+      dMaxMultiplier += (pid_runtime_.dMaxPercent[axis] - 1.0f) * dMaxBoost;
+
+      // Smooth the multiplier with PT2 filter
+      dMaxMultiplier = pt2FilterApply(&pid_runtime_.dMaxLowpass[axis], dMaxMultiplier);
+
+      // Limit the gain to the fraction that DMax is greater than Min
+      dMaxMultiplier = std::fmin(dMaxMultiplier, pid_runtime_.dMaxPercent[axis]);
+    }
+
+    // Apply the gain that increases D towards Dmax
+    preTpaD *= dMaxMultiplier;
+#endif
+
+    // Step 7: Apply TPA factor (currently always 1.0, can be implemented later)
+    // For now, TPA is not implemented, so we use 1.0
+    const float tpaFactor = 1.0f;  // TODO: Implement TPA if needed
+    pid_data_[axis].D = preTpaD * tpaFactor;
 
     // Calculate feedforward component (same as Betaflight)
     // In Rate mode, use feedforward value from RC module (already contains setpoint change rate info)
@@ -387,10 +513,9 @@ rt_err_t PidBf::startMainThread() {
   }
 
   // Initialize main thread
-  rt_err_t ret = rt_thread_init(&main_thread_obj_, "pid_main", workerEntry, this,
-                                 main_thread_stack_, PROJECT_BF_PID_THREAD_STACK_SIZE,
-                                 PROJECT_BF_PID_THREAD_PRIORITY,
-                                 PROJECT_BF_PID_THREAD_TIMESLICE);
+  rt_err_t ret =
+      rt_thread_init(&main_thread_obj_, "pid", workerEntry, this, main_thread_stack_, PROJECT_BF_PID_THREAD_STACK_SIZE,
+                     PROJECT_BF_PID_THREAD_PRIORITY, PROJECT_BF_PID_THREAD_TIMESLICE);
 
   if (ret != RT_EOK) {
     LOG_E("PidMain thread init failed: %d", ret);

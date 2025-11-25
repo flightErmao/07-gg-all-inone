@@ -215,7 +215,7 @@ rt_err_t BMI270::init(const RuntimeConfig &cfg) {
   }
 
   if (!worker_inited_) {
-    rt_err_t err = rt_thread_init(&worker_thread_obj_, "b270_wk", &BMI270::workerEntry, this, worker_stack_,
+    rt_err_t err = rt_thread_init(&worker_thread_obj_, "b270", &BMI270::workerEntry, this, worker_stack_,
                                   THREAD_STACK_SIZE, THREAD_PRIORITY, THREAD_TIMESLICE);
     if (err != RT_EOK) {
       LOG_E("BMI270 worker thread init failed: %d", err);

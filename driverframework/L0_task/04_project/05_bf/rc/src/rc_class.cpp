@@ -16,7 +16,7 @@ extern "C" {
 #ifdef PROJECT_BF_RC_DEBUG_PIN_EN
 #include "debugPin.h"
 #endif
-#define LOG_TAG "rc_bf"
+#define LOG_TAG "rc"
 #define LOG_LVL LOG_LVL_INFO
 #include <ulog.h>
 }
@@ -160,7 +160,7 @@ rt_err_t RcBf::init() {
   size_t stack_size = RC_THREAD_STACK_SIZE;
   
   // Initialize thread
-  ret = rt_thread_init(&rc_thread_obj_, "rc_bf", rcThreadEntry, this, rc_thread_stack_, stack_size,
+  ret = rt_thread_init(&rc_thread_obj_, "rc", rcThreadEntry, this, rc_thread_stack_, stack_size,
                        PROJECT_BF_RC_THREAD_PRIORITY, PROJECT_BF_RC_THREAD_TIMESLICE);
 
   if (ret != RT_EOK) {
@@ -632,13 +632,6 @@ float RcBf::applyBetaflightRates(int axis, float rcCommandf, float rcCommandfAbs
   }
 
   return angle_rate;
-}
-
-float RcBf::getMaxRcRate(int axis) const {
-  if (axis >= 0 && axis < XYZ_AXIS_COUNT) {
-    return maxRcRate_[axis];
-  }
-  return 720.0f;
 }
 
 void RcBf::printDebugInfo(const rc_command_msg_t* setpoint_msg) const {

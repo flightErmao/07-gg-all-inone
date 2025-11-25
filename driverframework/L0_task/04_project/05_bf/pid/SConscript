@@ -17,6 +17,7 @@ include_paths = [
     os.path.join(cwd, "../log/inc"),    
     os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "01_module", "05_timestamp", "inc"),  # timestamp.h
     os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "01_module", "03_debugPin"),  # debugPin.h 所在目录
+    os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "06_bf_lib", "common", "inc"),  # filter.h
 ]
 
 group = DefineGroup(

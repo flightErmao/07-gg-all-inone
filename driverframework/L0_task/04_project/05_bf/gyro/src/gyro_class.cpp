@@ -3,7 +3,7 @@
 extern "C" {
 #include <rtthread.h>
 #include <rtconfig.h>
-#define LOG_TAG "gyro_filter"
+#define LOG_TAG "gyro"
 #define LOG_LVL LOG_LVL_INFO
 #include <ulog.h>
 #include "debugPin.h"
@@ -361,7 +361,7 @@ rt_err_t RateCtrlAngularVelocity::init() {
   // 每次启动时都会重新校准
 
   // 创建静态线程
-  rt_err_t err = rt_thread_init(&thread_obj_, "gyro_filter", RateCtrlAngularVelocity::threadEntry, this, thread_stack_,
+  rt_err_t err = rt_thread_init(&thread_obj_, "gyro", RateCtrlAngularVelocity::threadEntry, this, thread_stack_,
                                 PROJECT_BF_GYRO_FILTER_THREAD_STACK_SIZE, PROJECT_BF_GYRO_FILTER_THREAD_PRIORITY,
                                 PROJECT_BF_GYRO_FILTER_THREAD_TIMESLICE);
 

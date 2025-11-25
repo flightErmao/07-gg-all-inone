@@ -118,7 +118,7 @@ rt_err_t MotorBf::initThreadResources() {
   std::memset(motor_thread_stack_, 0, stack_size);
 
   // Initialize thread object
-  rt_err_t ret = rt_thread_init(&motor_thread_obj_, "motor_bf", motorThreadEntry, this, motor_thread_stack_, stack_size,
+  rt_err_t ret = rt_thread_init(&motor_thread_obj_, "motor", motorThreadEntry, this, motor_thread_stack_, stack_size,
                                 PROJECT_BF_MOTOR_THREAD_PRIORITY, PROJECT_BF_MOTOR_THREAD_TIMESLICE);
   if (ret != RT_EOK) {
     LOG_E("Motor thread init failed: %d", ret);
