@@ -102,3 +102,28 @@ void PidBf::calculatePidCoefficients() {
         pid_runtime_.itermLimit, pid_profile_.itermWindup, pid_runtime_.itermLimitYaw, pid_profile_.itermWindup);
 }
 
+void PidBf::loadPidProcessDenom() {
+  // Load PID process denominator (controls PID loop frequency)
+  // pid_process_denom = 1: 3.2kHz (312us)
+  // pid_process_denom = 2: 1.6kHz (624us)
+  // pid_process_denom = 3: 1.07kHz (936us)
+  // etc.
+  uint8_t pid_process_denom = 1;
+  if (getParam("pid_process_denom", &pid_process_denom, sizeof(pid_process_denom)) != RT_EOK) {
+    pid_process_denom = 1;
+  }
+
+  // Calculate target looptime based on denominator
+  target_looptime_us_ = 312;  // Default 3.2kHz
+  if (pid_process_denom > 1) {
+    target_looptime_us_ *= pid_process_denom;
+  }
+
+  // Update runtime parameters
+  pid_runtime_.dT = target_looptime_us_ * 1e-6f;
+  pid_runtime_.pidFrequency = (pid_runtime_.dT > 0.0f) ? 1.0f / pid_runtime_.dT : 0.0f;
+
+  LOG_I("Target looptime: %u us, dT: %.6f s, frequency: %.1f Hz", target_looptime_us_, pid_runtime_.dT,
+        pid_runtime_.pidFrequency);
+}
+

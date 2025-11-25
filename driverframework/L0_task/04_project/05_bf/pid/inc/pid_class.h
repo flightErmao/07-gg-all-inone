@@ -149,6 +149,9 @@ class PidBf {
   // Calculate PID coefficients from loaded parameters
   void calculatePidCoefficients();
   
+  // Load PID process denominator and calculate target looptime
+  void loadPidProcessDenom();
+  
   // Initialize PID configuration (calls loadPidParameters and calculatePidCoefficients)
   void initConfig();
 

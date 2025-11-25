@@ -133,21 +133,8 @@ rt_err_t PidBf::init() {
   setpoint_node_ = RT_NULL;
   setpoint_event_ = RT_NULL;
 
-  uint8_t pid_process_denom = 1;
-  if (getParam("pid_process_denom", &pid_process_denom, sizeof(pid_process_denom)) != RT_EOK) {
-    pid_process_denom = 1;
-  }
-
-  target_looptime_us_ = 312;  // 默认 3.2kHz
-  if (pid_process_denom > 1) {
-    target_looptime_us_ *= pid_process_denom;
-  }
-
-  pid_runtime_.dT = target_looptime_us_ * 1e-6f;
-  pid_runtime_.pidFrequency = (pid_runtime_.dT > 0.0f) ? 1.0f / pid_runtime_.dT : 0.0f;
-
-  LOG_I("Target looptime: %u us, dT: %.6f s, frequency: %.1f Hz", target_looptime_us_, pid_runtime_.dT,
-        pid_runtime_.pidFrequency);
+  // Load PID process denominator and calculate target looptime
+  loadPidProcessDenom();
 
   initConfig();
   initFilters();
