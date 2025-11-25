@@ -53,6 +53,8 @@ menuconfig PROJECT_BF_MOTOR_EN
             depends on PROJECT_BF_ANOTC_EN
             help
                 Enable ANOTC telemetry logging for motor output values.
+                Logs normalized motor output (0.0-1.0) before scaling to 48-2047,
+                and normalized throttle (after constrainThrottleForMix).
 
             if PROJECT_BF_MOTOR_ANOTC_LOG_EN
                 config PROJECT_BF_MOTOR_ANOTC_LOG_GROUP

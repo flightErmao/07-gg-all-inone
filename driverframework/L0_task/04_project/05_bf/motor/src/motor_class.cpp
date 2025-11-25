@@ -54,7 +54,10 @@ MotorBf::MotorBf()
       seq_(0) {
   std::memset(current_mixer_, 0, sizeof(current_mixer_));
   std::memset(motor_, 0, sizeof(motor_));
+  std::memset(motor_output_log_, 0, sizeof(motor_output_log_));
   std::memset(&motor_thread_obj_, 0, sizeof(motor_thread_obj_));
+  throttle_log_ = 0.0f;
+  motor_output_timestamp_ = 0;
 }
 
 MotorBf::~MotorBf() {
@@ -220,6 +223,9 @@ void MotorBf::mixTable(const pid_output_msg_t* pid_output, float* motor_output) 
   // Step 3: Constrain throttle to prevent clipping
   // Throttle must be constrained so that motorMix[i] + throttle stays in [0.0, 1.0]
   constrainThrottleForMix(&throttle, motorMixMin, motorMixMax);
+
+  // Save normalized throttle for logging (after constrainThrottleForMix)
+  throttle_log_ = throttle;
 
   // Step 4: Apply mix to motors (with throttle) - store result in motor_output array
   applyMixToMotors(motorMix, current_mixer_, throttle, motor_output);
@@ -396,6 +402,10 @@ void MotorBf::motorThreadEntry(void* parameter) {
           for (int i = 0; i < instance->motor_count_; i++) {
             motor_output_array[i] = 0.0f;
           }
+          // Update motor output data for logging (all zeros when disarmed)
+          std::memcpy(instance->motor_output_log_, motor_output_array, instance->motor_count_ * sizeof(float));
+          instance->throttle_log_ = 0.0f;
+          instance->motor_output_timestamp_ = timestamp_micros();
           instance->writeMotors(motor_output_array, motor_device);
 #ifdef PROJECT_BF_MOTOR_DEBUG_PIN_EN
           DEBUG_PIN_DEBUG2_LOW();  // Debug pin: Motor task execution end
@@ -406,6 +416,11 @@ void MotorBf::motorThreadEntry(void* parameter) {
         // Perform motor mixing (only when armed)
         // Throttle comes from pid_output->smoothed_throttle
         instance->mixTable(&pid_output, motor_output_array);
+
+        // Update motor output data for logging (normalized values before scaling to 48-2047)
+        std::memcpy(instance->motor_output_log_, motor_output_array, instance->motor_count_ * sizeof(float));
+        // Note: throttle_log_ is updated in mixTable() after constrainThrottleForMix()
+        instance->motor_output_timestamp_ = timestamp_micros();
 
         // Write motors to device
         instance->writeMotors(motor_output_array, motor_device);

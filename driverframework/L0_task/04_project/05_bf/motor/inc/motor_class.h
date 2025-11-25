@@ -118,6 +118,18 @@ class MotorBf {
 
   // Sequence counter
   uint32_t seq_;
+
+  // Motor output data for logging (normalized values 0.0-1.0)
+  float motor_output_log_[MAX_SUPPORTED_MOTORS];  // Normalized motor output (before scaling to 48-2047)
+  float throttle_log_;                             // Normalized throttle (after constrainThrottleForMix)
+  uint32_t motor_output_timestamp_;                // Timestamp of last motor output update
+
+ public:
+  // Get motor output data for logging (same pattern as PidBf)
+  const float* getMotorOutput() const { return motor_output_log_; }
+  float getThrottle() const { return throttle_log_; }
+  uint32_t getMotorOutputTimestamp() const { return motor_output_timestamp_; }
+  uint8_t getMotorCount() const { return motor_count_; }
 };
 
 #endif /* MOTOR_BF_H__ */
