@@ -19,7 +19,7 @@ menuconfig PROJECT_BF_MOTOR_EN
         config PROJECT_BF_MOTOR_THREAD_PRIORITY
             int "Motor Thread Priority"
             range 1 32
-            default 6
+            default 8
             help
                 Priority for the motor control thread. Higher number means higher priority. 
                 Should be lower than PID thread. Default: 6.

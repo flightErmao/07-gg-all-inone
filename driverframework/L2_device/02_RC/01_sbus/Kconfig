@@ -46,7 +46,7 @@ config RC_USING_SBUS
         config RC_SBUS_THREAD_PRIORITY
             int "SBUS Thread Priority"
             range 1 32
-            default 7
+            default 9
             help
                 Priority for the SBUS thread. Higher number means higher priority. Default: 7.
 

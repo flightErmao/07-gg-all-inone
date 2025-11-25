@@ -60,7 +60,7 @@ menuconfig PROJECT_BF_GYRO_FILTER_EN
         config PROJECT_BF_GYRO_FILTER_THREAD_PRIORITY
             int "Gyro Filter Thread Priority"
             range 1 32
-            default 10
+            default 6
             help
                 Priority for the gyro filter thread. Higher number means higher priority. Default: 10.
 

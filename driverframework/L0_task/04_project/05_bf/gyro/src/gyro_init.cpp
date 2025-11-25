@@ -257,13 +257,13 @@ void RateCtrlAngularVelocity::initInThreadEntry() {
   // 在线程调度器启动后，等待 BMI270 初始化完成（使用初始化同步机制）
   // 这部分初始化依赖其他线程状态，必须在线程入口函数中执行
 #ifdef PROJECT_BF_GYRO_FILTER_DEBUG_PIN_EN
-  DEBUG_PIN_DEBUG1_HIGH();  // Debug pin: Start waiting for BMI270 initialization
+  DEBUG_PIN_DEBUG0_HIGH();  // Debug pin: Start waiting for BMI270 initialization
 #endif
 
-  rt_err_t ret = initSyncWait(INIT_SYNC_BMI270, 5000);  // 等待最多5秒
+  rt_err_t ret = initSyncWait(INIT_SYNC_BMI270, 1000);  // 等待最多1秒
 
 #ifdef PROJECT_BF_GYRO_FILTER_DEBUG_PIN_EN
-  DEBUG_PIN_DEBUG1_LOW();  // Debug pin: End waiting for BMI270 initialization
+  DEBUG_PIN_DEBUG0_LOW();  // Debug pin: End waiting for BMI270 initialization
 #endif
 
   // 从 BMI270 单例获取 IMU 采样频率和周期（参考 gyro.c 的初始化）

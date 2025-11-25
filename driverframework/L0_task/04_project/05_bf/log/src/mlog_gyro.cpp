@@ -52,9 +52,9 @@ void MlogGyro::init() {
   // 获取 mlog 总线 ID（参考 aMlogStabilze.c:123）
   bus_id_ = mlog_get_bus_id("GyroData");
   if (bus_id_ < 0) {
-    rt_kprintf("[MlogGyro] Failed to get mlog bus ID for GyroData\n");
+    LOG_I("[MlogGyro] Failed to get mlog bus ID for GyroData\n");
   } else {
-    rt_kprintf("[MlogGyro] GyroData mlog bus ID: %d\n", bus_id_);
+    LOG_I("[MlogGyro] GyroData mlog bus ID: %d\n", bus_id_);
   }
 
   // 注册 mlog 开始回调（参考 aMlogStabilze.c:175）

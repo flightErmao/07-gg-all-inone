@@ -16,7 +16,7 @@ menuconfig PROJECT_BF_PID_EN
         config PROJECT_BF_PID_THREAD_PRIORITY
             int "PID Thread Priority"
             range 1 32
-            default 8
+            default 7
             help
                 Priority for the PID controller thread. Higher number means higher priority. 
                 Should be lower than gyro filter thread. Default: 8.
