@@ -67,10 +67,10 @@ menuconfig PROJECT_BF_PID_EN
                         config PROJECT_BF_PID_ANOTC_LOG_ANGULAR_RATE_GROUP
                             int "Log Group ID for Angular Rate Setpoint/Actual"
                             range 1 99
-                            default 6
+                            default 1
                             help
                                 Set the group ID for angular rate setpoint/actual logging (1-99).
-                                Default: 6.
+                                Default: 1.
 
                         config PROJECT_BF_PID_ANOTC_LOG_ANGULAR_RATE_PERIOD_MS
                             int "Angular Rate Log Period (ms)"
@@ -78,6 +78,7 @@ menuconfig PROJECT_BF_PID_EN
                             default 20
                             help
                                 Period (in milliseconds) for angular rate setpoint/actual logging. Default: 20ms.
+                endif
 
                 menuconfig PROJECT_BF_PID_ANOTC_LOG_PITCH_PIDF_EN
                     bool "DEBUG: ANOTC (ATKP) Pitch PIDF Logging"
@@ -90,10 +91,10 @@ menuconfig PROJECT_BF_PID_EN
                         config PROJECT_BF_PID_ANOTC_LOG_PITCH_PIDF_GROUP
                             int "Log Group ID for Pitch PIDF Data"
                             range 1 99
-                            default 7
+                            default 2
                             help
                                 Set the group ID for pitch PIDF data logging (1-99).
-                                Default: 7.
+                                Default: 2.
 
                         config PROJECT_BF_PID_ANOTC_LOG_PITCH_PIDF_PERIOD_MS
                             int "Pitch PIDF Log Period (ms)"
@@ -101,7 +102,6 @@ menuconfig PROJECT_BF_PID_EN
                             default 20
                             help
                                 Period (in milliseconds) for pitch PIDF data logging. Default: 20ms.
-                    endif
                 endif
 
             endif

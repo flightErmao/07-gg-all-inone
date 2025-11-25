@@ -28,11 +28,32 @@ extern "C" {
 #define MOTOR_OUTPUT_MAX 1.0f
 
 // QuadX mixer configuration (default)
+// 格式: {throttle, roll, pitch, yaw}
+// 俯视角度，机头向前时的电机布局：
+//    左前(FRONT_L)     右前(FRONT_R)
+//            |              |
+//            |              |
+//            |              |
+//            |              |
+//    机头(前方) <------------->
+//            |              |
+//            |              |
+//            |              |
+//            |              |
+//    左后(REAR_L)       右后(REAR_R)
+//
+// 默认配置（yawPid反向设置，yaw会被取反，见第213行）：
+// 电机序号 | 位置     | Roll | Pitch | Yaw(原始) | Yaw(取反后) | 电机转向
+// --------|---------|------|-------|----------|-----------|----------
+// 0       | 右后     | -1   | +1    | -1       | +1        | 顺时针(CW)
+// 1       | 右前     | -1   | -1    | +1       | -1        | 逆时针(CCW)
+// 2       | 左后     | +1   | +1    | +1       | -1        | 逆时针(CCW)
+// 3       | 左前     | +1   | -1    | -1       | +1        | 顺时针(CW)
 static const motorMixer_t mixerQuadX[] = {
-    {1.0f, -1.0f, 1.0f, -1.0f},   // REAR_R
-    {1.0f, -1.0f, -1.0f, 1.0f},   // FRONT_R
-    {1.0f, 1.0f, 1.0f, 1.0f},     // REAR_L
-    {1.0f, 1.0f, -1.0f, -1.0f},   // FRONT_L
+    {1.0f, -1.0f, 1.0f, -1.0f},  // 0: REAR_R  (右后, 顺时针CW)
+    {1.0f, -1.0f, -1.0f, 1.0f},  // 1: FRONT_R (右前, 逆时针CCW)
+    {1.0f, 1.0f, 1.0f, 1.0f},    // 2: REAR_L  (左后, 逆时针CCW)
+    {1.0f, 1.0f, -1.0f, -1.0f},  // 3: FRONT_L (左前, 顺时针CW)
 };
 
 // Singleton instance
@@ -210,6 +231,8 @@ void MotorBf::mixTable(const pid_output_msg_t* pid_output, float* motor_output) 
 
   // Yaw reversal: Betaflight behavior is to negate yaw by default (when yaw_motors_reversed is false)
   // Since we removed yaw_motors_reversed parameter, always negate yaw (normal behavior)
+  // 注意：此处的yaw取反会影响混控表中yaw系数的实际效果
+  // 混控表中的yaw系数需要与此取反操作配合，才能得到正确的电机转向配置
   scaledAxisPidYaw = -scaledAxisPidYaw;
 
   // Step 1: Calculate motor mix (roll, pitch, yaw components)
@@ -304,6 +327,21 @@ float MotorBf::scaleRangef(float x, float in_min, float in_max, float out_min, f
   return ((x - in_min) * (out_max - out_min) / (in_max - in_min)) + out_min;
 }
 
+void MotorBf::disArmMotors(rt_device_t motor_device) {
+  if (motor_device == nullptr) {
+    return;
+  }
+
+  // Set all motors to zero output
+  uint16_t motor_values[MAX_SUPPORTED_MOTORS];
+  for (int i = 0; i < motor_count_; i++) {
+    motor_values[i] = 0;  // Zero output for disarm
+  }
+
+  // Write zero values to motor device
+  rt_device_write(motor_device, 0x0F, motor_values, 4);
+}
+
 // Write motors to device
 void MotorBf::writeMotors(const float* motor_output, rt_device_t motor_device) {
   if (motor_output == nullptr || motor_device == nullptr) {
@@ -320,11 +358,11 @@ void MotorBf::writeMotors(const float* motor_output, rt_device_t motor_device) {
     if (normalized < 0.0f) normalized = 0.0f;
     if (normalized > 1.0f) normalized = 1.0f;
     // Scale from [0.0, 1.0] to [48, 2047] for DShot
-    motor_values[i] = (uint16_t)(normalized * (2047.0f - 48.0f) + 48.0f);
+    motor_values[i] = (uint16_t)(normalized * (2047.0f - 80.0f) + 80.0f);
   }
 
   // Write motor values to device
-  rt_device_write(motor_device, 0x0F, motor_values, motor_count_ * sizeof(uint16_t));
+  rt_device_write(motor_device, 0x0F, motor_values, 4);
 }
 
 // Motor thread initialization helpers
@@ -421,7 +459,7 @@ void MotorBf::motorThreadEntry(void* parameter) {
           std::memcpy(instance->motor_output_log_, motor_output_array, instance->motor_count_ * sizeof(float));
           instance->throttle_log_ = 0.0f;
           instance->motor_output_timestamp_ = timestamp_micros();
-          instance->writeMotors(motor_output_array, motor_device);
+          instance->disArmMotors(motor_device);
 #ifdef PROJECT_BF_MOTOR_DEBUG_PIN_EN
           DEBUG_PIN_DEBUG2_LOW();  // Debug pin: Motor task execution end
 #endif

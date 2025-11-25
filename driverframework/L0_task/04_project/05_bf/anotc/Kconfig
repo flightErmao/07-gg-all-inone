@@ -7,7 +7,7 @@ menuconfig PROJECT_BF_ANOTC_EN
     if PROJECT_BF_ANOTC_EN
         config PROJECT_BF_ANOTC_DEVICE_DEFAULT
             string "the default of send device"
-            default "uart2"
+            default "uart1"
             help
                 "the default of send device"
 

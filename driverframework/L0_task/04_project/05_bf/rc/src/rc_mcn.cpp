@@ -23,17 +23,17 @@ MCN_DEFINE(aux, sizeof(rc_aux_msg_t));
 // MCN echo 函数（用于调试）- 调用 RcBf 成员函数
 // 需要使用 C 链接以便 MCN 调用，但实际逻辑在对象成员函数中
 extern "C" {
-__attribute__((used)) static int echo_rc_setpoint(void* parameter) {
-  rc_command_msg_t setpoint_data;
+__attribute__((used)) static int echo_rc_command(void* parameter) {
+  rc_command_msg_t rc_command;
 
-  if (mcn_copy_from_hub((McnHub*)parameter, &setpoint_data) != RT_EOK) {
+  if (mcn_copy_from_hub((McnHub*)parameter, &rc_command) != RT_EOK) {
     return -1;
   }
 
   // Call RcBf member function to print debug information
   // This keeps the logic in the object while maintaining C linkage for MCN
   RcBf& rc = RcBf::instance();
-  rc.echoSetpoint(&setpoint_data);
+  rc.echoSetpoint(&rc_command);
 
   return 0;
 }
@@ -63,7 +63,7 @@ rt_err_t RcBf::initMcn() {
   }
 
   // 激活 rc_setpoint MCN 主题（必须调用，否则 mcn_publish 会失败）
-  rt_err_t advertise_ret = mcn_advertise(rc_command_hub_, echo_rc_setpoint);
+  rt_err_t advertise_ret = mcn_advertise(rc_command_hub_, echo_rc_command);
   if (advertise_ret != RT_EOK && advertise_ret != -RT_EBUSY) {
     LOG_E("rc_setpoint advertise failed: %d", advertise_ret);
     return advertise_ret;
@@ -142,17 +142,11 @@ void RcBf::publishAuxChannelsToMcn(uint32_t current_time_us) {
   }
 }
 
-void RcBf::echoSetpoint(const rc_command_msg_t* setpoint_data) {
-  // Get 4 channels raw data from RcBf instance (roll, pitch, yaw, throttle)
-  // rc_data_ contains processed RC data after range scaling, failsafe, and constraints
-  const float* rc_data = getRcData();
-  // Get rcCommand data (roll, pitch, yaw, throttle)
-  const float* rc_command = getRcCommandArray();
-  
-  // Print rcCommand and 4 channels raw data (roll, pitch, yaw, throttle) in one line
-  LOG_I("rcCmd: %.2f, %.2f, %.2f, %.0f | rawCh: %.0f, %.0f, %.0f, %.0f", 
-        rc_command[0], rc_command[1], rc_command[2], rc_command[3],
-        rc_data[0], rc_data[1], rc_data[2], rc_data[3]);
+void RcBf::echoSetpoint(const rc_command_msg_t* rc_command) {
+  // Print rawSetpoint, rcCommandThrottle, and feedforward from published message
+  LOG_I("rawSetpoint: %.2f, %.2f, %.2f | throttle: %.0f | feedforward: %.2f, %.2f, %.2f", rc_command->rawSetpoint[0],
+        rc_command->rawSetpoint[1], rc_command->rawSetpoint[2], rc_command->rcCommandThrottle,
+        rc_command->feedforward[0], rc_command->feedforward[1], rc_command->feedforward[2]);
 }
 
 void RcBf::echoAux(const rc_aux_msg_t* aux_data) {

@@ -130,6 +130,7 @@ class MotorBf {
   float getThrottle() const { return throttle_log_; }
   uint32_t getMotorOutputTimestamp() const { return motor_output_timestamp_; }
   uint8_t getMotorCount() const { return motor_count_; }
+  void disArmMotors(rt_device_t motor_device);
 };
 
 #endif /* MOTOR_BF_H__ */

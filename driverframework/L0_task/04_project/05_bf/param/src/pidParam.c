@@ -59,9 +59,9 @@ static float bf_pid_yaw_lpf_hz;         // Legacy: 保持向后兼容，映射�
 static uint8_t pid_process_denom;  // 对应 activePidLoopDenom，用于计算 targetLooptime
 
 /* 默认值 - Betaflight 典型配置 */
-static const float bf_rate_pid_roll_default[3] = {42.0f, 65.0f, 29.0f};    // 典型 Betaflight 默认值
+static const float bf_rate_pid_roll_default[3] = {0.0f, 0.0f, 0.0f};  // 典型 Betaflight 默认值
 static const float bf_rate_pid_pitch_default[3] = {45.0f, 62.0f, 31.0f};
-static const float bf_rate_pid_yaw_default[3] = {30.0f, 50.0f, 0.0f};
+static const float bf_rate_pid_yaw_default[3] = {0.0f, 0.0f, 0.0f};
 
 static const float bf_angle_pid_roll_default[3] = {0.0f, 0.0f, 0.0f};
 static const float bf_angle_pid_pitch_default[3] = {0.0f, 0.0f, 0.0f};
@@ -83,8 +83,8 @@ static const uint16_t bf_pid_dterm_lpf2_static_hz_default = 150;  // Dterm LPF2�
 static const uint8_t bf_pid_dterm_lpf2_type_default = 0;          // Dterm LPF2类型默认PT1
 
 /* Dynamic LPF 参数默认值 - 与Betaflight一致 */
-static const uint16_t bf_pid_dterm_lpf1_dyn_min_hz_default = 75;   // Dynamic LPF默认关闭
-static const uint16_t bf_pid_dterm_lpf1_dyn_max_hz_default = 150;  // Dynamic LPF默认关闭
+static const uint16_t bf_pid_dterm_lpf1_dyn_min_hz_default = 75;   // Dynamic LPF默认75Hz
+static const uint16_t bf_pid_dterm_lpf1_dyn_max_hz_default = 150;  // Dynamic LPF默认150Hz
 static const uint8_t bf_pid_dterm_lpf1_dyn_expo_default = 5;       // Dynamic LPF曲线指数默认5（0.5）
 
 #ifdef PROJECT_BF_PID_D_MAX_EN
