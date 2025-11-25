@@ -67,7 +67,16 @@ class MotorBf {
   // Motor mixing functions
   // Throttle now comes from pid_output->smoothed_throttle
   void mixTable(const pid_output_msg_t* pid_output, float* motor_output);
-  void applyMixerAdjustment(float* motorMix, float motorMixMin, float motorMixMax);
+  
+  // Normalize motor mix values if range > 1.0 (LEGACY mode - same as Betaflight)
+  // Updates motorMix array in-place and returns normalized min/max values
+  void normalizeMotorMix(float* motorMix, float* motorMixMin, float* motorMixMax);
+  
+  // Constrain throttle to prevent clipping when combined with motor mix
+  // Ensures motorMix[i] + throttle stays in [0.0, 1.0] for all motors
+  void constrainThrottleForMix(float* throttle, float motorMixMin, float motorMixMax);
+  
+  // Apply mix to motors (with throttle) - store result in motor_output array
   void applyMixToMotors(const float* motorMix, const motorMixer_t* activeMixer, float throttle, float* motor_output);
   
   // Write motors to device

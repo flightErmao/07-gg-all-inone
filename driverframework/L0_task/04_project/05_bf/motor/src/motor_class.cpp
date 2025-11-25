@@ -194,60 +194,79 @@ void MotorBf::mixTable(const pid_output_msg_t* pid_output, float* motor_output) 
   float throttle = constrainf((pid_output->smoothed_throttle - PWM_RANGE_MIN) / PWM_RANGE, 0.0f, 1.0f);
 
   // Scale PID outputs (same as Betaflight)
-  // PID sum is already in deg/s range, we need to scale it for mixer
-  const float pidSumLimit = 500.0f;  // Default limit, should be configurable
-  float scaledAxisPidRoll = constrainf(pid_output->pid_sum[0], -pidSumLimit, pidSumLimit) / PID_MIXER_SCALING;
-  float scaledAxisPidPitch = constrainf(pid_output->pid_sum[1], -pidSumLimit, pidSumLimit) / PID_MIXER_SCALING;
-  float scaledAxisPidYaw = constrainf(pid_output->pid_sum[2], -pidSumLimit, pidSumLimit) / PID_MIXER_SCALING;
+  // PID sum is already in deg/s range and has been limited in PID class, we need to scale it for mixer
+  // Note: pid_sum is already clamped to ±pidSumLimit in pid_class.cpp, so no need to limit again here
+  float scaledAxisPidRoll = pid_output->pid_sum[0] / PID_MIXER_SCALING;
+  float scaledAxisPidPitch = pid_output->pid_sum[1] / PID_MIXER_SCALING;
+  float scaledAxisPidYaw = pid_output->pid_sum[2] / PID_MIXER_SCALING;
 
   // Yaw reversal: Betaflight behavior is to negate yaw by default (when yaw_motors_reversed is false)
   // Since we removed yaw_motors_reversed parameter, always negate yaw (normal behavior)
   scaledAxisPidYaw = -scaledAxisPidYaw;
 
-  // Calculate motor mix (roll, pitch, yaw components)
+  // Step 1: Calculate motor mix (roll, pitch, yaw components)
   float motorMix[MAX_SUPPORTED_MOTORS];
-  float motorMixMax = 0.0f, motorMixMin = 0.0f;
-
   for (int i = 0; i < motor_count_; i++) {
-    float mix = scaledAxisPidRoll * current_mixer_[i].roll + scaledAxisPidPitch * current_mixer_[i].pitch +
-                scaledAxisPidYaw * current_mixer_[i].yaw;
-
-    if (mix > motorMixMax) {
-      motorMixMax = mix;
-    } else if (mix < motorMixMin) {
-      motorMixMin = mix;
-    }
-    motorMix[i] = mix;
+    motorMix[i] = scaledAxisPidRoll * current_mixer_[i].roll + 
+                   scaledAxisPidPitch * current_mixer_[i].pitch +
+                   scaledAxisPidYaw * current_mixer_[i].yaw;
   }
 
-  float motorMixRange = motorMixMax - motorMixMin;
+  // Step 2: Normalize motor mix if range > 1.0 (same as Betaflight)
+  // This ensures motorMix values are in reasonable range to prevent clipping
+  float motorMixMin, motorMixMax;
+  normalizeMotorMix(motorMix, &motorMixMin, &motorMixMax);
 
-  // Apply mixer adjustment (LEGACY mode)
-  applyMixerAdjustment(motorMix, motorMixMin, motorMixMax);
+  // Step 3: Constrain throttle to prevent clipping
+  // Throttle must be constrained so that motorMix[i] + throttle stays in [0.0, 1.0]
+  constrainThrottleForMix(&throttle, motorMixMin, motorMixMax);
 
-  // Recalculate normalized range after adjustment
-  motorMixRange = motorMixMax - motorMixMin;
-
-  // Constrain throttle to prevent clipping
-  float normalizedMotorMixMin = motorMixMin * (motorMixRange > 1.0f ? 1.0f / motorMixRange : 1.0f);
-  float normalizedMotorMixMax = motorMixMax * (motorMixRange > 1.0f ? 1.0f / motorMixRange : 1.0f);
-  throttle = constrainf(throttle, -normalizedMotorMixMin, 1.0f - normalizedMotorMixMax);
-
-  // Apply mix to motors (with throttle) - store result in motor_output array
+  // Step 4: Apply mix to motors (with throttle) - store result in motor_output array
   applyMixToMotors(motorMix, current_mixer_, throttle, motor_output);
 }
 
-void MotorBf::applyMixerAdjustment(float* motorMix, float motorMixMin, float motorMixMax) {
-  // Mixer adjustment (LEGACY mode) - same as Betaflight
-  // Normalize motor mix to prevent clipping
-  float motorMixRange = motorMixMax - motorMixMin;
+void MotorBf::normalizeMotorMix(float* motorMix, float* motorMixMin, float* motorMixMax) {
+  // Find min/max of motor mix values
+  *motorMixMin = motorMix[0];
+  *motorMixMax = motorMix[0];
+  for (int i = 1; i < motor_count_; i++) {
+    if (motorMix[i] > *motorMixMax) {
+      *motorMixMax = motorMix[i];
+    } else if (motorMix[i] < *motorMixMin) {
+      *motorMixMin = motorMix[i];
+    }
+  }
+
+  // Normalize if range > 1.0 (LEGACY mode - same as Betaflight)
+  // If motorMix range exceeds 1.0, scale all values proportionally
+  float motorMixRange = *motorMixMax - *motorMixMin;
   float airmodeTransitionPercent = 1.0f;  // Simplified: no airmode support for now
   
-  const float motorMixNormalizationFactor = motorMixRange > 1.0f ? airmodeTransitionPercent / motorMixRange : airmodeTransitionPercent;
+  float normalizationFactor = (motorMixRange > 1.0f) ? (airmodeTransitionPercent / motorMixRange) : 1.0f;
   
+  // Apply normalization to all motor mix values
   for (int i = 0; i < motor_count_; i++) {
-    motorMix[i] *= motorMixNormalizationFactor;
+    motorMix[i] *= normalizationFactor;
   }
+  
+  // Update min/max after normalization
+  *motorMixMin *= normalizationFactor;
+  *motorMixMax *= normalizationFactor;
+}
+
+void MotorBf::constrainThrottleForMix(float* throttle, float motorMixMin, float motorMixMax) {
+  // Constrain throttle to prevent clipping (same as Betaflight)
+  // Final motor output = motorMix[i] + throttle
+  // We need: 0.0 <= motorMix[i] + throttle <= 1.0 for all motors
+  //
+  // For minimum constraint:
+  //   motorMixMin + throttle >= 0.0  =>  throttle >= -motorMixMin
+  //
+  // For maximum constraint:
+  //   motorMixMax + throttle <= 1.0  =>  throttle <= 1.0 - motorMixMax
+  //
+  // Note: motorMixMin can be negative (reducing a motor), so -motorMixMin can be positive
+  *throttle = constrainf(*throttle, -motorMixMin, 1.0f - motorMixMax);
 }
 
 void MotorBf::applyMixToMotors(const float* motorMix, const motorMixer_t* activeMixer, float throttle, float* motor_output) {
@@ -414,4 +433,5 @@ static int motor_bf_init_wrapper(void) {
 INIT_APP_EXPORT(motor_bf_init_wrapper);
 }
 #endif
+
 

@@ -189,13 +189,16 @@ void PidBf::initConfig() {
   }
   loadAxis(FD_YAW, pid_rate_yaw);
 
-  float pid_rate_roll_i_limit = pid_profile_.pidSumLimit;
-  if (getParam("pid_rate_roll_i_limit", &pid_rate_roll_i_limit, sizeof(pid_rate_roll_i_limit)) == RT_EOK) {
-    pid_profile_.pidSumLimit = pid_rate_roll_i_limit;
+  // Load PID sum limit (限制 P+I+D+F 的总和，单位：deg/s)
+  // 注意：这不是I项的单独限制，而是整个PID输出的限制
+  // I项的windup限制会基于此值计算：itermLimit = pidSumLimit * itermWindup / 100
+  float pid_sum_limit = pid_profile_.pidSumLimit;
+  if (getParam("pid_sum_limit", &pid_sum_limit, sizeof(pid_sum_limit)) == RT_EOK) {
+    pid_profile_.pidSumLimit = pid_sum_limit;
   }
-  float pid_rate_yaw_i_limit = pid_profile_.pidSumLimitYaw;
-  if (getParam("pid_rate_yaw_i_limit", &pid_rate_yaw_i_limit, sizeof(pid_rate_yaw_i_limit)) == RT_EOK) {
-    pid_profile_.pidSumLimitYaw = pid_rate_yaw_i_limit;
+  float pid_sum_limit_yaw = pid_profile_.pidSumLimitYaw;
+  if (getParam("pid_sum_limit_yaw", &pid_sum_limit_yaw, sizeof(pid_sum_limit_yaw)) == RT_EOK) {
+    pid_profile_.pidSumLimitYaw = pid_sum_limit_yaw;
   }
 
   float iterm_windup = pid_profile_.itermWindup;
@@ -220,11 +223,17 @@ void PidBf::initConfig() {
     pid_runtime_.pidCoefficient[axis].Kf = pidf.F * FEEDFORWARD_SCALE * 0.01f;
   }
 
+  // Calculate I term windup limit based on PID sum limit
+  // I项windup限制 = PID sum限制 * I项windup百分比 / 100
+  // 例如：如果pidSumLimit=500, itermWindup=80%，则itermLimit=500*0.8=400
+  // 这确保I项不会超过PID sum限制的itermWindup百分比
   pid_runtime_.itermLimit = 0.01f * pid_profile_.itermWindup * pid_profile_.pidSumLimit;
   pid_runtime_.itermLimitYaw = 0.01f * pid_profile_.itermWindup * pid_profile_.pidSumLimitYaw;
 
-  LOG_I("PID Sum Limits: Roll/Pitch=%.1f, Yaw=%.1f, I windup=%.1f%%", pid_profile_.pidSumLimit,
-        pid_profile_.pidSumLimitYaw, pid_profile_.itermWindup);
+  LOG_I("PID Sum Limits: Roll/Pitch=%.1f deg/s, Yaw=%.1f deg/s", pid_profile_.pidSumLimit,
+        pid_profile_.pidSumLimitYaw);
+  LOG_I("I Term Windup Limits: Roll/Pitch=%.1f deg/s (%.1f%% of sum), Yaw=%.1f deg/s (%.1f%% of sum)",
+        pid_runtime_.itermLimit, pid_profile_.itermWindup, pid_runtime_.itermLimitYaw, pid_profile_.itermWindup);
 }
 
 void PidBf::initFilters() {
