@@ -26,6 +26,11 @@ static float bf_angle_pid_yaw[3];    // [P, I, D]
 static float bf_pid_sum_limit;      // Roll/Pitch轴的PID sum限制
 static float bf_pid_sum_limit_yaw;  // Yaw轴的PID sum限制
 
+/* PID 滤波器参数 */
+static float bf_pid_iterm_windup;   // I项windup百分比（默认80%）
+static float bf_pid_dterm_lpf_hz;   // D项低通滤波器截止频率（Hz）
+static float bf_pid_yaw_lpf_hz;     // Yaw轴P项低通滤波器截止频率（Hz）
+
 /* PID 处理分母（控制 PID 循环频率） */
 static uint8_t pid_process_denom;  // 对应 activePidLoopDenom，用于计算 targetLooptime
 
@@ -42,6 +47,11 @@ static const float bf_angle_pid_yaw_default[3] = {0.0f, 0.0f, 0.0f};
 static const float bf_pid_sum_limit_default = 500.0f;      // Roll/Pitch轴默认500 deg/s
 static const float bf_pid_sum_limit_yaw_default = 400.0f;   // Yaw轴默认400 deg/s
 
+/* PID 滤波器参数默认值 - 与Betaflight一致 */
+static const float bf_pid_iterm_windup_default = 80.0f;     // I项windup百分比默认80%
+static const float bf_pid_dterm_lpf_hz_default = 120.0f;    // D项LPF默认120Hz
+static const float bf_pid_yaw_lpf_hz_default = 90.0f;      // Yaw轴LPF默认90Hz
+
 static const uint8_t pid_process_denom_default = 1;  // 默认值为 1，对应 activePidLoopDenom
 
 static const param_default_t bf_pid_defaults[] = {
@@ -53,6 +63,9 @@ static const param_default_t bf_pid_defaults[] = {
     {bf_angle_pid_yaw, bf_angle_pid_yaw_default},
     {&bf_pid_sum_limit, &bf_pid_sum_limit_default},
     {&bf_pid_sum_limit_yaw, &bf_pid_sum_limit_yaw_default},
+    {&bf_pid_iterm_windup, &bf_pid_iterm_windup_default},
+    {&bf_pid_dterm_lpf_hz, &bf_pid_dterm_lpf_hz_default},
+    {&bf_pid_yaw_lpf_hz, &bf_pid_yaw_lpf_hz_default},
     {&pid_process_denom, &pid_process_denom_default},
 };
 
@@ -74,6 +87,9 @@ static param_list bf_pid_params[] = {
     {(void *)bf_angle_pid_yaw, sizeof(bf_angle_pid_yaw), "pid_angle_yaw", "vf", bf_pid_param_default},
     {(void *)&bf_pid_sum_limit, sizeof(bf_pid_sum_limit), "pid_sum_limit", "f", bf_pid_param_default},
     {(void *)&bf_pid_sum_limit_yaw, sizeof(bf_pid_sum_limit_yaw), "pid_sum_limit_yaw", "f", bf_pid_param_default},
+    {(void *)&bf_pid_iterm_windup, sizeof(bf_pid_iterm_windup), "pid_iterm_windup", "f", bf_pid_param_default},
+    {(void *)&bf_pid_dterm_lpf_hz, sizeof(bf_pid_dterm_lpf_hz), "pid_dterm_lpf_hz", "f", bf_pid_param_default},
+    {(void *)&bf_pid_yaw_lpf_hz, sizeof(bf_pid_yaw_lpf_hz), "pid_yaw_lpf_hz", "f", bf_pid_param_default},
     {(void *)&pid_process_denom, sizeof(pid_process_denom), "pid_process_denom", "u8", bf_pid_param_default},
 };
 

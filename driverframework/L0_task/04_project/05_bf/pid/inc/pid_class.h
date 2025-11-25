@@ -140,8 +140,16 @@ class PidBf {
   PidBf(const PidBf&) = delete;
   PidBf& operator=(const PidBf&) = delete;
 
-  // Initialize PID filters and configuration
+  // Initialize PID filters
   void initFilters();
+  
+  // Load PID parameters from param system
+  void loadPidParameters();
+  
+  // Calculate PID coefficients from loaded parameters
+  void calculatePidCoefficients();
+  
+  // Initialize PID configuration (calls loadPidParameters and calculatePidCoefficients)
   void initConfig();
 
   // PID controller main function
