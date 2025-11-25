@@ -4,8 +4,18 @@ import os
 cwd = GetCurrentDir()
 group = []
 
+# 首先构建 common 模块（初始化同步机制）
+common_path = os.path.join(cwd, 'common')
+if os.path.isdir(common_path) and os.path.isfile(os.path.join(common_path, 'SConscript')):
+    sub_group = SConscript(os.path.join(common_path, 'SConscript'), variant_dir='common', duplicate=0)
+    group.extend(sub_group)
+
+# 然后构建其他模块
 for item in os.listdir(cwd):
     item_path = os.path.join(cwd, item)
+    # 跳过 common 目录（已经处理）
+    if item == 'common':
+        continue
     if os.path.isdir(item_path) and os.path.isfile(os.path.join(item_path, 'SConscript')):
         sub_group = SConscript(os.path.join(cwd, item, 'SConscript'), variant_dir=item, duplicate=0)
         group.extend(sub_group)

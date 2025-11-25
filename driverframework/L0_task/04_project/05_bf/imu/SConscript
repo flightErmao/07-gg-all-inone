@@ -10,7 +10,12 @@ inc_path = [
     os.path.join(cwd, 'inc'),
 ]
 
-group = DefineGroup('bmi270_bf', src, depend=['PROJECT_BF_BMI270_EN'], CPPPATH=inc_path)
+depend_list = ['PROJECT_BF_BMI270_EN']
+# Add debugPin dependency if enabled
+if GetDepend('PROJECT_BF_BMI270_DEBUG_PIN_EN'):
+    depend_list.append('L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN')
+
+group = DefineGroup('bmi270_bf', src, depend=depend_list, CPPPATH=inc_path)
 
 Return('group')
 

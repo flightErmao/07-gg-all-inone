@@ -10,6 +10,7 @@ extern "C" {
 #include "pid_mcn.h"
 #include "uMCN.h"
 #include "rc_mcn.h"  // For PWM_RANGE_MIN and PWM_RANGE constants (if defined there)
+#include "../common/inc/init_sync.h"  // For initSyncWait, initSyncNotify
 #ifdef PROJECT_BF_MOTOR_DEBUG_PIN_EN
 #include "debugPin.h"
 #endif
@@ -79,6 +80,8 @@ MotorBf::~MotorBf() {
 rt_err_t MotorBf::init() {
   rt_err_t ret;
 
+  // 注意：依赖 PID 的初始化已移到 motorThreadEntry 中，在线程调度器启动后执行
+
   // Step 1: Initialize mixer configuration
   initMixerConfig();
 
@@ -101,6 +104,8 @@ rt_err_t MotorBf::init() {
     cleanupThreadResources();
     return ret;
   }
+
+  // 注意：initSyncNotify(INIT_SYNC_MOTOR) 已移到 motorThreadEntry 中，在等待 PID 之后
 
   LOG_I("MotorBf initialized successfully");
   return RT_EOK;
@@ -360,22 +365,32 @@ void MotorBf::motorThreadEntry(void* parameter) {
 
   LOG_I("Motor thread started");
 
+  // 在线程调度器启动后，等待 PID 初始化完成（Motor 需要 PID 输出）
+  // 这部分初始化依赖其他线程状态，必须在线程入口函数中执行
+  rt_err_t ret = initSyncWait(INIT_SYNC_PID, 2000);  // 等待最多2秒
+  if (ret != RT_EOK) {
+    LOG_W("PID not ready, continuing anyway (ret=%d)", ret);
+  }
+
   // Step 1: Initialize motor device
-  rt_device_t motor_device = initMotorDevice();
+  rt_device_t motor_device = instance->initMotorDevice();
   if (motor_device == nullptr) {
     return;
   }
 
   // Step 2: Subscribe to MCN topics (each subscription is independent)
-  rt_err_t ret = instance->subscribePidOutput();
+  ret = instance->subscribePidOutput();
   if (ret != RT_EOK) {
     LOG_E("Failed to subscribe to PID output MCN topic");
-    cleanupMotorDevice(motor_device);
+    instance->cleanupMotorDevice(motor_device);
     return;
   }
 
   // Subscribe to RC aux (non-critical, continue even if fails)
   instance->subscribeRcAux();
+  
+  // 通知 Motor 初始化完成（在等待 PID 之后）
+  initSyncNotify(INIT_SYNC_MOTOR);
 
   // Step 3: Initialize thread-local data
   float motor_output_array[MAX_SUPPORTED_MOTORS];

@@ -7,7 +7,7 @@ menuconfig PROJECT_BF_RC_EN
     if PROJECT_BF_RC_EN
         config PROJECT_BF_RC_DEVICE_NAME
             string "RC Device Name"
-            default "rc"
+            default "sbus"
             help
                 Name of the RC device to open. Default: "rc"
 

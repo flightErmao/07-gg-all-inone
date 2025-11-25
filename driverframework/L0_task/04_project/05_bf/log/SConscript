@@ -14,9 +14,8 @@ include_paths = [
 group = DefineGroup(
     "PROJECT_BF_MLOG_GYRO",
     src,
-    depend=["PROJECT_BF_MLOG_GYRO_EN", "TASK_TOOL_02_SD_MLOG"],
+    depend=["TASK_TOOL_02_SD_MLOG"],
     CPPPATH=include_paths,
 )
 
 Return("group")
-

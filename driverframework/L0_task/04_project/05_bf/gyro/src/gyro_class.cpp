@@ -7,42 +7,16 @@ extern "C" {
 #define LOG_LVL LOG_LVL_INFO
 #include <ulog.h>
 #include "debugPin.h"
+#include "timestamp.h"
 }
 
 #include <cstring>
 
-#include "bfImuFilterInit.h"
-#include "../imu/inc/bmi270_class.h"
 #include "bfSensorAlignment.hpp"
 #include "bfNotchFilter.hpp"
 #include "bfDynNotchFilter.hpp"
-#include "../log/inc/mlog_gyro.hpp"
-#include "gyro_class.h"
 
-extern "C" {
-#include "param.h"
-#include "bfImuFilterParam.h"
-// #include "rpmFilter.h"  // TODO: RPM 滤波器暂未实现，先注释
-#include "timestamp.h"
-#include "uMCN.h"
-}
-
-/* 定义滤波后陀螺仪数据话题（在本文件内完成定义与发布） */
-MCN_DEFINE(gyro, sizeof(gyro_filtered_msg_t));
-
-// MCN echo 函数（参考 accgyro_spi_bmi270.cpp 中的 imu_raw_echo）
-static int gyro_filtered_echo(void* parameter) {
-  gyro_filtered_msg_t gyro_data;
-
-  if (mcn_copy_from_hub((McnHub*)parameter, &gyro_data) != RT_EOK) {
-    return -1;
-  }
-
-  LOG_I("seq: %lu, gyro_filtered: %.2f, %.2f, %.2f, gyro_adc: %.2f, %.2f, %.2f", gyro_data.seq,
-        gyro_data.gyro_filtered[0], gyro_data.gyro_filtered[1], gyro_data.gyro_filtered[2], gyro_data.gyro_adc[0],
-        gyro_data.gyro_adc[1], gyro_data.gyro_adc[2]);
-  return 0;
-}
+// MCN 定义和 echo 函数已移到 gyro_mcn.cpp
 
 // IMU 采样频率（Hz）- 假设从 IMU 发布频率推算
 #ifndef PROJECT_BF_GYRO_FILTER_IMU_SAMPLE_RATE_HZ
@@ -222,127 +196,21 @@ rt_err_t RateCtrlAngularVelocity::init() {
     return RT_EOK;
   }
 
-  // 创建 MCN 事件信号量（用于 mcn_poll_sync）
-  if (imu_event_ == RT_NULL) {
-    imu_event_ = rt_sem_create("gyro_evt", 0, RT_IPC_FLAG_FIFO);
-    if (imu_event_ == RT_NULL) {
-      LOG_E("create imu event semaphore failed");
-      return -RT_ERROR;
-    }
+  // 初始化 MCN（订阅和发布）
+  rt_err_t ret = initMcn();
+  if (ret != RT_EOK) {
+    return ret;
   }
 
-  // 订阅 imu MCN 节点（传入 event 用于同步等待）
-  imu_node_ = mcn_subscribe(MCN_HUB(imu), imu_event_, RT_NULL);
-  if (imu_node_ == RT_NULL) {
-    LOG_E("subscribe imu topic failed");
-    if (imu_event_ != RT_NULL) {
-      rt_sem_delete(imu_event_);
-      imu_event_ = RT_NULL;
-    }
-    return -RT_ERROR;
-  }
-  LOG_I("Subscribed to imu MCN topic");
-
-  // 获取 gyro MCN hub（用于发布滤波后的数据）
-  gyro_filtered_hub_ = MCN_HUB(gyro);
-  if (gyro_filtered_hub_ == nullptr) {
-    LOG_E("get gyro hub failed");
-    if (imu_node_ != RT_NULL) {
-      mcn_unsubscribe(MCN_HUB(imu), imu_node_);
-      imu_node_ = RT_NULL;
-    }
-    if (imu_event_ != RT_NULL) {
-      rt_sem_delete(imu_event_);
-      imu_event_ = RT_NULL;
-    }
-    return -RT_ERROR;
+  // 初始化 Mlog
+  ret = initMlog();
+  if (ret != RT_EOK) {
+    cleanupMcnSubscriptions();
+    return ret;
   }
 
-  // 激活 gyro MCN 主题（必须调用，否则 mcn_publish 会失败）
-  // 参考 accgyro_spi_bmi270.cpp:544 的 imu 主题激活方式
-  rt_err_t advertise_ret = mcn_advertise(gyro_filtered_hub_, gyro_filtered_echo);
-  if (advertise_ret != RT_EOK && advertise_ret != -RT_EBUSY) {
-    // RT_EOK: 成功激活
-    // -RT_EBUSY: 已经激活过了（可以忽略）
-    // 其他值: 激活失败（内存不足等）
-    LOG_E("gyro_filtered advertise failed: %d", advertise_ret);
-    if (imu_node_ != RT_NULL) {
-      mcn_unsubscribe(MCN_HUB(imu), imu_node_);
-      imu_node_ = RT_NULL;
-    }
-    if (imu_event_ != RT_NULL) {
-      rt_sem_delete(imu_event_);
-      imu_event_ = RT_NULL;
-    }
-    return advertise_ret;
-  }
-  LOG_I("gyro MCN topic advertised");
-
-  // 初始化 mlog_gyro（使用单例）
-  bf_mlog::MlogGyro* mlog_gyro = bf_mlog::MlogGyro::getInstance();
-  mlog_gyro->init();
-  // 从参数系统读取 mlog_gyro_en 参数并设置使能状态
-  uint8_t mlog_gyro_en = 0;
-  if (getParam("mlog_gyro_en", &mlog_gyro_en, sizeof(mlog_gyro_en)) == RT_EOK) {
-    mlog_gyro->setParamEnabled(mlog_gyro_en != 0);
-    LOG_I("Mlog gyro enabled: %u", mlog_gyro_en);
-  } else {
-    // 如果参数不存在，使用默认值（禁用）
-    mlog_gyro->setParamEnabled(false);
-    LOG_W("Mlog gyro parameter not found, disabled by default");
-  }
-
-  // 从 BMI270 单例获取 IMU 采样频率和周期（参考 gyro.c 的初始化）
-  bf_bmi270::BMI270& bmi270 = bf_bmi270::BMI270::instance();
-  float sample_rate_hz = 0.0f;
-  float sample_dt = 0.0f;
-
-  // 等待 BMI270 初始化完成（可能 gyro 启动比 bmi270 早，需要等待）
-  const uint32_t wait_interval_ms = 100;  // 每次等待 100ms
-  const uint32_t max_wait_count = 10;     // 最多等待 10 次（即 1 秒）
-  uint32_t wait_count = 0;
-  bool bmi270_ready = false;
-
-  while (wait_count < max_wait_count) {
-    if (bmi270.initialized()) {
-      bmi270_ready = true;
-      break;
-    }
-    wait_count++;
-    LOG_I("Waiting for BMI270 initialization... (%u/%u)", wait_count, max_wait_count);
-    rt_thread_mdelay(wait_interval_ms);
-  }
-
-  if (bmi270_ready) {
-    sample_rate_hz = bmi270.getGyroSampleRateHz();
-    sample_dt = bmi270.getGyroSampleDt();
-    LOG_I("IMU sample rate: %.1f Hz, dt: %.6f s", sample_rate_hz, sample_dt);
-  } else {
-    // 如果等待 10 次后 BMI270 仍未初始化，使用默认值
-    sample_rate_hz = PROJECT_BF_GYRO_FILTER_IMU_SAMPLE_RATE_HZ;
-    sample_dt = 1.0f / sample_rate_hz;
-    LOG_W("BMI270 not initialized after waiting %u ms, using default sample rate: %.1f Hz",
-          wait_count * wait_interval_ms, sample_rate_hz);
-  }
-
-  // 初始化 gyro_t 映射的变量（参考 gyro.c 中的初始化逻辑）
-  // 参考 gyro.c:734-740 中 gyro.sampleRateHz 的设置
-  sample_rate_hz_ = static_cast<uint16_t>(sample_rate_hz);
-
-  // 注意：scale_ 已移除，因为 mcn 发布的数据已经是缩放后的（在 accgyro_spi_bmi270.cpp 中已应用 GYRO_SCALE_2000DPS）
-
-  // 读取 pid_process_denom 参数并设置目标循环时间（参考 gyro.c:750-759 中的 gyroSetTargetLooptime）
-  uint8_t pid_process_denom = 1;  // 默认值
-  if (getParam("pid_process_denom", &pid_process_denom, sizeof(pid_process_denom)) != RT_EOK) {
-    // 如果参数不存在，使用默认值
-    pid_process_denom = 1;
-  }
-
-  // 设置目标循环时间（参考 gyroSetTargetLooptime）
-  setTargetLooptime(pid_process_denom);
-
-  // 初始化加速度采样频率（如果需要）
-  acc_sample_rate_hz_ = sample_rate_hz_;  // 默认与陀螺仪相同
+  // 注意：依赖 BMI270 的初始化已移到 threadEntry 中，在线程调度器启动后执行
+  // 这里只初始化不依赖其他线程的部分
 
   // 初始化调试和状态相关变量（参考 gyro.c:592-594）
   gyro_has_overflow_protection_ = true;  // 默认有溢出保护
@@ -350,12 +218,6 @@ rt_err_t RateCtrlAngularVelocity::init() {
 
   use_multi_gyro_debugging_ = false;
   gyro_debug_axis_ = 0;  // FD_ROLL (需要根据实际枚举值调整)
-
-  // 初始化滤波器（从参数系统读取配置，参考 gyroInitFilters）
-  initFilters();
-
-  // 初始化降采样滤波器（参考 gyro_init.c:262-265）
-  initDownsampleFilter();
 
   // 注意：gyro 零偏值在运行时计算，不保存到参数系统
   // 每次启动时都会重新校准
@@ -367,14 +229,7 @@ rt_err_t RateCtrlAngularVelocity::init() {
 
   if (err != RT_EOK) {
     LOG_E("RateCtrlAngularVelocity thread init failed: %d", err);
-    if (imu_node_ != RT_NULL) {
-      mcn_unsubscribe(MCN_HUB(imu), imu_node_);
-      imu_node_ = RT_NULL;
-    }
-    if (imu_event_ != RT_NULL) {
-      rt_sem_delete(imu_event_);
-      imu_event_ = RT_NULL;
-    }
+    cleanupMcnSubscriptions();
     return err;
   }
 
@@ -389,210 +244,7 @@ rt_err_t RateCtrlAngularVelocity::init() {
   return RT_EOK;
 }
 
-void RateCtrlAngularVelocity::initFilters() {
-  // 使用从成员变量获取的采样频率和周期
-  float sample_rate_hz = static_cast<float>(sample_rate_hz_);
-
-  // 如果无效，使用默认值
-  if (sample_rate_hz <= 0.0f) {
-    sample_rate_hz = PROJECT_BF_GYRO_FILTER_IMU_SAMPLE_RATE_HZ;
-    sample_rate_hz_ = static_cast<uint16_t>(sample_rate_hz);
-  }
-
-  // 使用目标循环时间（微秒）- 用于滤波器初始化
-  // 注意：target_looptime_us 目前未直接使用，但保留用于未来可能的动态滤波器
-  // uint32_t target_looptime_us = target_looptime_us_;
-
-  // 参考 gyroInitFilters() 的实现方式
-  // 步骤1: 读取 LPF1 参数并初始化（参考 gyro_init.c:229-244）
-  uint8_t gyro_lpf1_type = 0;
-  uint16_t gyro_lpf1_static_hz = 0;
-  uint16_t gyro_lpf1_dyn_min_hz = 0;
-
-  if (getParam("filter_gyro_lpf1_type", &gyro_lpf1_type, sizeof(gyro_lpf1_type)) == RT_EOK &&
-      getParam("filter_gyro_lpf1_static_hz", &gyro_lpf1_static_hz, sizeof(gyro_lpf1_static_hz)) == RT_EOK) {
-    // 读取动态滤波器参数
-    if (getParam("filter_gyro_lpf1_dyn_min_hz", &gyro_lpf1_dyn_min_hz, sizeof(gyro_lpf1_dyn_min_hz)) == RT_EOK) {
-      // 如果动态滤波器参数大于0，使用动态最小值作为初始频率（参考 gyro_init.c:231-236）
-      if (gyro_lpf1_dyn_min_hz > 0) {
-        gyro_lpf1_static_hz = gyro_lpf1_dyn_min_hz;
-        LOG_I("Dynamic LPF1 enabled, using dyn_min_hz: %u Hz", gyro_lpf1_dyn_min_hz);
-      }
-    }
-
-    // 初始化 LPF1 滤波器（参考 gyro_init.c:239-244）
-    if (gyro_lpf1_type > 0 && gyro_lpf1_static_hz > 0) {
-      BfLpfFilterType filter_type = static_cast<BfLpfFilterType>(gyro_lpf1_type);
-      float cutoff_hz = static_cast<float>(gyro_lpf1_static_hz);
-      if (lpf1_filter_.init(filter_type, cutoff_hz, sample_rate_hz)) {
-        lpf1_filter_.setEnabled(true);
-        LOG_I("LPF1 filter initialized: type=%u, cutoff=%u Hz, sample_rate=%.1f Hz", gyro_lpf1_type,
-              gyro_lpf1_static_hz, sample_rate_hz);
-      } else {
-        LOG_W("LPF1 filter init failed: type=%u, cutoff=%u Hz", gyro_lpf1_type, gyro_lpf1_static_hz);
-      }
-    }
-  }
-
-  // 步骤2: 读取并初始化 LPF2 滤波器（参考 gyro_init.c:246-251）
-  uint8_t gyro_lpf2_type = 0;
-  uint16_t gyro_lpf2_static_hz = 0;
-
-  if (getParam("filter_gyro_lpf2_type", &gyro_lpf2_type, sizeof(gyro_lpf2_type)) == RT_EOK &&
-      getParam("filter_gyro_lpf2_static_hz", &gyro_lpf2_static_hz, sizeof(gyro_lpf2_static_hz)) == RT_EOK) {
-    // 初始化 LPF2 滤波器
-    if (gyro_lpf2_type > 0 && gyro_lpf2_static_hz > 0) {
-      BfLpfFilterType filter_type = static_cast<BfLpfFilterType>(gyro_lpf2_type);
-      float cutoff_hz = static_cast<float>(gyro_lpf2_static_hz);
-      if (lpf2_filter_.init(filter_type, cutoff_hz, sample_rate_hz)) {
-        lpf2_filter_.setEnabled(true);
-        downsample_filter_enabled_ = true;  // LPF2 开启时使用滤波降采样（对应 gyro.downsampleFilterEnabled）
-        LOG_I("LPF2 filter initialized: type=%u, cutoff=%u Hz, sample_rate=%.1f Hz", gyro_lpf2_type,
-              gyro_lpf2_static_hz, sample_rate_hz);
-      } else {
-        LOG_W("LPF2 filter init failed: type=%u, cutoff=%u Hz", gyro_lpf2_type, gyro_lpf2_static_hz);
-      }
-    }
-  }
-
-  // 初始化动态 LPF 参数（参考 gyro_init.c:199-226 中的 dynLpfFilterInit）
-#ifdef USE_DYN_LPF
-  // 注意：gyro_lpf1_dyn_min_hz 已在上面声明，这里直接使用
-  if (getParam("filter_gyro_lpf1_dyn_min_hz", &gyro_lpf1_dyn_min_hz, sizeof(gyro_lpf1_dyn_min_hz)) == RT_EOK) {
-    if (gyro_lpf1_dyn_min_hz > 0) {
-      dyn_lpf_min_ = gyro_lpf1_dyn_min_hz;
-
-      uint16_t gyro_lpf1_dyn_max_hz = 0;
-      if (getParam("filter_gyro_lpf1_dyn_max_hz", &gyro_lpf1_dyn_max_hz, sizeof(gyro_lpf1_dyn_max_hz)) == RT_EOK) {
-        dyn_lpf_max_ = gyro_lpf1_dyn_max_hz;
-      } else {
-        dyn_lpf_max_ = 250;  // 默认值
-      }
-
-      uint8_t gyro_lpf1_dyn_expo = 0;
-      if (getParam("filter_gyro_lpf1_dyn_expo", &gyro_lpf1_dyn_expo, sizeof(gyro_lpf1_dyn_expo)) == RT_EOK) {
-        dyn_lpf_curve_expo_ = gyro_lpf1_dyn_expo;
-      } else {
-        dyn_lpf_curve_expo_ = 5;  // 默认值
-      }
-
-      // 根据 LPF1 类型设置动态滤波器类型
-      // 注意：gyro_lpf1_type 已在上面声明，这里直接使用
-      if (gyro_lpf1_type > 0) {
-        switch (gyro_lpf1_type) {
-          case 1:
-            dyn_lpf_filter_ = 1;
-            break;  // DYN_LPF_PT1
-          case 2:
-            dyn_lpf_filter_ = 2;
-            break;  // DYN_LPF_BIQUAD
-          case 3:
-            dyn_lpf_filter_ = 3;
-            break;  // DYN_LPF_PT2
-          case 4:
-            dyn_lpf_filter_ = 4;
-            break;  // DYN_LPF_PT3
-          default:
-            dyn_lpf_filter_ = 0;
-            break;  // DYN_LPF_NONE
-        }
-      }
-    } else {
-      dyn_lpf_filter_ = 0;  // DYN_LPF_NONE
-    }
-  }
-#endif
-
-  // 步骤3: 初始化 Notch1 滤波器（参考 gyro_init.c:253）
-  uint16_t gyro_soft_notch_hz_1 = 0;
-  uint16_t gyro_soft_notch_cutoff_1 = 0;
-
-  if (getParam("filter_gyro_soft_notch_hz_1", &gyro_soft_notch_hz_1, sizeof(gyro_soft_notch_hz_1)) == RT_EOK &&
-      getParam("filter_gyro_soft_notch_cutoff_1", &gyro_soft_notch_cutoff_1, sizeof(gyro_soft_notch_cutoff_1)) ==
-          RT_EOK) {
-    if (gyro_soft_notch_hz_1 > 0 && gyro_soft_notch_cutoff_1 > 0) {
-      float freq_hz = static_cast<float>(gyro_soft_notch_hz_1);
-      float cutoff_hz = static_cast<float>(gyro_soft_notch_cutoff_1);
-      if (notch1_filter_.init(freq_hz, cutoff_hz, sample_rate_hz)) {
-        notch1_filter_.setEnabled(true);
-        LOG_I("Notch1 filter initialized: freq=%u Hz, cutoff=%u Hz", gyro_soft_notch_hz_1, gyro_soft_notch_cutoff_1);
-      } else {
-        LOG_W("Notch1 filter init failed: freq=%u Hz, cutoff=%u Hz", gyro_soft_notch_hz_1, gyro_soft_notch_cutoff_1);
-      }
-    }
-  }
-
-  // 步骤4: 初始化 Notch2 滤波器（参考 gyro_init.c:254）
-  uint16_t gyro_soft_notch_hz_2 = 0;
-  uint16_t gyro_soft_notch_cutoff_2 = 0;
-
-  if (getParam("filter_gyro_soft_notch_hz_2", &gyro_soft_notch_hz_2, sizeof(gyro_soft_notch_hz_2)) == RT_EOK &&
-      getParam("filter_gyro_soft_notch_cutoff_2", &gyro_soft_notch_cutoff_2, sizeof(gyro_soft_notch_cutoff_2)) ==
-          RT_EOK) {
-    if (gyro_soft_notch_hz_2 > 0 && gyro_soft_notch_cutoff_2 > 0) {
-      float freq_hz = static_cast<float>(gyro_soft_notch_hz_2);
-      float cutoff_hz = static_cast<float>(gyro_soft_notch_cutoff_2);
-      if (notch2_filter_.init(freq_hz, cutoff_hz, sample_rate_hz)) {
-        notch2_filter_.setEnabled(true);
-        LOG_I("Notch2 filter initialized: freq=%u Hz, cutoff=%u Hz", gyro_soft_notch_hz_2, gyro_soft_notch_cutoff_2);
-      } else {
-        LOG_W("Notch2 filter init failed: freq=%u Hz, cutoff=%u Hz", gyro_soft_notch_hz_2, gyro_soft_notch_cutoff_2);
-      }
-    }
-  }
-
-  // TODO: 初始化动态 notch 滤波器（参考 gyro_init.c:258-259）
-  // 需要 dynNotchConfig_t 结构体，可以从参数系统读取或使用默认值
-  // dyn_notch_filter_.init(config, target_looptime_us);
-}
-
-void RateCtrlAngularVelocity::initDownsampleFilter() {
-  // 参考 gyro_init.c:262-265 中的 imuGyroFilter 初始化
-  // const float k = pt1FilterGain(GYRO_IMU_DOWNSAMPLE_CUTOFF_HZ, gyro.targetLooptime * 1e-6f);
-  // for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
-  //     pt1FilterInit(&gyro.imuGyroFilter[axis], k);
-  // }
-
-  const float GYRO_IMU_DOWNSAMPLE_CUTOFF_HZ = 200.0f;  // 对应 gyro.h:52
-  float target_looptime_s = target_looptime_us_ * 1e-6f;
-
-  if (target_looptime_s > 0.0f && target_looptime_us_ > 0) {
-    // 计算采样频率（参考 gyro_init.c，使用 targetLooptime）
-    float sample_rate_hz = 1.0f / target_looptime_s;
-    float cutoff_hz = GYRO_IMU_DOWNSAMPLE_CUTOFF_HZ;
-
-    for (int i = 0; i < 3; i++) {
-      if (imu_gyro_filter_[i].init(BfLpfFilterType::PT1, cutoff_hz, sample_rate_hz)) {
-        imu_gyro_filter_[i].setEnabled(true);
-      }
-    }
-
-    LOG_I("IMU downsample filter initialized: cutoff=%.1f Hz, sample_rate=%.1f Hz", cutoff_hz, sample_rate_hz);
-  }
-}
-
-void RateCtrlAngularVelocity::setTargetLooptime(uint8_t pid_denom) {
-  // 参考 gyro.c:750-759 中的 gyroSetTargetLooptime
-  // activePidLoopDenom = pidDenom;
-  // if (gyro.sampleRateHz) {
-  //     gyro.sampleLooptime = 1e6f / gyro.sampleRateHz;
-  //     gyro.targetLooptime = activePidLoopDenom * 1e6f / gyro.sampleRateHz;
-  // } else {
-  //     gyro.sampleLooptime = 0;
-  //     gyro.targetLooptime = 0;
-  // }
-
-  if (sample_rate_hz_ > 0) {
-    sample_looptime_us_ = static_cast<uint32_t>(1e6f / static_cast<float>(sample_rate_hz_));
-    target_looptime_us_ = pid_denom * sample_looptime_us_;
-    LOG_I("Target looptime set: pid_denom=%u, sample_rate=%u Hz, sample_looptime=%u us, target_looptime=%u us",
-          pid_denom, sample_rate_hz_, sample_looptime_us_, target_looptime_us_);
-  } else {
-    sample_looptime_us_ = 0;
-    target_looptime_us_ = 0;
-    LOG_W("Cannot set target looptime: sample_rate_hz_ is 0");
-  }
-}
+// initFilters(), initDownsampleFilter(), setTargetLooptime() 已移到 gyro_init.cpp
 
 void RateCtrlAngularVelocity::threadEntry(void* parameter) {
   if (parameter == RT_NULL) {
@@ -600,6 +252,12 @@ void RateCtrlAngularVelocity::threadEntry(void* parameter) {
   }
 
   RateCtrlAngularVelocity* instance = static_cast<RateCtrlAngularVelocity*>(parameter);
+  
+  // 在线程调度器启动后，执行依赖其他线程状态的初始化
+  // 这部分初始化已移到 initInThreadEntry() 中
+  instance->initInThreadEntry();
+  
+  // 进入主循环
   instance->threadLoop();
 }
 
@@ -729,25 +387,11 @@ void RateCtrlAngularVelocity::processImuData(const imu_raw_msg_t* imu_data) {
     std::memset(sample_sum_, 0, sizeof(sample_sum_));
   }
 
-  // 发布滤波后的陀螺仪数据到 MCN
-  gyro_filtered_msg_t filtered_msg;
-  std::memcpy(filtered_msg.gyro_filtered, gyro_adcf_, sizeof(gyro_adcf_));
-  std::memcpy(filtered_msg.gyro_adc, gyro_adc_, sizeof(gyro_adc_));
-  filtered_msg.seq = imu_data->seq;
+  // 发布滤波后的陀螺仪数据到 MCN（已移到 gyro_mcn.cpp）
+  publishGyroFiltered(imu_data);
 
-  if (gyro_filtered_hub_ != nullptr) {
-    rt_err_t publish_result = mcn_publish(gyro_filtered_hub_, &filtered_msg);
-    if (publish_result != RT_EOK) {
-      LOG_E("Failed to publish gyro_filtered data: %d", publish_result);
-    }
-  } else {
-    LOG_E("gyro hub is null, cannot publish data");
-  }
-
-  // 推送陀螺仪数据到 mlog（参考 aMlogStabilze.c:208-216）
-  // 记录滤波前后的陀螺仪数据
-  uint32_t timestamp = timestamp_micros();
-  bf_mlog::MlogGyro::getInstance()->pushGyroData(imu_data->seq, timestamp, gyro_adc_, gyro_adcf_);
+  // 推送陀螺仪数据到 mlog（已移到 gyro_mlog.cpp）
+  pushGyroDataToMlog(imu_data);
 
   // Debug log（可选，如果需要的话）
   // LOG_D("seq:%u angular_velocity(%.3f, %.3f, %.3f)",

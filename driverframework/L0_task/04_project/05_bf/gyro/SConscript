@@ -10,6 +10,7 @@ include_paths = [
     os.path.join(cwd, "inc"),
     os.path.join(cwd, "../imu/inc"),
     os.path.join(cwd, "../log/inc"),
+    os.path.join(cwd, "../common/inc"),  # init_sync.h 所在目录
     os.path.join(cwd, "../workqueueManage/inc"),  # workqueueManage.h 所在目录
     os.path.join(
         cwd, "..", "..", "..", "..", "L1_middleWare", "06_bf_lib", "filter_imu"
@@ -29,7 +30,6 @@ group = DefineGroup(
     depend=[
         "PROJECT_BF_GYRO_FILTER_EN",
         "PROJECT_BF_PARAM_EN",  # getParam function
-        "PROJECT_MINIFLY_TASK05_PARAM_FLYER_BF_DEFAULT_EN",
         "L1_MIDDLEWARE_06_BF_LIB_FILTER_IMU_EN",
         "PROJECT_BF_MLOG_GYRO_EN",
     ],

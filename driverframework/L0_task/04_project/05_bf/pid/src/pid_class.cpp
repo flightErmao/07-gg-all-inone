@@ -11,6 +11,7 @@ extern "C" {
 #include "bfPidParam.h"
 #include "rc_mcn.h"  // For MCN_DECLARE(rc), rc_command_msg_t, rc_aux_msg_t
 #include "filter.h"  // For filter functions: pt1FilterInit, pt2FilterInit, pt3FilterInit, biquadFilterInit, etc.
+#include "../common/inc/init_sync.h"  // For initSyncWait, initSyncNotify
 #ifdef PROJECT_BF_PID_DEBUG_PIN_EN
 #include "debugPin.h"
 #endif
@@ -183,6 +184,7 @@ PidBf::~PidBf() { cleanupMcnSubscriptions(); }
 
 rt_err_t PidBf::init() {
   // Note: Thread initialization removed - using taskPid.cpp main thread instead
+  // 注意：依赖 Gyro Filter 的初始化已移到 workerEntry 中，在线程调度器启动后执行
 
   // 初始化MCN订阅
   rt_err_t ret = initMcnSubscriptions();
@@ -201,6 +203,8 @@ rt_err_t PidBf::init() {
 
   initConfig();
   initFilters();
+
+  // 注意：initSyncNotify(INIT_SYNC_PID) 已移到 workerEntry 中，在等待 Gyro Filter 之后
 
   LOG_I("PidBf initialized (no thread - using taskPid.cpp main thread)");
   return RT_EOK;
@@ -332,7 +336,7 @@ void PidBf::pidController(uint32_t current_time_us) {
         pTerm = pid_runtime_.ptermYawLowpassApplyFn((filter_t*)&pid_runtime_.ptermYawLowpass, pTerm);
       } else {
         // Fallback to legacy SimpleLowpass for backward compatibility
-        pTerm = lowpassApply(&yaw_pterm_lpf_, pTerm);
+      pTerm = lowpassApply(&yaw_pterm_lpf_, pTerm);
       }
     }
     pid_data_[axis].P = pTerm;
@@ -503,6 +507,18 @@ void PidBf::workerEntry(void* parameter) {
   if (!self) {
     return;
   }
+  
+  // 在线程调度器启动后，等待 Gyro Filter 初始化完成（PID 需要 gyro 数据）
+  // 这部分初始化依赖其他线程状态，必须在线程入口函数中执行
+  rt_err_t ret = initSyncWait(INIT_SYNC_GYRO_FILTER, 2000);  // 等待最多2秒
+  if (ret != RT_EOK) {
+    LOG_W("Gyro Filter not ready, continuing anyway (ret=%d)", ret);
+  }
+  
+  // 通知 PID 初始化完成（在等待 Gyro Filter 之后）
+  initSyncNotify(INIT_SYNC_PID);
+  
+  // 进入主循环
   self->pidMainLoop();
 }
 

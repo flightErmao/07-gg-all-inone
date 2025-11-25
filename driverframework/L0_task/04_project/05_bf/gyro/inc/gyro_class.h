@@ -105,6 +105,15 @@ class RateCtrlAngularVelocity {
 
   rt_err_t init();
 
+  // MCN 相关函数
+  rt_err_t initMcn();
+  void cleanupMcnSubscriptions();
+  void publishGyroFiltered(const imu_raw_msg_t* imu_data);
+
+  // Mlog 相关函数
+  rt_err_t initMlog();
+  void pushGyroDataToMlog(const imu_raw_msg_t* imu_data);
+
   // 获取滤波后的角速度数据（对应 gyro.gyroADCf）
   void getFilteredGyro(float gyro_filtered[3]) const { std::memcpy(gyro_filtered, gyro_adcf_, sizeof(gyro_adcf_)); }
 
@@ -217,6 +226,9 @@ class RateCtrlAngularVelocity {
 
   // 设置目标循环时间（参考 gyro.c:750-759 中的 gyroSetTargetLooptime）
   void setTargetLooptime(uint8_t pid_denom);
+
+  // 在线程入口中执行的初始化（依赖其他线程状态）
+  void initInThreadEntry();
 };
 
 #endif /* GYRO_FILTER_H__ */

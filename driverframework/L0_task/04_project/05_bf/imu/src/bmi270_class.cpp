@@ -17,6 +17,7 @@ extern "C" {
 #include <ulog.h>
 #include <stdlib.h>  // for rand()
 #include "debugPin.h"
+#include "../common/inc/init_sync.h"  // For initSyncNotify
 }
 
 /* 定义 IMU 原始数据话题（在本文件内完成定义与发布）
@@ -167,6 +168,10 @@ rt_err_t BMI270::init(const RuntimeConfig &cfg) {
   cfg_ = cfg;
   init_ok_ = false;
 
+#ifdef PROJECT_BF_BMI270_DEBUG_PIN_EN
+  DEBUG_PIN_DEBUG3_HIGH();  // Debug pin: BMI270 initialization start
+#endif
+
   if (!cfg_.spi_bus_name || !cfg_.spi_device_name) {
     return -RT_EINVAL;
   }
@@ -233,6 +238,19 @@ rt_err_t BMI270::init(const RuntimeConfig &cfg) {
   // mlog_gyro->setParamEnabled(true);  // 临时测试：直接使能
 
   init_ok_ = true;
+  
+  // 通知初始化完成
+  rt_err_t notify_ret = initSyncNotify(INIT_SYNC_BMI270);
+  if (notify_ret != RT_EOK) {
+    LOG_E("BMI270 initSyncNotify failed: %d", notify_ret);
+  } else {
+    LOG_I("BMI270 initialization completed and notified");
+  }
+  
+#ifdef PROJECT_BF_BMI270_DEBUG_PIN_EN
+  DEBUG_PIN_DEBUG3_LOW();  // Debug pin: BMI270 initialization completed
+#endif
+  
   return RT_EOK;
 }
 
@@ -435,32 +453,6 @@ bool BMI270::readAccelGyro(int16_t acc[3], int16_t gyro[3]) {
 }
 
 void BMI270::publishImu(const int16_t acc[3], const int16_t gyro[3]) {
-  // 临时测试：使用随机数替代真实数据，记录到 mlog
-  // 已屏蔽：由 testThread 模块负责 mlog 记录
-  // static rt_uint32_t s_seq = 0;
-  // uint32_t seq = ++s_seq;
-  // uint32_t timestamp = timestamp_micros();
-
-  // 生成随机陀螺仪数据（范围：-2000 到 +2000 dps）
-  // float gyro_raw[3];
-  // float gyro_filtered[3];
-
-  // 使用 rand() 生成 -2000 到 +2000 之间的随机数
-  // rand() 返回 0 到 RAND_MAX，我们将其映射到 -2000 到 +2000
-  // for (int i = 0; i < 3; i++) {
-  //   gyro_raw[i] = ((float)rand() / RAND_MAX) * 4000.0f - 2000.0f;
-  //   gyro_filtered[i] = ((float)rand() / RAND_MAX) * 4000.0f - 2000.0f;
-  // }
-
-  // 调用 mlog 记录数据（使用单例）
-  // 已屏蔽：由 testThread 模块负责 mlog 记录
-  // #ifdef PROJECT_BF_BMI270_DEBUG_PIN_EN
-  //   DEBUG_PIN_DEBUG0_HIGH();
-  // #endif
-  //   bf_mlog::MlogGyro::getInstance()->pushGyroData(seq, timestamp, gyro_raw, gyro_filtered);
-  // #ifdef PROJECT_BF_BMI270_DEBUG_PIN_EN
-  //   DEBUG_PIN_DEBUG0_LOW();
-  // #endif
 
   static rt_uint32_t s_seq = 0;
   imu_raw_msg_t msg{};
