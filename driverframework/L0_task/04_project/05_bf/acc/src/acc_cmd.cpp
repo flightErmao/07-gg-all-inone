@@ -37,9 +37,7 @@ static void acc_calibrate(int argc, char** argv) {
     acc.getAccZero(acc_zero);
 
     // 保存到参数系统
-    if (setParam("acc_zero_x", &acc_zero[0], sizeof(acc_zero[0])) == RT_EOK &&
-        setParam("acc_zero_y", &acc_zero[1], sizeof(acc_zero[1])) == RT_EOK &&
-        setParam("acc_zero_z", &acc_zero[2], sizeof(acc_zero[2])) == RT_EOK) {
+    if (setParam("cali_imu_acc_offset", acc_zero, sizeof(acc_zero)) == RT_EOK) {
       LOG_I("Accelerometer calibration completed and saved: %.3f, %.3f, %.3f", 
             acc_zero[0], acc_zero[1], acc_zero[2]);
       rt_kprintf("Accelerometer calibration completed and saved.\n");
@@ -55,20 +53,6 @@ static void acc_calibrate(int argc, char** argv) {
 }
 MSH_CMD_EXPORT(acc_calibrate, Accelerometer calibration command);
 
-// 获取加速度计校准值命令
-static void acc_get_zero(int argc, char** argv) {
-  AccBf& acc = AccBf::instance();
-
-  float acc_zero[3] = {0.0f, 0.0f, 0.0f};
-  acc.getAccZero(acc_zero);
-
-  rt_kprintf("Accelerometer zero offset:\n");
-  rt_kprintf("  X: %.3f\n", acc_zero[0]);
-  rt_kprintf("  Y: %.3f\n", acc_zero[1]);
-  rt_kprintf("  Z: %.3f\n", acc_zero[2]);
-}
-MSH_CMD_EXPORT(acc_get_zero, Get accelerometer zero offset);
-
 // 设置加速度计 Trim 值命令
 static void acc_set_trim(int argc, char** argv) {
   if (argc < 3) {
@@ -81,8 +65,8 @@ static void acc_set_trim(int argc, char** argv) {
   float roll_trim = atof(argv[1]);
   float pitch_trim = atof(argv[2]);
 
-  if (setParam("acc_trim_roll", &roll_trim, sizeof(roll_trim)) == RT_EOK &&
-      setParam("acc_trim_pitch", &pitch_trim, sizeof(pitch_trim)) == RT_EOK) {
+  if (setParam("cali_acc_trim_roll", &roll_trim, sizeof(roll_trim)) == RT_EOK &&
+      setParam("cali_acc_trim_pitch", &pitch_trim, sizeof(pitch_trim)) == RT_EOK) {
     LOG_I("Accelerometer trim set: roll=%.2f, pitch=%.2f", roll_trim, pitch_trim);
     rt_kprintf("Accelerometer trim set: roll=%.2f, pitch=%.2f\n", roll_trim, pitch_trim);
   } else {

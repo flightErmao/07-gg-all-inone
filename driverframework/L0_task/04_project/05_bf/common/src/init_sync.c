@@ -14,6 +14,8 @@ static rt_bool_t init_sync_inited_ = RT_FALSE;
 static const char* init_sync_names_[] = {
     "BMI270",
     "GyroFilter",
+    "Acc",
+    "Attitude",
     "RC",
     "PID",
     "Motor",
@@ -91,9 +93,9 @@ rt_err_t initSyncWait(init_sync_id_t id, rt_int32_t timeout_ms) {
     return RT_EOK;
   }
 
-  // 等待初始化完成（使用 RT_EVENT_FLAG_CLEAR 清除事件位，确保只接收一次）
+  // 等待初始化完成（事件位保持置位，允许多个模块观察到完成状态）
   LOG_I("Waiting for %s initialization... (event_flag=0x%08X)", init_sync_names_[id], event_flag);
-  rt_err_t ret = rt_event_recv(init_sync_event_, event_flag, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR, timeout_ms, &recved);
+  rt_err_t ret = rt_event_recv(init_sync_event_, event_flag, RT_EVENT_FLAG_OR, timeout_ms, &recved);
   
   if (ret == RT_EOK) {
     LOG_I("%s is ready (recved=0x%08X)", init_sync_names_[id], recved);
@@ -118,9 +120,8 @@ rt_bool_t initSyncIsReady(init_sync_id_t id) {
   // 检查事件位（非阻塞）
   rt_uint32_t event_flag = 1UL << id;
   rt_uint32_t recved = 0;
-  if (rt_event_recv(init_sync_event_, event_flag, RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR, 0, &recved) == RT_EOK) {
-    // 已经就绪，恢复事件状态（重新发送事件）
-    rt_event_send(init_sync_event_, event_flag);
+  if (rt_event_recv(init_sync_event_, event_flag, RT_EVENT_FLAG_OR, 0, &recved) == RT_EOK) {
+    // 已经就绪
     return RT_TRUE;
   }
 

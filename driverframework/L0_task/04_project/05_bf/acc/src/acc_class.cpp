@@ -188,16 +188,14 @@ void AccBf::threadEntry(void* parameter) {
 void AccBf::initInThreadEntry() {
   // 从参数系统加载校准值（如果存在）
   float acc_zero[3] = {0.0f, 0.0f, 0.0f};
-  if (getParam("acc_zero_x", &acc_zero[0], sizeof(acc_zero[0])) == RT_EOK &&
-      getParam("acc_zero_y", &acc_zero[1], sizeof(acc_zero[1])) == RT_EOK &&
-      getParam("acc_zero_z", &acc_zero[2], sizeof(acc_zero[2])) == RT_EOK) {
+  if (getParam("cali_imu_acc_offset", acc_zero, sizeof(acc_zero)) == RT_EOK) {
     acc_calibration_.setAccZero(acc_zero);
     LOG_I("Loaded acc zero from params: %.3f, %.3f, %.3f", acc_zero[0], acc_zero[1], acc_zero[2]);
   }
 
   // 加载 Trim 值
-  if (getParam("acc_trim_roll", &acc_trim_[0], sizeof(acc_trim_[0])) == RT_EOK &&
-      getParam("acc_trim_pitch", &acc_trim_[1], sizeof(acc_trim_[1])) == RT_EOK) {
+  if (getParam("cali_acc_trim_roll", &acc_trim_[0], sizeof(acc_trim_[0])) == RT_EOK &&
+      getParam("cali_acc_trim_pitch", &acc_trim_[1], sizeof(acc_trim_[1])) == RT_EOK) {
     LOG_I("Loaded acc trim: roll=%.2f, pitch=%.2f", acc_trim_[0], acc_trim_[1]);
   }
 

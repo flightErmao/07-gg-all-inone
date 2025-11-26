@@ -88,6 +88,7 @@ int uparam_data_init(void) {
   uparam_add_list(bfImuCaliOffsetParam_list(), bfImuCaliOffsetParam_count());
   uparam_add_list(bfMlogParam_list(), bfMlogParam_count());
   uparam_add_list(bfMotorParam_list(), bfMotorParam_count());
+  uparam_add_list(bfAccParam_list(), bfAccParam_count());
 #endif
   return 0;  // 返回 0 表示成功
 }
