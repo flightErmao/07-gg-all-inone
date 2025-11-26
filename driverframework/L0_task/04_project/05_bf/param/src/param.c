@@ -10,6 +10,7 @@
 #include "bfImuCaliOffsetParam.h"
 #include "bfMlogParam.h"
 #include "bfMotorParam.h"
+#include "bfAccParam.h"
 #endif
 
 #ifdef PKG_USING_MIXER
@@ -49,6 +50,7 @@ static void init_param_sources(void) {
   register_param_source(bfImuCaliOffsetParam_list(), bfImuCaliOffsetParam_count());
   register_param_source(bfMlogParam_list(), bfMlogParam_count());
   register_param_source(bfMotorParam_list(), bfMotorParam_count());
+  register_param_source(bfAccParam_list(), bfAccParam_count());
 #endif
 }
 

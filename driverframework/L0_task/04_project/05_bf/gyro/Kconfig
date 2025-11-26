@@ -70,5 +70,27 @@ menuconfig PROJECT_BF_GYRO_FILTER_EN
             default 5
             help
                 Time slice for the gyro filter thread in ticks. Default: 5.
+
+        menuconfig PROJECT_BF_GYRO_FILTER_ADVANCED
+            bool "Advanced Gyro Filter Options"
+            default n
+            help
+                Enable advanced gyro filter options including dynamic LPF and dynamic notch filter.
+
+            if PROJECT_BF_GYRO_FILTER_ADVANCED
+                config USE_DYN_LPF
+                    bool "Enable Dynamic Low-Pass Filter (DYN_LPF)"
+                    default n
+                    help
+                        Enable dynamic low-pass filter that adjusts cutoff frequency based on gyro activity.
+                        This allows the filter to adapt to different flight conditions automatically.
+
+                config USE_DYN_NOTCH_FILTER
+                    bool "Enable Dynamic Notch Filter"
+                    default n
+                    help
+                        Enable dynamic notch filter that automatically detects and filters motor noise frequencies.
+                        This is useful for removing motor-induced vibrations from gyro data.
+        endif
     endif
 

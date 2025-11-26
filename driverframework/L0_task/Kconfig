@@ -38,4 +38,6 @@ menu "L0_TASK_CONFIG"
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/05_bf/param/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/05_bf/anotc/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/05_bf/motor/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/05_bf/attitude/Kconfig"
+    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/05_bf/acc/Kconfig"
 endmenu

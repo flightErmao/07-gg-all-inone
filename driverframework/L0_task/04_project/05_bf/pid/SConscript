@@ -14,23 +14,32 @@ include_paths = [
     os.path.join(cwd, "../anotc/inc"),  # anotc_bf.h, protocolAtkpInterface.h
     os.path.join(cwd, "../motor/inc"),  # motor_bf.h (for subTaskMotorUpdate)
     os.path.join(cwd, "../imu/inc"),
+    os.path.join(cwd, "../gyro/inc"),  # gyro_mcn.h
+    os.path.join(cwd, "../attitude/inc"),  # attitude_mcn.h (for angle mode)
     os.path.join(cwd, "../log/inc"),    
     os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "01_module", "05_timestamp", "inc"),  # timestamp.h
     os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "01_module", "03_debugPin"),  # debugPin.h 所在目录
     os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "06_bf_lib", "common", "inc"),  # filter.h
 ]
 
+depend_list = [
+    "PROJECT_BF_PID_EN",
+    "PROJECT_BF_GYRO_FILTER_EN",  # Depends on gyro filter for gyro_filtered data
+    "PROJECT_BF_RC_EN",  # Depends on RC module for RcBf class
+    "PROJECT_BF_PARAM_EN",  # getParam function
+]
+
+# Optional dependencies (will be checked at compile time via #ifdef)
+# Note: These are not strictly required for compilation, but are needed at runtime
+# if GetDepend("PROJECT_BF_ANOTC_EN"):
+#     depend_list.append("PROJECT_BF_ANOTC_EN")  # Depends on ANOTC for logging functions
+# if GetDepend("PROJECT_BF_ATTITUDE_EN"):
+#     depend_list.append("PROJECT_BF_ATTITUDE_EN")  # Depends on attitude module for angle mode
+
 group = DefineGroup(
     "PROJECT_BF_PID_EN",
     src,
-    depend=[
-        "PROJECT_BF_PID_EN",
-        "PROJECT_BF_GYRO_FILTER_EN",  # Depends on gyro filter for gyro_filtered data
-        "PROJECT_BF_RC_EN",  # Depends on RC module for RcBf class
-        "PROJECT_BF_PARAM_EN",  # getParam function
-        "PROJECT_BF_ANOTC_EN",  # Depends on ANOTC for logging functions (sendUserDatafloat6, etc.)
-        "L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN",  # Required when PROJECT_BF_PID_DEBUG_PIN_EN is enabled
-    ],
+    depend=depend_list,
     CPPPATH=include_paths,
 )
 

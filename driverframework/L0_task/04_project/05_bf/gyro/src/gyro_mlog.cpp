@@ -16,7 +16,7 @@ extern "C" {
 }
 
 // 初始化 mlog_gyro
-rt_err_t RateCtrlAngularVelocity::initMlog() {
+rt_err_t gyro::initMlog() {
   // 初始化 mlog_gyro（使用单例）
   bf_mlog::MlogGyro* mlog_gyro = bf_mlog::MlogGyro::getInstance();
   mlog_gyro->init();
@@ -36,7 +36,7 @@ rt_err_t RateCtrlAngularVelocity::initMlog() {
 }
 
 // 推送陀螺仪数据到 mlog（参考 aMlogStabilze.c:208-216）
-void RateCtrlAngularVelocity::pushGyroDataToMlog(const imu_raw_msg_t* imu_data) {
+void gyro::pushGyroDataToMlog(const imu_raw_msg_t* imu_data) {
   if (imu_data == nullptr) {
     return;
   }
@@ -45,4 +45,3 @@ void RateCtrlAngularVelocity::pushGyroDataToMlog(const imu_raw_msg_t* imu_data) 
   uint32_t timestamp = timestamp_micros();
   bf_mlog::MlogGyro::getInstance()->pushGyroData(imu_data->seq, timestamp, gyro_adc_, gyro_adcf_);
 }
-

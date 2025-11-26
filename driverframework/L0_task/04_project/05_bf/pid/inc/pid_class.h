@@ -14,6 +14,9 @@ extern "C" {
 #include "rc_mcn.h"  // For rc_aux_msg_t, rc_command_msg_t, rc_armed_status_t
 #include "timestamp.h"
 #include "filter.h"  // For biquadFilter_t, pt1Filter_t, pt2Filter_t, pt3Filter_t, filterApplyFnPtr, lowpassFilterType_e
+#ifdef PROJECT_BF_ATTITUDE_EN
+#include "../attitude/inc/attitude_mcn.h"  // For attitude_msg_t
+#endif
 }
 
 // Forward declaration
@@ -34,6 +37,7 @@ struct SimpleLowpass {
 #define FD_PITCH 1
 #define FD_YAW 2
 #define XYZ_AXIS_COUNT 3
+#define RP_AXIS_COUNT 2  // Roll and Pitch only (for angle mode)
 
 struct pidf_t {
   float P;
@@ -90,6 +94,12 @@ struct pidProfile_t {
   // Yaw P term filter parameters
   uint16_t yaw_lowpass_hz;              // Yaw P term lowpass filter cutoff (Hz) - replaces yawLpfHz
   float yawLpfHz;                       // Legacy: kept for backward compatibility, maps to yaw_lowpass_hz
+  
+  // Angle mode parameters (same as Betaflight)
+  uint8_t angle_limit;                  // Max angle in degrees in Angle mode
+  uint8_t angle_feedforward_smoothing_ms; // Smoothing factor for angle feedforward as time constant in milliseconds
+  uint8_t angle_earth_ref;              // Control amount of "co-ordination" from yaw into roll while pitched forward in angle mode (0-100)
+  pidf_t pid_level;                     // PID parameters for LEVEL (angle) mode [P, I, D, F, S]
 };
 
 struct pidCoefficient_t {
@@ -146,6 +156,18 @@ struct pidRuntime_t {
 #endif
   
   float previousGyroRateDterm[XYZ_AXIS_COUNT]; // Previous gyro rate for Dterm calculation
+  
+#ifdef PROJECT_BF_ATTITUDE_EN
+  // Angle mode runtime parameters (same as Betaflight)
+  float angleGain;                      // Angle gain (from PID_LEVEL P parameter)
+  float angleFeedforwardGain;           // Angle feedforward gain
+  float angleTarget[RP_AXIS_COUNT];     // Angle target [roll, pitch] (degrees)
+  float angleYawSetpoint;               // Yaw setpoint for earth reference compensation
+  float angleEarthRef;                  // Earth reference gain factor (0.0-1.0)
+  pt3Filter_t attitudeFilter[RP_AXIS_COUNT];  // Attitude filter (PT3) for smoothing angle rate output [roll, pitch]
+  pt3Filter_t angleFeedforwardPt3[XYZ_AXIS_COUNT]; // Angle feedforward filter (PT3) [roll, pitch, yaw]
+  bool axisInAngleMode[3];              // Flag indicating if axis is in angle mode [roll, pitch, yaw]
+#endif
 };
 
 /* PID setpoint message type (internal to PID module) */
@@ -202,6 +224,14 @@ class PidBf {
   // Update gyro data from MCN (blocking)
   bool updateGyroDataFromMcn();
   
+#ifdef PROJECT_BF_ATTITUDE_EN
+  // Update attitude data from MCN (non-blocking, polls for new data)
+  bool updateAttitudeDataFromMcn();
+  
+  // Get current attitude data (for angle mode)
+  const attitude_msg_t& getAttitudeData() const { return attitude_data_; }
+#endif
+  
   // Publish PID output to MCN
   void publishPidOutput(const pid_output_msg_t& output_msg);
 
@@ -243,6 +273,13 @@ class PidBf {
   float getSetpointRate(int axis);
   float getFeedforward(int axis);
   float getMaxRcRate(int axis);
+  
+#ifdef PROJECT_BF_ATTITUDE_EN
+  // Angle mode helper functions
+  float pidLevel(int axis, float currentPidSetpoint, float horizonLevelStrength);
+  float calcHorizonLevelStrength() const;
+  float getCurrentAngle(int axis) const;  // Get current angle from attitude data (degrees)
+#endif
 
   pidRuntime_t pid_runtime_;
   pidProfile_t pid_profile_;
@@ -265,6 +302,15 @@ class PidBf {
 
   // Current auxiliary channels data
   rc_aux_msg_t aux_channels_data_;
+
+#ifdef PROJECT_BF_ATTITUDE_EN
+  // MCN subscription for attitude data
+  McnNode_t attitude_node_;
+  
+  // Current attitude data
+  attitude_msg_t attitude_data_;
+  bool attitude_data_valid_;  // Flag to indicate if attitude data is valid
+#endif
 
   // Current RC command data (from MCN)
   rc_command_msg_t rc_command_data_;

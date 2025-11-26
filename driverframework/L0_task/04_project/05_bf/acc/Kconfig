@@ -1,0 +1,44 @@
+menuconfig PROJECT_BF_ACC_EN
+    bool "ENABLE: PROJECT_BF_ACC_EN"
+    default n
+    help
+        Enable Betaflight-style accelerometer processing with alignment, calibration, trim, and PT2 filtering.
+
+    if PROJECT_BF_ACC_EN
+        config PROJECT_BF_ACC_CALIBRATION_DURATION_MS
+            int "Accelerometer Calibration Duration (ms)"
+            range 500 5000
+            default 2000
+            help
+                Duration in milliseconds for accelerometer calibration. Default: 2000ms (2 seconds).
+
+        config PROJECT_BF_ACC_DEBUG_PIN_EN
+            bool "Enable Debug Pin for Acc Processing Timing Measurement"
+            default n
+            depends on L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN
+            help
+                Enable debug pin to measure accelerometer processing time.
+                The pin will be set HIGH during processing and LOW otherwise.
+
+        config PROJECT_BF_ACC_THREAD_STACK_SIZE
+            int "Accelerometer Thread Stack Size (bytes)"
+            range 1024 8192
+            default 2048
+            help
+                Stack size for the accelerometer processing thread in bytes. Default: 2048.
+
+        config PROJECT_BF_ACC_THREAD_PRIORITY
+            int "Accelerometer Thread Priority"
+            range 1 32
+            default 10
+            help
+                Priority for the accelerometer processing thread. Higher number means higher priority. Default: 10.
+
+        config PROJECT_BF_ACC_THREAD_TIMESLICE
+            int "Accelerometer Thread Time Slice (ticks)"
+            range 1 100
+            default 5
+            help
+                Time slice for the accelerometer processing thread in ticks. Default: 5.
+    endif
+

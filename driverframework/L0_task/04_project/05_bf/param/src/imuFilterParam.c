@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "bfImuFilterParam.h"
+#include "filter.h"  // For lowpassFilterType_e (FILTER_PT1, FILTER_BIQUAD, FILTER_PT2, FILTER_PT3)
 
 typedef struct {
     void *param;
@@ -32,16 +33,18 @@ static uint16_t gyro_lpf1_dyn_min_hz;  // 动态 LPF1 最小频率
 static uint16_t gyro_lpf1_dyn_max_hz;  // 动态 LPF1 最大频率
 static uint8_t gyro_lpf1_dyn_expo;  // 动态 LPF1 指数
 
+/* IMU 降采样 PT1 滤波器参数（用于姿态估计） */
+static uint16_t gyro_imu_downsample_cutoff_hz;  // IMU 降采样 PT1 滤波器截止频率（Hz）
+
 /* 默认值 - 完全仿照 pgResetFn_gyroConfig 的默认值 */
 #define GYRO_LPF1_DYN_MIN_HZ_DEFAULT 80
 #define GYRO_LPF1_DYN_MAX_HZ_DEFAULT 250
 #define GYRO_LPF2_HZ_DEFAULT 0
-#define FILTER_PT1 1
 
-static const uint8_t gyro_lpf1_type_default = FILTER_PT1;  // PT1
+static const uint8_t gyro_lpf1_type_default = FILTER_PT1;  // PT1 (from filter.h: lowpassFilterType_e)
 static const uint16_t gyro_lpf1_static_hz_default = GYRO_LPF1_DYN_MIN_HZ_DEFAULT;  // 默认使用动态最小值
 
-static const uint8_t gyro_lpf2_type_default = FILTER_PT1;  // PT1
+static const uint8_t gyro_lpf2_type_default = FILTER_PT1;  // PT1 (from filter.h: lowpassFilterType_e)
 static const uint16_t gyro_lpf2_static_hz_default = GYRO_LPF2_HZ_DEFAULT;  // 默认禁用
 
 static const uint16_t gyro_soft_notch_hz_1_default = 0;
@@ -52,6 +55,8 @@ static const uint16_t gyro_soft_notch_cutoff_2_default = 0;
 static const uint16_t gyro_lpf1_dyn_min_hz_default = GYRO_LPF1_DYN_MIN_HZ_DEFAULT;
 static const uint16_t gyro_lpf1_dyn_max_hz_default = GYRO_LPF1_DYN_MAX_HZ_DEFAULT;
 static const uint8_t gyro_lpf1_dyn_expo_default = 5;
+
+static const uint16_t gyro_imu_downsample_cutoff_hz_default = 200;  // 默认 200Hz
 
 static const param_default_t bf_imu_filter_defaults[] = {
     {&gyro_lpf1_type, &gyro_lpf1_type_default},
@@ -65,6 +70,7 @@ static const param_default_t bf_imu_filter_defaults[] = {
     {&gyro_lpf1_dyn_min_hz, &gyro_lpf1_dyn_min_hz_default},
     {&gyro_lpf1_dyn_max_hz, &gyro_lpf1_dyn_max_hz_default},
     {&gyro_lpf1_dyn_expo, &gyro_lpf1_dyn_expo_default},
+    {&gyro_imu_downsample_cutoff_hz, &gyro_imu_downsample_cutoff_hz_default},
 };
 
 static void bf_imu_filter_param_default(void *address, uint8_t size) {
@@ -98,6 +104,8 @@ static param_list bf_imu_filter_params[] = {
     {(void*)&gyro_lpf1_dyn_max_hz, sizeof(gyro_lpf1_dyn_max_hz), "filter_gyro_lpf1_dyn_max_hz", "u16",
      bf_imu_filter_param_default},
     {(void*)&gyro_lpf1_dyn_expo, sizeof(gyro_lpf1_dyn_expo), "filter_gyro_lpf1_dyn_expo", "u8",
+     bf_imu_filter_param_default},
+    {(void*)&gyro_imu_downsample_cutoff_hz, sizeof(gyro_imu_downsample_cutoff_hz), "filter_gyro_imu_downsample_cutoff_hz", "u16",
      bf_imu_filter_param_default},
 };
 

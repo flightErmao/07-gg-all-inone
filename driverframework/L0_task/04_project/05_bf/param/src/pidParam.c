@@ -55,6 +55,18 @@ static uint8_t bf_pid_d_max_advance;  // D_MAX setpoint输入的百分比乘数
 static uint16_t bf_pid_yaw_lowpass_hz;  // Yaw P项低通滤波器截止频率（Hz）
 static float bf_pid_yaw_lpf_hz;         // Legacy: 保持向后兼容，映射到yaw_lowpass_hz
 
+/* 角度模式参数（与Betaflight一致） */
+#ifdef PROJECT_BF_ATTITUDE_EN
+static uint8_t bf_pid_angle_limit;                    // 角度模式最大角度限制（度）
+static uint8_t bf_pid_angle_feedforward_smoothing_ms;  // 角度前馈平滑时间常数（毫秒）
+static uint8_t bf_pid_angle_earth_ref;                // 地球参考补偿增益（0-100）
+static uint8_t bf_pid_level_p;                         // PID_LEVEL P参数
+static uint8_t bf_pid_level_i;                         // PID_LEVEL I参数
+static uint8_t bf_pid_level_d;                         // PID_LEVEL D参数
+static uint16_t bf_pid_level_f;                        // PID_LEVEL F参数
+static uint8_t bf_pid_level_s;                         // PID_LEVEL S参数
+#endif
+
 /* PID 处理分母（控制 PID 循环频率） */
 static uint8_t pid_process_denom;  // 对应 activePidLoopDenom，用于计算 targetLooptime
 
@@ -98,6 +110,18 @@ static const uint8_t bf_pid_d_max_advance_default = 20;      // D_MAX advance默
 static const uint16_t bf_pid_yaw_lowpass_hz_default = 90;  // Yaw P项LPF默认90Hz
 static const float bf_pid_yaw_lpf_hz_default = 90.0f;      // Legacy: 保持向后兼容
 
+#ifdef PROJECT_BF_ATTITUDE_EN
+/* 角度模式参数默认值 - 与Betaflight一致 */
+static const uint8_t bf_pid_angle_limit_default = 60;                    // 角度模式最大角度默认60度
+static const uint8_t bf_pid_angle_feedforward_smoothing_ms_default = 80;  // 角度前馈平滑时间常数默认80ms
+static const uint8_t bf_pid_angle_earth_ref_default = 100;                // 地球参考补偿增益默认100（0-100）
+static const uint8_t bf_pid_level_p_default = 50;                         // PID_LEVEL P默认50
+static const uint8_t bf_pid_level_i_default = 75;                         // PID_LEVEL I默认75
+static const uint8_t bf_pid_level_d_default = 75;                         // PID_LEVEL D默认75
+static const uint16_t bf_pid_level_f_default = 50;                        // PID_LEVEL F默认50
+static const uint8_t bf_pid_level_s_default = 0;                          // PID_LEVEL S默认0
+#endif
+
 static const uint8_t pid_process_denom_default = 1;  // 默认值为 1，对应 activePidLoopDenom
 
 static const param_default_t bf_pid_defaults[] = {
@@ -126,6 +150,16 @@ static const param_default_t bf_pid_defaults[] = {
 #endif
     {&bf_pid_yaw_lowpass_hz, &bf_pid_yaw_lowpass_hz_default},
     {&bf_pid_yaw_lpf_hz, &bf_pid_yaw_lpf_hz_default},
+#ifdef PROJECT_BF_ATTITUDE_EN
+    {&bf_pid_angle_limit, &bf_pid_angle_limit_default},
+    {&bf_pid_angle_feedforward_smoothing_ms, &bf_pid_angle_feedforward_smoothing_ms_default},
+    {&bf_pid_angle_earth_ref, &bf_pid_angle_earth_ref_default},
+    {&bf_pid_level_p, &bf_pid_level_p_default},
+    {&bf_pid_level_i, &bf_pid_level_i_default},
+    {&bf_pid_level_d, &bf_pid_level_d_default},
+    {&bf_pid_level_f, &bf_pid_level_f_default},
+    {&bf_pid_level_s, &bf_pid_level_s_default},
+#endif
     {&pid_process_denom, &pid_process_denom_default},
 };
 
@@ -170,6 +204,16 @@ static param_list bf_pid_params[] = {
 #endif
     {(void*)&bf_pid_yaw_lowpass_hz, sizeof(bf_pid_yaw_lowpass_hz), "pid_yaw_lowpass_hz", "u16", bf_pid_param_default},
     {(void*)&bf_pid_yaw_lpf_hz, sizeof(bf_pid_yaw_lpf_hz), "pid_yaw_lpf_hz", "f", bf_pid_param_default},
+#ifdef PROJECT_BF_ATTITUDE_EN
+    {(void*)&bf_pid_angle_limit, sizeof(bf_pid_angle_limit), "pid_angle_limit", "u8", bf_pid_param_default},
+    {(void*)&bf_pid_angle_feedforward_smoothing_ms, sizeof(bf_pid_angle_feedforward_smoothing_ms), "pid_angle_feedforward_smoothing_ms", "u8", bf_pid_param_default},
+    {(void*)&bf_pid_angle_earth_ref, sizeof(bf_pid_angle_earth_ref), "pid_angle_earth_ref", "u8", bf_pid_param_default},
+    {(void*)&bf_pid_level_p, sizeof(bf_pid_level_p), "pid_angle_level_p", "u8", bf_pid_param_default},
+    {(void*)&bf_pid_level_i, sizeof(bf_pid_level_i), "pid_angle_level_i", "u8", bf_pid_param_default},
+    {(void*)&bf_pid_level_d, sizeof(bf_pid_level_d), "pid_angle_level_d", "u8", bf_pid_param_default},
+    {(void*)&bf_pid_level_f, sizeof(bf_pid_level_f), "pid_angle_level_f", "u16", bf_pid_param_default},
+    {(void*)&bf_pid_level_s, sizeof(bf_pid_level_s), "pid_angle_level_s", "u8", bf_pid_param_default},
+#endif
     {(void*)&pid_process_denom, sizeof(pid_process_denom), "pid_process_denom", "u8", bf_pid_param_default},
 };
 

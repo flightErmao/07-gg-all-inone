@@ -12,6 +12,9 @@ extern "C" {
 #include "rc_mcn.h"  // For MCN_DECLARE(rc), rc_command_msg_t, rc_aux_msg_t
 #include "filter.h"  // For filter functions: pt1FilterInit, pt2FilterInit, pt3FilterInit, biquadFilterInit, etc.
 #include "../common/inc/init_sync.h"  // For initSyncWait, initSyncNotify
+#ifdef PROJECT_BF_ATTITUDE_EN
+#include "../attitude/inc/attitude_mcn.h"  // For attitude_msg_t
+#endif
 #ifdef PROJECT_BF_PID_DEBUG_PIN_EN
 #include "debugPin.h"
 #endif
@@ -36,6 +39,8 @@ extern "C" {
 namespace {
 
 constexpr float PI_F = 3.14159265358979323846f;
+constexpr float DEGREES_TO_RADIANS = PI_F / 180.0f;
+constexpr float RADIANS_TO_DEGREES = 180.0f / PI_F;
 
 void lowpassInit(SimpleLowpass* filter, float cutoff_hz, float dt) {
   if (!filter) {
@@ -178,6 +183,36 @@ PidBf::PidBf()
   // Yaw P term filter defaults
   pid_profile_.yaw_lowpass_hz = 90;
   pid_profile_.yawLpfHz = 90.0f;  // Legacy: kept for backward compatibility
+
+#ifdef PROJECT_BF_ATTITUDE_EN
+  // Angle mode defaults (same as Betaflight)
+  pid_profile_.angle_limit = 60;  // Max angle in degrees
+  pid_profile_.angle_feedforward_smoothing_ms = 80;  // Time constant in milliseconds
+  pid_profile_.angle_earth_ref = 100;  // Earth reference gain (0-100)
+  // PID_LEVEL defaults: {50, 75, 75, 50, 0} (P, I, D, F, S)
+  pid_profile_.pid_level.P = 50;
+  pid_profile_.pid_level.I = 75;
+  pid_profile_.pid_level.D = 75;
+  pid_profile_.pid_level.F = 50;
+  pid_profile_.pid_level.S = 0;
+  
+  // Initialize angle mode runtime parameters
+  pid_runtime_.angleGain = 0.0f;
+  pid_runtime_.angleFeedforwardGain = 0.0f;
+  pid_runtime_.angleTarget[0] = 0.0f;
+  pid_runtime_.angleTarget[1] = 0.0f;
+  pid_runtime_.angleYawSetpoint = 0.0f;
+  pid_runtime_.angleEarthRef = 0.0f;
+  pid_runtime_.axisInAngleMode[0] = false;
+  pid_runtime_.axisInAngleMode[1] = false;
+  pid_runtime_.axisInAngleMode[2] = false;
+  
+  // Initialize attitude filters (will be initialized in initFilters)
+  std::memset(pid_runtime_.attitudeFilter, 0, sizeof(pid_runtime_.attitudeFilter));
+  std::memset(pid_runtime_.angleFeedforwardPt3, 0, sizeof(pid_runtime_.angleFeedforwardPt3));
+  
+  attitude_data_valid_ = false;
+#endif
 }
 
 PidBf::~PidBf() { cleanupMcnSubscriptions(); }
@@ -226,6 +261,30 @@ void PidBf::initFilters() {
   // Initialize legacy Yaw P term SimpleLowpass filter (for backward compatibility)
   // This is only used if ptermYawLowpassApplyFn is nullFilterApply
   lowpassInit(&yaw_pterm_lpf_, pid_profile_.yawLpfHz, pid_runtime_.dT);
+
+#ifdef PROJECT_BF_ATTITUDE_EN
+  // Initialize angle mode filters (same as Betaflight)
+  // Reference: ref/pid_init.c pidInitFilters()
+  constexpr float ATTITUDE_CUTOFF_HZ = 50.0f;  // Betaflight default
+  const float k = pt3FilterGain(ATTITUDE_CUTOFF_HZ, pid_runtime_.dT);
+  
+  // Angle feedforward filter cutoff frequency
+  const float angleCutoffHz = 1000.0f / (2.0f * PI_F * pid_profile_.angle_feedforward_smoothing_ms);
+  const float k2 = pt3FilterGain(angleCutoffHz, pid_runtime_.dT);
+  
+  // Initialize attitude filter (PT3) for roll and pitch only
+  for (int axis = 0; axis < 2; axis++) {
+    pt3FilterInit(&pid_runtime_.attitudeFilter[axis], k);
+    pt3FilterInit(&pid_runtime_.angleFeedforwardPt3[axis], k2);
+  }
+  // Initialize angle feedforward filter for yaw (though yaw doesn't use angle mode)
+  pt3FilterInit(&pid_runtime_.angleFeedforwardPt3[FD_YAW], k2);
+  
+  pid_runtime_.angleYawSetpoint = 0.0f;
+  
+  LOG_I("Angle mode filters initialized: attitude_cutoff=%.1f Hz, feedforward_cutoff=%.1f Hz", 
+        ATTITUDE_CUTOFF_HZ, angleCutoffHz);
+#endif
 
   LOG_I("PID filters initialized");
 }
@@ -290,34 +349,32 @@ void PidBf::pidController(uint32_t current_time_us) {
   }
 
   // Armed: process PID controller
-  // Check flight mode (currently only Rate mode is supported)
+  // Check flight mode
   // Mode 0 = Rate mode (角速度模式) - use rate PID
-  // Mode 1 = Angle mode (角度模式) - not implemented yet
-  // Mode 2 = Altitude mode (高度模式) - not implemented yet
+  // Mode 1 = Angle mode (角度模式) - use angle PID
   uint8_t flight_mode = aux_channels_data_.flight_mode;
-  if (flight_mode != 0) {
-    // Currently only Rate mode (mode 0) is supported
-    // For other modes, zero output for now (will be implemented later)
-    pid_output_msg_t output_msg;
-    output_msg.timestamp = current_time_us;
-    output_msg.seq = gyro_filtered_data_.seq;
-
-    for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
-      output_msg.pid_sum[axis] = 0.0f;
-      output_msg.pid_p[axis] = 0.0f;
-      output_msg.pid_i[axis] = 0.0f;
-      output_msg.pid_d[axis] = 0.0f;
-      output_msg.pid_f[axis] = 0.0f;
-    }
-
-    // Get smoothed throttle from setpoint data (already filtered by RC smoothing filter)
-    output_msg.smoothed_throttle = setpoint_data_.smoothed_throttle;
-
-    publishPidOutput(output_msg);
-    return;
-  }
+  
+#ifdef PROJECT_BF_ATTITUDE_EN
+  // Update attitude data from MCN (non-blocking)
+  updateAttitudeDataFromMcn();
+  
+  // Check if attitude data is valid (required for angle mode)
+  bool attitude_available = attitude_data_valid_;
+#else
+  bool attitude_available = false;
+#endif
 
   // Rate mode (角速度模式): process rate PID controller
+  // Angle mode (角度模式): process angle PID controller (converts angle error to rate setpoint, then rate PID)
+  bool is_angle_mode = (flight_mode == 1) && attitude_available;
+  
+  if (flight_mode == 1 && !attitude_available) {
+    // Angle mode requested but attitude data not available
+    LOG_W("Angle mode requested but attitude data not available, falling back to rate mode");
+    is_angle_mode = false;
+  }
+
+  // Get gyro rates
   float gyroRate[XYZ_AXIS_COUNT];
   std::memcpy(gyroRate, gyro_filtered_data_.gyro_filtered, sizeof(gyroRate));
 
@@ -326,7 +383,30 @@ void PidBf::pidController(uint32_t current_time_us) {
   output_msg.seq = gyro_filtered_data_.seq;
 
   for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
-    const float currentSetpoint = getSetpointRate(axis);
+    float currentSetpoint = getSetpointRate(axis);
+    
+#ifdef PROJECT_BF_ATTITUDE_EN
+    // If in angle mode and this is roll or pitch axis, convert angle error to rate setpoint
+    if (is_angle_mode && axis < FD_YAW) {
+      pid_runtime_.axisInAngleMode[axis] = true;
+      float horizonLevelStrength = 0.0f;  // Currently only angle mode, no horizon mode
+      currentSetpoint = pidLevel(axis, currentSetpoint, horizonLevelStrength);
+    } else {
+      pid_runtime_.axisInAngleMode[axis] = false;
+    }
+    
+    // Yaw axis: handle earth reference compensation in angle mode
+    if (is_angle_mode && axis == FD_YAW) {
+      // Store yaw setpoint for earth reference compensation in roll/pitch
+      pid_runtime_.angleYawSetpoint = currentSetpoint;
+      // Apply earth reference attenuation to yaw setpoint when pitched or rolled
+      float maxAngleTargetAbs = pid_runtime_.angleEarthRef * 
+          std::fmax(std::fabs(pid_runtime_.angleTarget[FD_ROLL]), 
+                   std::fabs(pid_runtime_.angleTarget[FD_PITCH]));
+      currentSetpoint *= std::cos(maxAngleTargetAbs * DEGREES_TO_RADIANS);
+    }
+#endif
+
     const float errorRate = currentSetpoint - gyroRate[axis];
 
     float pTerm = pid_runtime_.pidCoefficient[axis].Kp * errorRate;
@@ -407,10 +487,23 @@ void PidBf::pidController(uint32_t current_time_us) {
     pid_data_[axis].D = preTpaD * tpaFactor;
 
     // Calculate feedforward component (same as Betaflight)
-    // In Rate mode, use feedforward value from RC module (already contains setpoint change rate info)
-    // The feedforward value from RC module is calculated based on setpointDelta * rxRate,
-    // and has been smoothed and processed with boost, jitter attenuation, etc.
+#ifdef PROJECT_BF_ATTITUDE_EN
+    float pidSetpointDelta = 0.0f;
+    if (is_angle_mode && axis < FD_YAW && pid_runtime_.axisInAngleMode[axis]) {
+      // In angle mode, feedforward is already applied in pidLevel() as angleFeedforward
+      // So we set feedforward to zero here (same as Betaflight)
+      // Reference: ref/pid.c pidController() line 1408-1410
+      pidSetpointDelta = 0.0f;
+    } else {
+      // In Rate mode, use feedforward value from RC module (already contains setpoint change rate info)
+      // The feedforward value from RC module is calculated based on setpointDelta * rxRate,
+      // and has been smoothed and processed with boost, jitter attenuation, etc.
+      pidSetpointDelta = getFeedforward(axis);
+    }
+#else
+    // In Rate mode, use feedforward value from RC module
     float pidSetpointDelta = getFeedforward(axis);
+#endif
     pid_runtime_.previousPidSetpoint[axis] = currentSetpoint;  // Still update for potential other uses
 
     // Apply feedforward gain (Kf already includes FEEDFORWARD_SCALE)
@@ -515,7 +608,15 @@ void PidBf::workerEntry(void* parameter) {
     LOG_W("Gyro Filter not ready, continuing anyway (ret=%d)", ret);
   }
   
-  // 通知 PID 初始化完成（在等待 Gyro Filter 之后）
+#ifdef PROJECT_BF_ATTITUDE_EN
+  // 等待 Attitude 模块初始化完成（角度模式需要姿态数据）
+  ret = initSyncWait(INIT_SYNC_ATTITUDE, 2000);  // 等待最多2秒
+  if (ret != RT_EOK) {
+    LOG_W("Attitude not ready, angle mode will be disabled (ret=%d)", ret);
+  }
+#endif
+  
+  // 通知 PID 初始化完成（在等待依赖模块之后）
   initSyncNotify(INIT_SYNC_PID);
   
   // 进入主循环
@@ -575,6 +676,78 @@ static int pid_main_init_wrapper(void) {
   return (int)ret;
 }
 INIT_APP_EXPORT(pid_main_init_wrapper);
+}
+#endif
+
+#ifdef PROJECT_BF_ATTITUDE_EN
+// Get current angle from attitude data (degrees)
+float PidBf::getCurrentAngle(int axis) const {
+  if (axis >= 0 && axis < XYZ_AXIS_COUNT && attitude_data_valid_) {
+    // Return angle in degrees (from attitude.values)
+    return attitude_data_.values[axis];
+  }
+  return 0.0f;
+}
+
+// Calculate horizon level strength (for horizon mode, currently not used but kept for compatibility)
+float PidBf::calcHorizonLevelStrength() const {
+  // Currently only angle mode is supported, so return 0.0 (no horizon leveling)
+  // This function is kept for future horizon mode support
+  return 0.0f;
+}
+
+// Angle mode PID controller (pidLevel function)
+// Reference: ref/pid.c pidLevel()
+// Converts angle error to angle rate setpoint
+float PidBf::pidLevel(int axis, float currentPidSetpoint, float horizonLevelStrength) {
+  // Applies only to axes that are in Angle mode
+  // We now use Acro Rates, transformed into the range +/- 1, to provide setpoints
+  float angleLimit = pid_profile_.angle_limit;
+  float angleFeedforward = 0.0f;
+  
+  // if user changes rates profile, update the max setpoint for angle mode
+  const float maxSetpointRateInv = 1.0f / getMaxRcRate(axis);
+
+  // Calculate angle feedforward (if enabled)
+  angleFeedforward = angleLimit * getFeedforward(axis) * pid_runtime_.angleFeedforwardGain * maxSetpointRateInv;
+  // angle feedforward must be heavily filtered, at the PID loop rate, with limited user control over time constant
+  // it MUST be very delayed to avoid early overshoot and being too aggressive
+  angleFeedforward = pt3FilterApply(&pid_runtime_.angleFeedforwardPt3[axis], angleFeedforward);
+
+  // Calculate angle target from RC input
+  // use acro rates for the angle target in both horizon and angle modes, converted to -1 to +1 range using maxRate
+  float angleTarget = angleLimit * currentPidSetpoint * maxSetpointRateInv;
+
+  // Limit angle target
+  angleTarget = CLAMPF(angleTarget, -angleLimit, angleLimit);
+
+  // Get current angle from attitude data (degrees)
+  // Note: Betaflight uses (attitude.raw[axis] - angleTrim->raw[axis]) / 10.0f
+  // We use attitude.values[axis] directly (already in degrees)
+  // TODO: Add angle trim support if needed (currently angle trim is 0)
+  const float currentAngle = getCurrentAngle(axis);
+  
+  // Calculate angle error
+  const float errorAngle = angleTarget - currentAngle;
+  
+  // Calculate angle rate from error
+  float angleRate = errorAngle * pid_runtime_.angleGain + angleFeedforward;
+
+  // Earth reference compensation (coordinate yaw turns)
+  // minimise cross-axis wobble due to faster yaw responses than roll or pitch, and make co-ordinated yaw turns
+  // by compensating for the effect of yaw on roll while pitched, and on pitch while rolled
+  float sinAngle = std::sin(pid_runtime_.angleTarget[axis == FD_ROLL ? FD_PITCH : FD_ROLL] * DEGREES_TO_RADIANS);
+  sinAngle *= (axis == FD_ROLL) ? -1.0f : 1.0f;  // must be negative for Roll
+  angleRate += pid_runtime_.angleYawSetpoint * sinAngle * pid_runtime_.angleEarthRef;
+  pid_runtime_.angleTarget[axis] = angleTarget;  // set target for alternate axis to current axis, for use in preceding calculation
+
+  // smooth final angle rate output to clean up attitude signal steps (500hz), GPS steps (10 or 100hz), RC steps etc
+  // this filter runs at ATTITUDE_CUTOFF_HZ, currently 50hz, so GPS roll may be a bit steppy
+  angleRate = pt3FilterApply(&pid_runtime_.attitudeFilter[axis], angleRate);
+
+  // For angle mode, return the angle rate directly
+  // For horizon mode (not implemented yet), would crossfade Angle rate and Acro rate
+  return angleRate;
 }
 #endif
 

@@ -8,6 +8,9 @@ extern "C" {
 #include <ulog.h>
 #include "pid_mcn.h"
 #include "rc_mcn.h"  // For rc_command_msg_t
+#ifdef PROJECT_BF_ATTITUDE_EN
+#include "../attitude/inc/attitude_mcn.h"  // For attitude_msg_t
+#endif
 }
 
 #include <cstring>
@@ -88,6 +91,18 @@ rt_err_t PidBf::initMcnSubscriptions() {
     LOG_I("Subscribed to rc_command MCN topic (independent subscription)");
   }
 
+#ifdef PROJECT_BF_ATTITUDE_EN
+  // 订阅姿态数据MCN主题（非阻塞，用于角度模式）
+  attitude_node_ = mcn_subscribe(MCN_HUB(attitude), RT_NULL, RT_NULL);
+  if (attitude_node_ == RT_NULL) {
+    LOG_W("subscribe attitude topic failed, angle mode will be disabled");
+    // 角度模式需要姿态数据，如果没有则禁用角度模式
+  } else {
+    LOG_I("Subscribed to attitude MCN topic");
+  }
+  attitude_data_valid_ = false;
+#endif
+
   return RT_EOK;
 }
 
@@ -112,6 +127,14 @@ void PidBf::cleanupMcnSubscriptions() {
     mcn_unsubscribe(MCN_HUB(rc), rc_command_node_);
     rc_command_node_ = RT_NULL;
   }
+
+#ifdef PROJECT_BF_ATTITUDE_EN
+  if (attitude_node_ != RT_NULL) {
+    mcn_unsubscribe(MCN_HUB(attitude), attitude_node_);
+    attitude_node_ = RT_NULL;
+  }
+  attitude_data_valid_ = false;
+#endif
 
   pid_output_hub_ = nullptr;
 }
@@ -167,6 +190,25 @@ bool PidBf::updateGyroDataFromMcn() {
   }
   return false;
 }
+
+#ifdef PROJECT_BF_ATTITUDE_EN
+// 从MCN更新姿态数据（非阻塞）
+bool PidBf::updateAttitudeDataFromMcn() {
+  // 轮询新的姿态数据（非阻塞）
+  // 姿态数据更新频率较低（500Hz），所以使用非阻塞方式
+  if (attitude_node_ != RT_NULL) {
+    if (mcn_poll(attitude_node_) == RT_TRUE) {
+      // 有新的姿态数据可用，复制它
+      if (mcn_copy(MCN_HUB(attitude), attitude_node_, &attitude_data_) == RT_EOK) {
+        attitude_data_valid_ = true;
+        return true;
+      }
+    }
+  }
+  // 没有新数据，但如果有有效的历史数据，仍然返回true
+  return attitude_data_valid_;
+}
+#endif
 
 // 发布PID输出数据到MCN
 void PidBf::publishPidOutput(const pid_output_msg_t& output_msg) {

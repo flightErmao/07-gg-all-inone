@@ -12,9 +12,13 @@ extern "C" {
 
 #include <cstring>
 
-#include "bfSensorAlignment.hpp"
-#include "bfNotchFilter.hpp"
-#include "bfDynNotchFilter.hpp"
+extern "C" {
+#include "sensor_alignment.h"  // For sensor alignment
+#include "vector.h"            // For matrix operations
+}
+extern "C" {
+#include "filter.h"  // For filter functions: pt1FilterInit, pt2FilterInit, pt3FilterInit, biquadFilterInit, etc.
+}
 
 // MCN 定义和 echo 函数已移到 gyro_mcn.cpp
 
@@ -23,13 +27,13 @@ extern "C" {
 #define PROJECT_BF_GYRO_FILTER_IMU_SAMPLE_RATE_HZ 800.0f
 #endif
 
-// RateCtrlAngularVelocity 单例实现
-RateCtrlAngularVelocity& RateCtrlAngularVelocity::instance() {
-  static RateCtrlAngularVelocity instance_obj;
+// gyro 单例实现
+gyro& gyro::instance() {
+  static gyro instance_obj;
   return instance_obj;
 }
 
-RateCtrlAngularVelocity::RateCtrlAngularVelocity()
+gyro::gyro()
     :  // 从 gyro_t 映射的简单变量初始化（参考 gyro_t 的 FAST_DATA_ZERO_INIT）
       sample_rate_hz_(0),
       target_looptime_us_(0),
@@ -48,11 +52,24 @@ RateCtrlAngularVelocity::RateCtrlAngularVelocity()
       dyn_lpf_max_(0),
       dyn_lpf_curve_expo_(0),
 #endif
+      // 滤波器初始化
+      lpf1_apply_fn_(nullFilterApply),
+      lpf1_type_(FILTER_PT1),
+      lpf1_enabled_(false),
+      lpf2_apply_fn_(nullFilterApply),
+      lpf2_type_(FILTER_PT1),
+      lpf2_enabled_(false),
+      notch1_apply_fn_(nullFilterApply),
+      notch1_enabled_(false),
+      notch2_apply_fn_(nullFilterApply),
+      notch2_enabled_(false),
+      dyn_notch_enabled_(false),
+      imu_gyro_filter_enabled_(false),
 #ifdef USE_GYRO_OVERFLOW_CHECK
       overflow_axis_mask_(0),
 #endif
       // 其他辅助成员
-      gyro_align_(BfSensorAlignment::ALIGN_DEFAULT),
+      gyro_align_(ALIGN_DEFAULT),
       use_custom_matrix_(false),
       calibration_started_(false),
       // 线程相关
@@ -68,12 +85,18 @@ RateCtrlAngularVelocity::RateCtrlAngularVelocity()
   std::memset(gyro_adc_, 0, sizeof(gyro_adc_));
   std::memset(gyro_adcf_, 0, sizeof(gyro_adcf_));
   std::memset(sample_sum_, 0, sizeof(sample_sum_));
-  std::memset(rotation_matrix_, 0, sizeof(rotation_matrix_));
+  std::memset(&rotation_matrix_, 0, sizeof(rotation_matrix_));
+  std::memset(lpf1_filter_, 0, sizeof(lpf1_filter_));
+  std::memset(lpf2_filter_, 0, sizeof(lpf2_filter_));
+  std::memset(notch1_filter_, 0, sizeof(notch1_filter_));
+  std::memset(notch2_filter_, 0, sizeof(notch2_filter_));
+  std::memset(imu_gyro_filter_, 0, sizeof(imu_gyro_filter_));
+  std::memset(gyroFilteredDownsampled_, 0, sizeof(gyroFilteredDownsampled_));
 }
 
-rt_err_t RateCtrlAngularVelocity::init() {
+rt_err_t gyro::init() {
   if (thread_inited_) {
-    LOG_W("RateCtrlAngularVelocity already initialized");
+    LOG_W("gyro already initialized");
     return RT_EOK;
   }
 
@@ -104,12 +127,12 @@ rt_err_t RateCtrlAngularVelocity::init() {
   // 每次启动时都会重新校准
 
   // 创建静态线程
-  rt_err_t err = rt_thread_init(&thread_obj_, "gyro", RateCtrlAngularVelocity::threadEntry, this, thread_stack_,
+  rt_err_t err = rt_thread_init(&thread_obj_, "gyro", gyro::threadEntry, this, thread_stack_,
                                 PROJECT_BF_GYRO_FILTER_THREAD_STACK_SIZE, PROJECT_BF_GYRO_FILTER_THREAD_PRIORITY,
                                 PROJECT_BF_GYRO_FILTER_THREAD_TIMESLICE);
 
   if (err != RT_EOK) {
-    LOG_E("RateCtrlAngularVelocity thread init failed: %d", err);
+    LOG_E("gyro thread init failed: %d", err);
     cleanupMcnSubscriptions();
     return err;
   }
@@ -119,21 +142,21 @@ rt_err_t RateCtrlAngularVelocity::init() {
 
   // 启动线程
   rt_thread_startup(thread_);
-  LOG_I("RateCtrlAngularVelocity thread started");
+  LOG_I("gyro thread started");
 
-  LOG_I("RateCtrlAngularVelocity initialized");
+  LOG_I("gyro initialized");
   return RT_EOK;
 }
 
 // initFilters(), initDownsampleFilter(), setTargetLooptime() 已移到 gyro_init.cpp
 
-void RateCtrlAngularVelocity::threadEntry(void* parameter) {
+void gyro::threadEntry(void* parameter) {
   if (parameter == RT_NULL) {
     return;
   }
 
-  RateCtrlAngularVelocity* instance = static_cast<RateCtrlAngularVelocity*>(parameter);
-  
+  gyro* instance = static_cast<gyro*>(parameter);
+
   // 在线程调度器启动后，执行依赖其他线程状态的初始化
   // 这部分初始化已移到 initInThreadEntry() 中
   instance->initInThreadEntry();
@@ -142,10 +165,10 @@ void RateCtrlAngularVelocity::threadEntry(void* parameter) {
   instance->threadLoop();
 }
 
-void RateCtrlAngularVelocity::threadLoop() {
+void gyro::threadLoop() {
   imu_raw_msg_t imu_data;
 
-  LOG_I("RateCtrlAngularVelocity thread loop started");
+  LOG_I("gyro thread loop started");
 
   while (true) {
     // 阻塞等待 MCN 发布
@@ -160,7 +183,7 @@ void RateCtrlAngularVelocity::threadLoop() {
   }
 }
 
-void RateCtrlAngularVelocity::processImuData(const imu_raw_msg_t* imu_data) {
+void gyro::processImuData(const imu_raw_msg_t* imu_data) {
   if (imu_data == RT_NULL) {
     return;
   }
@@ -216,26 +239,42 @@ void RateCtrlAngularVelocity::processImuData(const imu_raw_msg_t* imu_data) {
   std::memcpy(gyro_rotated, gyro_corrected, sizeof(gyro_corrected));
 
   if (use_custom_matrix_) {
-    BfSensorAlignmentUtil::alignViaMatrix(gyro_rotated, rotation_matrix_);
+    // 使用自定义旋转矩阵
+    vector3_t vec_in = {gyro_rotated[0], gyro_rotated[1], gyro_rotated[2]};
+    vector3_t vec_out;
+    matrixVectorMul(&vec_out, &rotation_matrix_, &vec_in);
+    gyro_rotated[0] = vec_out.x;
+    gyro_rotated[1] = vec_out.y;
+    gyro_rotated[2] = vec_out.z;
   } else {
-    BfSensorAlignmentUtil::alignViaRotation(gyro_rotated, gyro_align_);
+    // 使用标准对齐方式
+    buildAlignmentFromStandardAlignment(&gyro_align_rpy_, gyro_align_);
+    buildRotationMatrixFromAngles(&rotation_matrix_, &gyro_align_rpy_);
+    vector3_t vec_in = {gyro_rotated[0], gyro_rotated[1], gyro_rotated[2]};
+    vector3_t vec_out;
+    matrixVectorMul(&vec_out, &rotation_matrix_, &vec_in);
+    gyro_rotated[0] = vec_out.x;
+    gyro_rotated[1] = vec_out.y;
+    gyro_rotated[2] = vec_out.z;
   }
 
-  // 步骤3: 降采样（参考 gyro.c:457-468 中的 gyroUpdate 降采样逻辑）
-  // 将旋转后的数据存储到 gyro_adc_（对应 gyro.gyroADC）
+  // 步骤1: 原始数据采集 - 存储到 gyro_adc_（对应 gyro.gyroADC[axis]）
   std::memcpy(gyro_adc_, gyro_rotated, sizeof(gyro_rotated));
 
+  // 步骤2: 第一个低通滤波器 - LPF2（降采样，如果启用）
+  // 位置：gyroUpdate() - src/main/sensors/gyro.c:457-461
+  // 如果启用：使用 gyro.lowpass2Filter 进行降采样
+  // 如果未启用：使用简单平均
+  // 输出：gyro.sampleSum[axis]
   float gyro_downsampled[3];
-  if (downsample_filter_enabled_) {
+  if (downsample_filter_enabled_ && lpf2_enabled_) {
     // 使用 LPF2 滤波器进行降采样（参考 gyro.c:457-461）
     // gyro.sampleSum[X] = gyro.lowpass2FilterApplyFn((filter_t *)&gyro.lowpass2Filter[X], gyro.gyroADC[X]);
-    if (lpf2_filter_.isEnabled()) {
-      lpf2_filter_.apply(gyro_adc_, gyro_downsampled);
-      // 将滤波结果存储到 sample_sum_（对应 gyro.sampleSum）
-      std::memcpy(sample_sum_, gyro_downsampled, sizeof(gyro_downsampled));
-    } else {
-      std::memcpy(gyro_downsampled, gyro_adc_, sizeof(gyro_adc_));
+    for (int i = 0; i < 3; i++) {
+      gyro_downsampled[i] = lpf2_apply_fn_((filter_t*)&lpf2_filter_[i], gyro_adc_[i]);
     }
+    // 将滤波结果存储到 sample_sum_（对应 gyro.sampleSum）
+    std::memcpy(sample_sum_, gyro_downsampled, sizeof(gyro_downsampled));
   } else {
     // 使用简单平均值进行降采样（参考 gyro.c:462-467）
     // gyro.sampleSum[X] += gyro.gyroADC[X];
@@ -255,12 +294,28 @@ void RateCtrlAngularVelocity::processImuData(const imu_raw_msg_t* imu_data) {
     // }
   }
 
-  // 步骤4: 应用完整的滤波链（参考 gyro_filter_impl.c）
-  // 将结果存储到 gyro_adcf_（对应 gyro.gyroADCf）
+  // 步骤3-7: 应用完整的滤波链（参考 gyro_filter_impl.c）
+  // 顺序：RPM滤波器 -> Notch1 -> Notch2 -> LPF1 -> 动态Notch
+  // 输出：gyro.gyroADCf[axis]
   applyFilterChain(gyro_downsampled, gyro_adcf_);
 #ifdef PROJECT_BF_GYRO_FILTER_DEBUG_PIN_EN
   DEBUG_PIN_DEBUG0_LOW();
 #endif
+
+  // 步骤8: 第三个低通滤波器 - PT1（用于姿态估计）
+  // 位置：gyroFiltering() - src/main/sensors/gyro.c:541
+  // 使用：gyro.imuGyroFilter
+  // 截止频率：200 Hz (GYRO_IMU_DOWNSAMPLE_CUTOFF_HZ)
+  // 输出：gyroFilteredDownsampled[axis]（给 attitude 使用）
+  // gyroFilteredDownsampled[axis] = pt1FilterApply(&gyro.imuGyroFilter[axis], gyro.gyroADCf[axis]);
+  if (imu_gyro_filter_enabled_) {
+    for (int i = 0; i < 3; i++) {
+      gyroFilteredDownsampled_[i] = pt1FilterApply(&imu_gyro_filter_[i], gyro_adcf_[i]);
+    }
+  } else {
+    // 如果滤波器未启用，直接使用 gyro_adcf_
+    std::memcpy(gyroFilteredDownsampled_, gyro_adcf_, sizeof(gyroFilteredDownsampled_));
+  }
 
   // 重置降采样计数器（参考 gyro_filter_impl.c:86）
   if (!downsample_filter_enabled_) {
@@ -282,47 +337,60 @@ void RateCtrlAngularVelocity::processImuData(const imu_raw_msg_t* imu_data) {
   //     gyro_adcf_[2]);
 }
 
-void RateCtrlAngularVelocity::applyFilterChain(const float input[3], float output[3]) {
+void gyro::applyFilterChain(const float input[3], float output[3]) {
   // 参考 gyro_filter_impl.c 的滤波顺序
+  // 顺序：RPM滤波器 -> Notch1 -> Notch2 -> LPF1 -> 动态Notch
   float filtered[3];
   std::memcpy(filtered, input, sizeof(float) * 3);
 
+  // 步骤3: RPM滤波器（可选）
+  // 位置：gyro_filter_impl.c:48-50
   // TODO: 应用 RPM 滤波器（如果使能）
   // rpmFilter(gyroData, rpmData, filtered);
 
-  // 应用静态 notch 滤波器
-  if (notch1_filter_.isEnabled()) {
-    float temp[3];
-    notch1_filter_.apply(filtered, temp);
-    std::memcpy(filtered, temp, sizeof(float) * 3);
-  }
-
-  if (notch2_filter_.isEnabled()) {
-    float temp[3];
-    notch2_filter_.apply(filtered, temp);
-    std::memcpy(filtered, temp, sizeof(float) * 3);
-  }
-
-  // 应用 LPF1 滤波器
-  if (lpf1_filter_.isEnabled()) {
-    float temp[3];
-    lpf1_filter_.apply(filtered, temp);
-    std::memcpy(filtered, temp, sizeof(float) * 3);
-  }
-
-  // 应用动态 notch 滤波器（如果激活）
-  if (dyn_notch_filter_.isActive()) {
-    // 推送样本用于频率分析
+  // 步骤4: 静态陷波滤波器1
+  // 位置：gyro_filter_impl.c:56
+  if (notch1_enabled_) {
     for (int i = 0; i < 3; i++) {
-      dyn_notch_filter_.push(i, filtered[i]);
+      filtered[i] = notch1_apply_fn_((filter_t*)&notch1_filter_[i], filtered[i]);
     }
-
-    // 更新动态 notch 滤波器
-    dyn_notch_filter_.update();
-
-    // 应用动态 notch 滤波器
-    dyn_notch_filter_.apply3Axis(filtered, filtered);
   }
+
+  // 步骤5: 静态陷波滤波器2
+  // 位置：gyro_filter_impl.c:57
+  if (notch2_enabled_) {
+    for (int i = 0; i < 3; i++) {
+      filtered[i] = notch2_apply_fn_((filter_t*)&notch2_filter_[i], filtered[i]);
+    }
+  }
+
+  // 步骤6: 第二个低通滤波器 - LPF1（静态或动态）
+  // 位置：gyro_filter_impl.c:58
+  // 使用：gyro.lowpassFilterApplyFn
+  // 可以是静态或动态（根据油门调整）
+  // 输出：gyro.gyroADCf[axis]
+  if (lpf1_enabled_) {
+    for (int i = 0; i < 3; i++) {
+      filtered[i] = lpf1_apply_fn_((filter_t*)&lpf1_filter_[i], filtered[i]);
+    }
+  }
+
+  // 步骤7: 动态陷波滤波器（可选）
+  // 位置：gyro_filter_impl.c:63-78
+  // TODO: 应用动态 notch 滤波器（如果激活）
+  // 动态 notch 滤波器需要重新实现，暂时注释掉
+  // if (dyn_notch_enabled_) {
+  //   // 推送样本用于频率分析
+  //   for (int i = 0; i < 3; i++) {
+  //     dyn_notch_filter_.push(i, filtered[i]);
+  //   }
+  //
+  //   // 更新动态 notch 滤波器
+  //   dyn_notch_filter_.update();
+  //
+  //   // 应用动态 notch 滤波器
+  //   dyn_notch_filter_.apply3Axis(filtered, filtered);
+  // }
 
   std::memcpy(output, filtered, sizeof(float) * 3);
 }
@@ -331,7 +399,7 @@ void RateCtrlAngularVelocity::applyFilterChain(const float input[3], float outpu
 #ifdef PROJECT_BF_GYRO_FILTER_EN
 extern "C" {
 static int gyro_filter_init_wrapper(void) {
-  RateCtrlAngularVelocity& instance = RateCtrlAngularVelocity::instance();
+  gyro& instance = gyro::instance();
   rt_err_t ret = instance.init();
   if (ret == RT_EOK) {
     LOG_I("GyroFilter auto-init success");

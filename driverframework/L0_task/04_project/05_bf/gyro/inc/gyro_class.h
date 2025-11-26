@@ -10,12 +10,13 @@
 extern "C" {
 #include "imu_mcn.h"
 #include "gyro_mcn.h"
+#include "filter.h"  // For filter functions: pt1FilterInit, pt2FilterInit, pt3FilterInit, biquadFilterInit, etc.
 }
 
-#include "bfGyroLpfFilter.hpp"
-#include "bfSensorAlignment.hpp"
-#include "bfNotchFilter.hpp"
-#include "bfDynNotchFilter.hpp"
+extern "C" {
+#include "sensor_alignment.h"  // For sensor alignment
+#include "vector.h"            // For matrix operations
+}
 #include "../log/inc/mlog_gyro.hpp"
 
 #define USE_DYN_LPF
@@ -94,14 +95,14 @@ class GyroCalibration {
   bool isOnFinalCycle() const;
 };
 
-// RateCtrlAngularVelocity 是 gyro_t 的 C++ 版本
+// gyro 是 gyro_t 的 C++ 版本
 // 简单变量直接映射为成员变量，复杂成员变量对象化
-class RateCtrlAngularVelocity {
+class gyro {
  public:
   // 单例模式：获取唯一实例
-  static RateCtrlAngularVelocity& instance();
+  static gyro& instance();
 
-  RateCtrlAngularVelocity();
+  gyro();
 
   rt_err_t init();
 
@@ -124,8 +125,8 @@ class RateCtrlAngularVelocity {
   static void threadEntry(void* parameter);
 
  private:
-  RateCtrlAngularVelocity(const RateCtrlAngularVelocity&) = delete;
-  RateCtrlAngularVelocity& operator=(const RateCtrlAngularVelocity&) = delete;
+  gyro(const gyro&) = delete;
+  gyro& operator=(const gyro&) = delete;
 
   // 线程主循环
   void threadLoop();
@@ -175,27 +176,56 @@ class RateCtrlAngularVelocity {
   // ========== 复杂成员变量对象化 ==========
 
   // 低通滤波器（对应 gyro.lowpassFilter, lowpass2Filter）
-  // 原本：gyroLowpassFilter_t lowpassFilter[XYZ_AXIS_COUNT] + filterApplyFnPtr
-  BfGyroLpfFilter lpf1_filter_;  // LPF1 滤波器对象
-  BfGyroLpfFilter lpf2_filter_;  // LPF2 滤波器对象
+  // 使用 union 结构，类似 pid 中的 dtermLowpass_t
+  typedef union gyroLowpassFilter_u {
+    pt1Filter_t pt1Filter;
+    biquadFilter_t biquadFilter;
+    pt2Filter_t pt2Filter;
+    pt3Filter_t pt3Filter;
+  } gyroLowpassFilter_t;
+
+  // LPF1 滤波器（对应 gyro.lowpassFilter[XYZ_AXIS_COUNT]）
+  filterApplyFnPtr lpf1_apply_fn_;      // LPF1 filter apply function pointer
+  gyroLowpassFilter_t lpf1_filter_[3];  // LPF1 filter state [X, Y, Z]
+  uint8_t lpf1_type_;                   // LPF1 filter type (FILTER_PT1, FILTER_BIQUAD, FILTER_PT2, FILTER_PT3)
+  bool lpf1_enabled_;                   // LPF1 filter enabled flag
+
+  // LPF2 滤波器（对应 gyro.lowpass2Filter[XYZ_AXIS_COUNT]）
+  filterApplyFnPtr lpf2_apply_fn_;      // LPF2 filter apply function pointer
+  gyroLowpassFilter_t lpf2_filter_[3];  // LPF2 filter state [X, Y, Z]
+  uint8_t lpf2_type_;                   // LPF2 filter type (FILTER_PT1, FILTER_BIQUAD, FILTER_PT2, FILTER_PT3)
+  bool lpf2_enabled_;                   // LPF2 filter enabled flag
 
   // Notch 滤波器（对应 gyro.notchFilter1, notchFilter2）
   // 原本：biquadFilter_t notchFilter1[XYZ_AXIS_COUNT] + filterApplyFnPtr
-  BfNotchFilter3Axis notch1_filter_;  // Notch1 滤波器对象
-  BfNotchFilter3Axis notch2_filter_;  // Notch2 滤波器对象
+  filterApplyFnPtr notch1_apply_fn_;  // Notch1 filter apply function pointer
+  biquadFilter_t notch1_filter_[3];   // Notch1 filter state [X, Y, Z]
+  bool notch1_enabled_;               // Notch1 filter enabled flag
+
+  filterApplyFnPtr notch2_apply_fn_;  // Notch2 filter apply function pointer
+  biquadFilter_t notch2_filter_[3];   // Notch2 filter state [X, Y, Z]
+  bool notch2_enabled_;               // Notch2 filter enabled flag
 
   // 动态 notch 滤波器（对应 dynNotchInit/dynNotchFilter 函数）
-  BfDynNotchFilter dyn_notch_filter_;
+  // TODO: 需要查看 BfDynNotchFilter 的实现，看是否依赖已删除的模块
+  // 暂时保留，后续可能需要重写
+  // BfDynNotchFilter dyn_notch_filter_;
+  bool dyn_notch_enabled_;  // Dynamic notch filter enabled flag
 
-  // IMU 降采样滤波器（对应 gyro.imuGyroFilter[XYZ_AXIS_COUNT]）
-  // 需要创建一个 PT1 滤波器对象，或者使用现有的 BfGyroLpfFilter
-  BfGyroLpfFilter imu_gyro_filter_[3];  // gyro.imuGyroFilter[XYZ_AXIS_COUNT]
+  // 第三个低通滤波器：PT1（用于姿态估计）
+  // 对应 gyro.imuGyroFilter[XYZ_AXIS_COUNT]
+  // 对 gyro_adcf_ 进行 PT1 滤波，输出给 attitude 使用
+  // 截止频率：200 Hz (GYRO_IMU_DOWNSAMPLE_CUTOFF_HZ)
+  pt1Filter_t imu_gyro_filter_[3];    // gyro.imuGyroFilter[XYZ_AXIS_COUNT]
+  bool imu_gyro_filter_enabled_;      // IMU gyro filter enabled flag
+  float gyroFilteredDownsampled_[3];  // 输出：gyroFilteredDownsampled[axis]（给 attitude 使用）
 
   // ========== 其他辅助成员 ==========
 
   // 传感器对齐
-  BfSensorAlignment gyro_align_;
-  float rotation_matrix_[3][3];  // 自定义旋转矩阵（如果使用）
+  sensor_align_e gyro_align_;         // Sensor alignment enum
+  sensorAlignment_t gyro_align_rpy_;  // Sensor alignment angles (in deciderees)
+  matrix33_t rotation_matrix_;        // 自定义旋转矩阵（如果使用）
   bool use_custom_matrix_;
 
   // Gyro calibration（对应 gyro.gyroSensor[].calibration）
@@ -217,6 +247,17 @@ class RateCtrlAngularVelocity {
 
   // 初始化滤波器（从参数系统读取配置，参考 gyroInitFilters）
   void initFilters();
+
+  // 初始化低通滤波器（参考 gyro_init.c:127-197）
+  // slot: FILTER_LPF1 (0) 或 FILTER_LPF2 (1)
+  // type: FILTER_PT1, FILTER_BIQUAD, FILTER_PT2, FILTER_PT3
+  // lpfHz: 截止频率（Hz）
+  // looptime: 循环时间（微秒）
+  // 返回: true 如果初始化成功，false 否则
+  bool gyroInitLowpassFilterLpf(int slot, int type, uint16_t lpfHz, uint32_t looptime);
+
+  // 初始化所有滤波器（参考 gyro_init.c:229-266）
+  void gyroInitFilters();
 
   // 应用完整的滤波链（参考 gyro_filter_impl.c）
   void applyFilterChain(const float input[3], float output[3]);

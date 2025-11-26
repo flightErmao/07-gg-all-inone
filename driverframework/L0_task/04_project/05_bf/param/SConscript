@@ -9,6 +9,7 @@ include_paths = [
     cwd,
     os.path.join(cwd, "inc"),  # param.h, bfRcParam.h, bfPidParam.h, etc.
     os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "03_package", "uparam"),  # uparam.h
+    os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "06_bf_lib", "common", "inc"),  # filter.h
 ]
 
 group = DefineGroup(

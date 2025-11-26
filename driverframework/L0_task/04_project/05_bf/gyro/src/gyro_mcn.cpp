@@ -24,14 +24,17 @@ static int gyro_filtered_echo(void* parameter) {
     return -1;
   }
 
-  LOG_I("seq: %lu, gyro_filtered: %.2f, %.2f, %.2f, gyro_adc: %.2f, %.2f, %.2f", gyro_data.seq,
-        gyro_data.gyro_filtered[0], gyro_data.gyro_filtered[1], gyro_data.gyro_filtered[2], gyro_data.gyro_adc[0],
-        gyro_data.gyro_adc[1], gyro_data.gyro_adc[2]);
+  LOG_I(
+      "seq: %lu, gyro_filtered: %.2f, %.2f, %.2f, gyro_adc: %.2f, %.2f, %.2f, gyroFilteredDownsampled: %.2f, %.2f, "
+      "%.2f",
+      gyro_data.seq, gyro_data.gyro_filtered[0], gyro_data.gyro_filtered[1], gyro_data.gyro_filtered[2],
+      gyro_data.gyro_adc[0], gyro_data.gyro_adc[1], gyro_data.gyro_adc[2], gyro_data.gyroFilteredDownsampled[0],
+      gyro_data.gyroFilteredDownsampled[1], gyro_data.gyroFilteredDownsampled[2]);
   return 0;
 }
 
 // MCN 初始化函数
-rt_err_t RateCtrlAngularVelocity::initMcn() {
+rt_err_t gyro::initMcn() {
   // 创建 MCN 事件信号量（用于 mcn_poll_sync）
   if (imu_event_ == RT_NULL) {
     imu_event_ = rt_sem_create("gyro_evt", 0, RT_IPC_FLAG_FIFO);
@@ -92,7 +95,7 @@ rt_err_t RateCtrlAngularVelocity::initMcn() {
 }
 
 // 清理 MCN 订阅
-void RateCtrlAngularVelocity::cleanupMcnSubscriptions() {
+void gyro::cleanupMcnSubscriptions() {
   if (imu_node_ != RT_NULL) {
     mcn_unsubscribe(MCN_HUB(imu), imu_node_);
     imu_node_ = RT_NULL;
@@ -105,7 +108,7 @@ void RateCtrlAngularVelocity::cleanupMcnSubscriptions() {
 }
 
 // 发布滤波后的陀螺仪数据到 MCN
-void RateCtrlAngularVelocity::publishGyroFiltered(const imu_raw_msg_t* imu_data) {
+void gyro::publishGyroFiltered(const imu_raw_msg_t* imu_data) {
   if (imu_data == nullptr || gyro_filtered_hub_ == nullptr) {
     return;
   }
@@ -113,6 +116,7 @@ void RateCtrlAngularVelocity::publishGyroFiltered(const imu_raw_msg_t* imu_data)
   gyro_filtered_msg_t filtered_msg;
   std::memcpy(filtered_msg.gyro_filtered, gyro_adcf_, sizeof(gyro_adcf_));
   std::memcpy(filtered_msg.gyro_adc, gyro_adc_, sizeof(gyro_adc_));
+  std::memcpy(filtered_msg.gyroFilteredDownsampled, gyroFilteredDownsampled_, sizeof(gyroFilteredDownsampled_));
   filtered_msg.seq = imu_data->seq;
 
   rt_err_t publish_result = mcn_publish(gyro_filtered_hub_, &filtered_msg);
@@ -120,4 +124,3 @@ void RateCtrlAngularVelocity::publishGyroFiltered(const imu_raw_msg_t* imu_data)
     LOG_E("Failed to publish gyro_filtered data: %d", publish_result);
   }
 }
-

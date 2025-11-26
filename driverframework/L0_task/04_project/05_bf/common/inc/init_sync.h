@@ -16,6 +16,8 @@ extern "C" {
 typedef enum {
   INIT_SYNC_BMI270 = 0,      // BMI270 IMU 初始化完成
   INIT_SYNC_GYRO_FILTER,     // Gyro Filter 初始化完成
+  INIT_SYNC_ACC,             // Acc 模块初始化完成
+  INIT_SYNC_ATTITUDE,        // Attitude 模块初始化完成
   INIT_SYNC_RC,              // RC 模块初始化完成
   INIT_SYNC_PID,             // PID 模块初始化完成
   INIT_SYNC_MOTOR,           // Motor 模块初始化完成
