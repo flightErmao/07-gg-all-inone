@@ -20,6 +20,10 @@ extern "C" {
 #include "filter.h"  // For filter functions: pt1FilterInit, pt2FilterInit, pt3FilterInit, biquadFilterInit, etc.
 }
 
+#ifdef USE_DYN_NOTCH_FILTER
+#include "gyro_dnf.h"  // For GyroDynNotch class
+#endif
+
 // IMU 采样频率（Hz）- 假设从 IMU 发布频率推算
 #ifndef PROJECT_BF_GYRO_FILTER_IMU_SAMPLE_RATE_HZ
 #define PROJECT_BF_GYRO_FILTER_IMU_SAMPLE_RATE_HZ 800.0f
@@ -236,8 +240,39 @@ void gyro::gyroInitFilters() {
 #endif
 
 #ifdef USE_DYN_NOTCH_FILTER
-  // TODO: 实现动态 notch 滤波器初始化
-  // dynNotchInit(dynNotchConfig(), target_looptime_us_);
+  // 初始化动态 notch 滤波器
+  // 默认启用（如果编译时启用了 USE_DYN_NOTCH_FILTER）
+  dyn_notch_enabled_ = true;
+  if (dyn_notch_enabled_) {
+    // 从参数系统读取动态陷波滤波器参数
+    uint16_t dyn_notch_q = 120;
+    uint16_t dyn_notch_min_hz = 250;
+    uint16_t dyn_notch_max_hz = 550;
+    uint8_t dyn_notch_count = 1;
+    
+    getParam("filter_dyn_notch_q", &dyn_notch_q, sizeof(dyn_notch_q));
+    getParam("filter_dyn_notch_min_hz", &dyn_notch_min_hz, sizeof(dyn_notch_min_hz));
+    getParam("filter_dyn_notch_max_hz", &dyn_notch_max_hz, sizeof(dyn_notch_max_hz));
+    getParam("filter_dyn_notch_count", &dyn_notch_count, sizeof(dyn_notch_count));
+    
+    // 创建动态陷波滤波器实例
+    dyn_notch_filter_ = new GyroDynNotch();
+    if (dyn_notch_filter_ != nullptr) {
+      dyn_notch_filter_->init(dyn_notch_q, dyn_notch_min_hz, dyn_notch_max_hz, dyn_notch_count, target_looptime_us_);
+      if (!dyn_notch_filter_->isActive()) {
+        // 如果初始化失败（例如循环频率太低），删除实例
+        delete dyn_notch_filter_;
+        dyn_notch_filter_ = nullptr;
+        dyn_notch_enabled_ = false;
+        LOG_W("Dynamic notch filter initialization failed, disabled");
+      } else {
+        LOG_I("Dynamic notch filter initialized successfully");
+      }
+    } else {
+      dyn_notch_enabled_ = false;
+      LOG_E("Failed to allocate memory for dynamic notch filter");
+    }
+  }
 #endif
 
   // 步骤8: 初始化第三个低通滤波器 - PT1（用于姿态估计）

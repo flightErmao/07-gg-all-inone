@@ -93,6 +93,11 @@ class GyroCalibration {
   bool isOnFinalCycle() const;
 };
 
+// Forward declaration for dynamic notch filter (defined in gyro_dnf.h)
+#ifdef USE_DYN_NOTCH_FILTER
+class GyroDynNotch;
+#endif
+
 // gyro 是 gyro_t 的 C++ 版本
 // 简单变量直接映射为成员变量，复杂成员变量对象化
 class gyro {
@@ -201,11 +206,12 @@ class gyro {
   biquadFilter_t notch2_filter_[3];   // Notch2 filter state [X, Y, Z]
   bool notch2_enabled_;               // Notch2 filter enabled flag
 
+#ifdef USE_DYN_NOTCH_FILTER
   // 动态 notch 滤波器（对应 dynNotchInit/dynNotchFilter 函数）
-  // TODO: 需要查看 BfDynNotchFilter 的实现，看是否依赖已删除的模块
-  // 暂时保留，后续可能需要重写
-  // BfDynNotchFilter dyn_notch_filter_;
-  bool dyn_notch_enabled_;  // Dynamic notch filter enabled flag
+  // Forward declaration is at file scope (above class definition)
+  GyroDynNotch* dyn_notch_filter_;  // Dynamic notch filter instance (pointer to avoid include in header)
+  bool dyn_notch_enabled_;           // Dynamic notch filter enabled flag
+#endif
 
   // 第三个低通滤波器：PT1（用于姿态估计）
   // 对应 gyro.imuGyroFilter[XYZ_AXIS_COUNT]

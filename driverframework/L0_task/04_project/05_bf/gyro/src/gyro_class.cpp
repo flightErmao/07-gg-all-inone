@@ -12,6 +12,10 @@ extern "C" {
 
 #include <cstring>
 
+#ifdef USE_DYN_NOTCH_FILTER
+#include "gyro_dnf.h"  // For GyroDynNotch class
+#endif
+
 extern "C" {
 #include "sensor_alignment.h"  // For sensor alignment
 #include "vector.h"            // For matrix operations
@@ -57,7 +61,10 @@ gyro::gyro()
       notch1_enabled_(false),
       notch2_apply_fn_(nullFilterApply),
       notch2_enabled_(false),
+#ifdef USE_DYN_NOTCH_FILTER
+      dyn_notch_filter_(nullptr),
       dyn_notch_enabled_(false),
+#endif
       imu_gyro_filter_enabled_(false),
       // 其他辅助成员
       gyro_align_(ALIGN_DEFAULT),
@@ -83,6 +90,11 @@ gyro::gyro()
   std::memset(notch2_filter_, 0, sizeof(notch2_filter_));
   std::memset(imu_gyro_filter_, 0, sizeof(imu_gyro_filter_));
   std::memset(gyroFilteredDownsampled_, 0, sizeof(gyroFilteredDownsampled_));
+
+#ifdef USE_DYN_NOTCH_FILTER
+  // 动态陷波滤波器使用指针，在 initInThreadEntry 中创建
+  dyn_notch_filter_ = nullptr;
+#endif
 }
 
 rt_err_t gyro::init() {
@@ -285,6 +297,15 @@ void gyro::processImuData(const imu_raw_msg_t* imu_data) {
     std::memcpy(gyroFilteredDownsampled_, gyro_adcf_, sizeof(gyroFilteredDownsampled_));
   }
 
+  // 步骤9: 更新动态陷波滤波器（在滤波链的末尾）
+  // 位置：参考 Betaflight，dynNotchUpdate 在滤波链的最后调用
+  // 这用于检测频率并更新滤波器参数
+#ifdef USE_DYN_NOTCH_FILTER
+  if (dyn_notch_enabled_ && dyn_notch_filter_ != nullptr && dyn_notch_filter_->isActive()) {
+    dyn_notch_filter_->update();
+  }
+#endif
+
   // 重置降采样计数器（参考 gyro_filter_impl.c:86）
   if (!downsample_filter_enabled_) {
     sample_count_ = 0;
@@ -336,20 +357,21 @@ void gyro::applyFilterChain(const float input[3], float output[3]) {
 
   // 步骤7: 动态陷波滤波器（可选）
   // 位置：gyro_filter_impl.c:63-78
-  // TODO: 应用动态 notch 滤波器（如果激活）
-  // 动态 notch 滤波器需要重新实现，暂时注释掉
-  // if (dyn_notch_enabled_) {
-  //   // 推送样本用于频率分析
-  //   for (int i = 0; i < 3; i++) {
-  //     dyn_notch_filter_.push(i, filtered[i]);
-  //   }
-  //
-  //   // 更新动态 notch 滤波器
-  //   dyn_notch_filter_.update();
-  //
-  //   // 应用动态 notch 滤波器
-  //   dyn_notch_filter_.apply3Axis(filtered, filtered);
-  // }
+  // 注意：在 Betaflight 中，dynNotchPush 和 dynNotchFilter 在滤波链中调用
+  // 而 dynNotchUpdate 在滤波链的末尾调用（在 processImuData 中）
+#ifdef USE_DYN_NOTCH_FILTER
+  if (dyn_notch_enabled_ && dyn_notch_filter_ != nullptr && dyn_notch_filter_->isActive()) {
+    // 推送样本用于频率分析（在滤波链中）
+    for (int i = 0; i < 3; i++) {
+      dyn_notch_filter_->push(i, filtered[i]);
+    }
+    
+    // 应用动态 notch 滤波器（在滤波链中）
+    for (int i = 0; i < 3; i++) {
+      filtered[i] = dyn_notch_filter_->filter(i, filtered[i]);
+    }
+  }
+#endif
 
   std::memcpy(output, filtered, sizeof(float) * 3);
 }

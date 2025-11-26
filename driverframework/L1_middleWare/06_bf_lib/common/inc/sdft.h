@@ -23,9 +23,14 @@
 
 #pragma once
 
+#ifdef __cplusplus
+#include <complex>
+typedef std::complex<float> complex_t;
+#else
 #include <complex.h>
 #undef I  // avoid collision of imaginary unit I with variable I in pid.h
 typedef float complex complex_t; // Better readability for type "float complex"
+#endif
 
 #include "utils.h"
 
@@ -45,6 +50,10 @@ typedef struct sdft_s {
 STATIC_ASSERT(SDFT_SAMPLE_SIZE % 2 == 0, sdft_sample_size_not_even);
 STATIC_ASSERT(SDFT_BIN_COUNT >= 2, sdft_bin_count_too_small);
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void sdftInit(sdft_t *sdft, const int startBin, const int endBin, const int numBatches);
 void sdftPush(sdft_t *sdft, const float sample);
 void sdftPushBatch(sdft_t *sdft, const float sample, const int batchIdx);
@@ -52,3 +61,7 @@ void sdftMagSq(const sdft_t *sdft, float *output);
 void sdftMagnitude(const sdft_t *sdft, float *output);
 void sdftWinSq(const sdft_t *sdft, float *output);
 void sdftWindow(const sdft_t *sdft, float *output);
+
+#ifdef __cplusplus
+}
+#endif

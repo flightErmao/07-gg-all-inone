@@ -510,6 +510,7 @@
 #define PROJECT_BF_GYRO_FILTER_THREAD_TIMESLICE 5
 #define PROJECT_BF_GYRO_FILTER_ADVANCED
 #define USE_DYN_LPF
+#define USE_DYN_NOTCH_FILTER
 #define PROJECT_BF_MLOG_GYRO_EN
 
 /* Mlog gyro logging is configured via parameter system (mlog_gyro_en) */
