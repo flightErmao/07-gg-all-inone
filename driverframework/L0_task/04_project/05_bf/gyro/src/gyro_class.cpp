@@ -40,12 +40,6 @@ gyro::gyro()
       sample_looptime_us_(0),
       sample_count_(0),
       downsample_filter_enabled_(false),
-      gyro_enabled_bitmask_(0),
-      gyro_debug_mode_(0),
-      gyro_has_overflow_protection_(true),
-      use_multi_gyro_debugging_(false),
-      gyro_debug_axis_(0),
-      acc_sample_rate_hz_(0),
 #ifdef USE_DYN_LPF
       dyn_lpf_filter_(0),
       dyn_lpf_min_(0),
@@ -65,9 +59,6 @@ gyro::gyro()
       notch2_enabled_(false),
       dyn_notch_enabled_(false),
       imu_gyro_filter_enabled_(false),
-#ifdef USE_GYRO_OVERFLOW_CHECK
-      overflow_axis_mask_(0),
-#endif
       // 其他辅助成员
       gyro_align_(ALIGN_DEFAULT),
       use_custom_matrix_(false),
@@ -113,20 +104,6 @@ rt_err_t gyro::init() {
     return ret;
   }
 
-  // 注意：依赖 BMI270 的初始化已移到 threadEntry 中，在线程调度器启动后执行
-  // 这里只初始化不依赖其他线程的部分
-
-  // 初始化调试和状态相关变量（参考 gyro.c:592-594）
-  gyro_has_overflow_protection_ = true;  // 默认有溢出保护
-  gyro_debug_mode_ = 0;                  // DEBUG_NONE
-
-  use_multi_gyro_debugging_ = false;
-  gyro_debug_axis_ = 0;  // FD_ROLL (需要根据实际枚举值调整)
-
-  // 注意：gyro 零偏值在运行时计算，不保存到参数系统
-  // 每次启动时都会重新校准
-
-  // 创建静态线程
   rt_err_t err = rt_thread_init(&thread_obj_, "gyro", gyro::threadEntry, this, thread_stack_,
                                 PROJECT_BF_GYRO_FILTER_THREAD_STACK_SIZE, PROJECT_BF_GYRO_FILTER_THREAD_PRIORITY,
                                 PROJECT_BF_GYRO_FILTER_THREAD_TIMESLICE);
@@ -147,8 +124,6 @@ rt_err_t gyro::init() {
   LOG_I("gyro initialized");
   return RT_EOK;
 }
-
-// initFilters(), initDownsampleFilter(), setTargetLooptime() 已移到 gyro_init.cpp
 
 void gyro::threadEntry(void* parameter) {
   if (parameter == RT_NULL) {
@@ -171,13 +146,15 @@ void gyro::threadLoop() {
   LOG_I("gyro thread loop started");
 
   while (true) {
-    // 阻塞等待 MCN 发布
     if (mcn_poll_sync(imu_node_, RT_WAITING_FOREVER) == RT_TRUE) {
-      // 复制数据
+#ifdef PROJECT_BF_GYRO_FILTER_DEBUG_PIN_EN
+      DEBUG_PIN_DEBUG0_HIGH();
+#endif
       if (mcn_copy(MCN_HUB(imu), imu_node_, &imu_data) == RT_EOK) {
-        // 处理 IMU 数据
         processImuData(&imu_data);
-        // Debug Pin: 拉低，表示滤波处理完成
+#ifdef PROJECT_BF_GYRO_FILTER_DEBUG_PIN_EN
+        DEBUG_PIN_DEBUG0_LOW();
+#endif
       }
     }
   }
@@ -187,9 +164,6 @@ void gyro::processImuData(const imu_raw_msg_t* imu_data) {
   if (imu_data == RT_NULL) {
     return;
   }
-#ifdef PROJECT_BF_GYRO_FILTER_DEBUG_PIN_EN
-  DEBUG_PIN_DEBUG0_HIGH();
-#endif
   float gyro_raw[3] = {imu_data->gyro[0], imu_data->gyro[1], imu_data->gyro[2]};
 
   // 如果没有校准，开始校准
@@ -276,9 +250,6 @@ void gyro::processImuData(const imu_raw_msg_t* imu_data) {
     // 将滤波结果存储到 sample_sum_（对应 gyro.sampleSum）
     std::memcpy(sample_sum_, gyro_downsampled, sizeof(gyro_downsampled));
   } else {
-    // 使用简单平均值进行降采样（参考 gyro.c:462-467）
-    // gyro.sampleSum[X] += gyro.gyroADC[X];
-    // gyro.sampleCount++;
     for (int i = 0; i < 3; i++) {
       sample_sum_[i] += gyro_adc_[i];
     }
@@ -298,9 +269,6 @@ void gyro::processImuData(const imu_raw_msg_t* imu_data) {
   // 顺序：RPM滤波器 -> Notch1 -> Notch2 -> LPF1 -> 动态Notch
   // 输出：gyro.gyroADCf[axis]
   applyFilterChain(gyro_downsampled, gyro_adcf_);
-#ifdef PROJECT_BF_GYRO_FILTER_DEBUG_PIN_EN
-  DEBUG_PIN_DEBUG0_LOW();
-#endif
 
   // 步骤8: 第三个低通滤波器 - PT1（用于姿态估计）
   // 位置：gyroFiltering() - src/main/sensors/gyro.c:541
@@ -323,18 +291,9 @@ void gyro::processImuData(const imu_raw_msg_t* imu_data) {
     std::memset(sample_sum_, 0, sizeof(sample_sum_));
   }
 
-  // 发布滤波后的陀螺仪数据到 MCN（已移到 gyro_mcn.cpp）
   publishGyroFiltered(imu_data);
 
-  // 推送陀螺仪数据到 mlog（已移到 gyro_mlog.cpp）
   pushGyroDataToMlog(imu_data);
-
-  // Debug log（可选，如果需要的话）
-  // LOG_D("seq:%u angular_velocity(%.3f, %.3f, %.3f)",
-  //     imu_data->seq,
-  //     gyro_adcf_[0],
-  //     gyro_adcf_[1],
-  //     gyro_adcf_[2]);
 }
 
 void gyro::applyFilterChain(const float input[3], float output[3]) {

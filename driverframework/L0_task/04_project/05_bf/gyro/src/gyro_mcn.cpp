@@ -33,8 +33,8 @@ static int gyro_filtered_echo(void* parameter) {
   return 0;
 }
 
-// MCN 初始化函数
-rt_err_t gyro::initMcn() {
+// 订阅 IMU MCN 主题
+rt_err_t gyro::subscribeImu() {
   // 创建 MCN 事件信号量（用于 mcn_poll_sync）
   if (imu_event_ == RT_NULL) {
     imu_event_ = rt_sem_create("gyro_evt", 0, RT_IPC_FLAG_FIFO);
@@ -55,19 +55,15 @@ rt_err_t gyro::initMcn() {
     return -RT_ERROR;
   }
   LOG_I("Subscribed to imu MCN topic");
+  return RT_EOK;
+}
 
+// 发布 gyro_filtered MCN 主题
+rt_err_t gyro::advertiseGyroFiltered() {
   // 获取 gyro MCN hub（用于发布滤波后的数据）
   gyro_filtered_hub_ = MCN_HUB(gyro);
   if (gyro_filtered_hub_ == nullptr) {
     LOG_E("get gyro hub failed");
-    if (imu_node_ != RT_NULL) {
-      mcn_unsubscribe(MCN_HUB(imu), imu_node_);
-      imu_node_ = RT_NULL;
-    }
-    if (imu_event_ != RT_NULL) {
-      rt_sem_delete(imu_event_);
-      imu_event_ = RT_NULL;
-    }
     return -RT_ERROR;
   }
 
@@ -79,17 +75,28 @@ rt_err_t gyro::initMcn() {
     // -RT_EBUSY: 已经激活过了（可以忽略）
     // 其他值: 激活失败（内存不足等）
     LOG_E("gyro_filtered advertise failed: %d", advertise_ret);
-    if (imu_node_ != RT_NULL) {
-      mcn_unsubscribe(MCN_HUB(imu), imu_node_);
-      imu_node_ = RT_NULL;
-    }
-    if (imu_event_ != RT_NULL) {
-      rt_sem_delete(imu_event_);
-      imu_event_ = RT_NULL;
-    }
+    gyro_filtered_hub_ = nullptr;
     return advertise_ret;
   }
   LOG_I("gyro MCN topic advertised");
+  return RT_EOK;
+}
+
+// MCN 初始化函数
+rt_err_t gyro::initMcn() {
+  // 订阅 IMU MCN 主题
+  rt_err_t ret = subscribeImu();
+  if (ret != RT_EOK) {
+    return ret;
+  }
+
+  // 发布 gyro_filtered MCN 主题
+  ret = advertiseGyroFiltered();
+  if (ret != RT_EOK) {
+    // 如果发布失败，清理订阅
+    cleanupMcnSubscriptions();
+    return ret;
+  }
 
   return RT_EOK;
 }

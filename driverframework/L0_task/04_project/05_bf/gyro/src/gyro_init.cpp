@@ -259,28 +259,7 @@ void gyro::gyroInitFilters() {
   LOG_I("IMU downsample filter initialized: cutoff=%.1f Hz", static_cast<float>(gyro_imu_downsample_cutoff_hz));
 }
 
-void gyro::initFilters() {
-  // 调用新的 gyroInitFilters 函数（保持向后兼容）
-  gyroInitFilters();
-}
-
-void gyro::initDownsampleFilter() {
-  // 这个函数现在只用于初始化 LPF2 降采样相关的逻辑
-  // 第三个低通滤波器（imuGyroFilter）的初始化已经在 gyroInitFilters() 中完成
-  // 保留此函数以保持接口一致性，但实际初始化逻辑已移到 gyroInitFilters()
-}
-
 void gyro::setTargetLooptime(uint8_t pid_denom) {
-  // 参考 gyro.c:750-759 中的 gyroSetTargetLooptime
-  // activePidLoopDenom = pidDenom;
-  // if (gyro.sampleRateHz) {
-  //     gyro.sampleLooptime = 1e6f / gyro.sampleRateHz;
-  //     gyro.targetLooptime = activePidLoopDenom * 1e6f / gyro.sampleRateHz;
-  // } else {
-  //     gyro.sampleLooptime = 0;
-  //     gyro.targetLooptime = 0;
-  // }
-
   if (sample_rate_hz_ > 0) {
     sample_looptime_us_ = static_cast<uint32_t>(1e6f / static_cast<float>(sample_rate_hz_));
     target_looptime_us_ = pid_denom * sample_looptime_us_;
@@ -339,16 +318,9 @@ void gyro::initInThreadEntry() {
   // 设置目标循环时间（参考 gyroSetTargetLooptime）
   setTargetLooptime(pid_process_denom);
 
-  // 初始化加速度采样频率（如果需要）
-  acc_sample_rate_hz_ = sample_rate_hz_;  // 默认与陀螺仪相同
-
   // 初始化滤波器（从参数系统读取配置，参考 gyroInitFilters）
   // 注意：这些初始化依赖 sample_rate_hz_ 和 target_looptime_us_，所以必须在这里执行
   gyroInitFilters();
-
-  // 初始化降采样滤波器（参考 gyro_init.c:262-265）
-  // 注意：这些初始化依赖 target_looptime_us_，所以必须在这里执行
-  initDownsampleFilter();
 
   // 通知 Gyro Filter 初始化完成
   initSyncNotify(INIT_SYNC_GYRO_FILTER);

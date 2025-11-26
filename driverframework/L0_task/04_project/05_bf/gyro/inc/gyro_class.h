@@ -110,6 +110,10 @@ class gyro {
   rt_err_t initMcn();
   void cleanupMcnSubscriptions();
   void publishGyroFiltered(const imu_raw_msg_t* imu_data);
+  
+  // MCN 订阅和发布封装函数
+  rt_err_t subscribeImu();
+  rt_err_t advertiseGyroFiltered();
 
   // Mlog 相关函数
   rt_err_t initMlog();
@@ -151,15 +155,6 @@ class gyro {
   float sample_sum_[3];             // gyro.sampleSum[XYZ_AXIS_COUNT] - 用于降采样的累加样本
   bool downsample_filter_enabled_;  // gyro.downsampleFilterEnabled - 是否使用 LPF2 降采样
 
-  // 调试和状态相关
-  uint8_t gyro_enabled_bitmask_;       // gyro.gyroEnabledBitmask
-  uint8_t gyro_debug_mode_;            // gyro.gyroDebugMode
-  bool gyro_has_overflow_protection_;  // gyro.gyroHasOverflowProtection
-  bool use_multi_gyro_debugging_;      // gyro.useMultiGyroDebugging
-  uint8_t gyro_debug_axis_;            // gyro.gyroDebugAxis (flight_dynamics_index_t)
-
-  // 加速度采样频率
-  uint16_t acc_sample_rate_hz_;  // gyro.accSampleRateHz
 
 #ifdef USE_DYN_LPF
   // 动态 LPF1 参数（对应 gyro.dynLpfFilter, dynLpfMin, dynLpfMax, dynLpfCurveExpo）
@@ -169,9 +164,6 @@ class gyro {
   uint8_t dyn_lpf_curve_expo_;  // gyro.dynLpfCurveExpo
 #endif
 
-#ifdef USE_GYRO_OVERFLOW_CHECK
-  uint8_t overflow_axis_mask_;  // gyro.overflowAxisMask
-#endif
 
   // ========== 复杂成员变量对象化 ==========
 
@@ -244,9 +236,6 @@ class gyro {
   McnHub_t gyro_filtered_hub_;  // MCN 发布 hub（gyro_filtered）
 
   // ========== 内部方法 ==========
-
-  // 初始化滤波器（从参数系统读取配置，参考 gyroInitFilters）
-  void initFilters();
 
   // 初始化低通滤波器（参考 gyro_init.c:127-197）
   // slot: FILTER_LPF1 (0) 或 FILTER_LPF2 (1)
