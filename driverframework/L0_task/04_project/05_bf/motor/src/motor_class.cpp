@@ -359,7 +359,7 @@ void MotorBf::writeMotors(const float* motor_output, rt_device_t motor_device) {
     if (normalized < 0.0f) normalized = 0.0f;
     if (normalized > 1.0f) normalized = 1.0f;
     // Scale from [0.0, 1.0] to [48, 2047] for DShot
-    motor_values[i] = (uint16_t)(normalized * (2047.0f - 80.0f) + 80.0f);
+    motor_values[i] = (uint16_t)(normalized * (2047.0f - 120.0f) + 120.0f);
   }
 
   // Write motor values to device

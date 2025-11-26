@@ -11,8 +11,6 @@ typedef struct {
     const void *default_value;
 } param_default_t;
 
-static void bf_acc_param_default(void *address, uint8_t size);
-
 /* 加速度计滤波器与 Trim 参数 */
 #ifdef PROJECT_BF_ACC_EN
 static uint16_t acc_filter_cutoff_hz;  // 加速度计 PT2 滤波器截止频率（Hz）
