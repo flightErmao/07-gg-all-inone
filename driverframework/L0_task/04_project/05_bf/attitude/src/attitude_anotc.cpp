@@ -15,6 +15,7 @@ extern "C" {
 #include "anotc_bf.h"
 #include "rc_mcn.h"
 #include "uMCN.h"
+#include "attitude_mcn.h"
 }
 
 #ifdef PROJECT_BF_ATTITUDE_ANOTC_LOG_EN
@@ -23,15 +24,41 @@ static McnNode_t rc_aux_node_ = RT_NULL;
 static rc_aux_msg_t rc_aux_data_ = {0};
 static bool rc_aux_data_valid_ = false;
 
+// Static MCN subscription node for attitude data (to get latest attitude values)
+static McnNode_t attitude_node_ = RT_NULL;
+static attitude_msg_t attitude_data_cache_ = {0};
+static bool attitude_data_valid_ = false;
+
 // Static function to send attitude data using packStatus interface
 // This allows the ground station to display aircraft attitude information
+// Similar to Betaflight: subscribe to attitude MCN topic to get latest values
 static void sendAttitudeData(uint16_t count_ms) {
   if (!(count_ms % PROJECT_BF_ATTITUDE_ANOTC_LOG_PERIOD_MS)) {
-    // Get attitude data directly from AttitudeBf singleton
-    AttitudeBf& attitude = AttitudeBf::instance();
+    // Update attitude data from MCN (non-blocking)
+    // This ensures we get the latest attitude values from the attitude estimation thread
+    if (attitude_node_ != RT_NULL) {
+      if (mcn_poll(attitude_node_) == RT_TRUE) {
+        if (mcn_copy(MCN_HUB(attitude), attitude_node_, &attitude_data_cache_) == RT_EOK) {
+          attitude_data_valid_ = true;
+        }
+      }
+    }
 
-    float attitude_data[3];  // [roll, pitch, yaw] in degrees
-    attitude.getAttitude(attitude_data);
+    // Get attitude data from MCN (latest values from attitude thread)
+    // Similar to Betaflight: always use latest data from attitude estimation thread
+    float attitude_data[3] = {0.0f, 0.0f, 0.0f};  // [roll, pitch, yaw] in degrees
+
+    if (attitude_data_valid_ && attitude_data_cache_.seq > 0) {
+      // Use data from MCN (latest values from attitude thread)
+      // Only use if seq > 0, which indicates attitude has been updated at least once
+      attitude_data[0] = attitude_data_cache_.values[0];  // roll in degrees
+      attitude_data[1] = attitude_data_cache_.values[1];  // pitch in degrees
+      attitude_data[2] = attitude_data_cache_.values[2];  // yaw in degrees
+    } else {
+      // Attitude not initialized yet or MCN subscription failed
+      // Don't send uninitialized data (will send 0,0,0 which is better than stale data)
+      // In Betaflight, attitude is initialized from accelerometer on first update
+    }
 
     // Update RC aux data from MCN (non-blocking)
     // This provides armed status and flight mode
@@ -59,6 +86,17 @@ static void sendAttitudeData(uint16_t count_ms) {
 
 int addPeriodFunListAttitude(void) {
 #ifdef PROJECT_BF_ATTITUDE_ANOTC_LOG_EN
+  // Subscribe to attitude MCN topic to get latest attitude values
+  // This is similar to Betaflight: get attitude data from MCN subscription
+  attitude_node_ = mcn_subscribe(MCN_HUB(attitude), RT_NULL, RT_NULL);
+  if (attitude_node_ == RT_NULL) {
+    LOG_W("anotcAttitude: Failed to subscribe to attitude MCN topic, will use singleton fallback");
+    attitude_data_valid_ = false;
+  } else {
+    LOG_I("anotcAttitude: Subscribed to attitude MCN topic for latest attitude data");
+    attitude_data_valid_ = false;
+  }
+
   // Subscribe to RC aux MCN topic for armed status and flight mode
   rc_aux_node_ = mcn_subscribe(MCN_HUB(aux), RT_NULL, RT_NULL);
   if (rc_aux_node_ == RT_NULL) {
