@@ -19,8 +19,6 @@ extern "C" {
 }
 #include "../log/inc/mlog_gyro.hpp"
 
-#define USE_DYN_LPF
-
 // 简化的标准差统计结构（用于校准运动检测）
 class DeviationStats {
  public:
@@ -124,6 +122,11 @@ class gyro {
 
   // 获取对齐后的角速度数据（对应 gyro.gyroADC）
   void getGyroAdc(float gyro_adc[3]) const { std::memcpy(gyro_adc, gyro_adc_, sizeof(gyro_adc_)); }
+
+#ifdef USE_DYN_LPF
+  // 动态 LPF 更新函数
+  void dynLpfGyroUpdate(float throttle);
+#endif
 
   // 线程入口函数（静态）
   static void threadEntry(void* parameter);

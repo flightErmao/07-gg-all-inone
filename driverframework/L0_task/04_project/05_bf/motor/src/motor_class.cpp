@@ -15,7 +15,8 @@ extern "C" {
 #include "debugPin.h"
 #endif
 }
-
+#include "gyro_class.h"
+#include "pid_class.h"
 #include <cmath>
 #include <cstring>
 
@@ -435,6 +436,14 @@ void MotorBf::motorThreadEntry(void* parameter) {
   rc_aux_msg_t aux_data = {0};
   bool aux_data_valid = false;
 
+#ifdef USE_DYN_LPF
+  // Dynamic LPF update state
+  static uint32_t lastDynLpfUpdateUs = 0;
+  static int dynLpfPreviousQuantizedThrottle = -1;  // to allow an initial zero throttle to set the filter cutoff
+  const uint32_t DYN_LPF_THROTTLE_UPDATE_DELAY_US = 10000;  // 10ms update delay (same as Betaflight)
+  const int DYN_LPF_THROTTLE_STEPS = 50;                    // Throttle quantization steps (same as Betaflight)
+#endif
+
   // Step 4: Main loop - process PID output and control motors
   while (true) {
     // Wait for PID output data (blocking) - this releases CPU when waiting
@@ -469,6 +478,25 @@ void MotorBf::motorThreadEntry(void* parameter) {
         // Perform motor mixing (only when armed)
         // Throttle comes from pid_output->smoothed_throttle
         instance->mixTable(&pid_output, motor_output_array);
+
+#ifdef USE_DYN_LPF
+        // Update dynamic LPF cutoffs based on throttle (same as Betaflight)
+        // Reference: ref/pid.c updateDynLpfCutoffs()
+        uint32_t currentTimeUs = timestamp_micros();
+        if (currentTimeUs - lastDynLpfUpdateUs >= DYN_LPF_THROTTLE_UPDATE_DELAY_US) {
+          float throttle = instance->getThrottle();  // Get normalized throttle (0.0-1.0)
+          const int quantizedThrottle = (int)std::lrintf(
+              throttle * DYN_LPF_THROTTLE_STEPS);  // quantize the throttle reduce the number of filter updates
+          if (quantizedThrottle != dynLpfPreviousQuantizedThrottle) {
+            // scale the quantized value back to the throttle range so the filter cutoff steps are repeatable
+            const float dynLpfThrottle = (float)quantizedThrottle / DYN_LPF_THROTTLE_STEPS;
+            gyro::instance().dynLpfGyroUpdate(dynLpfThrottle);
+            PidBf::instance().dynLpfDTermUpdate(dynLpfThrottle);
+            dynLpfPreviousQuantizedThrottle = quantizedThrottle;
+            lastDynLpfUpdateUs = currentTimeUs;
+          }
+        }
+#endif
 
         // Update motor output data for logging (normalized values before scaling to 48-2047)
         std::memcpy(instance->motor_output_log_, motor_output_array, instance->motor_count_ * sizeof(float));

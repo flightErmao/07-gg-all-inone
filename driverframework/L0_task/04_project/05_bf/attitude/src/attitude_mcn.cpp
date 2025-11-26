@@ -9,6 +9,7 @@ extern "C" {
 #include "uMCN.h"
 #include "imu_mcn.h"
 #include "gyro_mcn.h"
+#include "acc_mcn.h"
 #include "attitude_mcn.h"
 #ifdef PROJECT_BF_ACC_EN
 #include "../acc/inc/acc_mcn.h"

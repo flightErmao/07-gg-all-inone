@@ -238,6 +238,11 @@ class PidBf {
   // Echo PID output data (for MCN echo callback)
   void echoPidOutput(const pid_output_msg_t* output_data);
 
+#ifdef USE_DYN_LPF
+  // Dynamic LPF update function for Dterm
+  void dynLpfDTermUpdate(float throttle);
+#endif
+
  private:
   PidBf(const PidBf&) = delete;
   PidBf& operator=(const PidBf&) = delete;

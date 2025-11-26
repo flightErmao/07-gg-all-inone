@@ -10,6 +10,7 @@ include_paths = [
     os.path.join(cwd, "inc"),
     os.path.join(cwd, "../imu/inc"),
     os.path.join(cwd, "../gyro/inc"),
+    os.path.join(cwd, "../acc/inc"),
     os.path.join(cwd, "../common/inc"),  # init_sync.h 所在目录
     os.path.join(cwd, "../anotc/inc"),  # anotc_bf.h 所在目录
     os.path.join(
@@ -31,9 +32,9 @@ group = DefineGroup(
         "PROJECT_BF_ATTITUDE_EN",
         "PROJECT_BF_GYRO_FILTER_EN",  # 依赖 gyro filter
         "PROJECT_BF_PARAM_EN",  # getParam function
+        "PROJECT_BF_ACC_EN",  # 依赖 acc
     ],
     CPPPATH=include_paths,
 )
 
 Return("group")
-

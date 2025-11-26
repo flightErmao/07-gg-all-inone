@@ -354,6 +354,57 @@ void gyro::applyFilterChain(const float input[3], float output[3]) {
   std::memcpy(output, filtered, sizeof(float) * 3);
 }
 
+#ifdef USE_DYN_LPF
+// Dynamic throttle curve function (same as Betaflight)
+static float dynThrottle(float throttle) {
+  return throttle * (1.0f - (throttle * throttle) / 3.0f) * 1.5f;
+}
+
+// Dynamic LPF cutoff frequency calculation (same as Betaflight)
+// Reference: ref/pid.c dynLpfCutoffFreq()
+static float dynLpfCutoffFreq(float throttle, uint16_t dynLpfMin, uint16_t dynLpfMax, uint8_t expo) {
+  const float expof = expo / 10.0f;
+  const float curve = throttle * (1.0f - throttle) * expof + throttle;
+  return (dynLpfMax - dynLpfMin) * curve + dynLpfMin;
+}
+
+// Dynamic LPF gyro update function (same as Betaflight)
+void gyro::dynLpfGyroUpdate(float throttle) {
+  if (dyn_lpf_filter_ != 0) {  // DYN_LPF_NONE = 0
+    float cutoffFreq;
+    if (dyn_lpf_curve_expo_ > 0) {
+      cutoffFreq = dynLpfCutoffFreq(throttle, dyn_lpf_min_, dyn_lpf_max_, dyn_lpf_curve_expo_);
+    } else {
+      cutoffFreq = std::fmax(dynThrottle(throttle) * dyn_lpf_max_, dyn_lpf_min_);
+    }
+    
+    const float gyroDt = target_looptime_us_ * 1e-6f;
+    switch (dyn_lpf_filter_) {
+      case 1:  // DYN_LPF_PT1
+        for (int axis = 0; axis < 3; axis++) {
+          pt1FilterUpdateCutoff(&lpf1_filter_[axis].pt1Filter, pt1FilterGain(cutoffFreq, gyroDt));
+        }
+        break;
+      case 2:  // DYN_LPF_BIQUAD
+        for (int axis = 0; axis < 3; axis++) {
+          biquadFilterUpdateLPF(&lpf1_filter_[axis].biquadFilter, cutoffFreq, target_looptime_us_);
+        }
+        break;
+      case 3:  // DYN_LPF_PT2
+        for (int axis = 0; axis < 3; axis++) {
+          pt2FilterUpdateCutoff(&lpf1_filter_[axis].pt2Filter, pt2FilterGain(cutoffFreq, gyroDt));
+        }
+        break;
+      case 4:  // DYN_LPF_PT3
+        for (int axis = 0; axis < 3; axis++) {
+          pt3FilterUpdateCutoff(&lpf1_filter_[axis].pt3Filter, pt3FilterGain(cutoffFreq, gyroDt));
+        }
+        break;
+    }
+  }
+}
+#endif
+
 // RT-Thread 自动初始化包装函数
 #ifdef PROJECT_BF_GYRO_FILTER_EN
 extern "C" {

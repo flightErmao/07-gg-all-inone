@@ -243,20 +243,15 @@ void gyro::gyroInitFilters() {
   // 步骤8: 初始化第三个低通滤波器 - PT1（用于姿态估计）
   // 位置：gyroFiltering() - src/main/sensors/gyro.c:541
   // 使用：gyro.imuGyroFilter
-  // 截止频率：从参数系统读取 filter_gyro_imu_downsample_cutoff_hz（默认 200 Hz）
+  // 截止频率：200 Hz (GYRO_IMU_DOWNSAMPLE_CUTOFF_HZ)
   // 输出：gyroFilteredDownsampled[axis]（给 attitude 使用）
   // gyroFilteredDownsampled[axis] = pt1FilterApply(&gyro.imuGyroFilter[axis], gyro.gyroADCf[axis]);
-  uint16_t gyro_imu_downsample_cutoff_hz = 200;  // 默认 200Hz
-  if (getParam("filter_gyro_imu_downsample_cutoff_hz", &gyro_imu_downsample_cutoff_hz,
-               sizeof(gyro_imu_downsample_cutoff_hz)) != RT_EOK) {
-    gyro_imu_downsample_cutoff_hz = 200;  // 如果参数不存在，使用默认值 200Hz
-  }
-  const float k = pt1FilterGain(static_cast<float>(gyro_imu_downsample_cutoff_hz), target_looptime_us_ * 1e-6f);
+  const float k = pt1FilterGain(GYRO_IMU_DOWNSAMPLE_CUTOFF_HZ, target_looptime_us_ * 1e-6f);
   for (int axis = 0; axis < 3; axis++) {
     pt1FilterInit(&imu_gyro_filter_[axis], k);
   }
   imu_gyro_filter_enabled_ = true;
-  LOG_I("IMU downsample filter initialized: cutoff=%.1f Hz", static_cast<float>(gyro_imu_downsample_cutoff_hz));
+  LOG_I("IMU downsample filter initialized: cutoff=%.1f Hz", GYRO_IMU_DOWNSAMPLE_CUTOFF_HZ);
 }
 
 void gyro::setTargetLooptime(uint8_t pid_denom) {

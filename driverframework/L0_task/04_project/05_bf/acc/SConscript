@@ -25,10 +25,8 @@ group = DefineGroup(
     depend=[
         "PROJECT_BF_ACC_EN",
         "PROJECT_BF_PARAM_EN",  # getParam function
-        "L1_MIDDLEWARE_06_BF_LIB_FILTER_IMU_EN",
     ],
     CPPPATH=include_paths,
 )
 
 Return("group")
-

@@ -751,4 +751,52 @@ float PidBf::pidLevel(int axis, float currentPidSetpoint, float horizonLevelStre
 }
 #endif
 
+#ifdef USE_DYN_LPF
+// Forward declaration of dynLpfCutoffFreq (defined in pid_init.cpp)
+extern float dynLpfCutoffFreq(float throttle, uint16_t dynLpfMin, uint16_t dynLpfMax, uint8_t expo);
+
+// Dynamic throttle curve function (same as Betaflight)
+static float dynThrottle(float throttle) {
+  return throttle * (1.0f - (throttle * throttle) / 3.0f) * 1.5f;
+}
+
+// Dynamic LPF Dterm update function (same as Betaflight)
+void PidBf::dynLpfDTermUpdate(float throttle) {
+  if (pid_runtime_.dynLpfFilter != DYN_LPF_NONE) {
+    float cutoffFreq;
+    if (pid_runtime_.dynLpfCurveExpo > 0) {
+      cutoffFreq = dynLpfCutoffFreq(throttle, pid_runtime_.dynLpfMin, pid_runtime_.dynLpfMax, pid_runtime_.dynLpfCurveExpo);
+    } else {
+      cutoffFreq = std::fmax(dynThrottle(throttle) * pid_runtime_.dynLpfMax, pid_runtime_.dynLpfMin);
+    }
+    
+    switch (pid_runtime_.dynLpfFilter) {
+      case DYN_LPF_PT1:
+        for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
+          pt1FilterUpdateCutoff(&pid_runtime_.dtermLowpass[axis].pt1Filter, pt1FilterGain(cutoffFreq, pid_runtime_.dT));
+        }
+        break;
+      case DYN_LPF_BIQUAD:
+        for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
+          biquadFilterUpdateLPF(&pid_runtime_.dtermLowpass[axis].biquadFilter, cutoffFreq, target_looptime_us_);
+        }
+        break;
+      case DYN_LPF_PT2:
+        for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
+          pt2FilterUpdateCutoff(&pid_runtime_.dtermLowpass[axis].pt2Filter, pt2FilterGain(cutoffFreq, pid_runtime_.dT));
+        }
+        break;
+      case DYN_LPF_PT3:
+        for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
+          pt3FilterUpdateCutoff(&pid_runtime_.dtermLowpass[axis].pt3Filter, pt3FilterGain(cutoffFreq, pid_runtime_.dT));
+        }
+        break;
+      case DYN_LPF_NONE:
+        // No update needed
+        break;
+    }
+  }
+}
+#endif
+
 
