@@ -55,13 +55,6 @@ menuconfig PROJECT_BF_ATTITUDE_EN
                 Enable ANOTC telemetry logging for attitude data (roll/pitch angles).
 
             if PROJECT_BF_ATTITUDE_ANOTC_LOG_EN
-                config PROJECT_BF_ATTITUDE_ANOTC_LOG_GROUP
-                    int "Log Group ID for Attitude Data"
-                    range 1 99
-                    default 9
-                    help
-                        Set the group ID for attitude data logging (1-99). Default: 9.
-
                 config PROJECT_BF_ATTITUDE_ANOTC_LOG_PERIOD_MS
                     int "Attitude Log Period (ms)"
                     range 1 1000
