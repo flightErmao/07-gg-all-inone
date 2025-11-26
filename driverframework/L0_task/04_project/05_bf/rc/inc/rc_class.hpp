@@ -173,7 +173,6 @@ class RcBf {
   // Raw RC channel data (PWM values, typically 1000-2000)
   uint16_t rc_raw_channels_[16];
   bool rc_data_new_;
-  bool rx_receiving_signal_;
   
   // RC command after deadband [roll, pitch, yaw, throttle] (normalized to -500..500 or 1000..2000)
   float rc_command_[PRIMARY_CHANNEL_COUNT];
@@ -232,7 +231,6 @@ class RcBf {
   // RC data arrays
   float rc_data_[16];  // Processed RC channel data
   uint8_t channel_count_;  // Number of RC channels
-  bool rx_flight_channels_valid_;  // Flight channels valid status
   bool is_rc_data_new_;  // Flag indicating new RC data available
   
   // RC device handle

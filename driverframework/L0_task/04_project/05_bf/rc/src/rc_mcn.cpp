@@ -123,10 +123,11 @@ void RcBf::publishAuxChannelsToMcn(uint32_t current_time_us) {
         aux_msg.aux_channels[i] = rc_data_[4 + i];  // Channels 5-18 (indices 4-17)
       }
     }
-    aux_msg.aux_channel_count = aux_count;
-    aux_msg.rx_receiving_signal = rx_receiving_signal_ ? 1 : 0;
-    aux_msg.rx_flight_channels_valid = rx_flight_channels_valid_ ? 1 : 0;
-    
+    // Zero out unused AUX channels
+    for (uint8_t i = aux_count; i < MAX_AUX_CHANNEL_COUNT; i++) {
+      aux_msg.aux_channels[i] = 0.0f;
+    }
+
     // Get arm status and flight mode from RcControls
     RcControls& rc_controls = RcControls::instance();
     aux_msg.armed = rc_controls.isArmed() ? RC_ARMED_STATUS_ARMED : RC_ARMED_STATUS_DISARMED;
@@ -154,58 +155,10 @@ void RcBf::echoAux(const rc_aux_msg_t* aux_data) {
   RcControls& rc_controls = RcControls::instance();
   bool is_armed = rc_controls.isArmed();
   uint8_t flight_mode = rc_controls.getFlightMode();
-  
-  // Print auxiliary channels debug information
-  if (aux_data->aux_channel_count > 0) {
-    // Print first few AUX channels (up to 6) in one line
-    uint8_t print_count = aux_data->aux_channel_count > 6 ? 6 : aux_data->aux_channel_count;
-    if (print_count >= 1) {
-      if (print_count == 1) {
-        LOG_I("arm: %s, mode: %u, rx_signal: %s, rx_valid: %s, aux: %.0f", 
-              is_armed ? "ARMED" : "DISARMED", flight_mode,
-              aux_data->rx_receiving_signal ? "OK" : "LOST", 
-              aux_data->rx_flight_channels_valid ? "OK" : "INVALID",
-              aux_data->aux_channels[0]);
-      } else if (print_count == 2) {
-        LOG_I("arm: %s, mode: %u, rx_signal: %s, rx_valid: %s, aux: %.0f %.0f", 
-              is_armed ? "ARMED" : "DISARMED", flight_mode,
-              aux_data->rx_receiving_signal ? "OK" : "LOST", 
-              aux_data->rx_flight_channels_valid ? "OK" : "INVALID",
-              aux_data->aux_channels[0], aux_data->aux_channels[1]);
-      } else if (print_count == 3) {
-        LOG_I("arm: %s, mode: %u, rx_signal: %s, rx_valid: %s, aux: %.0f %.0f %.0f", 
-              is_armed ? "ARMED" : "DISARMED", flight_mode,
-              aux_data->rx_receiving_signal ? "OK" : "LOST", 
-              aux_data->rx_flight_channels_valid ? "OK" : "INVALID",
-              aux_data->aux_channels[0], aux_data->aux_channels[1], aux_data->aux_channels[2]);
-      } else if (print_count == 4) {
-        LOG_I("arm: %s, mode: %u, rx_signal: %s, rx_valid: %s, aux: %.0f %.0f %.0f %.0f", 
-              is_armed ? "ARMED" : "DISARMED", flight_mode,
-              aux_data->rx_receiving_signal ? "OK" : "LOST", 
-              aux_data->rx_flight_channels_valid ? "OK" : "INVALID",
-              aux_data->aux_channels[0], aux_data->aux_channels[1], aux_data->aux_channels[2], aux_data->aux_channels[3]);
-      } else if (print_count == 5) {
-        LOG_I("arm: %s, mode: %u, rx_signal: %s, rx_valid: %s, aux: %.0f %.0f %.0f %.0f %.0f", 
-              is_armed ? "ARMED" : "DISARMED", flight_mode,
-              aux_data->rx_receiving_signal ? "OK" : "LOST", 
-              aux_data->rx_flight_channels_valid ? "OK" : "INVALID",
-              aux_data->aux_channels[0], aux_data->aux_channels[1], aux_data->aux_channels[2], 
-              aux_data->aux_channels[3], aux_data->aux_channels[4]);
-      } else {
-        LOG_I("arm: %s, mode: %u, rx_signal: %s, rx_valid: %s, aux: %.0f %.0f %.0f %.0f %.0f %.0f%s", 
-              is_armed ? "ARMED" : "DISARMED", flight_mode,
-              aux_data->rx_receiving_signal ? "OK" : "LOST", 
-              aux_data->rx_flight_channels_valid ? "OK" : "INVALID",
-              aux_data->aux_channels[0], aux_data->aux_channels[1], aux_data->aux_channels[2], 
-              aux_data->aux_channels[3], aux_data->aux_channels[4], aux_data->aux_channels[5],
-              aux_data->aux_channel_count > 6 ? " ..." : "");
-      }
-    }
-  } else {
-    LOG_I("arm: %s, mode: %u, rx_signal: %s, rx_valid: %s", 
-          is_armed ? "ARMED" : "DISARMED", flight_mode,
-          aux_data->rx_receiving_signal ? "OK" : "LOST", 
-          aux_data->rx_flight_channels_valid ? "OK" : "INVALID");
-  }
+
+  // Print auxiliary channels debug information (first 6 channels)
+  LOG_I("arm: %s, mode: %u, aux: %.0f %.0f %.0f %.0f %.0f %.0f", is_armed ? "ARMED" : "DISARMED", flight_mode,
+        aux_data->aux_channels[0], aux_data->aux_channels[1], aux_data->aux_channels[2], aux_data->aux_channels[3],
+        aux_data->aux_channels[4], aux_data->aux_channels[5]);
 }
 

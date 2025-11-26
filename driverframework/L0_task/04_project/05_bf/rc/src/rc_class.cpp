@@ -62,7 +62,6 @@ RcBf::RcBf()
     : rate_profile_(),
       rc_controls_config_(),
       rc_data_new_(false),
-      rx_receiving_signal_(false),
       last_rc_time_us_(0),
       previous_rx_interval_us_(0),
       current_rx_interval_us_(0),
@@ -76,7 +75,6 @@ RcBf::RcBf()
       seq_(0),
       target_looptime_s_(0.0003125f),  // 3.2kHz default
       channel_count_(16),              // Default to 16 channels
-      rx_flight_channels_valid_(false),
       is_rc_data_new_(false),
       rc_device_(RT_NULL),
       rcCommandDivider_(500.0f),
@@ -414,7 +412,6 @@ void RcBf::readRawRcChannels() {
                                    MAX_SUPPORTED_RC_CHANNEL_COUNT * sizeof(uint16_t));
   
   if (size > 0) {
-    rx_receiving_signal_ = true;
     rc_loss_count_ = 0;
     
     // Apply channel mapping: map logical channels to physical channels
@@ -429,9 +426,6 @@ void RcBf::readRawRcChannels() {
     }
   } else {
     rc_loss_count_++;
-    if (rc_loss_count_ > 10) {
-      rx_receiving_signal_ = false;
-    }
   }
 }
 
@@ -455,19 +449,18 @@ void RcBf::applyRangeScaling() {
 void RcBf::applyFailsafeAndConstraints(uint32_t current_time_us) {
   // Step 2: rcRaw[] → rcData[]（failsafe + 约束）
   uint32_t current_time_ms = current_time_us / 1000;
-  
-  rx_flight_channels_valid_ = rx_receiving_signal_;
+  bool rx_receiving_signal = (rc_loss_count_ <= 10);
   
   for (int channel = 0; channel < channel_count_; channel++) {
     float sample = rc_raw_[channel];
-    bool this_channel_valid = rx_flight_channels_valid_ && this->isPulseValid(static_cast<uint16_t>(sample));
+    bool this_channel_valid = rx_receiving_signal && this->isPulseValid(static_cast<uint16_t>(sample));
     
     if (this_channel_valid) {
       valid_rx_signal_timeout_[channel] = current_time_ms + MAX_INVALID_PULSE_TIME_MS;
     }
     
     // Apply failsafe logic
-    if (!rx_receiving_signal_) {
+    if (!rx_receiving_signal) {
       // Signal lost - apply failsafe
       const rxFailsafeConfig_t* failsafe = &failsafe_configs_[channel];
       
@@ -491,9 +484,6 @@ void RcBf::applyFailsafeAndConstraints(uint32_t current_time_us) {
         sample = rc_data_[channel];
       } else {
         // After 300ms - apply failsafe
-        if (channel < NON_AUX_CHANNEL_COUNT) {
-          rx_flight_channels_valid_ = false;
-        }
         const rxFailsafeConfig_t* failsafe = &failsafe_configs_[channel];
         if (failsafe->mode == 2) {
           sample = RXFAIL_STEP_TO_CHANNEL_VALUE(failsafe->step);
@@ -774,7 +764,8 @@ void RcBf::rcThreadEntry(void* parameter) {
     instance->updateRcCommands();  // rcData[] → rcCommand[]
     
     // Update refresh rate
-    instance->updateRcRefreshRate(current_time_us, instance->rx_receiving_signal_);
+    bool rx_receiving_signal = (instance->rc_loss_count_ <= 10);
+    instance->updateRcRefreshRate(current_time_us, rx_receiving_signal);
 
     // Process RC command and publish to MCN (in RC thread)
     // This calculates rawSetpoint[] from rcCommand[] and publishes to MCN for PID thread

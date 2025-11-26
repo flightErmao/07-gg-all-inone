@@ -38,7 +38,6 @@ RcControls::RcControls()
       mode_aux_channel_(6),
       mode_aux_threshold_low_(1400),
       mode_aux_threshold_high_(1600),
-      aux_channel_count_(0),
       flight_mode_(0),
       rc_sticks_(0),
       rc_delay_ms_(0),
@@ -115,7 +114,6 @@ void RcControls::loadParameters() {
 
 void RcControls::updateAuxChannels(const float* rc_data, uint8_t channel_count) {
   // Update AUX channel values (channels 5-18, indices 4-17)
-  aux_channel_count_ = 0;
   if (channel_count > 4) {
     uint8_t aux_count = channel_count - 4;
     if (aux_count > 14) {
@@ -124,7 +122,15 @@ void RcControls::updateAuxChannels(const float* rc_data, uint8_t channel_count) 
     for (uint8_t i = 0; i < aux_count; i++) {
       aux_channels_[i] = rc_data[4 + i];  // Channels 5-18 (indices 4-17)
     }
-    aux_channel_count_ = aux_count;
+    // Zero out unused AUX channels
+    for (uint8_t i = aux_count; i < 14; i++) {
+      aux_channels_[i] = 0.0f;
+    }
+  } else {
+    // No AUX channels, zero all
+    for (uint8_t i = 0; i < 14; i++) {
+      aux_channels_[i] = 0.0f;
+    }
   }
 }
 
@@ -226,8 +232,8 @@ void RcControls::processAuxArming(const float* rc_data, uint32_t current_time_us
   }
   aux_index -= 4;  // Convert to AUX index (0-13)
 
-  if (aux_index >= aux_channel_count_) {
-    return;  // Channel not available
+  if (aux_index >= 14) {
+    return;  // Invalid AUX index
   }
 
   // Get AUX channel value
@@ -315,8 +321,8 @@ void RcControls::processFlightMode(const float* rc_data) {
   }
   aux_index -= 4;  // Convert to AUX index
 
-  if (aux_index >= aux_channel_count_) {
-    return;  // Channel not available
+  if (aux_index >= 14) {
+    return;  // Invalid AUX index
   }
 
   float aux_value = aux_channels_[aux_index];
@@ -336,7 +342,7 @@ void RcControls::processFlightMode(const float* rc_data) {
 
 bool RcControls::isAuxChannelActive(uint8_t channel, uint16_t threshold_low,
                                      uint16_t threshold_high) const {
-  if (channel >= aux_channel_count_) {
+  if (channel >= 14) {
     return false;
   }
 

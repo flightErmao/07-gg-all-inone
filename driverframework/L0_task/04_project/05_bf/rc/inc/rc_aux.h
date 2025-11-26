@@ -118,7 +118,6 @@ class RcControls {
 
   // Current AUX channel values (from latest RC data)
   float aux_channels_[14];  // AUX1-AUX14 (channels 5-18)
-  uint8_t aux_channel_count_;
 
   // Current flight mode
   uint8_t flight_mode_;
