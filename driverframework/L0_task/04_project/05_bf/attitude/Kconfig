@@ -34,7 +34,7 @@ menuconfig PROJECT_BF_ATTITUDE_EN
         config PROJECT_BF_ATTITUDE_THREAD_PRIORITY
             int "Attitude Thread Priority"
             range 1 32
-            default 10
+            default 11
             help
                 Priority for the attitude estimation thread. Higher number means higher priority.
                 Should be lower than motor thread (6). Default: 10.
@@ -46,7 +46,7 @@ menuconfig PROJECT_BF_ATTITUDE_EN
             help
                 Time slice for the attitude estimation thread in ticks. Default: 5.
 
-        # ======== DEBUG: ANOTC (ATKP) ========
+# ======== DEBUG: ANOTC (ATKP) ========
         menuconfig PROJECT_BF_ATTITUDE_ANOTC_LOG_EN
             bool "DEBUG: ANOTC (ATKP) Logging"
             default n

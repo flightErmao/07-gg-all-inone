@@ -106,7 +106,8 @@ static constexpr uint8_t BMI270_VAL_INT_MAP_DATA_DRDY_INT1 = 0x04;
 static constexpr uint8_t BMI270_VAL_INT1_IO_CTRL_PINMODE = 0x0A;  // 高电平、推挽、输出
 
 #if defined(SENSOR_BMI270_BF_ODR_3200HZ)
-static constexpr uint8_t BMI270_VAL_ACC_CONF_ODR_BITS = 0x0D;
+// TO DO: 为什么 ACC的ODR必须是800Hz,否则acc[2]在静止的时候数据是2G
+static constexpr uint8_t BMI270_VAL_ACC_CONF_ODR_BITS = 0x0B;
 static constexpr uint8_t BMI270_VAL_GYRO_CONF_ODR_BITS = 0x0D;
 static constexpr float BMI270_SELECTED_ODR_HZ = 3200.0f;
 #elif defined(SENSOR_BMI270_BF_ODR_1600HZ)
@@ -121,8 +122,9 @@ static constexpr float BMI270_SELECTED_ODR_HZ = 800.0f;
 
 static constexpr uint8_t BMI270_VAL_ACC_CONF =
     (0x01u << 7) | (0x01u << 4) | BMI270_VAL_ACC_CONF_ODR_BITS;   // 高性能 + osr2 + 选择 ODR
+// TO DO : OSR根据用户参数来配置
 static constexpr uint8_t BMI270_VAL_GYRO_CONF =
-    (0x01u << 7) | (0x01u << 6) | (0x01u << 4) | BMI270_VAL_GYRO_CONF_ODR_BITS;  // HP filter/noise + OSR2 + 选择 ODR
+    (0x01u << 7) | (0x01u << 6) | BMI270_VAL_GYRO_CONF_ODR_BITS;  // HP filter/noise + OSR4 + 选择 ODR
 
 // 原始值转换系数（从 Betaflight 抽取，与 accgyro_spi_bmi270.c 保持一致）
 // 16G: 32768 -> 16g
