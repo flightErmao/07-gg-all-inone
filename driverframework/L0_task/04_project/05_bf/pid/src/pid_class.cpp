@@ -8,7 +8,7 @@ extern "C" {
 #include <ulog.h>
 #include "gyro_mcn.h"
 #include "pid_mcn.h"
-#include "bfPidParam.h"
+#include "pidParam.h"
 #include "rc_mcn.h"  // For MCN_DECLARE(rc), rc_command_msg_t, rc_aux_msg_t
 #include "filter.h"  // For filter functions: pt1FilterInit, pt2FilterInit, pt3FilterInit, biquadFilterInit, etc.
 #include "../common/inc/init_sync.h"  // For initSyncWait, initSyncNotify

@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "bfImuCaliOffsetParam.h"
+#include "caliParam.h"
 
 typedef struct {
     void *param;

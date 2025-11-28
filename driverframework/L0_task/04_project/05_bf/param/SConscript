@@ -7,9 +7,13 @@ src = Glob("./src/*.c")
 
 include_paths = [
     cwd,
-    os.path.join(cwd, "inc"),  # param.h, bfRcParam.h, bfPidParam.h, etc.
-    os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "03_package", "uparam"),  # uparam.h
-    os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "06_bf_lib", "common", "inc"),  # filter.h
+    os.path.join(cwd, "inc"),  # param.h, rcParam.h, pidParam.h, etc.
+    os.path.join(
+        cwd, "..", "..", "..", "..", "L1_middleWare", "03_package", "uparam"
+    ),  # uparam.h
+    os.path.join(
+        cwd, "..", "..", "..", "..", "L1_middleWare", "06_bf_lib", "common", "inc"
+    ),  # filter.h
 ]
 
 group = DefineGroup(
@@ -22,4 +26,3 @@ group = DefineGroup(
 )
 
 Return("group")
-

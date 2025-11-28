@@ -104,6 +104,31 @@ menuconfig PROJECT_BF_PID_EN
                                 Period (in milliseconds) for pitch PIDF data logging. Default: 20ms.
                 endif
 
+                menuconfig PROJECT_BF_PID_ANOTC_LOG_ANGLE_EN
+                    bool "DEBUG: ANOTC (ATKP) Angle Setpoint/Actual Logging"
+                    default n
+                    depends on PROJECT_BF_ATTITUDE_EN
+                    help
+                        Enable ANOTC telemetry logging for PID angle setpoint and actual angle.
+                        This logs the angle mode setpoint (desired angle) and actual angle from attitude estimator.
+                    
+                    if PROJECT_BF_PID_ANOTC_LOG_ANGLE_EN
+                        config PROJECT_BF_PID_ANOTC_LOG_ANGLE_GROUP
+                            int "Log Group ID for Angle Setpoint/Actual"
+                            range 1 99
+                            default 3
+                            help
+                                Set the group ID for angle setpoint/actual logging (1-99).
+                                Default: 3.
+
+                        config PROJECT_BF_PID_ANOTC_LOG_ANGLE_PERIOD_MS
+                            int "Angle Log Period (ms)"
+                            range 1 1000
+                            default 20
+                            help
+                                Period (in milliseconds) for angle setpoint/actual logging. Default: 20ms.
+                endif
+
             endif
     endif
 

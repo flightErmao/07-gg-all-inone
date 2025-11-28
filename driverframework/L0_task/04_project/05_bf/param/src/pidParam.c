@@ -4,7 +4,7 @@
 
 #include <rtconfig.h>  // For PROJECT_BF_PID_D_MAX_EN
 
-#include "bfPidParam.h"
+#include "pidParam.h"
 
 typedef struct {
     void *param;

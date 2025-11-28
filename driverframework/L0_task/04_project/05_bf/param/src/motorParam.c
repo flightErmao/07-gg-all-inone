@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdbool.h>
 
-#include "bfMotorParam.h"
+#include "motorParam.h"
 
 typedef struct {
     void *param;

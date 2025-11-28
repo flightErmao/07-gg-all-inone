@@ -1,0 +1,22 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+
+src = Glob("./*.c")
+
+include_paths = [
+    cwd,
+    os.path.join(cwd, "..", "common", "inc"),
+    os.path.join(cwd, "..", "common", "src"),
+]
+
+group = DefineGroup(
+    "L1_MIDDLEWARE_06_BF_LIB_SENSOR_EN",
+    src,
+    depend=["L1_MIDDLEWARE_06_BF_LIB_SENSOR_EN", "L1_MIDDLEWARE_06_BF_LIB_COMMON_EN"],
+    CPPPATH=include_paths,
+)
+
+Return("group")
+

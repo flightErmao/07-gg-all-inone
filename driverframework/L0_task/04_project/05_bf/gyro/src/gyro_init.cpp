@@ -7,7 +7,7 @@ extern "C" {
 #define LOG_LVL LOG_LVL_INFO
 #include <ulog.h>
 #include "param.h"
-#include "bfImuFilterParam.h"
+#include "gyroParam.h"
 #include "timestamp.h"
 #include "../common/inc/init_sync.h"  // For initSyncWait, initSyncNotify
 #include "../imu/inc/bmi270_class.h"
@@ -18,6 +18,7 @@ extern "C" {
 
 extern "C" {
 #include "filter.h"  // For filter functions: pt1FilterInit, pt2FilterInit, pt3FilterInit, biquadFilterInit, etc.
+#include "sensor_alignment.h"  // For sensor_align_e and sensorAlignment_t
 }
 
 #ifdef USE_DYN_NOTCH_FILTER
@@ -352,6 +353,44 @@ void gyro::initInThreadEntry() {
   // 注意：这些初始化依赖 sample_rate_hz_ 和 target_looptime_us_，所以必须在这里执行
   gyroInitFilters();
 
+  // 加载对齐参数（从参数系统读取）
+  loadAlignmentFromParams();
+
   // 通知 Gyro Filter 初始化完成
   initSyncNotify(INIT_SYNC_GYRO_FILTER);
+}
+
+// 从参数系统加载对齐参数并初始化
+void gyro::loadAlignmentFromParams() {
+  uint8_t align_value = 0;
+  int16_t custom_align[3] = {0, 0, 0};
+
+  if (getParam("imu_align_gyro", &align_value, sizeof(align_value)) == RT_EOK) {
+    sensor_align_e align = static_cast<sensor_align_e>(align_value);
+
+    if (align == ALIGN_CUSTOM) {
+      // 如果是自定义对齐，读取自定义对齐角度
+      if (getParam("imu_custom_align_gyro", custom_align, sizeof(custom_align)) == RT_EOK) {
+        sensorAlignment_t custom_alignment;
+        custom_alignment.roll = custom_align[0];
+        custom_alignment.pitch = custom_align[1];
+        custom_alignment.yaw = custom_align[2];
+        setAlignment(align, &custom_alignment);
+        LOG_I("Loaded gyro alignment: ALIGN_CUSTOM (roll=%d, pitch=%d, yaw=%d decidegrees)", custom_align[0],
+              custom_align[1], custom_align[2]);
+      } else {
+        // 自定义对齐参数不存在，使用默认对齐
+        setAlignment(ALIGN_DEFAULT);
+        LOG_W("Gyro alignment set to ALIGN_CUSTOM but custom_align not found, using ALIGN_DEFAULT");
+      }
+    } else {
+      // 标准对齐方式
+      setAlignment(align);
+      LOG_I("Loaded gyro alignment: %d", align);
+    }
+  } else {
+    // 参数不存在，使用默认对齐
+    setAlignment(ALIGN_DEFAULT);
+    LOG_I("Gyro alignment parameter not found, using ALIGN_DEFAULT");
+  }
 }

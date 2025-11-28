@@ -99,6 +99,12 @@ class AccBf {
     return acc_calibration_.isCalibrationComplete();
   }
 
+  // 设置传感器对齐参数
+  void setAlignment(sensor_align_e align, const sensorAlignment_t* customAlignment = nullptr);
+
+  // 从参数系统加载对齐参数（在 acc_init.cpp 中实现）
+  void loadAlignmentFromParams();
+
  private:
   AccBf(const AccBf&) = delete;
   AccBf& operator=(const AccBf&) = delete;

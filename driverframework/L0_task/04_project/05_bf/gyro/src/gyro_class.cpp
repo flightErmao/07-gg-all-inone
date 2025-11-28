@@ -19,6 +19,7 @@ extern "C" {
 extern "C" {
 #include "sensor_alignment.h"  // For sensor alignment
 #include "vector.h"            // For matrix operations
+#include "boardalignment.h"    // For sensor alignment functions
 }
 extern "C" {
 #include "filter.h"  // For filter functions: pt1FilterInit, pt2FilterInit, pt3FilterInit, biquadFilterInit, etc.
@@ -137,6 +138,34 @@ rt_err_t gyro::init() {
   return RT_EOK;
 }
 
+void gyro::setAlignment(sensor_align_e align, const sensorAlignment_t* customAlignment) {
+  gyro_align_ = align;
+  
+  if (align == ALIGN_CUSTOM && customAlignment != nullptr) {
+    // 使用自定义对齐
+    use_custom_matrix_ = true;
+    gyro_align_rpy_ = *customAlignment;
+    buildRotationMatrixFromAngles(&rotation_matrix_, &gyro_align_rpy_);
+    LOG_I("Gyro alignment set to ALIGN_CUSTOM: roll=%d, pitch=%d, yaw=%d (decidegrees)",
+          gyro_align_rpy_.roll, gyro_align_rpy_.pitch, gyro_align_rpy_.yaw);
+  } else if (align != ALIGN_DEFAULT && align != ALIGN_CUSTOM) {
+    // 使用标准对齐
+    use_custom_matrix_ = false;
+    buildAlignmentFromStandardAlignment(&gyro_align_rpy_, align);
+    buildRotationMatrixFromAngles(&rotation_matrix_, &gyro_align_rpy_);
+    LOG_I("Gyro alignment set to standard: %d", align);
+  } else {
+    // ALIGN_DEFAULT 或无效值，使用默认（无旋转）
+    use_custom_matrix_ = false;
+    std::memset(&gyro_align_rpy_, 0, sizeof(gyro_align_rpy_));
+    std::memset(&rotation_matrix_, 0, sizeof(rotation_matrix_));
+    rotation_matrix_.m[0][0] = 1.0f;
+    rotation_matrix_.m[1][1] = 1.0f;
+    rotation_matrix_.m[2][2] = 1.0f;
+    LOG_I("Gyro alignment set to ALIGN_DEFAULT");
+  }
+}
+
 void gyro::threadEntry(void* parameter) {
   if (parameter == RT_NULL) {
     return;
@@ -220,29 +249,27 @@ void gyro::processImuData(const imu_raw_msg_t* imu_data) {
   float gyro_corrected[3];
   gyro_calibration_.applyZeroOffset(gyro_raw, gyro_corrected);
 
-  // 步骤2: 应用传感器旋转（如果需要）
+  // 步骤2: 应用传感器对齐（对齐矩阵在 setAlignment 时已预先计算好）
+  // 参考 Betaflight: 对齐在初始化时设置，处理时直接应用
   float gyro_rotated[3];
-  std::memcpy(gyro_rotated, gyro_corrected, sizeof(gyro_corrected));
-
-  if (use_custom_matrix_) {
-    // 使用自定义旋转矩阵
-    vector3_t vec_in = {gyro_rotated[0], gyro_rotated[1], gyro_rotated[2]};
-    vector3_t vec_out;
-    matrixVectorMul(&vec_out, &rotation_matrix_, &vec_in);
-    gyro_rotated[0] = vec_out.x;
-    gyro_rotated[1] = vec_out.y;
-    gyro_rotated[2] = vec_out.z;
+  vector3_t vec_in = {gyro_corrected[0], gyro_corrected[1], gyro_corrected[2]};
+  vector3_t vec_aligned;
+  
+  if (gyro_align_ == ALIGN_DEFAULT) {
+    // ALIGN_DEFAULT，无需对齐（单位矩阵已在 setAlignment 中设置）
+    vec_aligned = vec_in;
+  } else if (use_custom_matrix_) {
+    // 使用自定义旋转矩阵（ALIGN_CUSTOM）
+    matrixVectorMul(&vec_aligned, &rotation_matrix_, &vec_in);
   } else {
-    // 使用标准对齐方式
-    buildAlignmentFromStandardAlignment(&gyro_align_rpy_, gyro_align_);
-    buildRotationMatrixFromAngles(&rotation_matrix_, &gyro_align_rpy_);
-    vector3_t vec_in = {gyro_rotated[0], gyro_rotated[1], gyro_rotated[2]};
-    vector3_t vec_out;
-    matrixVectorMul(&vec_out, &rotation_matrix_, &vec_in);
-    gyro_rotated[0] = vec_out.x;
-    gyro_rotated[1] = vec_out.y;
-    gyro_rotated[2] = vec_out.z;
+    // 使用标准对齐方式（CW0_DEG, CW90_DEG 等）
+    // 使用预先计算的旋转矩阵（在 setAlignment 中已计算）
+    matrixVectorMul(&vec_aligned, &rotation_matrix_, &vec_in);
   }
+  
+  gyro_rotated[0] = vec_aligned.x;
+  gyro_rotated[1] = vec_aligned.y;
+  gyro_rotated[2] = vec_aligned.z;
 
   // 步骤1: 原始数据采集 - 存储到 gyro_adc_（对应 gyro.gyroADC[axis]）
   std::memcpy(gyro_adc_, gyro_rotated, sizeof(gyro_rotated));

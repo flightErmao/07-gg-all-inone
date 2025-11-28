@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "bfMlogParam.h"
+#include "mlogParam.h"
 
 typedef struct {
     void *param;

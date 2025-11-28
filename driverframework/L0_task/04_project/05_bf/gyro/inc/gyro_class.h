@@ -128,6 +128,12 @@ class gyro {
   // 获取对齐后的角速度数据（对应 gyro.gyroADC）
   void getGyroAdc(float gyro_adc[3]) const { std::memcpy(gyro_adc, gyro_adc_, sizeof(gyro_adc_)); }
 
+  // 设置传感器对齐参数
+  void setAlignment(sensor_align_e align, const sensorAlignment_t* customAlignment = nullptr);
+
+  // 从参数系统加载对齐参数（在 gyro_init.cpp 中实现）
+  void loadAlignmentFromParams();
+
 #ifdef USE_DYN_LPF
   // 动态 LPF 更新函数
   void dynLpfGyroUpdate(float throttle);

@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "bfRcParam.h"
+#include "rcParam.h"
 
 typedef struct {
     void *param;

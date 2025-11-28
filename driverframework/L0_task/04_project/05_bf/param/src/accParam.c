@@ -4,7 +4,7 @@
 
 #include <rtconfig.h>  // For PROJECT_BF_ACC_EN
 
-#include "bfAccParam.h"
+#include "accParam.h"
 
 typedef struct {
     void *param;

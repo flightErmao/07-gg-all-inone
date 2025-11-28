@@ -9,6 +9,7 @@ extern "C" {
 #include "timestamp.h"
 #include "param.h"
 #include "../common/inc/init_sync.h"
+#include "boardalignment.h"  // For sensor alignment functions
 #ifdef PROJECT_BF_ACC_DEBUG_PIN_EN
 #include "debugPin.h"
 #endif
@@ -169,6 +170,34 @@ rt_err_t AccBf::startThread() {
   return RT_EOK;
 }
 
+void AccBf::setAlignment(sensor_align_e align, const sensorAlignment_t* customAlignment) {
+  acc_align_ = align;
+  
+  if (align == ALIGN_CUSTOM && customAlignment != nullptr) {
+    // 使用自定义对齐
+    use_custom_matrix_ = true;
+    acc_align_rpy_ = *customAlignment;
+    buildRotationMatrixFromAngles(&rotation_matrix_, &acc_align_rpy_);
+    LOG_I("Acc alignment set to ALIGN_CUSTOM: roll=%d, pitch=%d, yaw=%d (decidegrees)",
+          acc_align_rpy_.roll, acc_align_rpy_.pitch, acc_align_rpy_.yaw);
+  } else if (align != ALIGN_DEFAULT && align != ALIGN_CUSTOM) {
+    // 使用标准对齐
+    use_custom_matrix_ = false;
+    buildAlignmentFromStandardAlignment(&acc_align_rpy_, align);
+    buildRotationMatrixFromAngles(&rotation_matrix_, &acc_align_rpy_);
+    LOG_I("Acc alignment set to standard: %d", align);
+  } else {
+    // ALIGN_DEFAULT 或无效值，使用默认（无旋转）
+    use_custom_matrix_ = false;
+    std::memset(&acc_align_rpy_, 0, sizeof(acc_align_rpy_));
+    std::memset(&rotation_matrix_, 0, sizeof(rotation_matrix_));
+    rotation_matrix_.m[0][0] = 1.0f;
+    rotation_matrix_.m[1][1] = 1.0f;
+    rotation_matrix_.m[2][2] = 1.0f;
+    LOG_I("Acc alignment set to ALIGN_DEFAULT");
+  }
+}
+
 void AccBf::threadEntry(void* parameter) {
   auto* self = static_cast<AccBf*>(parameter);
   if (!self) {
@@ -198,6 +227,9 @@ void AccBf::initInThreadEntry() {
       getParam("cali_acc_trim_pitch", &acc_trim_[1], sizeof(acc_trim_[1])) == RT_EOK) {
     LOG_I("Loaded acc trim: roll=%.2f, pitch=%.2f", acc_trim_[0], acc_trim_[1]);
   }
+
+  // 加载对齐参数（从 acc_init.cpp 中调用）
+  loadAlignmentFromParams();
 
   LOG_I("AccBf thread initialization complete");
 }
@@ -237,26 +269,26 @@ void AccBf::processAccData(const imu_raw_msg_t* imu_data) {
   float acc_processed[3];
   std::memcpy(acc_processed, imu_data->accel, sizeof(acc_processed));
 
-  // 步骤1: 传感器对齐
-  if (use_custom_matrix_) {
-    // 使用自定义旋转矩阵
-    vector3_t vec_in = {acc_processed[0], acc_processed[1], acc_processed[2]};
-    vector3_t vec_out;
-    matrixVectorMul(&vec_out, &rotation_matrix_, &vec_in);
-    acc_processed[0] = vec_out.x;
-    acc_processed[1] = vec_out.y;
-    acc_processed[2] = vec_out.z;
+  // 步骤1: 传感器对齐（对齐矩阵在 setAlignment 时已预先计算好）
+  // 参考 Betaflight: 对齐在初始化时设置，处理时直接应用
+  vector3_t vec_in = {acc_processed[0], acc_processed[1], acc_processed[2]};
+  vector3_t vec_aligned;
+  
+  if (acc_align_ == ALIGN_DEFAULT) {
+    // ALIGN_DEFAULT，无需对齐（单位矩阵已在 setAlignment 中设置）
+    vec_aligned = vec_in;
+  } else if (use_custom_matrix_) {
+    // 使用自定义旋转矩阵（ALIGN_CUSTOM）
+    matrixVectorMul(&vec_aligned, &rotation_matrix_, &vec_in);
   } else {
-    // 使用标准对齐方式
-    buildAlignmentFromStandardAlignment(&acc_align_rpy_, acc_align_);
-    buildRotationMatrixFromAngles(&rotation_matrix_, &acc_align_rpy_);
-    vector3_t vec_in = {acc_processed[0], acc_processed[1], acc_processed[2]};
-    vector3_t vec_out;
-    matrixVectorMul(&vec_out, &rotation_matrix_, &vec_in);
-    acc_processed[0] = vec_out.x;
-    acc_processed[1] = vec_out.y;
-    acc_processed[2] = vec_out.z;
+    // 使用标准对齐方式（CW0_DEG, CW90_DEG 等）
+    // 使用预先计算的旋转矩阵（在 setAlignment 中已计算）
+    matrixVectorMul(&vec_aligned, &rotation_matrix_, &vec_in);
   }
+  
+  acc_processed[0] = vec_aligned.x;
+  acc_processed[1] = vec_aligned.y;
+  acc_processed[2] = vec_aligned.z;
 
   // 步骤2: 应用校准（零偏校正）
   // 如果正在校准，更新校准状态

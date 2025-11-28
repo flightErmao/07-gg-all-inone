@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "bfImuFilterParam.h"
+#include "gyroParam.h"
 #include "filter.h"  // For lowpassFilterType_e (FILTER_PT1, FILTER_BIQUAD, FILTER_PT2, FILTER_PT3)
 
 typedef struct {

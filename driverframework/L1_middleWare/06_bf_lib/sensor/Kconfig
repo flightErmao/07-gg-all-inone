@@ -1,0 +1,8 @@
+menuconfig L1_MIDDLEWARE_06_BF_LIB_SENSOR_EN
+    bool "ENABLE: L1_MIDDLEWARE_06_BF_LIB_SENSOR_EN"
+    default y
+    depends on L1_MIDDLEWARE_06_BF_LIB_COMMON_EN
+    help
+        Enable Betaflight sensor alignment library support.
+        This module provides sensor alignment functions for accelerometer and gyroscope.
+
