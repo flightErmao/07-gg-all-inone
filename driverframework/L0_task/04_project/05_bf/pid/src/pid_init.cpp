@@ -63,11 +63,11 @@ void PidBf::loadPidParameters() {
   // 注意：这不是I项的单独限制，而是整个PID输出的限制
   // I项的windup限制会基于此值计算：itermLimit = pidSumLimit * itermWindup / 100
   float pid_sum_limit = pid_profile_.pidSumLimit;
-  if (getParam("pid_sum_limit", &pid_sum_limit, sizeof(pid_sum_limit)) == RT_EOK) {
+  if (getParam("pid_rate_sum_limit", &pid_sum_limit, sizeof(pid_sum_limit)) == RT_EOK) {
     pid_profile_.pidSumLimit = pid_sum_limit;
   }
   float pid_sum_limit_yaw = pid_profile_.pidSumLimitYaw;
-  if (getParam("pid_sum_limit_yaw", &pid_sum_limit_yaw, sizeof(pid_sum_limit_yaw)) == RT_EOK) {
+  if (getParam("pid_rate_sum_limit_yaw", &pid_sum_limit_yaw, sizeof(pid_sum_limit_yaw)) == RT_EOK) {
     pid_profile_.pidSumLimitYaw = pid_sum_limit_yaw;
   }
 
