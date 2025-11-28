@@ -97,10 +97,24 @@ rt_err_t PidBf::initMcnSubscriptions() {
   if (attitude_node_ == RT_NULL) {
     LOG_W("subscribe attitude topic failed, angle mode will be disabled");
     // 角度模式需要姿态数据，如果没有则禁用角度模式
+    attitude_data_valid_ = false;
   } else {
     LOG_I("Subscribed to attitude MCN topic");
+    // 订阅成功后，尝试获取一次数据（如果有的话）
+    // 即使没有数据，也先设置为 true，后续会通过 updateAttitudeDataFromMcn 更新
+    // 这样可以确保在第一次获取到数据后，即使后续某次没有新数据，也能继续使用历史数据
+    if (mcn_poll(attitude_node_) == RT_TRUE) {
+      if (mcn_copy(MCN_HUB(att), attitude_node_, &attitude_data_) == RT_EOK) {
+        attitude_data_valid_ = true;
+        LOG_I("Initial attitude data loaded from MCN");
+      } else {
+        attitude_data_valid_ = false;
+      }
+    } else {
+      // 订阅成功但暂时没有数据，先设置为 false，等待第一次数据更新
+      attitude_data_valid_ = false;
+    }
   }
-  attitude_data_valid_ = false;
 #endif
 
   return RT_EOK;
@@ -193,19 +207,30 @@ bool PidBf::updateGyroDataFromMcn() {
 
 #ifdef PROJECT_BF_ATTITUDE_EN
 // 从MCN更新姿态数据（非阻塞）
+// 参考 Betaflight：一旦获取到有效数据，就持续使用历史数据，即使某次没有新数据更新
 bool PidBf::updateAttitudeDataFromMcn() {
+  // 如果订阅失败，直接返回 false
+  if (attitude_node_ == RT_NULL) {
+    attitude_data_valid_ = false;
+    return false;
+  }
+  
   // 轮询新的姿态数据（非阻塞）
-  // 姿态数据更新频率较低（500Hz），所以使用非阻塞方式
-  if (attitude_node_ != RT_NULL) {
-    if (mcn_poll(attitude_node_) == RT_TRUE) {
-      // 有新的姿态数据可用，复制它
-      if (mcn_copy(MCN_HUB(att), attitude_node_, &attitude_data_) == RT_EOK) {
-        attitude_data_valid_ = true;
-        return true;
-      }
+  // 姿态数据更新频率较低（通常 < PID 频率），所以使用非阻塞方式
+  if (mcn_poll(attitude_node_) == RT_TRUE) {
+    // 有新的姿态数据可用，复制它
+    if (mcn_copy(MCN_HUB(att), attitude_node_, &attitude_data_) == RT_EOK) {
+      // 成功获取新数据，标记为有效
+      attitude_data_valid_ = true;
+      return true;
+    } else {
+      // 复制失败，但保持之前的状态（如果有历史数据，继续使用）
+      return attitude_data_valid_;
     }
   }
-  // 没有新数据，但如果有有效的历史数据，仍然返回true
+  
+  // 没有新数据，但如果有有效的历史数据，继续使用历史数据（Betaflight 的做法）
+  // 这样可以避免因为姿态更新频率低于 PID 频率而导致角度模式频繁退出
   return attitude_data_valid_;
 }
 #endif

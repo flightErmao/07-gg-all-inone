@@ -356,21 +356,28 @@ void PidBf::pidController(uint32_t current_time_us) {
   
 #ifdef PROJECT_BF_ATTITUDE_EN
   // Update attitude data from MCN (non-blocking)
-  updateAttitudeDataFromMcn();
-  
-  // Check if attitude data is valid (required for angle mode)
-  bool attitude_available = attitude_data_valid_;
+  // 即使没有新数据，也会返回 true（如果有历史数据）
+  bool attitude_available = updateAttitudeDataFromMcn();
 #else
   bool attitude_available = false;
 #endif
 
   // Rate mode (角速度模式): process rate PID controller
   // Angle mode (角度模式): process angle PID controller (converts angle error to rate setpoint, then rate PID)
+  // 参考 Betaflight：一旦订阅成功并获取到一次有效数据，就持续使用历史数据
+  // 即使某次没有新数据更新，也继续使用历史数据，避免角度模式频繁退出
   bool is_angle_mode = (flight_mode == 1) && attitude_available;
   
   if (flight_mode == 1 && !attitude_available) {
     // Angle mode requested but attitude data not available
-    LOG_W("Angle mode requested but attitude data not available, falling back to rate mode");
+    // 只有在订阅失败或从未获取到数据时才会进入这里
+    static uint32_t last_warn_time = 0;
+    uint32_t current_time = rt_tick_get();
+    // 避免频繁打印警告（每 1 秒打印一次）
+    if (current_time - last_warn_time > RT_TICK_PER_SECOND) {
+      LOG_W("Angle mode requested but attitude data not available, falling back to rate mode");
+      last_warn_time = current_time;
+    }
     is_angle_mode = false;
   }
 
