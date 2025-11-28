@@ -24,9 +24,7 @@ static int gyro_filtered_echo(void* parameter) {
     return -1;
   }
 
-  LOG_I(
-      "seq: %lu, gyro_filtered: %.2f, %.2f, %.2f, gyro_adc: %.2f, %.2f, %.2f, gyroFilteredDownsampled: %.2f, %.2f, "
-      "%.2f",
+  LOG_I("%lu f:%.2f %.2f %.2f r:%.2f %.2f %.2f d:%.2f %.2f %.2f",
       gyro_data.seq, gyro_data.gyro_filtered[0], gyro_data.gyro_filtered[1], gyro_data.gyro_filtered[2],
       gyro_data.gyro_adc[0], gyro_data.gyro_adc[1], gyro_data.gyro_adc[2], gyro_data.gyroFilteredDownsampled[0],
       gyro_data.gyroFilteredDownsampled[1], gyro_data.gyroFilteredDownsampled[2]);

@@ -20,7 +20,7 @@ extern "C" {
 #include <cstring>
 
 /* 定义姿态数据话题（在本文件内完成定义与发布） */
-MCN_DEFINE(attitude, sizeof(attitude_msg_t));
+MCN_DEFINE(att, sizeof(attitude_msg_t));
 
 // MCN echo 函数（参考 gyro_mcn.cpp 中的 gyro_filtered_echo）
 static int attitude_echo(void* parameter) {
@@ -30,10 +30,8 @@ static int attitude_echo(void* parameter) {
     return -1;
   }
 
-  LOG_I("seq: %lu, roll: %.2f, pitch: %.2f, yaw: %.2f (raw: %d, %d, %d)", 
-        attitude_data.seq,
-        attitude_data.values[0], attitude_data.values[1], attitude_data.values[2],
-        attitude_data.raw[0], attitude_data.raw[1], attitude_data.raw[2]);
+  LOG_I("%lu deg:%.2f %.2f %.2f", attitude_data.seq, attitude_data.values[0], attitude_data.values[1],
+        attitude_data.values[2]);
   return 0;
 }
 
@@ -99,7 +97,7 @@ rt_err_t AttitudeBf::initMcn() {
 #endif
 
   // 获取 attitude MCN hub（用于发布姿态数据）
-  attitude_hub_ = MCN_HUB(attitude);
+  attitude_hub_ = MCN_HUB(att);
   if (attitude_hub_ == nullptr) {
     LOG_E("get attitude hub failed");
     if (imu_node_ != RT_NULL) {

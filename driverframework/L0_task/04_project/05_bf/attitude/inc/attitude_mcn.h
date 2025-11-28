@@ -18,7 +18,7 @@ typedef struct {
   rt_uint32_t timestamp; // 时间戳（微秒）
 } attitude_msg_t;
 
-MCN_DECLARE(attitude);
+MCN_DECLARE(att);
 
 #endif /* ATTITUDE_MCN_H__ */
 

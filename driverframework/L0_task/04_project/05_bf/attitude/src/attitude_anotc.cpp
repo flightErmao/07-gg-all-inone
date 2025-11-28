@@ -38,7 +38,7 @@ static void sendAttitudeData(uint16_t count_ms) {
     // This ensures we get the latest attitude values from the attitude estimation thread
     if (attitude_node_ != RT_NULL) {
       if (mcn_poll(attitude_node_) == RT_TRUE) {
-        if (mcn_copy(MCN_HUB(attitude), attitude_node_, &attitude_data_cache_) == RT_EOK) {
+        if (mcn_copy(MCN_HUB(att), attitude_node_, &attitude_data_cache_) == RT_EOK) {
           attitude_data_valid_ = true;
         }
       }
@@ -88,7 +88,7 @@ int addPeriodFunListAttitude(void) {
 #ifdef PROJECT_BF_ATTITUDE_ANOTC_LOG_EN
   // Subscribe to attitude MCN topic to get latest attitude values
   // This is similar to Betaflight: get attitude data from MCN subscription
-  attitude_node_ = mcn_subscribe(MCN_HUB(attitude), RT_NULL, RT_NULL);
+  attitude_node_ = mcn_subscribe(MCN_HUB(att), RT_NULL, RT_NULL);
   if (attitude_node_ == RT_NULL) {
     LOG_W("anotcAttitude: Failed to subscribe to attitude MCN topic, will use singleton fallback");
     attitude_data_valid_ = false;

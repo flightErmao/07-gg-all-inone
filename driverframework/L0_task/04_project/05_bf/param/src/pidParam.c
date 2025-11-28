@@ -18,11 +18,6 @@ static float bf_rate_pid_roll[3];   // [P, I, D]
 static float bf_rate_pid_pitch[3];  // [P, I, D]
 static float bf_rate_pid_yaw[3];    // [P, I, D]
 
-/* Betaflight 风格角度环 PID 参数（可选） */
-static float bf_angle_pid_roll[3];   // [P, I, D]
-static float bf_angle_pid_pitch[3];  // [P, I, D]
-static float bf_angle_pid_yaw[3];    // [P, I, D]
-
 /* Rate PID 总和限制（Rate PID Sum Limit）- 限制 rate PID 的 P+I+D+F 总和 */
 /* 注意：这不是I项的单独限制，而是整个 rate PID 输出的限制（单位：deg/s） */
 static float bf_pid_rate_sum_limit;      // Roll/Pitch轴的 rate PID sum限制
@@ -75,10 +70,6 @@ static const float bf_rate_pid_roll_default[3] = {0.0f, 0.0f, 0.0f};  // 典型 
 static const float bf_rate_pid_pitch_default[3] = {45.0f, 62.0f, 31.0f};
 static const float bf_rate_pid_yaw_default[3] = {0.0f, 0.0f, 0.0f};
 
-static const float bf_angle_pid_roll_default[3] = {0.0f, 0.0f, 0.0f};
-static const float bf_angle_pid_pitch_default[3] = {0.0f, 0.0f, 0.0f};
-static const float bf_angle_pid_yaw_default[3] = {0.0f, 0.0f, 0.0f};
-
 /* Rate PID sum限制的默认值（deg/s）- 与Betaflight一致 */
 static const float bf_pid_rate_sum_limit_default = 500.0f;      // Roll/Pitch轴默认500 deg/s
 static const float bf_pid_rate_sum_limit_yaw_default = 400.0f;   // Yaw轴默认400 deg/s
@@ -128,9 +119,6 @@ static const param_default_t bf_pid_defaults[] = {
     {bf_rate_pid_roll, bf_rate_pid_roll_default},
     {bf_rate_pid_pitch, bf_rate_pid_pitch_default},
     {bf_rate_pid_yaw, bf_rate_pid_yaw_default},
-    {bf_angle_pid_roll, bf_angle_pid_roll_default},
-    {bf_angle_pid_pitch, bf_angle_pid_pitch_default},
-    {bf_angle_pid_yaw, bf_angle_pid_yaw_default},
     {&bf_pid_rate_sum_limit, &bf_pid_rate_sum_limit_default},
     {&bf_pid_rate_sum_limit_yaw, &bf_pid_rate_sum_limit_yaw_default},
     {&bf_pid_iterm_windup, &bf_pid_iterm_windup_default},
@@ -178,9 +166,6 @@ static param_list bf_pid_params[] = {
     {(void*)bf_rate_pid_yaw, sizeof(bf_rate_pid_yaw), "pid_rate_yaw", "vf", bf_pid_param_default},
     {(void*)&bf_pid_rate_sum_limit, sizeof(bf_pid_rate_sum_limit), "pid_rate_sum_limit", "f", bf_pid_param_default},
     {(void*)&bf_pid_rate_sum_limit_yaw, sizeof(bf_pid_rate_sum_limit_yaw), "pid_rate_sum_limit_yaw", "f", bf_pid_param_default},
-    {(void*)bf_angle_pid_roll, sizeof(bf_angle_pid_roll), "pid_angle_roll", "vf", bf_pid_param_default},
-    {(void*)bf_angle_pid_pitch, sizeof(bf_angle_pid_pitch), "pid_angle_pitch", "vf", bf_pid_param_default},
-    {(void*)bf_angle_pid_yaw, sizeof(bf_angle_pid_yaw), "pid_angle_yaw", "vf", bf_pid_param_default},
     {(void*)&bf_pid_iterm_windup, sizeof(bf_pid_iterm_windup), "pid_iterm_windup", "f", bf_pid_param_default},
     {(void*)&bf_pid_dterm_notch_hz, sizeof(bf_pid_dterm_notch_hz), "pid_dterm_notch_hz", "u16", bf_pid_param_default},
     {(void*)&bf_pid_dterm_notch_cutoff, sizeof(bf_pid_dterm_notch_cutoff), "pid_dterm_notch_cutoff", "u16",

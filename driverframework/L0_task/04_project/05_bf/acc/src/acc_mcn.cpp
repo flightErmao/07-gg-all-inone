@@ -25,7 +25,7 @@ static int acc_filtered_echo(void* parameter) {
     return -1;
   }
 
-  LOG_I("seq: %lu, acc_filtered: %.2f, %.2f, %.2f, acc_adc: %.2f, %.2f, %.2f", acc_data.seq,
+  LOG_I("%lu f:%.2f %.2f %.2f r:%.2f %.2f %.2f", acc_data.seq,
         acc_data.acc_filtered[0], acc_data.acc_filtered[1], acc_data.acc_filtered[2], 
         acc_data.acc_adc[0], acc_data.acc_adc[1], acc_data.acc_adc[2]);
   return 0;

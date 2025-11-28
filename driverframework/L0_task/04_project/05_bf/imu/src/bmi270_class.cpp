@@ -430,10 +430,10 @@ bool BMI270::readAccelGyro(int16_t acc[3], int16_t gyro[3]) {
   // 0x0C-0x11: 加速度数据（6字节）
   // 0x12-0x17: 陀螺仪数据（6字节）
   // 中间 0x0C-0x12 之间有保留寄存器，但我们一次性读取可以包含这些数据
-  uint8_t data_buf[18] = {0};
+  uint8_t data_buf[12] = {0};
 
   // 从 ACC_DATA_X_LSB (0x0C) 开始读取 18 字节，一次性获取加速度和陀螺仪数据
-  if (spi_.readMultiReg16(BMI270_REG_ACC_DATA_X_LSB, data_buf, 18) != RT_EOK) {
+  if (spi_.readMultiReg16(BMI270_REG_ACC_DATA_X_LSB, data_buf, 12) != RT_EOK) {
     return false;
   }
 

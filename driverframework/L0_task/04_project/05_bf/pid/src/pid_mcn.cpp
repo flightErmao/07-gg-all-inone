@@ -93,7 +93,7 @@ rt_err_t PidBf::initMcnSubscriptions() {
 
 #ifdef PROJECT_BF_ATTITUDE_EN
   // 订阅姿态数据MCN主题（非阻塞，用于角度模式）
-  attitude_node_ = mcn_subscribe(MCN_HUB(attitude), RT_NULL, RT_NULL);
+  attitude_node_ = mcn_subscribe(MCN_HUB(att), RT_NULL, RT_NULL);
   if (attitude_node_ == RT_NULL) {
     LOG_W("subscribe attitude topic failed, angle mode will be disabled");
     // 角度模式需要姿态数据，如果没有则禁用角度模式
@@ -130,7 +130,7 @@ void PidBf::cleanupMcnSubscriptions() {
 
 #ifdef PROJECT_BF_ATTITUDE_EN
   if (attitude_node_ != RT_NULL) {
-    mcn_unsubscribe(MCN_HUB(attitude), attitude_node_);
+    mcn_unsubscribe(MCN_HUB(att), attitude_node_);
     attitude_node_ = RT_NULL;
   }
   attitude_data_valid_ = false;
@@ -199,7 +199,7 @@ bool PidBf::updateAttitudeDataFromMcn() {
   if (attitude_node_ != RT_NULL) {
     if (mcn_poll(attitude_node_) == RT_TRUE) {
       // 有新的姿态数据可用，复制它
-      if (mcn_copy(MCN_HUB(attitude), attitude_node_, &attitude_data_) == RT_EOK) {
+      if (mcn_copy(MCN_HUB(att), attitude_node_, &attitude_data_) == RT_EOK) {
         attitude_data_valid_ = true;
         return true;
       }
