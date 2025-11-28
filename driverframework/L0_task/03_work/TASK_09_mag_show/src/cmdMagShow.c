@@ -101,6 +101,15 @@ static void cmd_mag_unit_info(int argc, char **argv)
     LOG_I("  全球平均：     300 ~ 600 mGs（30 ~ 60 uT）");
 
     LOG_I("这些数值可帮助快速判断当前磁传感器数据是否处于合理范围。");
+
+    LOG_I("差值计算说明（MCN echo输出）：");
+    LOG_I("  PREV行：上一次的磁力计数据（X、Y、Z轴及模长）");
+    LOG_I("  CURR行：最新的磁力计数据（X、Y、Z轴及模长）");
+    LOG_I("  DIFF行：差值数据，计算方式如下：");
+    LOG_I("    - 各轴差值 = 最新值 - 上一次值（单位：uT）");
+    LOG_I("    - 差值模长 = √(diff_x² + diff_y² + diff_z²)（单位：uT）");
+    LOG_I("    - 差值百分比 = (差值模长 / 上一次模长) × 100%%");
+    LOG_I("  差值百分比反映磁场变化的相对强度，可用于检测磁干扰。");
 }
 
 MSH_CMD_EXPORT_ALIAS(cmd_mag_unit_info, mag_info, Show magnetic unit conversions and Earth field reference);
@@ -428,8 +437,9 @@ static void cmd_mag_result(int argc, char **argv)
     float diff_x = mag_after_data.x - mag_before_data.x;
     float diff_y = mag_after_data.y - mag_before_data.y;
     float diff_z = mag_after_data.z - mag_before_data.z;
-    float diff_magnitude = mag_after_data.magnitude - mag_before_data.magnitude;
-    
+
+    float diff_magnitude = calculate_magnitude(diff_x, diff_y, diff_z);
+
     /* 计算差值百分比 */
     float diff_magnitude_percent = 0.0f;
     if (mag_before_data.magnitude > 0.001f) {
@@ -439,31 +449,14 @@ static void cmd_mag_result(int argc, char **argv)
     LOG_I("=== 磁力计受磁前后对比结果 ===");
     
     /* 第一行：受磁前数据 */
-    LOG_I("BEFORE: X=%.3f uT Y=%.3f uT Z=%.3f uT Magnitude=%.3f uT Diff=%.2f%% timestamp=%ums",
-          mag_before_data.x,
-          mag_before_data.y,
-          mag_before_data.z,
-          mag_before_data.magnitude,
-          mag_before_data.diff_percent,
-          mag_before_data.timestamp_ms);
-    
+    LOG_I("BEFORE: X=%.3f uT Y=%.3f uT Z=%.3f uT", mag_before_data.x, mag_before_data.y, mag_before_data.z);
+
     /* 第二行：受磁后数据 */
-    LOG_I("AFTER:  X=%.3f uT Y=%.3f uT Z=%.3f uT Magnitude=%.3f uT Diff=%.2f%% timestamp=%ums",
-          mag_after_data.x,
-          mag_after_data.y,
-          mag_after_data.z,
-          mag_after_data.magnitude,
-          mag_after_data.diff_percent,
-          mag_after_data.timestamp_ms);
-    
+    LOG_I("AFTER:  X=%.3f uT Y=%.3f uT Z=%.3f uT", mag_after_data.x, mag_after_data.y, mag_after_data.z);
+
     /* 第三行：差值数据 */
-    LOG_I("DIFF:   X=%.3f uT Y=%.3f uT Z=%.3f uT Magnitude=%.3f uT (%.2f%%) timestamp=%ums",
-          diff_x,
-          diff_y,
-          diff_z,
-          diff_magnitude,
-          diff_magnitude_percent,
-          mag_after_data.timestamp_ms);
+    LOG_I("DIFF:   X=%.3f uT Y=%.3f uT Z=%.3f uT Magnitude=%.3f uT (%.2f%%)", diff_x, diff_y, diff_z, diff_magnitude,
+          diff_magnitude_percent);
 }
 
 MSH_CMD_EXPORT_ALIAS(cmd_mag_result, mag_result, Show magnetometer before/after comparison result);

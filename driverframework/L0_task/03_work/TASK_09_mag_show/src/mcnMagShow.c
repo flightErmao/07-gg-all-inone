@@ -16,6 +16,15 @@ MCN_DEFINE(mag, sizeof(mag_report_t));
 /* MCN subscriber node */
 static McnNode_t mag_sub_node = RT_NULL;
 
+/* Previous magnetometer data for difference calculation */
+static mag_report_t prev_mag_data = {0};
+static rt_bool_t has_prev_data = RT_FALSE;
+
+/* Calculate magnitude */
+static float calculate_magnitude(float x, float y, float z) {
+  return sqrtf(x * x + y * y + z * z);
+}
+
 /* Echo function for magnetometer data */
 static int mag_echo(void* parameter) {
   mag_report_t mag_data;
@@ -24,26 +33,77 @@ static int mag_echo(void* parameter) {
     return -1;
   }
 
-  /* Calculate magnitude (地磁长模长强度) */
-  float magnitude = sqrtf(mag_data.value_x * mag_data.value_x + 
-                         mag_data.value_y * mag_data.value_y + 
-                         mag_data.value_z * mag_data.value_z);
+  /* Calculate current magnitude */
+  float magnitude = calculate_magnitude(mag_data.value_x, mag_data.value_y, mag_data.value_z);
   
-  float relative_diff_percent = 0.0f;
-  if (MAG_REF_FIELD_UT > 0.0f) {
-    relative_diff_percent = ((magnitude - MAG_REF_FIELD_UT) / MAG_REF_FIELD_UT) * 100.0f;
+  /* Calculate difference if previous data exists */
+  float diff_x = 0.0f, diff_y = 0.0f, diff_z = 0.0f;
+  float diff_magnitude = 0.0f;
+  float diff_magnitude_percent = 0.0f;
+  float prev_magnitude = 0.0f;
+  
+  if (has_prev_data) {
+    /* Calculate axis differences */
+    diff_x = mag_data.value_x - prev_mag_data.value_x;
+    diff_y = mag_data.value_y - prev_mag_data.value_y;
+    diff_z = mag_data.value_z - prev_mag_data.value_z;
+    
+    /* Calculate difference magnitude */
+    diff_magnitude = calculate_magnitude(diff_x, diff_y, diff_z);
+    
+    /* Calculate previous magnitude */
+    prev_magnitude = calculate_magnitude(prev_mag_data.value_x, 
+                                         prev_mag_data.value_y, 
+                                         prev_mag_data.value_z);
+    
+    /* Calculate percentage relative to previous magnitude */
+    if (prev_magnitude > 0.001f) {
+      diff_magnitude_percent = (diff_magnitude / prev_magnitude) * 100.0f;
+    }
   }
 
-  LOG_I(
-      "MAG[%s]: X=%.3f uT Y=%.3f uT Z=%.3f uT Magnitude=%.3f uT Ref=%.3f uT Diff=%.2f%% timestamp=%ums",
-      TASK_MAG_DEVICE_NAME,
-      mag_data.value_x,
-      mag_data.value_y,
-      mag_data.value_z,
-      magnitude,
-      MAG_REF_FIELD_UT,
-      relative_diff_percent,
-      mag_data.timestamp_ms);
+  /* Print in 3 lines: previous, current, and difference */
+  if (has_prev_data) {
+    /* First line: Previous data */
+    LOG_I("PREV[%s]: X=%.3f uT Y=%.3f uT Z=%.3f uT Magnitude=%.3f uT timestamp=%ums",
+          TASK_MAG_DEVICE_NAME,
+          prev_mag_data.value_x,
+          prev_mag_data.value_y,
+          prev_mag_data.value_z,
+          prev_magnitude,
+          prev_mag_data.timestamp_ms);
+    
+    /* Second line: Current data */
+    LOG_I("CURR[%s]: X=%.3f uT Y=%.3f uT Z=%.3f uT Magnitude=%.3f uT timestamp=%ums",
+          TASK_MAG_DEVICE_NAME,
+          mag_data.value_x,
+          mag_data.value_y,
+          mag_data.value_z,
+          magnitude,
+          mag_data.timestamp_ms);
+    
+    /* Third line: Difference data */
+    LOG_I("DIFF[%s]: X=%.3f uT Y=%.3f uT Z=%.3f uT Magnitude=%.3f uT (%.2f%%)",
+          TASK_MAG_DEVICE_NAME,
+          diff_x,
+          diff_y,
+          diff_z,
+          diff_magnitude,
+          diff_magnitude_percent);
+  } else {
+    /* First time, only print current data */
+    LOG_I("CURR[%s]: X=%.3f uT Y=%.3f uT Z=%.3f uT Magnitude=%.3f uT timestamp=%ums",
+          TASK_MAG_DEVICE_NAME,
+          mag_data.value_x,
+          mag_data.value_y,
+          mag_data.value_z,
+          magnitude,
+          mag_data.timestamp_ms);
+  }
+
+  /* Update previous data */
+  prev_mag_data = mag_data;
+  has_prev_data = RT_TRUE;
 
   return 0;
 }
