@@ -39,6 +39,9 @@ static uint16_t filter_dyn_notch_min_hz;  // 动态陷波最小频率
 static uint16_t filter_dyn_notch_max_hz;  // 动态陷波最大频率
 static uint8_t filter_dyn_notch_count;    // 动态陷波数量
 
+/* 加速度计滤波器参数 */
+static uint16_t filter_acc_cutoff_hz;  // 加速度计 PT2 滤波器截止频率（Hz）
+
 static const uint8_t gyro_lpf1_type_default = FILTER_PT1;  // PT1 (from filter.h: lowpassFilterType_e)
 static const uint16_t gyro_lpf1_static_hz_default = 80;    // 默认使用动态最小值
 
@@ -59,6 +62,8 @@ static const uint16_t filter_dyn_notch_min_hz_default = 250;
 static const uint16_t filter_dyn_notch_max_hz_default = 550;
 static const uint8_t filter_dyn_notch_count_default = 1;
 
+static const uint16_t filter_acc_cutoff_hz_default = 50;  // 默认 50Hz
+
 static const param_default_t bf_imu_filter_defaults[] = {
     {&gyro_lpf1_type, &gyro_lpf1_type_default},
     {&gyro_lpf1_static_hz, &gyro_lpf1_static_hz_default},
@@ -75,6 +80,7 @@ static const param_default_t bf_imu_filter_defaults[] = {
     {&filter_dyn_notch_min_hz, &filter_dyn_notch_min_hz_default},
     {&filter_dyn_notch_max_hz, &filter_dyn_notch_max_hz_default},
     {&filter_dyn_notch_count, &filter_dyn_notch_count_default},
+    {&filter_acc_cutoff_hz, &filter_acc_cutoff_hz_default},
 };
 
 static void bf_imu_filter_param_default(void *address, uint8_t size) {
@@ -113,6 +119,8 @@ static param_list bf_imu_filter_params[] = {
     {(void*)&filter_dyn_notch_max_hz, sizeof(filter_dyn_notch_max_hz), "filter_dyn_notch_max_hz", "u16",
      bf_imu_filter_param_default},
     {(void*)&filter_dyn_notch_count, sizeof(filter_dyn_notch_count), "filter_dyn_notch_count", "u8",
+     bf_imu_filter_param_default},
+    {(void*)&filter_acc_cutoff_hz, sizeof(filter_acc_cutoff_hz), "filter_acc_cutoff_hz", "u16",
      bf_imu_filter_param_default},
 };
 

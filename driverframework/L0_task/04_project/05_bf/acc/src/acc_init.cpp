@@ -17,12 +17,12 @@ void AccBf::loadAlignmentFromParams() {
   uint8_t align_value = 0;
   int16_t custom_align[3] = {0, 0, 0};
 
-  if (getParam("imu_align_acc", &align_value, sizeof(align_value)) == RT_EOK) {
+  if (getParam("imu_align_method", &align_value, sizeof(align_value)) == RT_EOK) {
     sensor_align_e align = static_cast<sensor_align_e>(align_value);
 
     if (align == ALIGN_CUSTOM) {
       // 如果是自定义对齐，读取自定义对齐角度
-      if (getParam("imu_custom_align_acc", custom_align, sizeof(custom_align)) == RT_EOK) {
+      if (getParam("imu_custom_align", custom_align, sizeof(custom_align)) == RT_EOK) {
         sensorAlignment_t custom_alignment;
         custom_alignment.roll = custom_align[0];
         custom_alignment.pitch = custom_align[1];

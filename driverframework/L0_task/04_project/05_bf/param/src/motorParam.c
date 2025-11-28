@@ -39,8 +39,8 @@ static void bf_motor_param_default(void *address, uint8_t size) {
 }
 
 static param_list bf_motor_params[] = {
-    {(void *)&mixer_mode, sizeof(mixer_mode), "mixer_mode", "u8", bf_motor_param_default},
-    {(void *)&mixer_type, sizeof(mixer_type), "mixer_type", "u8", bf_motor_param_default},
+    {(void *)&mixer_mode, sizeof(mixer_mode), "motor_mixer_mode", "u8", bf_motor_param_default},
+    {(void *)&mixer_type, sizeof(mixer_type), "motor_mixer_type", "u8", bf_motor_param_default},
 };
 
 param_list *bfMotorParam_list(void) { return bf_motor_params; }

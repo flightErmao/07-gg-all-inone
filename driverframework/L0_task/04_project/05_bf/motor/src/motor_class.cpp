@@ -187,11 +187,11 @@ void MotorBf::cleanupThreadResources() {
 void MotorBf::initMixerConfig() {
   // Load mixer parameters
   uint8_t mixer_mode_temp = MIXER_QUADX;
-  getParam("mixer_mode", &mixer_mode_temp, sizeof(mixer_mode_temp));
+  getParam("motor_mixer_mode", &mixer_mode_temp, sizeof(mixer_mode_temp));
   mixer_mode_ = mixer_mode_temp;
 
   uint8_t mixer_type_temp = MIXER_LEGACY;
-  getParam("mixer_type", &mixer_type_temp, sizeof(mixer_type_temp));
+  getParam("motor_mixer_type", &mixer_type_temp, sizeof(mixer_type_temp));
   mixer_type_ = mixer_type_temp;
 
   // Initialize mixer based on mode

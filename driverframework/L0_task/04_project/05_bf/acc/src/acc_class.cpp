@@ -327,7 +327,7 @@ void AccBf::applyProcessingChain(const float acc_input[3], float acc_output[3]) 
 void AccBf::initFilters() {
   // 从参数系统读取 PT2 滤波器配置（默认值 50Hz）
   uint16_t acc_filter_cutoff_hz = 50;  // 默认值 50Hz
-  if (getParam("acc_filter_cutoff_hz", &acc_filter_cutoff_hz, sizeof(acc_filter_cutoff_hz)) != RT_EOK) {
+  if (getParam("filter_acc_cutoff_hz", &acc_filter_cutoff_hz, sizeof(acc_filter_cutoff_hz)) != RT_EOK) {
     acc_filter_cutoff_hz = 50;  // 如果参数不存在，使用默认值 50Hz
   }
 
