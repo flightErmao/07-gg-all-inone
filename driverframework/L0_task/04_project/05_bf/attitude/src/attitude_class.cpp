@@ -29,6 +29,12 @@ constexpr float GRAVITY = 9.80665f;  // m/s^2
 // alpha 越小，越信任陀螺仪（动态响应好）
 // alpha 越大，越信任加速度计（静态准确）
 constexpr float DEFAULT_COMPLEMENTARY_ALPHA = 0.02f;  // 2% 加速度计，98% 陀螺仪
+
+// 加速度计缩放因子（Betaflight 风格：在 attitude 更新中进行缩放）
+// 16G: 32768 -> 16g，转换为 m/s^2: 16g * 9.80665 m/s^2/g = 156.9064 m/s^2
+// 或者直接使用 g 单位: 16.0f / 32768.0f = 0.00048828125 g/ADC
+// 转换为 m/s^2: (16.0f / 32768.0f) * 9.80665f = 0.004788 m/s^2 per ADC
+constexpr float ACC_SCALE_16G_TO_MS2 = (16.0f / 32768.0f) * GRAVITY;  // m/s^2 per ADC
 }  // namespace
 
 // AttitudeBf 单例实现
@@ -403,6 +409,13 @@ void AttitudeBf::complementaryFilterUpdateQuaternion(const float q_gyro[4], cons
 
 void AttitudeBf::updateAttitude(const float accel[3], const float gyro[3], float dt) {
   // 使用四元数进行姿态估计，避免万向锁
+  
+  // Betaflight 风格：在 attitude 更新中将 acc 从原始 ADC 值缩放到 m/s^2
+  // accel 输入是原始 ADC 值（未缩放），需要转换为 m/s^2
+  float accel_scaled[3];
+  accel_scaled[0] = accel[0] * ACC_SCALE_16G_TO_MS2;
+  accel_scaled[1] = accel[1] * ACC_SCALE_16G_TO_MS2;
+  accel_scaled[2] = accel[2] * ACC_SCALE_16G_TO_MS2;
 
   // 1. 使用陀螺仪数据积分更新四元数
   float q_gyro[4];
@@ -410,7 +423,7 @@ void AttitudeBf::updateAttitude(const float accel[3], const float gyro[3], float
 
   // 2. 从加速度计计算参考四元数（用于校正 roll 和 pitch）
   float q_accel[4];
-  calculateQuaternionFromAccel(accel, q_accel);
+  calculateQuaternionFromAccel(accel_scaled, q_accel);
 
   // 3. 使用互补滤波器融合陀螺仪积分和加速度计参考
   // 注意：只对 roll 和 pitch 进行校正，yaw 保持陀螺仪积分结果

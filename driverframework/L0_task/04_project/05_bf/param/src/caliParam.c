@@ -5,6 +5,7 @@
 #include <rtconfig.h>  // For PROJECT_BF_ACC_EN, PROJECT_BF_GYRO_FILTER_EN
 
 #include "caliParam.h"
+#include "boardalignment.h"  // For boardAlignment_t
 
 typedef struct {
     void *param;
@@ -29,6 +30,9 @@ static float cali_acc_trim_pitch;  // Pitch Trim（deg）
 static uint8_t imu_align_method;  // IMU 对齐方式 (sensor_align_e)
 static int16_t imu_custom_align[3];  // IMU 自定义对齐角度 [roll, pitch, yaw] (decidegrees)
 
+/* 板级对齐参数（Betaflight 风格） */
+static boardAlignment_t board_alignment;  // 板级对齐角度 [roll, pitch, yaw] (degrees)
+
 /* 默认值 */
 static const int16_t bf_imu_cali_gyro_offset_yaw_default = 0;  // 0 centidegrees
 
@@ -42,6 +46,9 @@ static const float cali_acc_trim_pitch_default = 0.0f;
 static const uint8_t imu_align_method_default = 0;  // ALIGN_DEFAULT
 static const int16_t imu_custom_align_default[3] = {0, 0, 0};  // 默认无自定义对齐
 
+/* 板级对齐参数默认值 */
+static const boardAlignment_t board_alignment_default = {0, 0, 0};  // 默认无板级对齐
+
 static const param_default_t bf_imu_cali_offset_defaults[] = {
     {&bf_imu_cali_gyro_offset_yaw, &bf_imu_cali_gyro_offset_yaw_default},
     {bf_imu_cali_acc_offset, bf_imu_cali_acc_offset_default},
@@ -52,6 +59,7 @@ static const param_default_t bf_imu_cali_offset_defaults[] = {
 static const param_default_t bf_imu_cali_align_defaults[] = {
     {&imu_align_method, &imu_align_method_default},
     {imu_custom_align, imu_custom_align_default},
+    {&board_alignment, &board_alignment_default},
 };
 
 static void bf_imu_cali_offset_param_default(void *address, uint8_t size) {
@@ -84,6 +92,8 @@ static param_list bf_imu_cali_offset_params[] = {
     /* IMU 对齐参数 */
     {(void*)&imu_align_method, sizeof(imu_align_method), BF_IMU_CALI_PARAM_ALIGN_METHOD, "u8", bf_imu_cali_align_param_default},
     {(void*)imu_custom_align, sizeof(imu_custom_align), BF_IMU_CALI_PARAM_CUSTOM_ALIGN, "vw", bf_imu_cali_align_param_default},
+    /* 板级对齐参数 */
+    {(void*)&board_alignment, sizeof(board_alignment), BF_IMU_CALI_PARAM_BOARD_ALIGNMENT, "vw", bf_imu_cali_align_param_default},
 };
 
 param_list *bfImuCaliOffsetParam_list(void) { return bf_imu_cali_offset_params; }

@@ -142,18 +142,17 @@ void gyro::setAlignment(sensor_align_e align, const sensorAlignment_t* customAli
   gyro_align_ = align;
   
   if (align == ALIGN_CUSTOM && customAlignment != nullptr) {
-    // 使用自定义对齐
+    // 使用自定义对齐：读取旋转角度，初始化旋转矩阵
     use_custom_matrix_ = true;
     gyro_align_rpy_ = *customAlignment;
     buildRotationMatrixFromAngles(&rotation_matrix_, &gyro_align_rpy_);
     LOG_I("Gyro alignment set to ALIGN_CUSTOM: roll=%d, pitch=%d, yaw=%d (decidegrees)",
           gyro_align_rpy_.roll, gyro_align_rpy_.pitch, gyro_align_rpy_.yaw);
   } else if (align != ALIGN_DEFAULT && align != ALIGN_CUSTOM) {
-    // 使用标准对齐
+    // 使用标准对齐：不初始化旋转矩阵，直接使用 alignSensorViaRotation
     use_custom_matrix_ = false;
-    buildAlignmentFromStandardAlignment(&gyro_align_rpy_, align);
-    buildRotationMatrixFromAngles(&rotation_matrix_, &gyro_align_rpy_);
-    LOG_I("Gyro alignment set to standard: %d", align);
+    // 不构建旋转矩阵，只保存对齐类型
+    LOG_I("Gyro alignment set to standard: %d (will use alignSensorViaRotation)", align);
   } else {
     // ALIGN_DEFAULT 或无效值，使用默认（无旋转）
     use_custom_matrix_ = false;
@@ -249,22 +248,22 @@ void gyro::processImuData(const imu_raw_msg_t* imu_data) {
   float gyro_corrected[3];
   gyro_calibration_.applyZeroOffset(gyro_raw, gyro_corrected);
 
-  // 步骤2: 应用传感器对齐（对齐矩阵在 setAlignment 时已预先计算好）
+  // 步骤2: 应用传感器对齐
   // 参考 Betaflight: 对齐在初始化时设置，处理时直接应用
   float gyro_rotated[3];
   vector3_t vec_in = {gyro_corrected[0], gyro_corrected[1], gyro_corrected[2]};
   vector3_t vec_aligned;
   
   if (gyro_align_ == ALIGN_DEFAULT) {
-    // ALIGN_DEFAULT，无需对齐（单位矩阵已在 setAlignment 中设置）
+    // ALIGN_DEFAULT，无需对齐
     vec_aligned = vec_in;
   } else if (use_custom_matrix_) {
     // 使用自定义旋转矩阵（ALIGN_CUSTOM）
     matrixVectorMul(&vec_aligned, &rotation_matrix_, &vec_in);
   } else {
-    // 使用标准对齐方式（CW0_DEG, CW90_DEG 等）
-    // 使用预先计算的旋转矩阵（在 setAlignment 中已计算）
-    matrixVectorMul(&vec_aligned, &rotation_matrix_, &vec_in);
+    // 使用标准对齐方式（CW0_DEG, CW90_DEG 等）：直接使用 alignSensorViaRotation
+    vec_aligned = vec_in;
+    alignSensorViaRotation(&vec_aligned, gyro_align_);
   }
   
   gyro_rotated[0] = vec_aligned.x;

@@ -9,7 +9,7 @@ extern "C" {
 #include "timestamp.h"
 #include "param.h"
 #include "../common/inc/init_sync.h"
-#include "boardalignment.h"  // For sensor alignment functions
+#include "boardalignment.h"  // For sensor alignment functions and initBoardAlignment
 #ifdef PROJECT_BF_ACC_DEBUG_PIN_EN
 #include "debugPin.h"
 #endif
@@ -174,18 +174,17 @@ void AccBf::setAlignment(sensor_align_e align, const sensorAlignment_t* customAl
   acc_align_ = align;
   
   if (align == ALIGN_CUSTOM && customAlignment != nullptr) {
-    // 使用自定义对齐
+    // 使用自定义对齐：读取旋转角度，初始化旋转矩阵
     use_custom_matrix_ = true;
     acc_align_rpy_ = *customAlignment;
     buildRotationMatrixFromAngles(&rotation_matrix_, &acc_align_rpy_);
     LOG_I("Acc alignment set to ALIGN_CUSTOM: roll=%d, pitch=%d, yaw=%d (decidegrees)",
           acc_align_rpy_.roll, acc_align_rpy_.pitch, acc_align_rpy_.yaw);
   } else if (align != ALIGN_DEFAULT && align != ALIGN_CUSTOM) {
-    // 使用标准对齐
+    // 使用标准对齐：不初始化旋转矩阵，直接使用 alignSensorViaRotation
     use_custom_matrix_ = false;
-    buildAlignmentFromStandardAlignment(&acc_align_rpy_, align);
-    buildRotationMatrixFromAngles(&rotation_matrix_, &acc_align_rpy_);
-    LOG_I("Acc alignment set to standard: %d", align);
+    // 不构建旋转矩阵，只保存对齐类型
+    LOG_I("Acc alignment set to standard: %d (will use alignSensorViaRotation)", align);
   } else {
     // ALIGN_DEFAULT 或无效值，使用默认（无旋转）
     use_custom_matrix_ = false;
@@ -215,11 +214,24 @@ void AccBf::threadEntry(void* parameter) {
 }
 
 void AccBf::initInThreadEntry() {
+  // 从参数系统加载板级对齐参数并初始化（Betaflight 风格）
+  boardAlignment_t board_alignment = {0, 0, 0};
+  if (getParam("board_alignment", &board_alignment, sizeof(board_alignment)) == RT_EOK) {
+    initBoardAlignment(&board_alignment);
+    LOG_I("Loaded board alignment: roll=%d, pitch=%d, yaw=%d (degrees)", 
+          (int)board_alignment.rollDegrees, (int)board_alignment.pitchDegrees, (int)board_alignment.yawDegrees);
+  } else {
+    // 参数不存在，使用默认值（无板级对齐）
+    // initBoardAlignment(&board_alignment);
+    LOG_I("Board alignment parameter not found, using default (0, 0, 0)");
+  }
+
   // 从参数系统加载校准值（如果存在）
+  // 注意：acc_zero 单位是原始 ADC 值（与 Betaflight 一致）
   float acc_zero[3] = {0.0f, 0.0f, 0.0f};
   if (getParam("cali_imu_acc_offset", acc_zero, sizeof(acc_zero)) == RT_EOK) {
     acc_calibration_.setAccZero(acc_zero);
-    LOG_I("Loaded acc zero from params: %.3f, %.3f, %.3f", acc_zero[0], acc_zero[1], acc_zero[2]);
+    LOG_I("Loaded acc zero from params (ADC units): %.3f, %.3f, %.3f", acc_zero[0], acc_zero[1], acc_zero[2]);
   }
 
   // 加载 Trim 值
@@ -266,24 +278,25 @@ void AccBf::processAccData(const imu_raw_msg_t* imu_data) {
   }
 
   // 处理流程：原始ADC → 对齐 → 校准 → Trim → PT2滤波
+  // Betaflight 风格：acc 数据保持原始 ADC 值（未缩放），缩放将在 attitude 更新中进行
   float acc_processed[3];
   std::memcpy(acc_processed, imu_data->accel, sizeof(acc_processed));
 
-  // 步骤1: 传感器对齐（对齐矩阵在 setAlignment 时已预先计算好）
+  // 步骤1: 传感器对齐
   // 参考 Betaflight: 对齐在初始化时设置，处理时直接应用
   vector3_t vec_in = {acc_processed[0], acc_processed[1], acc_processed[2]};
   vector3_t vec_aligned;
   
   if (acc_align_ == ALIGN_DEFAULT) {
-    // ALIGN_DEFAULT，无需对齐（单位矩阵已在 setAlignment 中设置）
+    // ALIGN_DEFAULT，无需对齐
     vec_aligned = vec_in;
   } else if (use_custom_matrix_) {
     // 使用自定义旋转矩阵（ALIGN_CUSTOM）
     matrixVectorMul(&vec_aligned, &rotation_matrix_, &vec_in);
   } else {
-    // 使用标准对齐方式（CW0_DEG, CW90_DEG 等）
-    // 使用预先计算的旋转矩阵（在 setAlignment 中已计算）
-    matrixVectorMul(&vec_aligned, &rotation_matrix_, &vec_in);
+    // 使用标准对齐方式（CW0_DEG, CW90_DEG 等）：直接使用 alignSensorViaRotation
+    vec_aligned = vec_in;
+    alignSensorViaRotation(&vec_aligned, acc_align_);
   }
   
   acc_processed[0] = vec_aligned.x;

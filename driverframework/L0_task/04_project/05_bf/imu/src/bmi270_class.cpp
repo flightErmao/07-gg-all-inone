@@ -460,9 +460,10 @@ void BMI270::publishImu(const int16_t acc[3], const int16_t gyro[3]) {
   imu_raw_msg_t msg{};
 
   msg.seq = ++s_seq;
-  msg.accel[0] = ACC_SCALE_16G * static_cast<float>(acc[0]);
-  msg.accel[1] = ACC_SCALE_16G * static_cast<float>(acc[1]);
-  msg.accel[2] = ACC_SCALE_16G * static_cast<float>(acc[2]);
+  // Betaflight 风格：acc 保持原始 ADC 值（不缩放），缩放将在 attitude 更新中进行
+  msg.accel[0] = static_cast<float>(acc[0]);
+  msg.accel[1] = static_cast<float>(acc[1]);
+  msg.accel[2] = static_cast<float>(acc[2]);
   msg.gyro[0] = GYRO_SCALE_2000DPS * static_cast<float>(gyro[0]);
   msg.gyro[1] = GYRO_SCALE_2000DPS * static_cast<float>(gyro[1]);
   msg.gyro[2] = GYRO_SCALE_2000DPS * static_cast<float>(gyro[2]);
