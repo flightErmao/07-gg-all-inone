@@ -22,14 +22,14 @@ namespace {
 constexpr float GRAVITY = 9.80665f;  // m/s^2
 }  // namespace
 
-// AccCalibration 实现
+// AccCalibration 实现（Betaflight 风格）
 AccCalibration::AccCalibration()
     : calibration_complete_(false),
       calibrating_(false),
       calibration_cycles_remaining_(0),
       calibration_cycles_total_(0) {
   std::memset(calibration_sum_, 0, sizeof(calibration_sum_));
-  std::memset(acc_zero_, 0, sizeof(acc_zero_));
+  std::memset(acc_trim_, 0, sizeof(acc_trim_));
 }
 
 void AccCalibration::startCalibration(float sample_rate_hz, uint32_t calibration_duration_ms) {
@@ -43,28 +43,44 @@ void AccCalibration::startCalibration(float sample_rate_hz, uint32_t calibration
   }
   calibration_cycles_remaining_ = calibration_cycles_total_;
 
+  // Betaflight 风格：使用整数累加
   std::memset(calibration_sum_, 0, sizeof(calibration_sum_));
-  std::memset(acc_zero_, 0, sizeof(acc_zero_));
+  std::memset(acc_trim_, 0, sizeof(acc_trim_));
 }
 
-bool AccCalibration::updateCalibration(const float acc_raw[3]) {
+bool AccCalibration::updateCalibration(const float acc_adc[3]) {
+  // Betaflight 风格：校准使用对齐（旋转）后的 ADC 数据
+  // acc_adc 应该是已经经过对齐处理的原始 ADC 值
   if (!calibrating_ || calibration_complete_) {
     return false;
   }
 
-  // 累加数据
+  // Betaflight 风格：在第一个周期重置累加值
+  if (isOnFirstCalibrationCycle()) {
+    for (int axis = 0; axis < 3; axis++) {
+      calibration_sum_[axis] = 0;
+    }
+  }
+
+  // Betaflight 风格：使用整数累加（将 float 转换为 int32_t）
   for (int axis = 0; axis < 3; axis++) {
-    calibration_sum_[axis] += acc_raw[axis];
+    calibration_sum_[axis] += static_cast<int32_t>(acc_adc[axis]);
   }
 
   calibration_cycles_remaining_--;
 
-  // 检查是否完成
-  if (calibration_cycles_remaining_ == 0) {
-    // 计算平均值作为零偏值
-    for (int axis = 0; axis < 3; axis++) {
-      acc_zero_[axis] = calibration_sum_[axis] / calibration_cycles_total_;
-    }
+  // Betaflight 风格：在最后一个周期计算 trim 值
+  if (isOnFinalCalibrationCycle()) {
+    // 计算平均值（使用四舍五入）：(sum + cycles/2) / cycles
+    // X 和 Y 轴：直接计算平均值
+    acc_trim_[0] = static_cast<float>(calibration_sum_[0] + static_cast<int32_t>(calibration_cycles_total_ / 2)) / 
+                   static_cast<float>(calibration_cycles_total_);
+    acc_trim_[1] = static_cast<float>(calibration_sum_[1] + static_cast<int32_t>(calibration_cycles_total_ / 2)) / 
+                   static_cast<float>(calibration_cycles_total_);
+    
+    // Z 轴：平均值减去 1G（Betaflight 风格）
+    acc_trim_[2] = static_cast<float>(calibration_sum_[2] + static_cast<int32_t>(calibration_cycles_total_ / 2)) / 
+                   static_cast<float>(calibration_cycles_total_) - ACC_1G_ADC;
 
     calibration_complete_ = true;
     calibrating_ = false;
@@ -74,19 +90,22 @@ bool AccCalibration::updateCalibration(const float acc_raw[3]) {
   return false;
 }
 
-void AccCalibration::getAccZero(float acc_zero[3]) const {
-  std::memcpy(acc_zero, acc_zero_, sizeof(acc_zero_));
+void AccCalibration::getAccTrim(float acc_trim[3]) const {
+  std::memcpy(acc_trim, acc_trim_, sizeof(acc_trim_));
 }
 
-void AccCalibration::setAccZero(const float acc_zero[3]) {
-  std::memcpy(acc_zero_, acc_zero, sizeof(acc_zero_));
+void AccCalibration::setAccTrim(const float acc_trim[3]) {
+  std::memcpy(acc_trim_, acc_trim, sizeof(acc_trim_));
   calibration_complete_ = true;
   calibrating_ = false;
 }
 
-void AccCalibration::applyZeroOffset(const float acc_raw[3], float acc_corrected[3]) const {
+void AccCalibration::applyTrim(const float acc_adc[3], float acc_corrected[3]) const {
+  // Betaflight 风格：trim 值应用于对齐（旋转）后的 ADC 数据
+  // acc_adc 应该是已经经过对齐处理的原始 ADC 值
+  // acc_trim_ 是在对齐后坐标系中记录的 trim 值（X/Y 是平均值，Z 是平均值减去 1G）
   for (int axis = 0; axis < 3; axis++) {
-    acc_corrected[axis] = acc_raw[axis] - acc_zero_[axis];
+    acc_corrected[axis] = acc_adc[axis] - acc_trim_[axis];
   }
 }
 
@@ -227,11 +246,11 @@ void AccBf::initInThreadEntry() {
   }
 
   // 从参数系统加载校准值（如果存在）
-  // 注意：acc_zero 单位是原始 ADC 值（与 Betaflight 一致）
-  float acc_zero[3] = {0.0f, 0.0f, 0.0f};
-  if (getParam("cali_imu_acc_offset", acc_zero, sizeof(acc_zero)) == RT_EOK) {
-    acc_calibration_.setAccZero(acc_zero);
-    LOG_I("Loaded acc zero from params (ADC units): %.3f, %.3f, %.3f", acc_zero[0], acc_zero[1], acc_zero[2]);
+  // Betaflight 风格：trim 值单位是原始 ADC 值（X/Y 是平均值，Z 是平均值减去 1G）
+  float acc_trim[3] = {0.0f, 0.0f, 0.0f};
+  if (getParam("cali_imu_acc_offset", acc_trim, sizeof(acc_trim)) == RT_EOK) {
+    acc_calibration_.setAccTrim(acc_trim);
+    LOG_I("Loaded acc trim from params (ADC units): %.3f, %.3f, %.3f", acc_trim[0], acc_trim[1], acc_trim[2]);
   }
 
   // 加载 Trim 值
@@ -303,15 +322,18 @@ void AccBf::processAccData(const imu_raw_msg_t* imu_data) {
   acc_processed[1] = vec_aligned.y;
   acc_processed[2] = vec_aligned.z;
 
-  // 步骤2: 应用校准（零偏校正）
-  // 如果正在校准，更新校准状态
+  // 步骤2: 应用校准（trim 校正，Betaflight 风格）
+  // Betaflight 风格：校准在对齐（旋转）之后进行
+  // - 校准过程：原始 ADC → 对齐（旋转）→ 记录 trim 值（在对齐后的坐标系中，Z 轴减去 1G）
+  // - 应用过程：原始 ADC → 对齐（旋转）→ 去除 trim 值（使用对齐后坐标系的 trim 值）
+  // 如果正在校准，更新校准状态（使用对齐后的 ADC 数据）
   if (calibration_started_ && acc_calibration_.isCalibrating()) {
     acc_calibration_.updateCalibration(acc_processed);
   }
   
-  // 如果校准完成，应用零偏校正
+  // 如果校准完成，应用 trim 校正（使用对齐后坐标系的 trim 值）
   if (acc_calibration_.isCalibrationComplete()) {
-    acc_calibration_.applyZeroOffset(acc_processed, acc_processed);
+    acc_calibration_.applyTrim(acc_processed, acc_processed);
   }
 
   // 存储对齐和校准后的数据（未Trim和滤波）

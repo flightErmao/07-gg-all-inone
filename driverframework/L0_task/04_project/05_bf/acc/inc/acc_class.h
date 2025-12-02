@@ -24,7 +24,7 @@ extern "C" {
 #include "vector.h"  // For matrix operations
 }
 
-// 加速度计校准类
+// 加速度计校准类（Betaflight 风格）
 class AccCalibration {
  public:
   AccCalibration();
@@ -32,8 +32,9 @@ class AccCalibration {
   // 开始校准
   void startCalibration(float sample_rate_hz, uint32_t calibration_duration_ms);
 
-  // 更新校准（每帧调用，传入原始加速度计数据）
-  bool updateCalibration(const float acc_raw[3]);
+  // 更新校准（每帧调用，传入对齐后的加速度计 ADC 数据）
+  // Betaflight 风格：使用整数累加，Z 轴减去 1G
+  bool updateCalibration(const float acc_adc[3]);
 
   // 检查校准是否完成
   bool isCalibrationComplete() const { return calibration_complete_; }
@@ -41,22 +42,36 @@ class AccCalibration {
   // 检查是否正在校准
   bool isCalibrating() const { return calibrating_; }
 
-  // 获取零偏值
-  void getAccZero(float acc_zero[3]) const;
+  // 获取 trim 值（Betaflight 风格：trim 值，不是零偏值）
+  void getAccTrim(float acc_trim[3]) const;
 
-  // 设置零偏值（用于从参数系统加载）
-  void setAccZero(const float acc_zero[3]);
+  // 设置 trim 值（用于从参数系统加载）
+  void setAccTrim(const float acc_trim[3]);
 
-  // 应用零偏值到原始数据
-  void applyZeroOffset(const float acc_raw[3], float acc_corrected[3]) const;
+  // 应用 trim 值到对齐后的数据
+  // Betaflight 风格：trim 值应用于对齐后的数据
+  void applyTrim(const float acc_adc[3], float acc_corrected[3]) const;
 
  private:
   bool calibration_complete_;
   bool calibrating_;
   uint32_t calibration_cycles_remaining_;
   uint32_t calibration_cycles_total_;
-  float calibration_sum_[3];  // 每个轴的累加值
-  float acc_zero_[3];          // 零偏值
+  int32_t calibration_sum_[3];  // 每个轴的整数累加值（Betaflight 风格）
+  float acc_trim_[3];            // Trim 值（Betaflight 风格：X/Y 是平均值，Z 是平均值减去 1G）
+  
+  // 1G 对应的 ADC 值（16G 量程：32768 / 16 = 2048）
+  static constexpr float ACC_1G_ADC = 32768.0f / 16.0f;
+  
+  // 检查是否是第一个校准周期
+  bool isOnFirstCalibrationCycle() const {
+    return calibration_cycles_remaining_ == calibration_cycles_total_;
+  }
+  
+  // 检查是否是最后一个校准周期
+  bool isOnFinalCalibrationCycle() const {
+    return calibration_cycles_remaining_ == 1;
+  }
 };
 
 // 加速度计处理类
@@ -89,9 +104,9 @@ class AccBf {
   // 校准命令接口
   rt_err_t startCalibration();
 
-  // 获取校准零偏值（用于命令和参数保存）
-  void getAccZero(float acc_zero[3]) const {
-    acc_calibration_.getAccZero(acc_zero);
+  // 获取校准 trim 值（用于命令和参数保存，Betaflight 风格）
+  void getAccTrim(float acc_trim[3]) const {
+    acc_calibration_.getAccTrim(acc_trim);
   }
 
   // 检查校准是否完成

@@ -32,16 +32,17 @@ static void acc_calibrate(int argc, char** argv) {
       check_count++;
     }
 
-    // 获取校准结果
-    float acc_zero[3] = {0.0f, 0.0f, 0.0f};
-    acc.getAccZero(acc_zero);
+    // 获取校准结果（Betaflight 风格：trim 值）
+    float acc_trim[3] = {0.0f, 0.0f, 0.0f};
+    acc.getAccTrim(acc_trim);
 
     // 保存到参数系统
-    if (setParam("cali_imu_acc_offset", acc_zero, sizeof(acc_zero)) == RT_EOK) {
+    if (setParam("cali_imu_acc_offset", acc_trim, sizeof(acc_trim)) == RT_EOK) {
       LOG_I("Accelerometer calibration completed and saved: %.3f, %.3f, %.3f", 
-            acc_zero[0], acc_zero[1], acc_zero[2]);
+            acc_trim[0], acc_trim[1], acc_trim[2]);
       rt_kprintf("Accelerometer calibration completed and saved.\n");
-      rt_kprintf("Zero offset: X=%.3f, Y=%.3f, Z=%.3f\n", acc_zero[0], acc_zero[1], acc_zero[2]);
+      rt_kprintf("Trim values: X=%.3f, Y=%.3f, Z=%.3f (ADC units, Z includes -1G)\n", 
+                 acc_trim[0], acc_trim[1], acc_trim[2]);
     } else {
       LOG_E("Failed to save accelerometer calibration");
       rt_kprintf("Calibration completed but failed to save to parameters.\n");
