@@ -43,11 +43,11 @@ static const float cali_acc_trim_roll_default = 0.0f;
 static const float cali_acc_trim_pitch_default = 0.0f;
 
 /* IMU 对齐参数默认值 */
-static const uint8_t imu_align_method_default = 0;  // ALIGN_DEFAULT
+static const uint8_t imu_align_method_default = 7;             // ALIGN_DEFAULT
 static const int16_t imu_custom_align_default[3] = {0, 0, 0};  // 默认无自定义对齐
 
 /* 板级对齐参数默认值 */
-static const boardAlignment_t board_alignment_default = {0, 0, 0};  // 默认无板级对齐
+static const boardAlignment_t board_alignment_default = {180, 0, 0};  // 默认无板级对齐
 
 static const param_default_t bf_imu_cali_offset_defaults[] = {
     {&bf_imu_cali_gyro_offset_yaw, &bf_imu_cali_gyro_offset_yaw_default},
