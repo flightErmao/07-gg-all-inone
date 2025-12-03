@@ -88,6 +88,10 @@ class RcBf {
   const float* getRcData() const { return rc_data_; }
   const float* getRcCommandArray() const { return rc_command_; }
 
+  // Get max RC rate for a specific axis (deg/s)
+  // This is the maximum angle rate that can be achieved with full stick deflection
+  float getMaxRcRate(int axis) const;
+
   // Print debug information
   void printDebugInfo(const rc_command_msg_t* setpoint_msg) const;
 

@@ -356,6 +356,10 @@ class PidBf {
   // RC smoothing filter instance (set by RC thread during initialization)
   RcSmoothingFilter* rc_smoothing_filter_;
 
+  // Cached max RC rates for each axis (deg/s)
+  // Initialized once from RC module to avoid repeated singleton calls
+  float max_rc_rate_[XYZ_AXIS_COUNT];
+
   // Target looptime (from pid_process_denom)
   uint32_t target_looptime_us_;
 

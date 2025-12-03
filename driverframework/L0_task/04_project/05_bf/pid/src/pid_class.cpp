@@ -21,6 +21,7 @@ extern "C" {
 }
 
 #include "rc_smooth.h"  // For RcSmoothingFilter
+#include "../rc/inc/rc_class.hpp"  // For RcBf::instance()
 
 #include <cmath>
 #include <cstring>
@@ -306,8 +307,12 @@ float PidBf::getFeedforward(int axis) {
 }
 
 float PidBf::getMaxRcRate(int axis) {
-  (void)axis;
-  return 720.0f;
+  // Return cached max RC rate (initialized once from RC module)
+  // This avoids repeated singleton calls for better performance
+  if (axis >= 0 && axis < XYZ_AXIS_COUNT) {
+    return max_rc_rate_[axis];
+  }
+  return 0.0f;
 }
 
 void PidBf::subTaskRcCommand(uint32_t current_time_us) {

@@ -1,4 +1,5 @@
 #include "pid_class.h"
+#include "../rc/inc/rc_class.hpp"  // For RcBf::instance()
 
 extern "C" {
 #include <rtthread.h>
@@ -701,6 +702,7 @@ PidBf::PidBf()
   std::memset(&pid_profile_, 0, sizeof(pid_profile_));
   std::memset(&main_thread_obj_, 0, sizeof(main_thread_obj_));
   std::memset(main_thread_stack_, 0, sizeof(main_thread_stack_));
+  std::memset(max_rc_rate_, 0, sizeof(max_rc_rate_));
 
 #ifdef PROJECT_BF_ATTITUDE_EN
   attitude_data_valid_ = false;
@@ -793,6 +795,23 @@ void PidBf::workerEntry(void* parameter) {
   rt_err_t ret = initSyncWait(INIT_SYNC_GYRO_FILTER, 2000);  // 等待最多2秒
   if (ret != RT_EOK) {
     LOG_W("Gyro Filter not ready, continuing anyway (ret=%d)", ret);
+  }
+  
+  // 等待 RC 模块初始化完成，然后缓存 max RC rates
+  ret = initSyncWait(INIT_SYNC_RC, 2000);  // 等待最多2秒
+  if (ret != RT_EOK) {
+    LOG_W("RC not ready, using default max RC rates (ret=%d)", ret);
+    // 使用默认值
+    for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
+      self->max_rc_rate_[axis] = 720.0f;  // 默认值
+    }
+  } else {
+    // 从 RC 模块获取并缓存 max RC rates
+    for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
+      self->max_rc_rate_[axis] = RcBf::instance().getMaxRcRate(axis);
+    }
+    LOG_I("Cached max RC rates: Roll=%.1f, Pitch=%.1f, Yaw=%.1f deg/s",
+          self->max_rc_rate_[0], self->max_rc_rate_[1], self->max_rc_rate_[2]);
   }
   
 #ifdef PROJECT_BF_ATTITUDE_EN

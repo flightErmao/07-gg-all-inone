@@ -13,6 +13,7 @@ extern "C" {
 #include "timestamp.h"
 #include "filter.h"  // pt3Filter functions
 #include "param.h"   // getParam function
+#include "../common/inc/init_sync.h"  // For initSyncNotify
 #ifdef PROJECT_BF_RC_DEBUG_PIN_EN
 #include "debugPin.h"
 #endif
@@ -175,6 +176,14 @@ rt_err_t RcBf::init() {
     LOG_E("RC thread startup failed: %d", ret);
     thread_inited_ = false;
     return ret;
+  }
+  
+  // 通知 RC 模块初始化完成
+  rt_err_t notify_ret = initSyncNotify(INIT_SYNC_RC);
+  if (notify_ret != RT_EOK) {
+    LOG_E("RC initSyncNotify failed: %d", notify_ret);
+  } else {
+    LOG_I("RC initialization completed and notified");
   }
   
   LOG_I("RcBf initialized successfully");
@@ -622,6 +631,13 @@ float RcBf::applyBetaflightRates(int axis, float rcCommandf, float rcCommandfAbs
   }
 
   return angle_rate;
+}
+
+float RcBf::getMaxRcRate(int axis) const {
+  if (axis >= 0 && axis < XYZ_AXIS_COUNT) {
+    return maxRcRate_[axis];
+  }
+  return 0.0f;
 }
 
 void RcBf::printDebugInfo(const rc_command_msg_t* setpoint_msg) const {
