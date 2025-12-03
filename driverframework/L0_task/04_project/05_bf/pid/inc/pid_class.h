@@ -22,17 +22,6 @@ extern "C" {
 // Forward declaration
 class RcSmoothingFilter;
 
-// SimpleLowpass structure (defined in rc_class.hpp, forward declare here to avoid circular dependency)
-// If rc_class.hpp is included, this will be a duplicate definition, so we use a guard
-#ifndef SIMPLE_LOWPASS_DEFINED
-#define SIMPLE_LOWPASS_DEFINED
-struct SimpleLowpass {
-  float state;
-  float alpha;
-  bool enabled;
-};
-#endif
-
 #define FD_ROLL 0
 #define FD_PITCH 1
 #define FD_YAW 2
@@ -168,6 +157,14 @@ struct pidRuntime_t {
   pt3Filter_t attitudeFilter[RP_AXIS_COUNT];  // Attitude filter (PT3) for smoothing angle rate output [roll, pitch]
   pt3Filter_t angleFeedforwardPt3[XYZ_AXIS_COUNT]; // Angle feedforward filter (PT3) [roll, pitch, yaw]
   bool axisInAngleMode[3];              // Flag indicating if axis is in angle mode [roll, pitch, yaw]
+  
+  // Angle loop debug data for logging (per axis: target, current, errorGain, feedforward)
+  struct angleLoopDebug_t {
+    float target;        // Angle target (degrees)
+    float current;       // Current angle (degrees)
+    float errorGain;     // errorAngle * angleGain
+    float feedforward;   // Angle feedforward
+  } angleLoopDebug[RP_AXIS_COUNT];  // [roll, pitch]
 #endif
 };
 
@@ -240,6 +237,16 @@ class PidBf {
     }
     return 0.0f;
   }
+  
+  // Get angle loop debug data for logging
+  // axis: 0 = roll, 1 = pitch
+  // Returns pointer to debug data structure, or nullptr if invalid axis
+  const pidRuntime_t::angleLoopDebug_t* getAngleLoopDebug(int axis) const {
+    if (axis >= 0 && axis < RP_AXIS_COUNT) {
+      return &pid_runtime_.angleLoopDebug[axis];
+    }
+    return nullptr;
+  }
 #endif
   
   // Publish PID output to MCN
@@ -259,6 +266,15 @@ class PidBf {
 
   // Initialize PID filters
   void initFilters();
+  
+  // Initialize defaults (profile values) - moved to pid_init.cpp
+  void initDefaults();
+  
+  // Initialize runtime state - moved to pid_init.cpp
+  void initRuntime();
+  
+  // Initialize angle mode filters - moved to pid_init.cpp
+  void initAngleModeFilters();
   
   // Initialize Dterm filters (called from initFilters, but can be called separately after parameter changes)
   // This function is in pid_init.cpp and initializes filter function pointers based on parameters
@@ -299,8 +315,6 @@ class PidBf {
   pidRuntime_t pid_runtime_;
   pidProfile_t pid_profile_;
   pidAxisData_t pid_data_[XYZ_AXIS_COUNT];
-  // Legacy: SimpleLowpass for yaw P term (kept for backward compatibility, will be replaced by ptermYawLowpass)
-  SimpleLowpass yaw_pterm_lpf_;
 
   // MCN subscription and publication
   rt_sem_t gyro_filtered_event_;

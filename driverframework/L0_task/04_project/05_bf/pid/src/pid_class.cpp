@@ -25,13 +25,12 @@ extern "C" {
 #include <cmath>
 #include <cstring>
 
-// PID constants from ref/pid.h
+// PID constants from ref/pid.h (used in this file)
 #define PTERM_SCALE 0.032029f
 #define ITERM_SCALE 0.244381f
 #define DTERM_SCALE 0.000529f
 #define FEEDFORWARD_SCALE 0.013754f
-#define PIDSUM_LIMIT 500.0f
-#define PIDSUM_LIMIT_YAW 400.0f
+// Note: PIDSUM_LIMIT and PIDSUM_LIMIT_YAW moved to pid_init.cpp
 
 // Helper macros
 #define CLAMPF(x, min, max) ((x) < (min) ? (min) : (((x) > (max)) ? (max) : (x)))
@@ -42,249 +41,13 @@ constexpr float PI_F = 3.14159265358979323846f;
 constexpr float DEGREES_TO_RADIANS = PI_F / 180.0f;
 constexpr float RADIANS_TO_DEGREES = 180.0f / PI_F;
 
-void lowpassInit(SimpleLowpass* filter, float cutoff_hz, float dt) {
-  if (!filter) {
-    return;
-  }
-  if (cutoff_hz <= 0.0f || dt <= 0.0f) {
-    filter->enabled = false;
-    filter->alpha = 1.0f;
-    filter->state = 0.0f;
-    return;
-  }
-  const float rc = 1.0f / (2.0f * PI_F * cutoff_hz);
-  filter->alpha = dt / (rc + dt);
-  filter->enabled = true;
-  filter->state = 0.0f;
-}
-
-float lowpassApply(SimpleLowpass* filter, float input) {
-  if (!filter || !filter->enabled) {
-    if (filter) {
-      filter->state = input;
-    }
-    return input;
-  }
-  filter->state += filter->alpha * (input - filter->state);
-  return filter->state;
-}
-
 }  // namespace
 
 /* PID 消息 MCN 定义已移动到 pid_mcn.cpp */
 
 // Thread configuration removed - using taskPid.cpp main thread instead
 
-PidBf& PidBf::instance() {
-  static PidBf instance_obj;
-  return instance_obj;
-}
-
-PidBf::PidBf()
-    : gyro_filtered_event_(RT_NULL),
-      gyro_filtered_node_(RT_NULL),
-      setpoint_event_(RT_NULL),
-      setpoint_node_(RT_NULL),
-      pid_output_hub_(nullptr),
-      rc_aux_node_(RT_NULL),
-      rc_command_node_(RT_NULL),
-      rc_command_data_valid_(false),
-      rc_smoothing_filter_(nullptr),
-      target_looptime_us_(0),
-      main_thread_(RT_NULL),
-      main_thread_inited_(false) {
-  std::memset(&gyro_filtered_data_, 0, sizeof(gyro_filtered_data_));
-  std::memset(&setpoint_data_, 0, sizeof(setpoint_data_));
-  std::memset(&rc_command_data_, 0, sizeof(rc_command_data_));
-  std::memset(&rc_command_data_cached_, 0, sizeof(rc_command_data_cached_));
-  std::memset(&pid_runtime_, 0, sizeof(pid_runtime_));
-  std::memset(pid_data_, 0, sizeof(pid_data_));
-  std::memset(&pid_profile_, 0, sizeof(pid_profile_));
-  std::memset(&main_thread_obj_, 0, sizeof(main_thread_obj_));
-  std::memset(main_thread_stack_, 0, sizeof(main_thread_stack_));
-
-  pid_runtime_.pidStabilisationEnabled = true;
-  pid_runtime_.dT = 0.0f;
-  pid_runtime_.pidFrequency = 0.0f;
-
-  // Initialize filter function pointers (will be set in initFilters)
-  pid_runtime_.dtermNotchApplyFn = nullFilterApply;
-  pid_runtime_.dtermLowpassApplyFn = nullFilterApply;
-  pid_runtime_.dtermLowpass2ApplyFn = nullFilterApply;
-  pid_runtime_.ptermYawLowpassApplyFn = nullFilterApply;
-
-  // Initialize Dynamic LPF (same as Betaflight)
-  pid_runtime_.dynLpfFilter = DYN_LPF_NONE;
-  pid_runtime_.dynLpfMin = 0;
-  pid_runtime_.dynLpfMax = 0;
-  pid_runtime_.dynLpfCurveExpo = 0;
-
-#ifdef PROJECT_BF_PID_D_MAX_EN
-  // Initialize D_MAX (same as Betaflight)
-  for (int axis = 0; axis < XYZ_AXIS_COUNT; ++axis) {
-    std::memset(&pid_runtime_.dMaxRange[axis], 0, sizeof(pt2Filter_t));
-    std::memset(&pid_runtime_.dMaxLowpass[axis], 0, sizeof(pt2Filter_t));
-    pid_runtime_.dMaxPercent[axis] = 1.0f;
-  }
-  pid_runtime_.dMaxGyroGain = 0.0f;
-  pid_runtime_.dMaxSetpointGain = 0.0f;
-#endif
-
-  // Initialize filter states
-  for (int axis = 0; axis < XYZ_AXIS_COUNT; ++axis) {
-    pid_runtime_.previousPidSetpoint[axis] = 0.0f;
-    pid_runtime_.previousGyroRateDterm[axis] = 0.0f;
-
-    // Initialize dtermNotch (biquadFilter_t)
-    std::memset(&pid_runtime_.dtermNotch[axis], 0, sizeof(biquadFilter_t));
-
-    // Initialize dtermLowpass (union - initialize as pt1Filter)
-    std::memset(&pid_runtime_.dtermLowpass[axis], 0, sizeof(dtermLowpass_t));
-
-    // Initialize dtermLowpass2 (union - initialize as pt1Filter)
-    std::memset(&pid_runtime_.dtermLowpass2[axis], 0, sizeof(dtermLowpass_t));
-  }
-
-  // Initialize ptermYawLowpass (pt1Filter_t)
-  std::memset(&pid_runtime_.ptermYawLowpass, 0, sizeof(pt1Filter_t));
-
-  // Legacy: SimpleLowpass for yaw P term (kept for backward compatibility)
-  yaw_pterm_lpf_.state = 0.0f;
-  yaw_pterm_lpf_.alpha = 1.0f;
-  yaw_pterm_lpf_.enabled = false;
-
-  // Initialize profile defaults
-  pid_profile_.pidSumLimit = PIDSUM_LIMIT;
-  pid_profile_.pidSumLimitYaw = PIDSUM_LIMIT_YAW;
-  pid_profile_.itermWindup = 80.0f;
-
-  // Dterm filter defaults (same as Betaflight)
-  pid_profile_.dterm_notch_hz = 0;
-  pid_profile_.dterm_notch_cutoff = 0;
-  pid_profile_.dterm_lpf1_static_hz = 100;  // Betaflight default
-  pid_profile_.dterm_lpf1_type = FILTER_PT1;
-  pid_profile_.dterm_lpf2_static_hz = 0;  // Disabled by default
-  pid_profile_.dterm_lpf2_type = FILTER_PT1;
-
-  // Dynamic LPF defaults (same as Betaflight)
-  pid_profile_.dterm_lpf1_dyn_min_hz = 0;  // Disabled by default
-  pid_profile_.dterm_lpf1_dyn_max_hz = 0;  // Disabled by default
-  pid_profile_.dterm_lpf1_dyn_expo = 5;    // Default expo (0.5)
-
-#ifdef PROJECT_BF_PID_D_MAX_EN
-  // D_MAX defaults (same as Betaflight)
-  pid_profile_.d_max[FD_ROLL] = 40;   // Default D_MAX for roll
-  pid_profile_.d_max[FD_PITCH] = 46;  // Default D_MAX for pitch
-  pid_profile_.d_max[FD_YAW] = 0;     // Default D_MAX for yaw (disabled)
-  pid_profile_.d_max_gain = 37;       // Default D_MAX gain
-  pid_profile_.d_max_advance = 20;    // Default D_MAX advance
-#endif
-
-  // Yaw P term filter defaults
-  pid_profile_.yaw_lowpass_hz = 90;
-  pid_profile_.yawLpfHz = 90.0f;  // Legacy: kept for backward compatibility
-
-#ifdef PROJECT_BF_ATTITUDE_EN
-  // Angle mode defaults (same as Betaflight)
-  pid_profile_.angle_limit = 60;  // Max angle in degrees
-  pid_profile_.angle_earth_ref = 100;  // Earth reference gain (0-100)
-  pid_profile_.angle_p_gain = 50.0f;  // Angle mode P gain
-  pid_profile_.angle_feedforward = 50.0f;  // Angle mode feedforward gain
-  pid_profile_.angle_feedforward_smoothing_ms = 80;  // Time constant in milliseconds
-  
-  // Initialize angle mode runtime parameters
-  pid_runtime_.angleGain = 0.0f;
-  pid_runtime_.angleFeedforwardGain = 0.0f;
-  pid_runtime_.angleTarget[0] = 0.0f;
-  pid_runtime_.angleTarget[1] = 0.0f;
-  pid_runtime_.angleYawSetpoint = 0.0f;
-  pid_runtime_.angleEarthRef = 0.0f;
-  pid_runtime_.axisInAngleMode[0] = false;
-  pid_runtime_.axisInAngleMode[1] = false;
-  pid_runtime_.axisInAngleMode[2] = false;
-  
-  // Initialize attitude filters (will be initialized in initFilters)
-  std::memset(pid_runtime_.attitudeFilter, 0, sizeof(pid_runtime_.attitudeFilter));
-  std::memset(pid_runtime_.angleFeedforwardPt3, 0, sizeof(pid_runtime_.angleFeedforwardPt3));
-  
-  attitude_data_valid_ = false;
-#endif
-}
-
-PidBf::~PidBf() { cleanupMcnSubscriptions(); }
-
-rt_err_t PidBf::init() {
-  // Note: Thread initialization removed - using taskPid.cpp main thread instead
-  // 注意：依赖 Gyro Filter 的初始化已移到 workerEntry 中，在线程调度器启动后执行
-
-  // 初始化MCN订阅
-  rt_err_t ret = initMcnSubscriptions();
-  if (ret != RT_EOK) {
-    LOG_E("MCN subscriptions initialization failed");
-    return ret;
-  }
-
-  // Note: setpoint data is now directly written by processRcSmoothingFilter() in subTaskRcCommand()
-  // No need to subscribe to pid_setpoint MCN topic anymore
-  setpoint_node_ = RT_NULL;
-  setpoint_event_ = RT_NULL;
-
-  // Load PID process denominator and calculate target looptime
-  loadPidProcessDenom();
-
-  initConfig();
-  initFilters();
-
-  // 注意：initSyncNotify(INIT_SYNC_PID) 已移到 workerEntry 中，在等待 Gyro Filter 之后
-
-  LOG_I("PidBf initialized (no thread - using taskPid.cpp main thread)");
-  return RT_EOK;
-}
-
-void PidBf::initConfig() {
-  // Load PID parameters from param system
-  loadPidParameters();
-  
-  // Calculate PID coefficients and limits from loaded parameters
-  calculatePidCoefficients();
-}
-
-void PidBf::initFilters() {
-  // Initialize all Dterm filters and Yaw P term filter (same pattern as Betaflight)
-  // initDtermFilters() is now in pid_init.cpp
-  initDtermFilters();
-
-  // Initialize legacy Yaw P term SimpleLowpass filter (for backward compatibility)
-  // This is only used if ptermYawLowpassApplyFn is nullFilterApply
-  lowpassInit(&yaw_pterm_lpf_, pid_profile_.yawLpfHz, pid_runtime_.dT);
-
-#ifdef PROJECT_BF_ATTITUDE_EN
-  // Initialize angle mode filters (same as Betaflight)
-  // Reference: ref/pid_init.c pidInitFilters()
-  constexpr float ATTITUDE_CUTOFF_HZ = 50.0f;  // Betaflight default
-  const float k = pt3FilterGain(ATTITUDE_CUTOFF_HZ, pid_runtime_.dT);
-  
-  // Angle feedforward filter cutoff frequency (from parameter)
-  // Use angle_feedforward_smoothing_ms parameter for cutoff frequency calculation
-  const float angleCutoffHz = 1000.0f / (2.0f * PI_F * pid_profile_.angle_feedforward_smoothing_ms);
-  const float k2 = pt3FilterGain(angleCutoffHz, pid_runtime_.dT);
-  
-  // Initialize attitude filter (PT3) for roll and pitch only
-  for (int axis = 0; axis < 2; axis++) {
-    pt3FilterInit(&pid_runtime_.attitudeFilter[axis], k);
-    pt3FilterInit(&pid_runtime_.angleFeedforwardPt3[axis], k2);
-  }
-  // Initialize angle feedforward filter for yaw (though yaw doesn't use angle mode)
-  pt3FilterInit(&pid_runtime_.angleFeedforwardPt3[FD_YAW], k2);
-  
-  pid_runtime_.angleYawSetpoint = 0.0f;
-  
-  LOG_I("Angle mode filters initialized: attitude_cutoff=%.1f Hz, feedforward_cutoff=%.1f Hz", 
-        ATTITUDE_CUTOFF_HZ, angleCutoffHz);
-#endif
-
-  LOG_I("PID filters initialized");
-}
+// Constructor, destructor, init functions moved to pid_init.cpp
 
 // Thread entry and loop functions removed - logic moved to processPidController()
 // This function is called from subTaskPidController in taskPid.cpp
@@ -416,12 +179,8 @@ void PidBf::pidController(uint32_t current_time_us) {
     float pTerm = pid_runtime_.pidCoefficient[axis].Kp * errorRate;
     if (axis == FD_YAW) {
       // Apply Yaw P term lowpass filter (same as Betaflight)
-      if (pid_runtime_.ptermYawLowpassApplyFn != nullFilterApply) {
-        pTerm = pid_runtime_.ptermYawLowpassApplyFn((filter_t*)&pid_runtime_.ptermYawLowpass, pTerm);
-      } else {
-        // Fallback to legacy SimpleLowpass for backward compatibility
-      pTerm = lowpassApply(&yaw_pterm_lpf_, pTerm);
-      }
+      // ptermYawLowpassApplyFn is always initialized (yaw_lowpass_hz has default value)
+      pTerm = pid_runtime_.ptermYawLowpassApplyFn((filter_t*)&pid_runtime_.ptermYawLowpass, pTerm);
     }
     pid_data_[axis].P = pTerm;
 
@@ -583,105 +342,7 @@ void PidBf::subTaskRcCommand(uint32_t current_time_us) {
   updateRcAuxFromMcn();
 }
 
-void PidBf::pidMainLoop() {
-  LOG_I("PidMain loop started");
-
-  while (true) {
-#ifdef PROJECT_BF_PID_DEBUG_PIN_EN
-    DEBUG_PIN_DEBUG1_HIGH();  // Debug pin: PID task execution start (monitor PID task frequency ~3.2kHz)
-#endif
-    uint32_t current_time_us = timestamp_micros();
-    subTaskRcCommand(current_time_us);
-    processPidController(current_time_us);
-#ifdef PROJECT_BF_PID_DEBUG_PIN_EN
-    DEBUG_PIN_DEBUG1_LOW();  // Debug pin: PID task execution end
-#endif
-  }
-}
-
-void PidBf::workerEntry(void* parameter) {
-  auto* self = static_cast<PidBf*>(parameter);
-  if (!self) {
-    return;
-  }
-  
-  // 在线程调度器启动后，等待 Gyro Filter 初始化完成（PID 需要 gyro 数据）
-  // 这部分初始化依赖其他线程状态，必须在线程入口函数中执行
-  rt_err_t ret = initSyncWait(INIT_SYNC_GYRO_FILTER, 2000);  // 等待最多2秒
-  if (ret != RT_EOK) {
-    LOG_W("Gyro Filter not ready, continuing anyway (ret=%d)", ret);
-  }
-  
-#ifdef PROJECT_BF_ATTITUDE_EN
-  // 等待 Attitude 模块初始化完成（角度模式需要姿态数据）
-  ret = initSyncWait(INIT_SYNC_ATTITUDE, 2000);  // 等待最多2秒
-  if (ret != RT_EOK) {
-    LOG_W("Attitude not ready, angle mode will be disabled (ret=%d)", ret);
-  }
-#endif
-  
-  // 通知 PID 初始化完成（在等待依赖模块之后）
-  initSyncNotify(INIT_SYNC_PID);
-  
-  // 进入主循环
-  self->pidMainLoop();
-}
-
-rt_err_t PidBf::startMainThread() {
-  if (main_thread_inited_) {
-    LOG_W("PidMain already initialized");
-    return RT_EOK;
-  }
-
-  // Initialize main thread
-  rt_err_t ret =
-      rt_thread_init(&main_thread_obj_, "pid", workerEntry, this, main_thread_stack_, PROJECT_BF_PID_THREAD_STACK_SIZE,
-                     PROJECT_BF_PID_THREAD_PRIORITY, PROJECT_BF_PID_THREAD_TIMESLICE);
-
-  if (ret != RT_EOK) {
-    LOG_E("PidMain thread init failed: %d", ret);
-    return ret;
-  }
-
-  main_thread_ = &main_thread_obj_;
-  main_thread_inited_ = true;
-
-  ret = rt_thread_startup(main_thread_);
-  if (ret != RT_EOK) {
-    LOG_E("PidMain thread startup failed: %d", ret);
-    main_thread_inited_ = false;
-    return ret;
-  }
-
-  return RT_EOK;
-}
-
-// RT-Thread 自动初始化包装函数
-#ifdef PROJECT_BF_PID_EN
-extern "C" {
-static int pid_main_init_wrapper(void) {
-  // Small delay to ensure RcBf is initialized first
-  rt_thread_mdelay(10);
-  
-  PidBf& pid = PidBf::instance();
-  rt_err_t ret = pid.init();
-  if (ret != RT_EOK) {
-    LOG_E("PidBf init failed: %d", ret);
-    return (int)ret;
-  }
-  LOG_I("PidBf initialized successfully");
-
-  ret = pid.startMainThread();
-  if (ret == RT_EOK) {
-    LOG_I("PidMain auto-init success");
-  } else {
-    LOG_E("PidMain auto-init failed: %d", ret);
-  }
-  return (int)ret;
-}
-INIT_APP_EXPORT(pid_main_init_wrapper);
-}
-#endif
+// Thread-related functions moved to pid_init.cpp
 
 #ifdef PROJECT_BF_ATTITUDE_EN
 // Get current angle from attitude data (degrees)
@@ -731,11 +392,20 @@ float PidBf::pidLevel(int axis, float currentPidSetpoint, float horizonLevelStre
   // TODO: Add angle trim support if needed (currently angle trim is 0)
   const float currentAngle = getCurrentAngle(axis);
   
+  // Record debug data: target and current angle (before error calculation)
+  pid_runtime_.angleLoopDebug[axis].target = angleTarget;
+  pid_runtime_.angleLoopDebug[axis].current = currentAngle;
+  
   // Calculate angle error
   const float errorAngle = angleTarget - currentAngle;
   
   // Calculate angle rate from error
-  float angleRate = errorAngle * pid_runtime_.angleGain + angleFeedforward;
+  const float errorGain = errorAngle * pid_runtime_.angleGain;
+  float angleRate = errorGain + angleFeedforward;
+  
+  // Record debug data: errorGain and feedforward (after calculation)
+  pid_runtime_.angleLoopDebug[axis].errorGain = errorGain;
+  pid_runtime_.angleLoopDebug[axis].feedforward = angleFeedforward;
 
   // Earth reference compensation (coordinate yaw turns)
   // minimise cross-axis wobble due to faster yaw responses than roll or pitch, and make co-ordinated yaw turns
