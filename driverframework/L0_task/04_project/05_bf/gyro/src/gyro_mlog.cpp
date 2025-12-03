@@ -36,12 +36,12 @@ rt_err_t gyro::initMlog() {
 }
 
 // 推送陀螺仪数据到 mlog（参考 aMlogStabilze.c:208-216）
-void gyro::pushGyroDataToMlog(const imu_raw_msg_t* imu_data) {
-  if (imu_data == nullptr) {
+void gyro::pushGyroDataToMlog(const gyro_raw_msg_t* gyro_data) {
+  if (gyro_data == nullptr) {
     return;
   }
 
   // 记录滤波前后的陀螺仪数据
   uint32_t timestamp = timestamp_micros();
-  bf_mlog::MlogGyro::getInstance()->pushGyroData(imu_data->seq, timestamp, gyro_adc_, gyro_adcf_);
+  bf_mlog::MlogGyro::getInstance()->pushGyroData(gyro_data->seq, timestamp, gyro_adc_, gyro_adcf_);
 }

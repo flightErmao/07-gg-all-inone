@@ -770,13 +770,13 @@ void PidBf::pidMainLoop() {
 
   while (true) {
 #ifdef PROJECT_BF_PID_DEBUG_PIN_EN
-    DEBUG_PIN_DEBUG1_HIGH();  // Debug pin: PID task execution start (monitor PID task frequency ~3.2kHz)
+    // DEBUG_PIN_DEBUG1_HIGH();  // Debug pin: PID task execution start (monitor PID task frequency ~3.2kHz)
 #endif
     uint32_t current_time_us = timestamp_micros();
     subTaskRcCommand(current_time_us);
     processPidController(current_time_us);
 #ifdef PROJECT_BF_PID_DEBUG_PIN_EN
-    DEBUG_PIN_DEBUG1_LOW();  // Debug pin: PID task execution end
+    // DEBUG_PIN_DEBUG1_LOW();  // Debug pin: PID task execution end
 #endif
   }
 }

@@ -32,9 +32,9 @@ static void sendRateSetpointActual(uint16_t count_ms) {
         setpoint_data.rate[0],  // roll setpoint
         setpoint_data.rate[1],  // pitch setpoint
         setpoint_data.rate[2],  // yaw setpoint
-        gyro_data.gyro_filtered[0],  // roll actual (gyro x)
-        gyro_data.gyro_filtered[1],  // pitch actual (gyro y)
-        gyro_data.gyro_filtered[2]   // yaw actual (gyro z)
+        gyro_data.gyro_filtered_for_pid[0],  // roll actual (gyro x)
+        gyro_data.gyro_filtered_for_pid[1],  // pitch actual (gyro y)
+        gyro_data.gyro_filtered_for_pid[2]   // yaw actual (gyro z)
     );
   }
 }

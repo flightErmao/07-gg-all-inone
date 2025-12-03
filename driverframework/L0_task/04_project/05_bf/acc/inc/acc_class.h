@@ -89,7 +89,7 @@ class AccBf {
   // MCN 相关函数
   rt_err_t initMcn();
   void cleanupMcnSubscriptions();
-  void publishAccFiltered(const imu_raw_msg_t* imu_data);
+  void publishAccFiltered(const acc_raw_msg_t* acc_data);
 
   // 获取处理后的加速度数据
   void getFilteredAcc(float acc_filtered[3]) const {
@@ -131,7 +131,7 @@ class AccBf {
   void threadLoop();
 
   // 处理 IMU 数据
-  void processAccData(const imu_raw_msg_t* imu_data);
+  void processAccData(const acc_raw_msg_t* acc_data);
 
   // 初始化滤波器
   void initFilters();

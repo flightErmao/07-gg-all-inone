@@ -24,10 +24,10 @@ static int gyro_filtered_echo(void* parameter) {
     return -1;
   }
 
-  LOG_I("%lu f:%.2f %.2f %.2f r:%.2f %.2f %.2f d:%.2f %.2f %.2f",
-      gyro_data.seq, gyro_data.gyro_filtered[0], gyro_data.gyro_filtered[1], gyro_data.gyro_filtered[2],
-      gyro_data.gyro_adc[0], gyro_data.gyro_adc[1], gyro_data.gyro_adc[2], gyro_data.gyroFilteredDownsampled[0],
-      gyro_data.gyroFilteredDownsampled[1], gyro_data.gyroFilteredDownsampled[2]);
+  LOG_I("%lu pid:%.2f %.2f %.2f att:%.2f %.2f %.2f",
+      gyro_data.seq, 
+      gyro_data.gyro_filtered_for_pid[0], gyro_data.gyro_filtered_for_pid[1], gyro_data.gyro_filtered_for_pid[2],
+      gyro_data.gyro_filtered_for_attitude[0], gyro_data.gyro_filtered_for_attitude[1], gyro_data.gyro_filtered_for_attitude[2]);
   return 0;
 }
 
@@ -42,17 +42,17 @@ rt_err_t gyro::subscribeImu() {
     }
   }
 
-  // 订阅 imu MCN 节点（传入 event 用于同步等待）
-  imu_node_ = mcn_subscribe(MCN_HUB(imu), imu_event_, RT_NULL);
-  if (imu_node_ == RT_NULL) {
-    LOG_E("subscribe imu topic failed");
+  // 订阅 gyro_raw MCN 节点（传入 event 用于同步等待）
+  gyro_node_ = mcn_subscribe(MCN_HUB(gyro_raw), imu_event_, RT_NULL);
+  if (gyro_node_ == RT_NULL) {
+    LOG_E("subscribe gyro_raw topic failed");
     if (imu_event_ != RT_NULL) {
       rt_sem_delete(imu_event_);
       imu_event_ = RT_NULL;
     }
     return -RT_ERROR;
   }
-  LOG_I("Subscribed to imu MCN topic");
+  LOG_I("Subscribed to gyro_raw MCN topic");
   return RT_EOK;
 }
 
@@ -101,9 +101,9 @@ rt_err_t gyro::initMcn() {
 
 // 清理 MCN 订阅
 void gyro::cleanupMcnSubscriptions() {
-  if (imu_node_ != RT_NULL) {
-    mcn_unsubscribe(MCN_HUB(imu), imu_node_);
-    imu_node_ = RT_NULL;
+  if (gyro_node_ != RT_NULL) {
+    mcn_unsubscribe(MCN_HUB(gyro_raw), gyro_node_);
+    gyro_node_ = RT_NULL;
   }
 
   if (imu_event_ != RT_NULL) {
@@ -113,16 +113,15 @@ void gyro::cleanupMcnSubscriptions() {
 }
 
 // 发布滤波后的陀螺仪数据到 MCN
-void gyro::publishGyroFiltered(const imu_raw_msg_t* imu_data) {
-  if (imu_data == nullptr || gyro_filtered_hub_ == nullptr) {
+void gyro::publishGyroFiltered(rt_uint32_t seq) {
+  if (gyro_filtered_hub_ == nullptr) {
     return;
   }
 
   gyro_filtered_msg_t filtered_msg;
-  std::memcpy(filtered_msg.gyro_filtered, gyro_adcf_, sizeof(gyro_adcf_));
-  std::memcpy(filtered_msg.gyro_adc, gyro_adc_, sizeof(gyro_adc_));
-  std::memcpy(filtered_msg.gyroFilteredDownsampled, gyroFilteredDownsampled_, sizeof(gyroFilteredDownsampled_));
-  filtered_msg.seq = imu_data->seq;
+  std::memcpy(filtered_msg.gyro_filtered_for_pid, gyro_adcf_, sizeof(gyro_adcf_));
+  std::memcpy(filtered_msg.gyro_filtered_for_attitude, gyroFilteredDownsampled_, sizeof(gyroFilteredDownsampled_));
+  filtered_msg.seq = seq;
 
   rt_err_t publish_result = mcn_publish(gyro_filtered_hub_, &filtered_msg);
   if (publish_result != RT_EOK) {

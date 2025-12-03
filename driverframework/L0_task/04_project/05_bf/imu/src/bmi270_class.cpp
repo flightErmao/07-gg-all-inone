@@ -21,9 +21,10 @@ extern "C" {
 }
 
 /* 定义 IMU 原始数据话题（在本文件内完成定义与发布）
- * 类型 imu_raw_msg_t 和 MCN_DECLARE(imu) 在 accgyro_spi_bmi270.hpp 中定义
+ * 类型 gyro_raw_msg_t 和 acc_raw_msg_t 在 imu_mcn.h 中定义
  */
-MCN_DEFINE(imu, sizeof(imu_raw_msg_t));
+MCN_DEFINE(gyro_raw, sizeof(gyro_raw_msg_t));
+MCN_DEFINE(acc_raw, sizeof(acc_raw_msg_t));
 
 #undef LOG_TAG
 #define LOG_TAG "bmi270_bf"
@@ -31,19 +32,31 @@ MCN_DEFINE(imu, sizeof(imu_raw_msg_t));
 #define LOG_LVL LOG_LVL_INFO
 #endif
 
-// MCN echo 函数（参考 aMcnSensorImu.c 中的 sensor_imu_echo）
-static int imu_raw_echo(void* parameter) {
-  imu_raw_msg_t imu_data;
-  
-  if (mcn_copy_from_hub((McnHub*)parameter, &imu_data) != RT_EOK) {
+// MCN echo 函数
+extern "C" {
+static int gyro_raw_echo(void* parameter) {
+  gyro_raw_msg_t gyro_data;
+
+  if (mcn_copy_from_hub((McnHub*)parameter, &gyro_data) != RT_EOK) {
     return -1;
   }
 
-  LOG_I("seq: %lu, acc: %.2f, %.2f, %.2f, gyro: %.2f, %.2f, %.2f", 
-        imu_data.seq,
-        imu_data.accel[0], imu_data.accel[1], imu_data.accel[2],
-        imu_data.gyro[0], imu_data.gyro[1], imu_data.gyro[2]);
+  LOG_I("gyro_raw: seq=%lu g:%.2f %.2f %.2f", gyro_data.seq,
+        gyro_data.gyro[0], gyro_data.gyro[1], gyro_data.gyro[2]);
   return 0;
+}
+
+static int acc_raw_echo(void* parameter) {
+  acc_raw_msg_t acc_data;
+
+  if (mcn_copy_from_hub((McnHub*)parameter, &acc_data) != RT_EOK) {
+    return -1;
+  }
+
+  LOG_I("acc_raw: seq=%lu a:%.2f %.2f %.2f", acc_data.seq,
+        acc_data.accel[0], acc_data.accel[1], acc_data.accel[2]);
+  return 0;
+}
 }
 
 namespace bf_bmi270 {
@@ -107,17 +120,20 @@ static constexpr uint8_t BMI270_VAL_INT1_IO_CTRL_PINMODE = 0x0A;  // 高电平�
 
 #if defined(SENSOR_BMI270_BF_ODR_3200HZ)
 // TO DO: 为什么 ACC的ODR必须是800Hz,否则acc[2]在静止的时候数据是2G
-static constexpr uint8_t BMI270_VAL_ACC_CONF_ODR_BITS = 0x0B;
-static constexpr uint8_t BMI270_VAL_GYRO_CONF_ODR_BITS = 0x0D;
-static constexpr float BMI270_SELECTED_ODR_HZ = 3200.0f;
+static constexpr uint8_t BMI270_VAL_ACC_CONF_ODR_BITS = 0x0B;  // ACC固定800Hz
+static constexpr uint8_t BMI270_VAL_GYRO_CONF_ODR_BITS = 0x0D;  // GYRO 3200Hz
+static constexpr float BMI270_SELECTED_ODR_HZ = 3200.0f;  // GYRO ODR
+static constexpr float BMI270_ACC_ODR_HZ = 800.0f;  // ACC ODR (固定800Hz)
 #elif defined(SENSOR_BMI270_BF_ODR_1600HZ)
-static constexpr uint8_t BMI270_VAL_ACC_CONF_ODR_BITS = 0x0C;
-static constexpr uint8_t BMI270_VAL_GYRO_CONF_ODR_BITS = 0x0C;
-static constexpr float BMI270_SELECTED_ODR_HZ = 1600.0f;
+static constexpr uint8_t BMI270_VAL_ACC_CONF_ODR_BITS = 0x0B;  // ACC固定800Hz
+static constexpr uint8_t BMI270_VAL_GYRO_CONF_ODR_BITS = 0x0C;  // GYRO 1600Hz
+static constexpr float BMI270_SELECTED_ODR_HZ = 1600.0f;  // GYRO ODR
+static constexpr float BMI270_ACC_ODR_HZ = 800.0f;  // ACC ODR (固定800Hz)
 #else  // 默认 800Hz
-static constexpr uint8_t BMI270_VAL_ACC_CONF_ODR_BITS = 0x0B;
-static constexpr uint8_t BMI270_VAL_GYRO_CONF_ODR_BITS = 0x0B;
-static constexpr float BMI270_SELECTED_ODR_HZ = 800.0f;
+static constexpr uint8_t BMI270_VAL_ACC_CONF_ODR_BITS = 0x0B;  // ACC 800Hz
+static constexpr uint8_t BMI270_VAL_GYRO_CONF_ODR_BITS = 0x0B;  // GYRO 800Hz
+static constexpr float BMI270_SELECTED_ODR_HZ = 800.0f;  // GYRO ODR
+static constexpr float BMI270_ACC_ODR_HZ = 800.0f;  // ACC ODR
 #endif
 
 static constexpr uint8_t BMI270_VAL_ACC_CONF =
@@ -157,6 +173,8 @@ BMI270::BMI270()
       worker_inited_(false),
       gyro_sample_rate_hz_(BMI270_SELECTED_ODR_HZ),
       gyro_sample_dt_(1.0f / BMI270_SELECTED_ODR_HZ),
+      acc_sample_rate_hz_(BMI270_ACC_ODR_HZ),
+      imu_process_denom_(2),  // 默认分频因子为2（800Hz acc -> 400Hz attitude）
       gyro_scale_(GYRO_SCALE_2000DPS) {  // BMI270 陀螺仪配置为 2000DPS
   cfg_ = {};
   rt_memset(&timer_, 0, sizeof(timer_));
@@ -420,19 +438,18 @@ void BMI270::disableInterrupt() {
 #endif
 }
 
-bool BMI270::readAccelGyro(int16_t acc[3], int16_t gyro[3]) {
+bool BMI270::readImu(int16_t acc[3], int16_t gyro[3]) {
   if (!spi_inited_) {
     return false;
   }
 
-  // 优化：一次性读取加速度和陀螺仪数据
-  // BMI270 寄存器布局：0x0C (ACC_X_LSB) 到 0x17 (GYR_Z_MSB) = 18 字节
+  // 一次性读取加速度和陀螺仪数据（12字节）
+  // BMI270 寄存器布局：0x0C (ACC_X_LSB) 到 0x17 (GYR_Z_MSB)
   // 0x0C-0x11: 加速度数据（6字节）
   // 0x12-0x17: 陀螺仪数据（6字节）
-  // 中间 0x0C-0x12 之间有保留寄存器，但我们一次性读取可以包含这些数据
   uint8_t data_buf[12] = {0};
 
-  // 从 ACC_DATA_X_LSB (0x0C) 开始读取 18 字节，一次性获取加速度和陀螺仪数据
+  // 从 ACC_DATA_X_LSB (0x0C) 开始读取 12 字节，一次性获取加速度和陀螺仪数据
   if (spi_.readMultiReg16(BMI270_REG_ACC_DATA_X_LSB, data_buf, 12) != RT_EOK) {
     return false;
   }
@@ -443,10 +460,8 @@ bool BMI270::readAccelGyro(int16_t acc[3], int16_t gyro[3]) {
   acc[2] = combine(data_buf[5], data_buf[4]);
 
   // 解析陀螺仪数据（offset 6-11，对应寄存器 0x12-0x17）
-  // 0x0C-0x11: 加速度数据（6字节，offset 0-5）
-  // 0x12-0x17: 陀螺仪数据（6字节，offset 6-11）
-  // 注意：BMI270 寄存器地址 0x0C 到 0x17 是连续的，0x12 相对于 0x0C 的偏移是 6 字节
-  uint8_t gyro_offset = 6;  // 从 0x0C 开始，0x12 相对于 0x0C 的偏移是 6 字节（0x12 - 0x0C = 6）
+  // 0x12 相对于 0x0C 的偏移是 6 字节（0x12 - 0x0C = 6）
+  uint8_t gyro_offset = 6;
   gyro[0] = combine(data_buf[gyro_offset + 1], data_buf[gyro_offset + 0]);
   gyro[1] = combine(data_buf[gyro_offset + 3], data_buf[gyro_offset + 2]);
   gyro[2] = combine(data_buf[gyro_offset + 5], data_buf[gyro_offset + 4]);
@@ -454,20 +469,49 @@ bool BMI270::readAccelGyro(int16_t acc[3], int16_t gyro[3]) {
   return true;
 }
 
-void BMI270::publishImu(const int16_t acc[3], const int16_t gyro[3]) {
+bool BMI270::readGyroOnly(int16_t gyro[3]) {
+  if (!spi_inited_) {
+    return false;
+  }
 
+  // 只读取陀螺仪数据（6字节）
+  // BMI270 寄存器布局：0x12 (GYR_X_LSB) 到 0x17 (GYR_Z_MSB)
+  uint8_t data_buf[6] = {0};
+
+  // 从 GYR_DATA_X_LSB (0x12) 开始读取 6 字节
+  if (spi_.readMultiReg16(BMI270_REG_GYR_DATA_X_LSB, data_buf, 6) != RT_EOK) {
+    return false;
+  }
+
+  // 解析陀螺仪数据
+  gyro[0] = combine(data_buf[1], data_buf[0]);
+  gyro[1] = combine(data_buf[3], data_buf[2]);
+  gyro[2] = combine(data_buf[5], data_buf[4]);
+
+  return true;
+}
+
+void BMI270::publishGyro(const int16_t gyro[3]) {
   static rt_uint32_t s_seq = 0;
-  imu_raw_msg_t msg{};
+  gyro_raw_msg_t msg{};
+
+  msg.seq = ++s_seq;
+  msg.gyro[0] = GYRO_SCALE_2000DPS * static_cast<float>(gyro[0]);
+  msg.gyro[1] = GYRO_SCALE_2000DPS * static_cast<float>(gyro[1]);
+  msg.gyro[2] = GYRO_SCALE_2000DPS * static_cast<float>(gyro[2]);
+  mcn_publish(MCN_HUB(gyro_raw), &msg);
+}
+
+void BMI270::publishAcc(const int16_t acc[3]) {
+  static rt_uint32_t s_seq = 0;
+  acc_raw_msg_t msg{};
 
   msg.seq = ++s_seq;
   // Betaflight 风格：acc 保持原始 ADC 值（不缩放），缩放将在 attitude 更新中进行
   msg.accel[0] = static_cast<float>(acc[0]);
   msg.accel[1] = static_cast<float>(acc[1]);
   msg.accel[2] = static_cast<float>(acc[2]);
-  msg.gyro[0] = GYRO_SCALE_2000DPS * static_cast<float>(gyro[0]);
-  msg.gyro[1] = GYRO_SCALE_2000DPS * static_cast<float>(gyro[1]);
-  msg.gyro[2] = GYRO_SCALE_2000DPS * static_cast<float>(gyro[2]);
-  mcn_publish(MCN_HUB(imu), &msg);
+  mcn_publish(MCN_HUB(acc_raw), &msg);
 }
 
 uint8_t BMI270::regRead(uint8_t reg) {
@@ -516,6 +560,9 @@ void BMI270::timerCallback(void* parameter) {
 }
 
 void BMI270::workerLoop() {
+  // 计数器：每4次中断，前3次只读gyro，第4次读acc+gyro
+  uint8_t interrupt_counter = 0;
+  
   while (true) {
     if (!event_inited_) {
       rt_thread_mdelay(10);
@@ -530,14 +577,29 @@ void BMI270::workerLoop() {
       continue;
     }
 
-    int16_t acc[3] = {0};
-    int16_t gyro[3] = {0};
-
-    if (!readAccelGyro(acc, gyro)) {
-      continue;
+    interrupt_counter++;
+    
+    // 前3次中断：只读取和发布gyro数据（只读取6字节）
+    if (interrupt_counter < 4) {
+      int16_t gyro[3] = {0};
+      // 使用readGyroOnly只读取6字节的gyro数据
+      if (readGyroOnly(gyro)) {
+        publishGyro(gyro);
+      }
+    } else {
+      // 第4次中断：读取acc+gyro，同时发布两个主题
+      int16_t acc[3] = {0};
+      int16_t gyro[3] = {0};
+      
+      // 使用readImu一次读取12字节，然后分别发布acc和gyro
+      if (readImu(acc, gyro)) {
+        publishAcc(acc);
+        publishGyro(gyro);
+      }
+      
+      // 重置计数器
+      interrupt_counter = 0;
     }
-
-    publishImu(acc, gyro);
   }
 }
 
@@ -559,11 +621,17 @@ rt_err_t bf_bmi270_init_default() {
   cfg.int_pin_name = SENSOR_BMI270_BF_INT_PIN;
   cfg.spi_max_hz = SENSOR_BMI270_BF_SPI_MAX_HZ;
 
-  // MCN 话题 imu 的广告发布（重复调用返回 -RT_EBUSY 视为成功）
-  // 参考 aMcnSensorImu.c，使用 echo 函数来打印数据
-  rt_err_t ret = mcn_advertise(MCN_HUB(imu), imu_raw_echo);
+  // MCN 话题 gyro_raw 的广告发布
+  rt_err_t ret = mcn_advertise(MCN_HUB(gyro_raw), gyro_raw_echo);
   if (ret != RT_EOK && ret != -RT_EBUSY) {
-    LOG_E("imu advertise failed: %d", ret);
+    LOG_E("gyro_raw advertise failed: %d", ret);
+    return ret;
+  }
+
+  // MCN 话题 acc_raw 的广告发布（acc_raw由IMU发布）
+  ret = mcn_advertise(MCN_HUB(acc_raw), acc_raw_echo);
+  if (ret != RT_EOK && ret != -RT_EBUSY) {
+    LOG_E("acc_raw advertise failed: %d", ret);
     return ret;
   }
 

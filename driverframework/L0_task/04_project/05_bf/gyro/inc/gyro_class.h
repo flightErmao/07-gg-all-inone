@@ -112,15 +112,15 @@ class gyro {
   // MCN 相关函数
   rt_err_t initMcn();
   void cleanupMcnSubscriptions();
-  void publishGyroFiltered(const imu_raw_msg_t* imu_data);
-  
+  void publishGyroFiltered(rt_uint32_t seq);
+
   // MCN 订阅和发布封装函数
   rt_err_t subscribeImu();
   rt_err_t advertiseGyroFiltered();
 
   // Mlog 相关函数
   rt_err_t initMlog();
-  void pushGyroDataToMlog(const imu_raw_msg_t* imu_data);
+  void pushGyroDataToMlog(const gyro_raw_msg_t* gyro_data);
 
   // 获取滤波后的角速度数据（对应 gyro.gyroADCf）
   void getFilteredGyro(float gyro_filtered[3]) const { std::memcpy(gyro_filtered, gyro_adcf_, sizeof(gyro_adcf_)); }
@@ -150,7 +150,7 @@ class gyro {
   void threadLoop();
 
   // 处理 IMU 数据（原 handleWork 的逻辑）
-  void processImuData(const imu_raw_msg_t* imu_data);
+  void processImuData(const gyro_raw_msg_t* gyro_data);
 
   // ========== 从 gyro_t 映射的简单变量 ==========
 
@@ -247,7 +247,7 @@ class gyro {
 
   // MCN 订阅和发布相关
   rt_sem_t imu_event_;          // MCN 事件信号量（用于 mcn_poll_sync）
-  McnNode_t imu_node_;          // MCN 订阅节点（imu_raw）
+  McnNode_t gyro_node_;         // MCN 订阅节点（imu_raw）
   McnHub_t gyro_filtered_hub_;  // MCN 发布 hub（gyro_filtered）
 
   // ========== 内部方法 ==========

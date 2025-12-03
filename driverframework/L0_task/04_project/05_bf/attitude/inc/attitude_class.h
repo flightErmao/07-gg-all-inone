@@ -14,11 +14,10 @@ extern "C" {
 #include "attitude_mcn.h"
 #include "timestamp.h"
 #include "../common/inc/init_sync.h"
-}
-
 #ifdef PROJECT_BF_ATTITUDE_DEBUG_PIN_EN
 #include "debugPin.h"
 #endif
+}
 
 // 简化的互补滤波器（参考 Betaflight 的姿态估计）
 // 使用加速度计计算角度，陀螺仪积分，然后互补融合
@@ -38,17 +37,12 @@ class AttitudeBf {
     std::memcpy(attitude, attitude_values_, sizeof(attitude_values_));
   }
 
-  // 获取当前姿态角度（十分之一度，centidegrees）
-  void getAttitudeRaw(int16_t attitude_raw[3]) const {
-    for (int i = 0; i < 3; i++) {
-      attitude_raw[i] = static_cast<int16_t>(attitude_values_[i] * 10.0f);
-    }
-  }
+  // 获取当前姿态角度（度，degrees）
 
   // MCN 相关方法
   rt_err_t initMcn();
   void cleanupMcnSubscriptions();
-  void publishAttitude(const imu_raw_msg_t* imu_data);
+  void publishAttitude(rt_uint32_t seq);
 
  private:
   AttitudeBf(const AttitudeBf&) = delete;
@@ -108,14 +102,17 @@ class AttitudeBf {
   uint32_t downsample_counter_;
   uint32_t downsample_factor_;
 
+  // IMU处理分频因子（用于从acc采样频率分频到姿态估计频率）
+  // 例如：acc 800Hz，imu_process_denom_=2，则姿态估计频率 = 800/2 = 400Hz
+  uint8_t imu_process_denom_;
+  uint8_t imu_process_counter_;  // 分频计数器
+
   // MCN 订阅和发布
-  rt_sem_t imu_event_;
-  McnNode_t imu_node_;
-  rt_sem_t gyro_event_;
-  McnNode_t gyro_node_;
+  rt_sem_t gyro_event_;  // gyro_filtered事件（可选，用于非阻塞poll）
+  McnNode_t gyro_node_;  // gyro_filtered订阅节点（可选）
 #ifdef PROJECT_BF_ACC_EN
-  rt_sem_t acc_event_;
-  McnNode_t acc_node_;
+  rt_sem_t acc_event_;  // acc_filtered事件（必须，用于同步阻塞等待）
+  McnNode_t acc_node_;  // acc_filtered订阅节点（必须）
 #endif
   McnHub_t attitude_hub_;
 

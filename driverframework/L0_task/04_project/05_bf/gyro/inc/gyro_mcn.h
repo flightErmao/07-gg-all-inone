@@ -12,10 +12,9 @@
 
 /* 滤波后陀螺仪数据消息类型 */
 typedef struct {
-  float gyro_filtered[3];  // 滤波后的角速度数据 [x, y, z]（对应 gyro_adcf_，PID 使用）
-  float gyro_adc[3];       // 对齐、校准但未滤波的数据 [x, y, z]（对应 gyro_adc_）
-  float gyroFilteredDownsampled[3];  // 专门给 attitude 使用的 PT1 滤波后的角速度数据 [x, y, z]（来自 gyro_adcf_ 的 PT1 滤波）
-  rt_uint32_t seq;         // 序列号（与 imu_raw 对应）
+  float gyro_filtered_for_pid[3];        // 滤波后的角速度数据 [x, y, z]（对应 gyro_adcf_，PID 使用）
+  float gyro_filtered_for_attitude[3];   // 专门给 attitude 使用的 PT1 滤波后的角速度数据 [x, y, z]（来自 gyro_adcf_ 的 PT1 滤波，对应 gyroFilteredDownsampled_）
+  rt_uint32_t seq;                       // 序列号（与 gyro_raw 对应）
 } gyro_filtered_msg_t;
 
 MCN_DECLARE(gyro);

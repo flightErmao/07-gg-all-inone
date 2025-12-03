@@ -143,7 +143,7 @@ void PidBf::pidController(uint32_t current_time_us) {
 
   // Get gyro rates
   float gyroRate[XYZ_AXIS_COUNT];
-  std::memcpy(gyroRate, gyro_filtered_data_.gyro_filtered, sizeof(gyroRate));
+  std::memcpy(gyroRate, gyro_filtered_data_.gyro_filtered_for_pid, sizeof(gyroRate));
 
   pid_output_msg_t output_msg;
   output_msg.timestamp = current_time_us;
@@ -369,7 +369,11 @@ float PidBf::pidLevel(int axis, float currentPidSetpoint, float horizonLevelStre
   // We now use Acro Rates, transformed into the range +/- 1, to provide setpoints
   float angleLimit = pid_profile_.angle_limit;
   float angleFeedforward = 0.0f;
-  
+#ifdef PROJECT_BF_PID_DEBUG_PIN_EN
+  if (axis == FD_ROLL) {
+    DEBUG_PIN_DEBUG2_HIGH();
+  }
+#endif
   // if user changes rates profile, update the max setpoint for angle mode
   const float maxSetpointRateInv = 1.0f / getMaxRcRate(axis);
 
@@ -391,18 +395,18 @@ float PidBf::pidLevel(int axis, float currentPidSetpoint, float horizonLevelStre
   // We use attitude.values[axis] directly (already in degrees)
   // TODO: Add angle trim support if needed (currently angle trim is 0)
   const float currentAngle = getCurrentAngle(axis);
-  
+
   // Record debug data: target and current angle (before error calculation)
   pid_runtime_.angleLoopDebug[axis].target = angleTarget;
   pid_runtime_.angleLoopDebug[axis].current = currentAngle;
-  
+
   // Calculate angle error
   const float errorAngle = angleTarget - currentAngle;
-  
+
   // Calculate angle rate from error
   const float errorGain = errorAngle * pid_runtime_.angleGain;
   float angleRate = errorGain + angleFeedforward;
-  
+
   // Record debug data: errorGain and feedforward (after calculation)
   pid_runtime_.angleLoopDebug[axis].errorGain = errorGain;
   pid_runtime_.angleLoopDebug[axis].feedforward = angleFeedforward;
@@ -413,11 +417,18 @@ float PidBf::pidLevel(int axis, float currentPidSetpoint, float horizonLevelStre
   float sinAngle = std::sin(pid_runtime_.angleTarget[axis == FD_ROLL ? FD_PITCH : FD_ROLL] * DEGREES_TO_RADIANS);
   sinAngle *= (axis == FD_ROLL) ? -1.0f : 1.0f;  // must be negative for Roll
   angleRate += pid_runtime_.angleYawSetpoint * sinAngle * pid_runtime_.angleEarthRef;
-  pid_runtime_.angleTarget[axis] = angleTarget;  // set target for alternate axis to current axis, for use in preceding calculation
+  pid_runtime_.angleTarget[axis] =
+      angleTarget;  // set target for alternate axis to current axis, for use in preceding calculation
 
   // smooth final angle rate output to clean up attitude signal steps (500hz), GPS steps (10 or 100hz), RC steps etc
   // this filter runs at ATTITUDE_CUTOFF_HZ, currently 50hz, so GPS roll may be a bit steppy
   angleRate = pt3FilterApply(&pid_runtime_.attitudeFilter[axis], angleRate);
+
+#ifdef PROJECT_BF_PID_DEBUG_PIN_EN
+  if (axis == FD_ROLL) {
+    DEBUG_PIN_DEBUG2_LOW();
+  }
+#endif
 
   // For angle mode, return the angle rate directly
   // For horizon mode (not implemented yet), would crossfade Angle rate and Acro rate

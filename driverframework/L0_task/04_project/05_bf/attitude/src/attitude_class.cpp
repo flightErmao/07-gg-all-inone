@@ -8,13 +8,16 @@ extern "C" {
 #include <ulog.h>
 #include "timestamp.h"
 #include "../common/inc/init_sync.h"
-#ifdef PROJECT_BF_ACC_EN
-#include "../acc/inc/acc_mcn.h"
-#endif
+#include "../imu/inc/imu_mcn.h"  // For gyro_raw_msg_t
 #ifdef PROJECT_BF_ATTITUDE_DEBUG_PIN_EN
 #include "debugPin.h"
 #endif
+#ifdef PROJECT_BF_ACC_EN
+#include "../acc/inc/acc_mcn.h"
+#endif
 }
+
+#include "../imu/inc/bmi270_class.h"
 
 #include <cstring>
 #include <cmath>
@@ -50,8 +53,8 @@ AttitudeBf::AttitudeBf()
       update_period_us_(0),
       downsample_counter_(0),
       downsample_factor_(0),
-      imu_event_(RT_NULL),
-      imu_node_(RT_NULL),
+      imu_process_denom_(0),  // 将在initInThreadEntry中从IMU模块获取
+      imu_process_counter_(0),
       gyro_event_(RT_NULL),
       gyro_node_(RT_NULL),
 #ifdef PROJECT_BF_ACC_EN
@@ -163,9 +166,10 @@ void AttitudeBf::threadEntry(void* parameter) {
 }
 
 void AttitudeBf::initInThreadEntry() {
-  // 从 IMU 模块获取实际采样频率（如果需要）
-  // 这里可以订阅 IMU 数据来获取频率，或者使用默认值
-  // 暂时使用默认值，实际可以从 IMU 模块获取
+  // 从 IMU 模块获取IMU处理分频因子
+  using namespace bf_bmi270;
+  imu_process_denom_ = BMI270::instance().getImuProcessDenom();
+  LOG_I("AttitudeBf: Got imu_process_denom from IMU: %u", imu_process_denom_);
 
   LOG_I("AttitudeBf thread initialization complete");
 }
@@ -174,77 +178,76 @@ void AttitudeBf::threadLoop() {
   LOG_I("AttitudeBf thread loop started");
 
   uint32_t last_update_time_us = timestamp_micros();
-  downsample_counter_ = 0;
+  imu_process_counter_ = 0;
+
+#ifdef PROJECT_BF_ACC_EN
+  if (acc_node_ == RT_NULL) {
+    LOG_E("AttitudeBf: acc_node_ is NULL, cannot continue");
+    return;
+  }
+#endif
 
   while (true) {
-#ifdef PROJECT_BF_ATTITUDE_DEBUG_PIN_EN
-    DEBUG_PIN_DEBUG3_HIGH();  // Debug pin: Attitude task execution start
-#endif
-
-    // 阻塞等待 IMU 数据
-    if (mcn_poll_sync(imu_node_, RT_WAITING_FOREVER) == RT_TRUE) {
-      imu_raw_msg_t imu_data;
-      if (mcn_copy(MCN_HUB(imu), imu_node_, &imu_data) == RT_EOK) {
-        // 降采样：只处理每 N 个样本
-        downsample_counter_++;
-        if (downsample_counter_ >= downsample_factor_) {
-          downsample_counter_ = 0;
-
-          // 计算时间差
-          uint32_t current_time_us = timestamp_micros();
-          float dt = (current_time_us - last_update_time_us) * 1e-6f;
-          if (dt <= 0.0f || dt > 0.1f) {
-            // 时间异常，使用默认值
-            dt = 1.0f / update_freq_hz_;
-          }
-          last_update_time_us = current_time_us;
-
-          // 获取专门给 attitude 使用的 PT1 滤波后的陀螺仪数据（如果可用）
-          // 参考 Betaflight：attitude 使用 gyro.gyroADCf[axis] 再经过一次 PT1 滤波
-          float gyro_attitude[3] = {0.0f, 0.0f, 0.0f};
-          if (gyro_node_ != RT_NULL) {
-            gyro_filtered_msg_t gyro_data;
-            if (mcn_poll(gyro_node_) == RT_TRUE) {
-              if (mcn_copy(MCN_HUB(gyro), gyro_node_, &gyro_data) == RT_EOK) {
-                // 使用专门给 attitude 的 PT1 滤波后的数据（gyroFilteredDownsampled）
-                std::memcpy(gyro_attitude, gyro_data.gyroFilteredDownsampled, sizeof(gyro_attitude));
-              }
-            }
-          } else {
-            // 如果没有订阅 gyro，直接使用 imu 的陀螺仪数据
-            std::memcpy(gyro_attitude, imu_data.gyro, sizeof(gyro_attitude));
-          }
-
-          // 获取处理后的加速度计数据（如果可用）
-          float acc_filtered[3] = {0.0f, 0.0f, 0.0f};
 #ifdef PROJECT_BF_ACC_EN
-          if (acc_node_ != RT_NULL) {
-            acc_filtered_msg_t acc_data;
-            if (mcn_poll(acc_node_) == RT_TRUE) {
-              if (mcn_copy(MCN_HUB(acc), acc_node_, &acc_data) == RT_EOK) {
-                std::memcpy(acc_filtered, acc_data.acc_filtered, sizeof(acc_filtered));
-              }
-            }
-          } else {
-            // 如果没有订阅 acc，直接使用 imu 的加速度计数据
-            std::memcpy(acc_filtered, imu_data.accel, sizeof(acc_filtered));
-          }
-#else
-          // 如果没有启用 acc 模块，直接使用 imu 的加速度计数据
-          std::memcpy(acc_filtered, imu_data.accel, sizeof(acc_filtered));
+    // 同步阻塞等待 acc 滤波数据（800Hz）
+    if (mcn_poll_sync(acc_node_, RT_WAITING_FOREVER) == RT_TRUE) {
+      acc_filtered_msg_t acc_data;
+      if (mcn_copy(MCN_HUB(acc), acc_node_, &acc_data) == RT_EOK) {
+        // 使用imu_process_denom_进行分频：每imu_process_denom_次acc更新，只处理1次
+        // 如果imu_process_denom_为0，说明还未初始化，使用默认值1（不分频）
+        uint8_t denom = (imu_process_denom_ > 0) ? imu_process_denom_ : 1;
+        imu_process_counter_++;
+
+        // 只有当计数器值大于(denom - 1)时才执行，否则立即下一次循环
+        if (imu_process_counter_ <= (denom - 1)) {
+          continue;
+        }
+
+        // 执行姿态估计处理
+        imu_process_counter_ = 0;
+
+#ifdef PROJECT_BF_ATTITUDE_DEBUG_PIN_EN
+        DEBUG_PIN_DEBUG1_HIGH();  // Debug pin: Attitude task execution start
 #endif
 
-          // 更新姿态估计
-          updateAttitude(acc_filtered, gyro_attitude, dt);
-
-          // 发布姿态数据
-          publishAttitude(&imu_data);
+        // 计算时间差
+        uint32_t current_time_us = timestamp_micros();
+        float dt = (current_time_us - last_update_time_us) * 1e-6f;
+        if (dt <= 0.0f || dt > 0.1f) {
+          // 时间异常，使用默认值
+          dt = 1.0f / update_freq_hz_;
         }
+        last_update_time_us = current_time_us;
+
+        // 获取处理后的加速度计数据
+        float acc_filtered[3] = {0.0f, 0.0f, 0.0f};
+        std::memcpy(acc_filtered, acc_data.acc_filtered, sizeof(acc_filtered));
+
+        // 非阻塞poll gyro滤波后的数据（使用专门为attitude准备的滤波数据）
+        float gyro_attitude[3] = {0.0f, 0.0f, 0.0f};
+        if (gyro_node_ != RT_NULL) {
+          gyro_filtered_msg_t gyro_data;
+          if (mcn_poll(gyro_node_) == RT_TRUE) {
+            if (mcn_copy(MCN_HUB(gyro), gyro_node_, &gyro_data) == RT_EOK) {
+              std::memcpy(gyro_attitude, gyro_data.gyro_filtered_for_attitude, sizeof(gyro_attitude));
+            }
+          }
+        }
+
+        // 更新姿态估计
+        updateAttitude(acc_filtered, gyro_attitude, dt);
+
+        // 发布姿态数据（使用acc_data的seq，发布attitude_values_数据）
+        publishAttitude(acc_data.seq);
+
+#ifdef PROJECT_BF_ATTITUDE_DEBUG_PIN_EN
+        DEBUG_PIN_DEBUG1_LOW();  // Debug pin: Attitude task execution end
+#endif
       }
     }
-
-#ifdef PROJECT_BF_ATTITUDE_DEBUG_PIN_EN
-    DEBUG_PIN_DEBUG3_LOW();  // Debug pin: Attitude task execution end
+#else
+    LOG_E("AttitudeBf: PROJECT_BF_ACC_EN not enabled, cannot run");
+    rt_thread_mdelay(100);
 #endif
   }
 }

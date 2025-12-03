@@ -45,6 +45,12 @@ class BMI270 {
   /** 获取陀螺仪比例因子（对应 gyro.scale） */
   float getGyroScale() const { return gyro_scale_; }
 
+  /** 获取加速度计采样频率（Hz） */
+  float getAccSampleRateHz() const { return acc_sample_rate_hz_; }
+
+  /** 获取IMU处理分频因子 */
+  uint8_t getImuProcessDenom() const { return imu_process_denom_; }
+
   /* 工作线程配置（静态栈） */
   static constexpr rt_uint16_t THREAD_STACK_SIZE = 2048;
   static constexpr rt_uint8_t THREAD_PRIORITY = 5;
@@ -68,8 +74,10 @@ class BMI270 {
   /* 软件定时器回调（临时替代中断） */
   static void timerCallback(void *parameter);
 
-  bool readAccelGyro(int16_t acc[3], int16_t gyro[3]);
-  void publishImu(const int16_t acc[3], const int16_t gyro[3]);
+  bool readImu(int16_t acc[3], int16_t gyro[3]);
+  bool readGyroOnly(int16_t gyro[3]);
+  void publishGyro(const int16_t gyro[3]);
+  void publishAcc(const int16_t acc[3]);
 
   uint8_t regRead(uint8_t reg);
   void regWrite(uint8_t reg, uint8_t value, unsigned delayMs = 0);
@@ -102,6 +110,10 @@ class BMI270 {
   /* IMU 采样频率和周期 */
   float gyro_sample_rate_hz_;  // 陀螺仪采样频率（Hz）
   float gyro_sample_dt_;       // 陀螺仪采样周期（秒）
+  float acc_sample_rate_hz_;   // 加速度计采样频率（Hz）
+  
+  /* IMU 处理分频因子（用于姿态估计等模块） */
+  uint8_t imu_process_denom_;  // IMU处理分频因子（例如：2表示每2次acc更新处理1次）
   
   /* IMU 比例因子（对应 gyro.scale） */
   float gyro_scale_;           // 陀螺仪比例因子（dps/lsb）

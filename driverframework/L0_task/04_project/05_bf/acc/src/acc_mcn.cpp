@@ -42,24 +42,24 @@ rt_err_t AccBf::initMcn() {
     }
   }
 
-  // 订阅 imu MCN 节点（传入 event 用于同步等待）
-  imu_node_ = mcn_subscribe(MCN_HUB(imu), imu_event_, RT_NULL);
+  // 订阅 acc_raw MCN 节点（传入 event 用于同步等待）
+  imu_node_ = mcn_subscribe(MCN_HUB(acc_raw), imu_event_, RT_NULL);
   if (imu_node_ == RT_NULL) {
-    LOG_E("subscribe imu topic failed");
+    LOG_E("subscribe acc_raw topic failed");
     if (imu_event_ != RT_NULL) {
       rt_sem_delete(imu_event_);
       imu_event_ = RT_NULL;
     }
     return -RT_ERROR;
   }
-  LOG_I("Subscribed to imu MCN topic");
+  LOG_I("Subscribed to acc_raw MCN topic");
 
   // 获取 acc MCN hub（用于发布处理后的数据）
   acc_filtered_hub_ = MCN_HUB(acc);
   if (acc_filtered_hub_ == nullptr) {
     LOG_E("get acc hub failed");
     if (imu_node_ != RT_NULL) {
-      mcn_unsubscribe(MCN_HUB(imu), imu_node_);
+      mcn_unsubscribe(MCN_HUB(acc_raw), imu_node_);
       imu_node_ = RT_NULL;
     }
     if (imu_event_ != RT_NULL) {
@@ -77,7 +77,7 @@ rt_err_t AccBf::initMcn() {
     // 其他值: 激活失败（内存不足等）
     LOG_E("acc_filtered advertise failed: %d", advertise_ret);
     if (imu_node_ != RT_NULL) {
-      mcn_unsubscribe(MCN_HUB(imu), imu_node_);
+      mcn_unsubscribe(MCN_HUB(acc_raw), imu_node_);
       imu_node_ = RT_NULL;
     }
     if (imu_event_ != RT_NULL) {
@@ -94,7 +94,7 @@ rt_err_t AccBf::initMcn() {
 // 清理 MCN 订阅
 void AccBf::cleanupMcnSubscriptions() {
   if (imu_node_ != RT_NULL) {
-    mcn_unsubscribe(MCN_HUB(imu), imu_node_);
+    mcn_unsubscribe(MCN_HUB(acc_raw), imu_node_);
     imu_node_ = RT_NULL;
   }
 
@@ -105,15 +105,15 @@ void AccBf::cleanupMcnSubscriptions() {
 }
 
 // 发布处理后的加速度计数据到 MCN
-void AccBf::publishAccFiltered(const imu_raw_msg_t* imu_data) {
-  if (imu_data == nullptr || acc_filtered_hub_ == nullptr) {
+void AccBf::publishAccFiltered(const acc_raw_msg_t* acc_data) {
+  if (acc_data == nullptr || acc_filtered_hub_ == nullptr) {
     return;
   }
 
   acc_filtered_msg_t filtered_msg;
   std::memcpy(filtered_msg.acc_filtered, acc_filtered_, sizeof(acc_filtered_));
   std::memcpy(filtered_msg.acc_adc, acc_adc_, sizeof(acc_adc_));
-  filtered_msg.seq = imu_data->seq;
+  filtered_msg.seq = acc_data->seq;
   filtered_msg.timestamp = timestamp_micros();
 
   rt_err_t publish_result = mcn_publish(acc_filtered_hub_, &filtered_msg);

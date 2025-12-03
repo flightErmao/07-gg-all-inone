@@ -8,6 +8,7 @@ extern "C" {
 #include <ulog.h>
 #include "debugPin.h"
 #include "timestamp.h"
+#include "../imu/inc/imu_mcn.h"  // For gyro_raw_msg_t
 }
 
 #include <cstring>
@@ -76,7 +77,7 @@ gyro::gyro()
       thread_inited_(false),
       // MCN 订阅和发布相关
       imu_event_(RT_NULL),
-      imu_node_(RT_NULL),
+      gyro_node_(RT_NULL),
       gyro_filtered_hub_(nullptr) {
   // 清零数组
   std::memset(&thread_obj_, 0, sizeof(thread_obj_));
@@ -181,17 +182,16 @@ void gyro::threadEntry(void* parameter) {
 }
 
 void gyro::threadLoop() {
-  imu_raw_msg_t imu_data;
-
   LOG_I("gyro thread loop started");
 
   while (true) {
-    if (mcn_poll_sync(imu_node_, RT_WAITING_FOREVER) == RT_TRUE) {
+    if (mcn_poll_sync(gyro_node_, RT_WAITING_FOREVER) == RT_TRUE) {
 #ifdef PROJECT_BF_GYRO_FILTER_DEBUG_PIN_EN
       DEBUG_PIN_DEBUG0_HIGH();
 #endif
-      if (mcn_copy(MCN_HUB(imu), imu_node_, &imu_data) == RT_EOK) {
-        processImuData(&imu_data);
+      gyro_raw_msg_t gyro_data;
+      if (mcn_copy(MCN_HUB(gyro_raw), gyro_node_, &gyro_data) == RT_EOK) {
+        processImuData(&gyro_data);
 #ifdef PROJECT_BF_GYRO_FILTER_DEBUG_PIN_EN
         DEBUG_PIN_DEBUG0_LOW();
 #endif
@@ -200,11 +200,11 @@ void gyro::threadLoop() {
   }
 }
 
-void gyro::processImuData(const imu_raw_msg_t* imu_data) {
-  if (imu_data == RT_NULL) {
+void gyro::processImuData(const gyro_raw_msg_t* gyro_data) {
+  if (gyro_data == RT_NULL) {
     return;
   }
-  float gyro_raw[3] = {imu_data->gyro[0], imu_data->gyro[1], imu_data->gyro[2]};
+  float gyro_raw[3] = {gyro_data->gyro[0], gyro_data->gyro[1], gyro_data->gyro[2]};
 
   // 如果没有校准，开始校准
   if (!calibration_started_ && !gyro_calibration_.isCalibrationComplete()) {
@@ -338,9 +338,9 @@ void gyro::processImuData(const imu_raw_msg_t* imu_data) {
     std::memset(sample_sum_, 0, sizeof(sample_sum_));
   }
 
-  publishGyroFiltered(imu_data);
-
-  pushGyroDataToMlog(imu_data);
+  // 发布滤波后的gyro数据到MCN
+  publishGyroFiltered(gyro_data->seq);
+  // pushGyroDataToMlog(&gyro_raw_data);
 }
 
 void gyro::applyFilterChain(const float input[3], float output[3]) {

@@ -25,15 +25,21 @@ include_paths = [
     ),  # debugPin.h 所在目录
 ]
 
+depend_list = [
+    "PROJECT_BF_ATTITUDE_EN",
+    "PROJECT_BF_GYRO_FILTER_EN",  # 依赖 gyro filter
+    "PROJECT_BF_PARAM_EN",  # getParam function
+    "PROJECT_BF_ACC_EN",  # 依赖 acc
+]
+
+# Add debugPin dependency if enabled
+if GetDepend('PROJECT_BF_ATTITUDE_DEBUG_PIN_EN'):
+    depend_list.append('L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN')
+
 group = DefineGroup(
     "PROJECT_BF_ATTITUDE_EN",
     src,
-    depend=[
-        "PROJECT_BF_ATTITUDE_EN",
-        "PROJECT_BF_GYRO_FILTER_EN",  # 依赖 gyro filter
-        "PROJECT_BF_PARAM_EN",  # getParam function
-        "PROJECT_BF_ACC_EN",  # 依赖 acc
-    ],
+    depend=depend_list,
     CPPPATH=include_paths,
 )
 

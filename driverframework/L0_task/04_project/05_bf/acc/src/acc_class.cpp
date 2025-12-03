@@ -15,6 +15,8 @@ extern "C" {
 #endif
 }
 
+#include "../imu/inc/bmi270_class.h"
+
 #include <cstring>
 #include <cmath>
 
@@ -151,8 +153,7 @@ rt_err_t AccBf::init() {
     return ret;
   }
 
-  // 初始化滤波器（从参数系统读取配置）
-  initFilters();
+  // 注意：滤波器初始化已移到initInThreadEntry中，因为需要等待IMU初始化完成
 
   // 创建线程
   rt_err_t err = rt_thread_init(&thread_obj_, "acc", threadEntry, this, thread_stack_,
@@ -233,6 +234,21 @@ void AccBf::threadEntry(void* parameter) {
 }
 
 void AccBf::initInThreadEntry() {
+  // 等待 IMU 模块初始化完成
+  rt_err_t ret = initSyncWait(INIT_SYNC_BMI270, 1000);  // 等待最多1秒
+  if (ret != RT_EOK) {
+    LOG_E("AccBf: Failed to wait for BMI270 initialization: %d", ret);
+    return;
+  }
+
+  // 从 IMU 模块获取加速度计采样频率
+  using namespace bf_bmi270;
+  sample_rate_hz_ = static_cast<uint16_t>(BMI270::instance().getAccSampleRateHz());
+  LOG_I("AccBf: Got acc sample rate from IMU: %u Hz", sample_rate_hz_);
+
+  // 初始化滤波器（使用从IMU获取的采样频率）
+  initFilters();
+
   // 从参数系统加载板级对齐参数并初始化（Betaflight 风格）
   boardAlignment_t board_alignment = {0, 0, 0};
   if (getParam("board_alignment", &board_alignment, sizeof(board_alignment)) == RT_EOK) {
@@ -270,36 +286,36 @@ void AccBf::threadLoop() {
 
   while (true) {
 #ifdef PROJECT_BF_ACC_DEBUG_PIN_EN
-    DEBUG_PIN_DEBUG4_HIGH();  // Debug pin: Acc task execution start
+    DEBUG_PIN_DEBUG0_HIGH();  // Debug pin: Acc task execution start
 #endif
 
-    // 阻塞等待 IMU 数据
+    // 阻塞等待 acc_raw 数据
     if (mcn_poll_sync(imu_node_, RT_WAITING_FOREVER) == RT_TRUE) {
-      imu_raw_msg_t imu_data;
-      if (mcn_copy(MCN_HUB(imu), imu_node_, &imu_data) == RT_EOK) {
+      acc_raw_msg_t acc_data;
+      if (mcn_copy(MCN_HUB(acc_raw), imu_node_, &acc_data) == RT_EOK) {
         // 处理加速度计数据
-        processAccData(&imu_data);
+        processAccData(&acc_data);
 
         // 发布处理后的数据
-        publishAccFiltered(&imu_data);
+        publishAccFiltered(&acc_data);
       }
     }
 
 #ifdef PROJECT_BF_ACC_DEBUG_PIN_EN
-    DEBUG_PIN_DEBUG4_LOW();  // Debug pin: Acc task execution end
+    DEBUG_PIN_DEBUG0_LOW();  // Debug pin: Acc task execution end
 #endif
   }
 }
 
-void AccBf::processAccData(const imu_raw_msg_t* imu_data) {
-  if (imu_data == nullptr) {
+void AccBf::processAccData(const acc_raw_msg_t* acc_data) {
+  if (acc_data == nullptr) {
     return;
   }
 
   // 处理流程：原始ADC → 对齐 → 校准 → Trim → PT2滤波
   // Betaflight 风格：acc 数据保持原始 ADC 值（未缩放），缩放将在 attitude 更新中进行
   float acc_processed[3];
-  std::memcpy(acc_processed, imu_data->accel, sizeof(acc_processed));
+  std::memcpy(acc_processed, acc_data->accel, sizeof(acc_processed));
 
   // 步骤1: 传感器对齐
   // 参考 Betaflight: 对齐在初始化时设置，处理时直接应用
@@ -366,18 +382,20 @@ void AccBf::initFilters() {
     acc_filter_cutoff_hz = 50;  // 如果参数不存在，使用默认值 50Hz
   }
 
-  // 获取采样频率（从 IMU 模块获取，或使用默认值）
-  float sample_rate_hz = 3200.0f;  // 默认 3.2kHz
-  // TODO: 从 IMU 模块获取实际采样频率
+  // 使用从IMU获取的采样频率（已在initInThreadEntry中设置）
+  if (sample_rate_hz_ == 0) {
+    LOG_W("Acc sample rate not set, using default 800Hz");
+    sample_rate_hz_ = 800;  // 默认800Hz
+  }
 
-  if (acc_filter_cutoff_hz > 0 && sample_rate_hz > 0) {
-    float dT = 1.0f / sample_rate_hz;
+  if (acc_filter_cutoff_hz > 0 && sample_rate_hz_ > 0) {
+    float dT = 1.0f / static_cast<float>(sample_rate_hz_);
     const float k = pt2FilterGain(static_cast<float>(acc_filter_cutoff_hz), dT);
     for (int i = 0; i < 3; i++) {
       pt2FilterInit(&pt2_filter_[i], k);
     }
     pt2_filter_enabled_ = true;
-    LOG_I("Acc PT2 filter initialized: cutoff=%u Hz, sample_rate=%.1f Hz", acc_filter_cutoff_hz, sample_rate_hz);
+    LOG_I("Acc PT2 filter initialized: cutoff=%u Hz, sample_rate=%u Hz", acc_filter_cutoff_hz, sample_rate_hz_);
   }
 }
 
@@ -387,13 +405,19 @@ rt_err_t AccBf::startCalibration() {
     return RT_EOK;
   }
 
-  float sample_rate_hz = 3200.0f;  // TODO: 从实际采样频率获取
+  // 使用从IMU获取的采样频率
+  if (sample_rate_hz_ == 0) {
+    LOG_E("Acc sample rate not set, cannot start calibration");
+    return -RT_ERROR;
+  }
+
+  float sample_rate_hz = static_cast<float>(sample_rate_hz_);
   uint32_t duration_ms = PROJECT_BF_ACC_CALIBRATION_DURATION_MS;
 
   acc_calibration_.startCalibration(sample_rate_hz, duration_ms);
   calibration_started_ = true;
 
-  LOG_I("Acc calibration started: duration=%u ms", duration_ms);
+  LOG_I("Acc calibration started: duration=%u ms, sample_rate=%.1f Hz", duration_ms, sample_rate_hz);
   return RT_EOK;
 }
 
