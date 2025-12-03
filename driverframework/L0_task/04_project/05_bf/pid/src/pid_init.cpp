@@ -164,45 +164,30 @@ void PidBf::loadPidParameters() {
     pid_profile_.angle_limit = angle_limit;
   }
 
-  uint8_t angle_feedforward_smoothing_ms = pid_profile_.angle_feedforward_smoothing_ms;
-  if (getParam("pid_angle_feedforward_smoothing_ms", &angle_feedforward_smoothing_ms, sizeof(angle_feedforward_smoothing_ms)) == RT_EOK) {
-    pid_profile_.angle_feedforward_smoothing_ms = angle_feedforward_smoothing_ms;
-  }
-
   uint8_t angle_earth_ref = pid_profile_.angle_earth_ref;
   if (getParam("pid_angle_earth_ref", &angle_earth_ref, sizeof(angle_earth_ref)) == RT_EOK) {
     pid_profile_.angle_earth_ref = angle_earth_ref;
   }
 
-  // Load PID_LEVEL parameters (for angle mode) - 分别加载每个参数
-  uint8_t pid_level_p = pid_profile_.pid_level.P;
-  if (getParam("pid_angle_level_p", &pid_level_p, sizeof(pid_level_p)) == RT_EOK) {
-    pid_profile_.pid_level.P = pid_level_p;
+  float angle_p_gain = pid_profile_.angle_p_gain;
+  if (getParam("pid_angle_p_gain", &angle_p_gain, sizeof(angle_p_gain)) == RT_EOK) {
+    pid_profile_.angle_p_gain = angle_p_gain;
   }
 
-  uint8_t pid_level_i = pid_profile_.pid_level.I;
-  if (getParam("pid_angle_level_i", &pid_level_i, sizeof(pid_level_i)) == RT_EOK) {
-    pid_profile_.pid_level.I = pid_level_i;
+  float angle_feedforward = pid_profile_.angle_feedforward;
+  if (getParam("pid_angle_feedforward", &angle_feedforward, sizeof(angle_feedforward)) == RT_EOK) {
+    pid_profile_.angle_feedforward = angle_feedforward;
   }
 
-  uint8_t pid_level_d = pid_profile_.pid_level.D;
-  if (getParam("pid_angle_level_d", &pid_level_d, sizeof(pid_level_d)) == RT_EOK) {
-    pid_profile_.pid_level.D = pid_level_d;
+  uint8_t angle_feedforward_smoothing_ms = pid_profile_.angle_feedforward_smoothing_ms;
+  if (getParam("pid_angle_feedforward_smoothing_ms", &angle_feedforward_smoothing_ms, sizeof(angle_feedforward_smoothing_ms)) == RT_EOK) {
+    pid_profile_.angle_feedforward_smoothing_ms = angle_feedforward_smoothing_ms;
   }
 
-  uint16_t pid_level_f = pid_profile_.pid_level.F;
-  if (getParam("pid_angle_level_f", &pid_level_f, sizeof(pid_level_f)) == RT_EOK) {
-    pid_profile_.pid_level.F = pid_level_f;
-  }
-
-  uint8_t pid_level_s = pid_profile_.pid_level.S;
-  if (getParam("pid_angle_level_s", &pid_level_s, sizeof(pid_level_s)) == RT_EOK) {
-    pid_profile_.pid_level.S = pid_level_s;
-  }
-
-  LOG_I("PID Level (Angle): P=%u, I=%u, D=%u, F=%u, S=%u",
-        pid_profile_.pid_level.P, pid_profile_.pid_level.I, 
-        pid_profile_.pid_level.D, pid_profile_.pid_level.F, pid_profile_.pid_level.S);
+  LOG_I("Angle mode parameters: limit=%u deg, earth_ref=%u, p_gain=%.2f, feedforward=%.2f, smoothing_ms=%u",
+        pid_profile_.angle_limit, pid_profile_.angle_earth_ref,
+        pid_profile_.angle_p_gain, pid_profile_.angle_feedforward,
+        pid_profile_.angle_feedforward_smoothing_ms);
 #endif
 }
 
@@ -261,17 +246,14 @@ void PidBf::calculatePidCoefficients() {
 #ifdef PROJECT_BF_ATTITUDE_EN
   // Calculate angle mode gains (same as Betaflight)
   // Reference: ref/pid_init.c pidInitConfig()
-  // Angle gain is calculated from PID_LEVEL P parameter
-  // angleGain = pid_level.P * PTERM_SCALE * some_factor
-  // Betaflight uses a scaling factor to convert PID_LEVEL P to angle gain
-  constexpr float ANGLE_GAIN_SCALE = 1.0f;  // May need adjustment based on testing
-  pid_runtime_.angleGain = pid_profile_.pid_level.P * PTERM_SCALE * ANGLE_GAIN_SCALE;
+  // Angle gain: divide by 10.0 (same as Betaflight: pid[PID_LEVEL].P / 10.0f)
+  pid_runtime_.angleGain = pid_profile_.angle_p_gain / 10.0f;
   
-  // Angle feedforward gain (from PID_LEVEL F parameter)
-  pid_runtime_.angleFeedforwardGain = pid_profile_.pid_level.F * FEEDFORWARD_SCALE * 0.01f;
+  // Angle feedforward gain: divide by 100.0 (same as Betaflight: pid[PID_LEVEL].F / 100.0f)
+  pid_runtime_.angleFeedforwardGain = pid_profile_.angle_feedforward / 100.0f;
   
-  // Earth reference gain (0.0-1.0 from 0-100)
-  pid_runtime_.angleEarthRef = pid_profile_.angle_earth_ref * 0.01f;
+  // Earth reference gain (0.0-1.0 from 0-100): divide by 100.0 (same as Betaflight: angle_earth_ref / 100.0f)
+  pid_runtime_.angleEarthRef = pid_profile_.angle_earth_ref / 100.0f;
   
   LOG_I("Angle mode gains: angleGain=%.4f, feedforwardGain=%.4f, earthRef=%.2f", 
         pid_runtime_.angleGain, pid_runtime_.angleFeedforwardGain, pid_runtime_.angleEarthRef);

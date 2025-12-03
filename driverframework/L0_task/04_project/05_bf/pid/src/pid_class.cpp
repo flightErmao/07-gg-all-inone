@@ -187,14 +187,10 @@ PidBf::PidBf()
 #ifdef PROJECT_BF_ATTITUDE_EN
   // Angle mode defaults (same as Betaflight)
   pid_profile_.angle_limit = 60;  // Max angle in degrees
-  pid_profile_.angle_feedforward_smoothing_ms = 80;  // Time constant in milliseconds
   pid_profile_.angle_earth_ref = 100;  // Earth reference gain (0-100)
-  // PID_LEVEL defaults: {50, 75, 75, 50, 0} (P, I, D, F, S)
-  pid_profile_.pid_level.P = 50;
-  pid_profile_.pid_level.I = 75;
-  pid_profile_.pid_level.D = 75;
-  pid_profile_.pid_level.F = 50;
-  pid_profile_.pid_level.S = 0;
+  pid_profile_.angle_p_gain = 50.0f;  // Angle mode P gain
+  pid_profile_.angle_feedforward = 50.0f;  // Angle mode feedforward gain
+  pid_profile_.angle_feedforward_smoothing_ms = 80;  // Time constant in milliseconds
   
   // Initialize angle mode runtime parameters
   pid_runtime_.angleGain = 0.0f;
@@ -268,7 +264,8 @@ void PidBf::initFilters() {
   constexpr float ATTITUDE_CUTOFF_HZ = 50.0f;  // Betaflight default
   const float k = pt3FilterGain(ATTITUDE_CUTOFF_HZ, pid_runtime_.dT);
   
-  // Angle feedforward filter cutoff frequency
+  // Angle feedforward filter cutoff frequency (from parameter)
+  // Use angle_feedforward_smoothing_ms parameter for cutoff frequency calculation
   const float angleCutoffHz = 1000.0f / (2.0f * PI_F * pid_profile_.angle_feedforward_smoothing_ms);
   const float k2 = pt3FilterGain(angleCutoffHz, pid_runtime_.dT);
   

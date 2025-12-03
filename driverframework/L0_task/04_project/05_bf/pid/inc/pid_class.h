@@ -97,9 +97,10 @@ struct pidProfile_t {
   
   // Angle mode parameters (same as Betaflight)
   uint8_t angle_limit;                  // Max angle in degrees in Angle mode
-  uint8_t angle_feedforward_smoothing_ms; // Smoothing factor for angle feedforward as time constant in milliseconds
   uint8_t angle_earth_ref;              // Control amount of "co-ordination" from yaw into roll while pitched forward in angle mode (0-100)
-  pidf_t pid_level;                     // PID parameters for LEVEL (angle) mode [P, I, D, F, S]
+  float angle_p_gain;                   // Angle mode P gain
+  float angle_feedforward;              // Angle mode feedforward gain
+  uint8_t angle_feedforward_smoothing_ms; // Smoothing factor for angle feedforward as time constant in milliseconds
 };
 
 struct pidCoefficient_t {
@@ -159,7 +160,7 @@ struct pidRuntime_t {
   
 #ifdef PROJECT_BF_ATTITUDE_EN
   // Angle mode runtime parameters (same as Betaflight)
-  float angleGain;                      // Angle gain (from PID_LEVEL P parameter)
+  float angleGain;                      // Angle gain (from angle_p_gain parameter)
   float angleFeedforwardGain;           // Angle feedforward gain
   float angleTarget[RP_AXIS_COUNT];     // Angle target [roll, pitch] (degrees)
   float angleYawSetpoint;               // Yaw setpoint for earth reference compensation
