@@ -159,6 +159,11 @@ void PidBf::initRuntime() {
     pid_runtime_.angleLoopDebug[axis].feedforward = 0.0f;
   }
 #endif
+  
+  // Initialize rate loop debug data
+  for (int axis = 0; axis < XYZ_AXIS_COUNT; ++axis) {
+    pid_runtime_.rateLoopDebug[axis].currentSetpoint = 0.0f;
+  }
 }
 
 void PidBf::loadPidParameters() {

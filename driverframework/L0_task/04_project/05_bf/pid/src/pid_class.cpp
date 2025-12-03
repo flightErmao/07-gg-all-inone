@@ -189,6 +189,9 @@ void PidBf::pidController(uint32_t current_time_us) {
     }
 #endif
 
+    // Save currentSetpoint snapshot before errorRate calculation (for logging/debugging)
+    pid_runtime_.rateLoopDebug[axis].currentSetpoint = currentSetpoint;
+
     // Store actual setpoint used for PID calculation (after angle mode conversion and earth reference compensation)
     actualSetpoint[axis] = currentSetpoint;
 
@@ -548,4 +551,11 @@ void PidBf::dynLpfDTermUpdate(float throttle) {
 }
 #endif
 
+// Get rate loop debug data for logging
+const pidRuntime_t::rateLoopDebug_t* PidBf::getRateLoopDebug(int axis) const {
+  if (axis >= 0 && axis < XYZ_AXIS_COUNT) {
+    return &pid_runtime_.rateLoopDebug[axis];
+  }
+  return nullptr;
+}
 

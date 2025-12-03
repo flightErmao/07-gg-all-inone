@@ -23,18 +23,21 @@ static void sendRateSetpointActual(uint16_t count_ms) {
     
     // Get data directly from PidBf singleton
     const gyro_filtered_msg_t& gyro_data = pid.getGyroFilteredData();
-    const pid_setpoint_msg_t& setpoint_data = pid.getSetpointData();
-    
+
+    // Get rate setpoint from rateLoopDebug (currentSetpoint snapshot saved before errorRate calculation)
+    const pidRuntime_t::rateLoopDebug_t* roll_debug = pid.getRateLoopDebug(0);   // FD_ROLL = 0
+    const pidRuntime_t::rateLoopDebug_t* pitch_debug = pid.getRateLoopDebug(1);  // FD_PITCH = 1
+    const pidRuntime_t::rateLoopDebug_t* yaw_debug = pid.getRateLoopDebug(2);    // FD_YAW = 2
+
     // Send rate setpoint (desired) and actual rate (from gyro)
     // Format: [roll_setpoint, pitch_setpoint, yaw_setpoint, roll_actual, pitch_actual, yaw_actual]
-    sendUserDatafloat6(
-        PROJECT_BF_PID_ANOTC_LOG_ANGULAR_RATE_GROUP,
-        setpoint_data.rate[0],  // roll setpoint
-        setpoint_data.rate[1],  // pitch setpoint
-        setpoint_data.rate[2],  // yaw setpoint
-        gyro_data.gyro_filtered_for_pid[0],  // roll actual (gyro x)
-        gyro_data.gyro_filtered_for_pid[1],  // pitch actual (gyro y)
-        gyro_data.gyro_filtered_for_pid[2]   // yaw actual (gyro z)
+    sendUserDatafloat6(PROJECT_BF_PID_ANOTC_LOG_ANGULAR_RATE_GROUP,
+                       (roll_debug != nullptr) ? roll_debug->currentSetpoint : 0.0f,    // roll setpoint
+                       (pitch_debug != nullptr) ? pitch_debug->currentSetpoint : 0.0f,  // pitch setpoint
+                       (yaw_debug != nullptr) ? yaw_debug->currentSetpoint : 0.0f,      // yaw setpoint
+                       gyro_data.gyro_filtered_for_pid[0],                              // roll actual (gyro x)
+                       gyro_data.gyro_filtered_for_pid[1],                              // pitch actual (gyro y)
+                       gyro_data.gyro_filtered_for_pid[2]                               // yaw actual (gyro z)
     );
   }
 }

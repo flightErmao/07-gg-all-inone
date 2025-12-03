@@ -168,6 +168,11 @@ struct pidRuntime_t {
     float feedforward;   // Angle feedforward
   } angleLoopDebug[RP_AXIS_COUNT];  // [roll, pitch]
 #endif
+  
+  // Rate loop debug data for logging (per axis: currentSetpoint snapshot)
+  struct rateLoopDebug_t {
+    float currentSetpoint;  // Current rate setpoint snapshot (deg/s) - saved before errorRate calculation
+  } rateLoopDebug[XYZ_AXIS_COUNT];  // [roll, pitch, yaw]
 };
 
 /* PID setpoint message type (internal to PID module) */
@@ -254,6 +259,11 @@ class PidBf {
     return nullptr;
   }
 #endif
+  
+  // Get rate loop debug data for logging
+  // axis: 0 = roll, 1 = pitch, 2 = yaw
+  // Returns pointer to debug data structure, or nullptr if invalid axis
+  const pidRuntime_t::rateLoopDebug_t* getRateLoopDebug(int axis) const;
   
   // Publish PID output to MCN
   void publishPidOutput(const pid_output_msg_t& output_msg);
