@@ -37,7 +37,7 @@ static void sendRateSetpointActual(uint16_t count_ms) {
                        (yaw_debug != nullptr) ? yaw_debug->currentSetpoint : 0.0f,      // yaw setpoint
                        gyro_data.gyro_filtered_for_pid[0],                              // roll actual (gyro x)
                        gyro_data.gyro_filtered_for_pid[1],                              // pitch actual (gyro y)
-                       gyro_data.gyro_filtered_for_pid[2]                               // yaw actual (gyro z)
+                       -gyro_data.gyro_filtered_for_pid[2]                              // yaw actual (gyro z)
     );
   }
 }

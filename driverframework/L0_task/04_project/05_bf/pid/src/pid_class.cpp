@@ -145,6 +145,12 @@ void PidBf::pidController(uint32_t current_time_us) {
   // Get gyro rates
   float gyroRate[XYZ_AXIS_COUNT];
   std::memcpy(gyroRate, gyro_filtered_data_.gyro_filtered_for_pid, sizeof(gyroRate));
+  
+  // Yaw axis gyro sign correction: Invert yaw gyro rate to match Betaflight convention
+  // Betaflight convention: Left stick (negative setpoint) -> Counterclockwise rotation -> Negative gyro rate
+  // If gyro reports positive rate for counterclockwise rotation, we need to invert it
+  // This ensures: Left stick -> Negative setpoint -> Counterclockwise -> Negative gyro -> Correct PID response
+  gyroRate[FD_YAW] = -gyroRate[FD_YAW];
 
   pid_output_msg_t output_msg;
   output_msg.timestamp = current_time_us;

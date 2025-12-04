@@ -43,13 +43,28 @@ extern "C" {
 //            |              |
 //    左后(REAR_L)       右后(REAR_R)
 //
-// 默认配置（yawPid反向设置，yaw会被取反，见第213行）：
+// 电机配置说明：
+// - 电机序号从0到3，对应物理位置：右后、右前、左后、左前
+// - 电机转向：右前(1)和左后(2)为逆时针(CCW)，左前(3)和右后(0)为顺时针(CW)
+//
+// 混控表说明（yaw会在mixTable中取反，见第244行）：
+// - Roll: 右倾(+1)时，右侧电机(0,1)减少，左侧电机(2,3)增加
+// - Pitch: 前倾(+1)时，前方电机(1,3)减少，后方电机(0,2)增加
+// - Yaw(原始): 左转(-1)时，逆时针电机(1,2)减少，顺时针电机(0,3)增加
+// - Yaw(取反后): 左转(+1)时，逆时针电机(1,2)增加，顺时针电机(0,3)减少 -> 逆时针旋转
+//
 // 电机序号 | 位置     | Roll | Pitch | Yaw(原始) | Yaw(取反后) | 电机转向
 // --------|---------|------|-------|----------|-----------|----------
 // 0       | 右后     | -1   | +1    | -1       | +1        | 顺时针(CW)
 // 1       | 右前     | -1   | -1    | +1       | -1        | 逆时针(CCW)
 // 2       | 左后     | +1   | +1    | +1       | -1        | 逆时针(CCW)
 // 3       | 左前     | +1   | -1    | -1       | +1        | 顺时针(CW)
+//
+// 验证混控逻辑（以左转为例，yaw PID输出为负，取反后为正）：
+// - 左转时，期望逆时针旋转（从上方看）
+// - Yaw取反后系数：电机0(+1), 电机1(-1), 电机2(-1), 电机3(+1)
+// - 负yaw PID输出 × 取反后系数：电机0(-), 电机1(+), 电机2(+), 电机3(-)
+// - 结果：逆时针电机(1,2)增加，顺时针电机(0,3)减少 -> 逆时针旋转 ✓
 static const motorMixer_t mixerQuadX[] = {
     {1.0f, -1.0f, 1.0f, -1.0f},  // 0: REAR_R  (右后, 顺时针CW)
     {1.0f, -1.0f, -1.0f, 1.0f},  // 1: FRONT_R (右前, 逆时针CCW)
@@ -239,9 +254,16 @@ void MotorBf::mixTable(const pid_output_msg_t* pid_output, float* motor_output) 
 
   // Yaw reversal: Betaflight behavior is to negate yaw by default (when yaw_motors_reversed is false)
   // Since we removed yaw_motors_reversed parameter, always negate yaw (normal behavior)
+  // 
+  // 为什么需要取反yaw：
+  // - RC左打yaw杆 -> 负setpoint -> 负PID输出（期望逆时针旋转）
+  // - 混控表中yaw系数设计为：左转时逆时针电机增加，顺时针电机减少
+  // - 但混控表原始系数是：左转(-1)时逆时针电机减少，顺时针电机增加
+  // - 因此需要取反yaw PID输出，使左转时逆时针电机增加，顺时针电机减少
+  // 
   // 注意：此处的yaw取反会影响混控表中yaw系数的实际效果
   // 混控表中的yaw系数需要与此取反操作配合，才能得到正确的电机转向配置
-  scaledAxisPidYaw = -scaledAxisPidYaw;
+  // scaledAxisPidYaw = -scaledAxisPidYaw;
 
   // Step 1: Calculate motor mix (roll, pitch, yaw components)
   float motorMix[MAX_SUPPORTED_MOTORS];

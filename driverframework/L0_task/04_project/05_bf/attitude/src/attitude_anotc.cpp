@@ -53,7 +53,7 @@ static void sendAttitudeData(uint16_t count_ms) {
       // Only use if seq > 0, which indicates attitude has been updated at least once
       attitude_data[0] = attitude_data_cache_.values[0];  // roll in degrees
       attitude_data[1] = -attitude_data_cache_.values[1];  // pitch in degrees
-      attitude_data[2] = attitude_data_cache_.values[2];  // yaw in degrees
+      attitude_data[2] = -attitude_data_cache_.values[2];  // yaw in degrees
     } else {
       // Attitude not initialized yet or MCN subscription failed
       // Don't send uninitialized data (will send 0,0,0 which is better than stale data)
