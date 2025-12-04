@@ -250,14 +250,14 @@ void AccBf::initInThreadEntry() {
   initFilters();
 
   // 从参数系统加载板级对齐参数并初始化（Betaflight 风格）
-  boardAlignment_t board_alignment = {0, 0, 0};
-  if (getParam("board_alignment", &board_alignment, sizeof(board_alignment)) == RT_EOK) {
-    initBoardAlignment(&board_alignment);
-    LOG_I("Loaded board alignment: roll=%d, pitch=%d, yaw=%d (degrees)", 
-          (int)board_alignment.rollDegrees, (int)board_alignment.pitchDegrees, (int)board_alignment.yawDegrees);
+  boardAlignment_t imu_board_alignment = {0, 0, 0};
+  if (getParam("imu_board_alignment", &imu_board_alignment, sizeof(imu_board_alignment)) == RT_EOK) {
+    initBoardAlignment(&imu_board_alignment);
+    LOG_I("Loaded board alignment: roll=%d, pitch=%d, yaw=%d (degrees)", (int)imu_board_alignment.rollDegrees,
+          (int)imu_board_alignment.pitchDegrees, (int)imu_board_alignment.yawDegrees);
   } else {
     // 参数不存在，使用默认值（无板级对齐）
-    // initBoardAlignment(&board_alignment);
+    // initBoardAlignment(&imu_board_alignment);
     LOG_I("Board alignment parameter not found, using default (0, 0, 0)");
   }
 

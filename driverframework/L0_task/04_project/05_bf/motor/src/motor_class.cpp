@@ -114,6 +114,13 @@ rt_err_t MotorBf::init() {
     return ret;
   }
 
+  // Step 2.5: Initialize mlog
+  ret = initMlog();
+  if (ret != RT_EOK) {
+    LOG_E("Mlog init failed");
+    return ret;
+  }
+
   // Step 3: Initialize thread resources
   ret = initThreadResources();
   if (ret != RT_EOK) {
@@ -364,6 +371,16 @@ void MotorBf::writeMotors(const float* motor_output, rt_device_t motor_device) {
 
   // Write motor values to device
   rt_device_write(motor_device, 0x0F, motor_values, 4);
+
+  // Push motor data to mlog (record final dshot values)
+  bf_mlog::motor_mlog_data_t mlog_data;
+  mlog_data.seq = seq_++;
+  mlog_data.timestamp = timestamp_micros();
+  // Copy first 4 motor values (uint16_t) to mlog data
+  for (int i = 0; i < 4 && i < motor_count_; i++) {
+    mlog_data.motor_values[i] = motor_values[i];
+  }
+  pushMotorDataToMlog(&mlog_data);
 }
 
 // Motor thread initialization helpers

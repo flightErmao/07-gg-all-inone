@@ -92,5 +92,26 @@ menuconfig PROJECT_BF_GYRO_FILTER_EN
                         Enable dynamic notch filter that automatically detects and filters motor noise frequencies.
                         This is useful for removing motor-induced vibrations from gyro data.
         endif
+
+        menuconfig PROJECT_BF_MLOG_GYRO_EN
+            bool "ENABLE: PROJECT_BF_MLOG_GYRO_EN"
+            default y
+            depends on TASK_TOOL_02_SD_MLOG
+            help
+                Enable Betaflight-style gyro data logging via mlog system.
+                Records filtered and unfiltered gyro data (gyroADC and gyroADCf).
+
+            if PROJECT_BF_MLOG_GYRO_EN
+                comment "Mlog gyro logging is configured via parameter system (mlog_gyro_en)"
+
+                config PROJECT_BF_MLOG_GYRO_DEBUG_PIN_EN
+                    bool "Enable Debug Pin for Mlog Push Timing Measurement"
+                    default n
+                    depends on L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN
+                    help
+                        Enable debug pin to measure mlog push data timing.
+                        The pin will toggle when batch push data (every 10 frames).
+
+            endif
     endif
 

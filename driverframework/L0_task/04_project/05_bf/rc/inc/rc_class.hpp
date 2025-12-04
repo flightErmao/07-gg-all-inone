@@ -14,6 +14,8 @@ extern "C" {
 #include "param.h"
 }
 
+#include "rc_mlog.h"
+
 // Forward declarations (rc_command_msg_t and rc_aux_msg_t are typedefs defined in rc_mcn.h)
 
 // Simple lowpass filter structure (shared with pid_class.h)
@@ -83,6 +85,10 @@ class RcBf {
   void publishAuxChannelsToMcn(uint32_t current_time_us);
   void echoSetpoint(const rc_command_msg_t* setpoint_data);
   void echoAux(const rc_aux_msg_t* aux_data);
+
+  // Mlog related functions
+  rt_err_t initMlog();
+  void pushRcDataToMlog(const bf_mlog::rc_mlog_data_t* data);
 
   // Get RC data and command arrays (for echo functions)
   const float* getRcData() const { return rc_data_; }

@@ -19,6 +19,8 @@ extern "C" {
 #endif
 }
 
+#include "pid_mlog.h"
+
 // Forward declaration
 class RcSmoothingFilter;
 
@@ -197,6 +199,10 @@ class PidBf {
 
   // Start main PID thread (replaces pidMainInit)
   rt_err_t startMainThread();
+
+  // Mlog related functions
+  rt_err_t initMlog();
+  void pushPidDataToMlog(const bf_mlog::pid_mlog_data_t* data);
 
   // Get current data (for logging/debugging)
   const gyro_filtered_msg_t& getGyroFilteredData() const { return gyro_filtered_data_; }

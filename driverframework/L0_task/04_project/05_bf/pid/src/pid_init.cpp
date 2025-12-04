@@ -739,6 +739,13 @@ rt_err_t PidBf::init() {
   initConfig();
   initFilters();
 
+  // Initialize mlog
+  ret = initMlog();
+  if (ret != RT_EOK) {
+    LOG_E("Mlog init failed");
+    return ret;
+  }
+
   // 注意：initSyncNotify(INIT_SYNC_PID) 已移到 workerEntry 中，在等待 Gyro Filter 之后
 
   LOG_I("PidBf initialized (no thread - using taskPid.cpp main thread)");

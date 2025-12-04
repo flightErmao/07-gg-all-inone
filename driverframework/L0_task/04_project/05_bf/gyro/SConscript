@@ -9,8 +9,8 @@ include_paths = [
     cwd,
     os.path.join(cwd, "inc"),
     os.path.join(cwd, "../imu/inc"),
-    os.path.join(cwd, "../log/inc"),
     os.path.join(cwd, "../common/inc"),  # init_sync.h 所在目录
+    os.path.join(cwd, "..", "..", "..", "02_tools", "TASK_02_SD_MLOG", "inc"),  # mlog.h 所在目录
     os.path.join(
         cwd, "..", "..", "..", "..", "L1_middleWare", "06_bf_lib", "common", "inc"
     ),  # filter.h, sdft.h, axis.h, maths.h, vector.h, sensor_alignment.h 所在目录
@@ -30,6 +30,7 @@ group = DefineGroup(
         "PROJECT_BF_GYRO_FILTER_EN",
         "PROJECT_BF_PARAM_EN",  # getParam function
         "PROJECT_BF_MLOG_GYRO_EN",
+        "TASK_TOOL_02_SD_MLOG",  # mlog system
     ],
     CPPPATH=include_paths,
 )

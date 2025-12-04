@@ -15,12 +15,24 @@ static void bf_mlog_param_default(void *address, uint8_t size);
 
 /* Mlog 陀螺仪数据记录使能 */
 static uint8_t mlog_gyro_en;  // 0=禁用, 1=使能
+/* Mlog RC 数据记录使能 */
+static uint8_t mlog_rc_en;  // 0=禁用, 1=使能
+/* Mlog Motor 数据记录使能 */
+static uint8_t mlog_motor_en;  // 0=禁用, 1=使能
+/* Mlog PID 数据记录使能 */
+static uint8_t mlog_pid_en;  // 0=禁用, 1=使能
 
 /* 默认值 */
 static const uint8_t mlog_gyro_en_default = 1;  // 默认使用
+static const uint8_t mlog_rc_en_default = 1;  // 默认使用
+static const uint8_t mlog_motor_en_default = 1;  // 默认使用
+static const uint8_t mlog_pid_en_default = 1;  // 默认使用
 
 static const param_default_t bf_mlog_defaults[] = {
     {&mlog_gyro_en, &mlog_gyro_en_default},
+    {&mlog_rc_en, &mlog_rc_en_default},
+    {&mlog_motor_en, &mlog_motor_en_default},
+    {&mlog_pid_en, &mlog_pid_en_default},
 };
 
 static void bf_mlog_param_default(void *address, uint8_t size) {
@@ -34,6 +46,12 @@ static void bf_mlog_param_default(void *address, uint8_t size) {
 
 static param_list bf_mlog_params[] = {
     {(void*)&mlog_gyro_en, sizeof(mlog_gyro_en), "mlog_gyro_en", "u8",
+     bf_mlog_param_default},
+    {(void*)&mlog_rc_en, sizeof(mlog_rc_en), "mlog_rc_en", "u8",
+     bf_mlog_param_default},
+    {(void*)&mlog_motor_en, sizeof(mlog_motor_en), "mlog_motor_en", "u8",
+     bf_mlog_param_default},
+    {(void*)&mlog_pid_en, sizeof(mlog_pid_en), "mlog_pid_en", "u8",
      bf_mlog_param_default},
 };
 

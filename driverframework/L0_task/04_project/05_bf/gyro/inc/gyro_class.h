@@ -17,7 +17,7 @@ extern "C" {
 #include "sensor_alignment.h"  // For sensor alignment
 #include "vector.h"            // For matrix operations
 }
-#include "../log/inc/mlog_gyro.hpp"
+#include "gyro_mlog.h"
 
 // 简化的标准差统计结构（用于校准运动检测）
 class DeviationStats {
@@ -120,7 +120,7 @@ class gyro {
 
   // Mlog 相关函数
   rt_err_t initMlog();
-  void pushGyroDataToMlog(const gyro_raw_msg_t* gyro_data);
+  void pushGyroDataToMlog(const bf_mlog::gyro_mlog_data_t* data);
 
   // 获取滤波后的角速度数据（对应 gyro.gyroADCf）
   void getFilteredGyro(float gyro_filtered[3]) const { std::memcpy(gyro_filtered, gyro_adcf_, sizeof(gyro_adcf_)); }

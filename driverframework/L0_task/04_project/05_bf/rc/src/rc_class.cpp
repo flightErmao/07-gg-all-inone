@@ -155,6 +155,13 @@ rt_err_t RcBf::init() {
     return ret;
   }
 
+  // Initialize mlog
+  ret = initMlog();
+  if (ret != RT_EOK) {
+    LOG_E("Mlog init failed");
+    return ret;
+  }
+
   // Initialize thread (rc_thread_stack_ is a fixed-size array, not dynamically allocated)
   size_t stack_size = RC_THREAD_STACK_SIZE;
   
@@ -794,6 +801,23 @@ void RcBf::rcThreadEntry(void* parameter) {
 
     // Publish auxiliary channels data to MCN (after failsafe protection)
     instance->publishAuxChannelsToMcn(current_time_us);
+
+    // Push RC data to mlog (record raw channels, rawSetpoint, throttle, armed, flight_mode)
+    // This is the last step in RC thread execution
+    // Note: seq_ was incremented in both publishRcCommandToMcn and publishAuxChannelsToMcn
+    // So use seq_ - 2 to match the seq from publishRcCommandToMcn
+    bf_mlog::rc_mlog_data_t mlog_data;
+    mlog_data.seq = instance->seq_ - 2;  // Use the seq from publishRcCommandToMcn (seq_ was incremented twice: once in publishRcCommandToMcn, once in publishAuxChannelsToMcn)
+    mlog_data.timestamp = current_time_us;
+    // Copy first 6 channels of raw RC data
+    for (int i = 0; i < 6; i++) {
+      mlog_data.raw_channels[i] = instance->rc_data_[i];
+    }
+    std::memcpy(mlog_data.rawSetpoint, instance->rawSetpoint_, sizeof(mlog_data.rawSetpoint));
+    mlog_data.rcCommandThrottle = instance->rc_command_[THROTTLE];
+    mlog_data.armed = rc_controls.isArmed() ? RC_ARMED_STATUS_ARMED : RC_ARMED_STATUS_DISARMED;
+    mlog_data.flight_mode = rc_controls.getFlightMode();
+    instance->pushRcDataToMlog(&mlog_data);
 
 #ifdef PROJECT_BF_RC_DEBUG_PIN_EN
     DEBUG_PIN_DEBUG3_LOW();  // Debug pin: RC task execution end

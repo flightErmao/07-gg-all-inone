@@ -32,7 +32,6 @@ menu "L0_TASK_CONFIG"
     
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/05_bf/imu/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/05_bf/gyro/Kconfig"
-    source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/05_bf/log/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/05_bf/pid/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/05_bf/rc/Kconfig"
     source "$(PROJECT_ROOT)/driverframework/L0_task/04_project/05_bf/param/Kconfig"

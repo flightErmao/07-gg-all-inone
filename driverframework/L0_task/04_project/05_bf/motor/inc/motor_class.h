@@ -14,6 +14,8 @@ extern "C" {
 #include "param.h"
 }
 
+#include "motor_mlog.h"
+
 #define MAX_SUPPORTED_MOTORS 8
 #define XYZ_AXIS_COUNT 3
 
@@ -52,6 +54,10 @@ class MotorBf {
 
   // Initialize MCN
   rt_err_t initMcn();
+
+  // Mlog related functions
+  rt_err_t initMlog();
+  void pushMotorDataToMlog(const bf_mlog::motor_mlog_data_t* data);
 
   // MCN subscription management (each subscription has its own function)
   rt_err_t subscribePidOutput();

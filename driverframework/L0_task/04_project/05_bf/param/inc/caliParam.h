@@ -13,7 +13,7 @@
 #define BF_IMU_CALI_PARAM_CUSTOM_ALIGN "imu_custom_align"
 
 /* 板级对齐参数（Betaflight 风格） */
-#define BF_IMU_CALI_PARAM_BOARD_ALIGNMENT "board_alignment"
+#define BF_IMU_CALI_PARAM_BOARD_ALIGNMENT "imu_board_alignment"
 
 param_list *bfImuCaliOffsetParam_list(void);
 size_t bfImuCaliOffsetParam_count(void);

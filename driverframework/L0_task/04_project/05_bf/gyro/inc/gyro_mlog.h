@@ -1,5 +1,5 @@
 /**
- * @file mlog_gyro.hpp
+ * @file gyro_mlog.h
  * 
  * Mlog 陀螺仪数据记录类
  * 用于记录 IMU 滤波前后的陀螺仪数据
@@ -16,6 +16,17 @@ extern "C" {
 }
 
 namespace bf_mlog {
+
+/**
+ * @brief 陀螺仪 mlog 数据结构体
+ * 用于快速修改需要记录到 log 中的数据
+ */
+struct gyro_mlog_data_t {
+  uint32_t seq;                       // 序列号
+  uint32_t timestamp;                 // 时间戳（微秒）
+  float gyro_adc[3];                  // 对齐、校准但未滤波的数据（对应 gyro_adc_）
+  float gyro_filtered[3];             // 滤波后的陀螺仪数据（对应 gyro_adcf_）
+} __packed;
 
 /**
  * @brief Mlog 陀螺仪数据记录类
@@ -38,12 +49,9 @@ public:
     
     /**
      * @brief 推送陀螺仪数据到 mlog
-     * @param seq 序列号
-     * @param timestamp 时间戳（微秒）
-     * @param gyro_raw 滤波前的陀螺仪数据 [x, y, z]（对应 gyro_adc_）
-     * @param gyro_filtered 滤波后的陀螺仪数据 [x, y, z]（对应 gyro_adcf_）
+     * @param data 陀螺仪 mlog 数据结构体
      */
-    void pushGyroData(uint32_t seq, uint32_t timestamp, const float gyro_raw[3], const float gyro_filtered[3]);
+    void pushGyroData(const gyro_mlog_data_t* data);
     
     /**
      * @brief 检查是否启用推送

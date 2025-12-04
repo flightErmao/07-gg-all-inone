@@ -150,6 +150,9 @@ void PidBf::pidController(uint32_t current_time_us) {
   output_msg.timestamp = current_time_us;
   output_msg.seq = gyro_filtered_data_.seq;
 
+  // Store actual setpoint used for PID calculation (for mlog)
+  float actualSetpoint[XYZ_AXIS_COUNT];
+
   for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
     float currentSetpoint = getSetpointRate(axis);
     
@@ -185,6 +188,9 @@ void PidBf::pidController(uint32_t current_time_us) {
       currentSetpoint *= std::cos(maxAngleTargetAbs * DEGREES_TO_RADIANS);
     }
 #endif
+
+    // Store actual setpoint used for PID calculation (after angle mode conversion and earth reference compensation)
+    actualSetpoint[axis] = currentSetpoint;
 
     const float errorRate = currentSetpoint - gyroRate[axis];
 
@@ -301,6 +307,48 @@ void PidBf::pidController(uint32_t current_time_us) {
   output_msg.smoothed_throttle = setpoint_data_.smoothed_throttle;
 
   publishPidOutput(output_msg);
+
+  // Push PID data to mlog (record rate and angle loop setpoint/actual snapshots)
+  bf_mlog::pid_mlog_data_t mlog_data;
+  mlog_data.seq = output_msg.seq;
+  mlog_data.timestamp = current_time_us;
+  
+  // Rate loop data: setpoint and actual rates
+  // Use actualSetpoint (after angle mode conversion and earth reference compensation) instead of raw setpoint_data_.rate
+  std::memcpy(mlog_data.rate_setpoint, actualSetpoint, sizeof(mlog_data.rate_setpoint));
+  // Use gyro_filtered_for_pid (same as anotc) for actual rates
+  std::memcpy(mlog_data.rate_actual, gyro_filtered_data_.gyro_filtered_for_pid, sizeof(mlog_data.rate_actual));
+  
+  // Angle loop data: setpoint and actual angles (roll and pitch only)
+#ifdef PROJECT_BF_ATTITUDE_EN
+  if (is_angle_mode) {
+    // Get angle loop debug data for roll and pitch
+    for (int axis = 0; axis < 2; axis++) {
+      const pidRuntime_t::angleLoopDebug_t* debug = getAngleLoopDebug(axis);
+      if (debug != nullptr) {
+        mlog_data.angle_setpoint[axis] = debug->target;
+        mlog_data.angle_actual[axis] = debug->current;
+      } else {
+        mlog_data.angle_setpoint[axis] = 0.0f;
+        mlog_data.angle_actual[axis] = 0.0f;
+      }
+    }
+  } else {
+    // Rate mode: angle loop data is not used
+    mlog_data.angle_setpoint[0] = 0.0f;
+    mlog_data.angle_setpoint[1] = 0.0f;
+    mlog_data.angle_actual[0] = 0.0f;
+    mlog_data.angle_actual[1] = 0.0f;
+  }
+#else
+  // No attitude support: angle loop data is not available
+  mlog_data.angle_setpoint[0] = 0.0f;
+  mlog_data.angle_setpoint[1] = 0.0f;
+  mlog_data.angle_actual[0] = 0.0f;
+  mlog_data.angle_actual[1] = 0.0f;
+#endif
+
+  pushPidDataToMlog(&mlog_data);
 }
 
 float PidBf::getSetpointRate(int axis) {

@@ -340,7 +340,15 @@ void gyro::processImuData(const gyro_raw_msg_t* gyro_data) {
 
   // 发布滤波后的gyro数据到MCN
   publishGyroFiltered(gyro_data->seq);
-  // pushGyroDataToMlog(&gyro_raw_data);
+  
+  // 推送数据到 mlog（如果需要记录）
+  // 构造 mlog 数据结构体
+  bf_mlog::gyro_mlog_data_t mlog_data;
+  mlog_data.seq = gyro_data->seq;
+  mlog_data.timestamp = timestamp_micros();
+  std::memcpy(mlog_data.gyro_adc, gyro_adc_, sizeof(mlog_data.gyro_adc));
+  std::memcpy(mlog_data.gyro_filtered, gyro_adcf_, sizeof(mlog_data.gyro_filtered));
+  pushGyroDataToMlog(&mlog_data);
 }
 
 void gyro::applyFilterChain(const float input[3], float output[3]) {
