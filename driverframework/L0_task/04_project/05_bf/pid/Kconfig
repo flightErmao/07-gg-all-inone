@@ -153,6 +153,31 @@ menuconfig PROJECT_BF_PID_EN
                             help
                                 Period (in milliseconds) for pitch angle loop debug logging. Default: 20ms.
                     endif
+
+                menuconfig PROJECT_BF_PID_ANOTC_LOG_ROLL_ANGLE_LOOP_EN
+                    bool "DEBUG: ANOTC (ATKP) Roll Angle Loop Debug Logging"
+                    default n
+                    depends on PROJECT_BF_ATTITUDE_EN
+                    help
+                        Enable ANOTC telemetry logging for roll axis angle loop debug data.
+                        This logs: target angle, current angle, errorGain (errorAngle * angleGain), and feedforward.
+                    
+                    if PROJECT_BF_PID_ANOTC_LOG_ROLL_ANGLE_LOOP_EN
+                        config PROJECT_BF_PID_ANOTC_LOG_ROLL_ANGLE_LOOP_GROUP
+                            int "Log Group ID for Roll Angle Loop Debug"
+                            range 1 99
+                            default 1
+                            help
+                                Set the group ID for roll angle loop debug logging (1-99).
+                                Default: 1.
+
+                        config PROJECT_BF_PID_ANOTC_LOG_ROLL_ANGLE_LOOP_PERIOD_MS
+                            int "Roll Angle Loop Log Period (ms)"
+                            range 1 1000
+                            default 20
+                            help
+                                Period (in milliseconds) for roll angle loop debug logging. Default: 20ms.
+                    endif
             endif
     endif
 

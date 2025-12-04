@@ -125,6 +125,33 @@ static void sendPitchAngleLoopData(uint16_t count_ms) {
 }
 #endif  // PROJECT_BF_PID_ANOTC_LOG_PITCH_ANGLE_LOOP_EN
 
+#ifdef PROJECT_BF_PID_ANOTC_LOG_ROLL_ANGLE_LOOP_EN
+// Static function to send roll axis angle loop debug data
+static void sendRollAngleLoopData(uint16_t count_ms) {
+  if (!(count_ms % PROJECT_BF_PID_ANOTC_LOG_ROLL_ANGLE_LOOP_PERIOD_MS)) {
+    // Get data directly from PidBf singleton
+    PidBf& pid = PidBf::instance();
+
+#ifdef PROJECT_BF_ATTITUDE_EN
+    // Get roll axis (axis = 0) angle loop debug data
+    const pidRuntime_t::angleLoopDebug_t* roll_debug = pid.getAngleLoopDebug(0);  // FD_ROLL = 0
+
+    if (roll_debug != nullptr) {
+      // Send roll axis angle loop debug data
+      // Format: [target, current, errorGain, feedforward]
+      float roll_angle_loop_data[4] = {
+          roll_debug->target,      // Roll angle target (degrees)
+          roll_debug->current,     // Roll current angle (degrees)
+          roll_debug->errorGain,   // errorAngle * angleGain
+          roll_debug->feedforward  // Roll angle feedforward
+      };
+      sendUserDatafloatN(PROJECT_BF_PID_ANOTC_LOG_ROLL_ANGLE_LOOP_GROUP, roll_angle_loop_data, 4);
+    }
+#endif  // PROJECT_BF_ATTITUDE_EN
+  }
+}
+#endif  // PROJECT_BF_PID_ANOTC_LOG_ROLL_ANGLE_LOOP_EN
+
 int addPeriodFunListPid(void) {
 #ifdef PROJECT_BF_PID_ANOTC_LOG_ANGULAR_RATE_EN
   anotcTelemAddSensorFunc(sendRateSetpointActual);
@@ -144,6 +171,11 @@ int addPeriodFunListPid(void) {
 #ifdef PROJECT_BF_PID_ANOTC_LOG_PITCH_ANGLE_LOOP_EN
   anotcTelemAddSensorFunc(sendPitchAngleLoopData);
   LOG_I("anotcPid: Added pitch angle loop debug logging function");
+#endif
+
+#ifdef PROJECT_BF_PID_ANOTC_LOG_ROLL_ANGLE_LOOP_EN
+  anotcTelemAddSensorFunc(sendRollAngleLoopData);
+  LOG_I("anotcPid: Added roll angle loop debug logging function");
 #endif
 
   return 0;
