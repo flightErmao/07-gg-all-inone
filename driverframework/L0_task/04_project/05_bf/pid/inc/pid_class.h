@@ -171,7 +171,7 @@ struct pidRuntime_t {
   
   // Rate loop debug data for logging (per axis: currentSetpoint snapshot)
   struct rateLoopDebug_t {
-    float currentSetpoint;  // Current rate setpoint snapshot (deg/s) - saved before errorRate calculation
+    float currentSetpoint;  // Current setpoint snapshot (saved before errorRate calculation)
   } rateLoopDebug[XYZ_AXIS_COUNT];  // [roll, pitch, yaw]
 };
 

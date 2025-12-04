@@ -150,9 +150,6 @@ void PidBf::pidController(uint32_t current_time_us) {
   output_msg.timestamp = current_time_us;
   output_msg.seq = gyro_filtered_data_.seq;
 
-  // Store actual setpoint used for PID calculation (for mlog)
-  float actualSetpoint[XYZ_AXIS_COUNT];
-
   for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
     float currentSetpoint = getSetpointRate(axis);
     
@@ -191,9 +188,6 @@ void PidBf::pidController(uint32_t current_time_us) {
 
     // Save currentSetpoint snapshot before errorRate calculation (for logging/debugging)
     pid_runtime_.rateLoopDebug[axis].currentSetpoint = currentSetpoint;
-
-    // Store actual setpoint used for PID calculation (after angle mode conversion and earth reference compensation)
-    actualSetpoint[axis] = currentSetpoint;
 
     const float errorRate = currentSetpoint - gyroRate[axis];
 
@@ -315,10 +309,10 @@ void PidBf::pidController(uint32_t current_time_us) {
   bf_mlog::pid_mlog_data_t mlog_data;
   mlog_data.seq = output_msg.seq;
   mlog_data.timestamp = current_time_us;
-  
   // Rate loop data: setpoint and actual rates
-  // Use actualSetpoint (after angle mode conversion and earth reference compensation) instead of raw setpoint_data_.rate
-  std::memcpy(mlog_data.rate_setpoint, actualSetpoint, sizeof(mlog_data.rate_setpoint));
+  for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
+    mlog_data.rate_setpoint[axis] = pid_runtime_.rateLoopDebug[axis].currentSetpoint;
+  }
   // Use gyro_filtered_for_pid (same as anotc) for actual rates
   std::memcpy(mlog_data.rate_actual, gyro_filtered_data_.gyro_filtered_for_pid, sizeof(mlog_data.rate_actual));
   

@@ -102,8 +102,8 @@ static const float bf_pid_yaw_lpf_hz_default = 90.0f;      // Legacy: 保持向�
 /* 角度模式参数默认值 - 与Betaflight一致 */
 static const uint8_t bf_pid_angle_limit_default = 60;                    // 角度模式最大角度默认60度
 static const uint8_t bf_pid_angle_earth_ref_default = 100;                // 地球参考补偿增益默认100（0-100）
-static const float bf_pid_angle_p_gain_default = 50.0f;                    // 角度模式P增益默认50.0
-static const float bf_pid_angle_feedforward_default = 50.0f;               // 角度模式前馈增益默认50.0
+static const float bf_pid_angle_p_gain_default = 10.0f;                   // 角度模式P增益默认10.0
+static const float bf_pid_angle_feedforward_default = 40.0f;              // 角度模式前馈增益默认40.0
 static const uint8_t bf_pid_angle_feedforward_smoothing_ms_default = 80;  // 角度前馈平滑时间常数默认80ms
 #endif
 
