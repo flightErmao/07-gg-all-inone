@@ -267,6 +267,10 @@ class RcBf {
   
   // Raw RC data (before processing)
   uint16_t rc_raw_[16];
+  
+  // Mlog arm control
+  uint8_t rc_arm_control_;  // 0=禁用, 1=使能（上锁时启动log，解锁时停止log）
+  bool prev_armed_status_;   // 上一次的上锁状态，用于检测状态变化
 };
 
 #endif /* RC_BF_HPP__ */

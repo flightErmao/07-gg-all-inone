@@ -14,6 +14,9 @@ extern "C" {
 #include "filter.h"  // pt3Filter functions
 #include "param.h"   // getParam function
 #include "../common/inc/init_sync.h"  // For initSyncNotify
+#ifdef TASK_TOOL_02_SD_MLOG
+#include "taskMlog.h"  // task_mlog_start_logging, task_mlog_stop_logging
+#endif
 #ifdef PROJECT_BF_RC_DEBUG_PIN_EN
 #include "debugPin.h"
 #endif
@@ -80,7 +83,9 @@ RcBf::RcBf()
       rc_device_(RT_NULL),
       rcCommandDivider_(500.0f),
       rcCommandYawDivider_(500.0f),
-      rc_loss_count_(0) {
+      rc_loss_count_(0),
+      rc_arm_control_(0),
+      prev_armed_status_(false) {
   std::memset(rc_raw_channels_, 0, sizeof(rc_raw_channels_));
   std::memset(rc_data_, 0, sizeof(rc_data_));
   std::memset(rc_command_, 0, sizeof(rc_command_));
@@ -161,6 +166,10 @@ rt_err_t RcBf::init() {
     LOG_E("Mlog init failed");
     return ret;
   }
+
+  // Read mlog_rc_arm_control parameter
+  getParam("mlog_rc_arm_control", &rc_arm_control_, sizeof(rc_arm_control_));
+  LOG_I("mlog_rc_arm_control: %u", rc_arm_control_);
 
   // Initialize thread (rc_thread_stack_ is a fixed-size array, not dynamically allocated)
   size_t stack_size = RC_THREAD_STACK_SIZE;
@@ -798,6 +807,34 @@ void RcBf::rcThreadEntry(void* parameter) {
     // This handles stick positions, arming/disarming, and flight mode switching
     RcControls& rc_controls = RcControls::instance();
     rc_controls.processRcStickPositions(instance->rc_data_, current_time_us);
+
+    // Handle mlog start/stop based on arm status change (if mlog_rc_arm_control is enabled)
+    if (instance->rc_arm_control_ == 1) {
+      bool current_armed = rc_controls.isArmed();
+      // Check if this is the first run (prev_armed_status_ is uninitialized)
+      // On first run, initialize prev_armed_status_ to current state without triggering action
+      static bool first_run = true;
+      if (first_run) {
+        instance->prev_armed_status_ = current_armed;
+        first_run = false;
+      } else if (instance->prev_armed_status_ != current_armed) {
+        // Arm status changed
+        if (current_armed) {
+          // Disarmed -> Armed: Start mlog
+#ifdef TASK_TOOL_02_SD_MLOG
+          task_mlog_start_logging(NULL);
+          LOG_I("RC arm detected, mlog started");
+#endif
+        } else {
+          // Armed -> Disarmed: Stop mlog
+#ifdef TASK_TOOL_02_SD_MLOG
+          task_mlog_stop_logging();
+          LOG_I("RC disarm detected, mlog stopped");
+#endif
+        }
+        instance->prev_armed_status_ = current_armed;
+      }
+    }
 
     // Publish auxiliary channels data to MCN (after failsafe protection)
     instance->publishAuxChannelsToMcn(current_time_us);
