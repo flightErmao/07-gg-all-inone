@@ -33,13 +33,11 @@ constexpr float GRAVITY = 9.80665f;  // m/s^2
 // alpha 越大，越信任加速度计（静态准确）
 constexpr float DEFAULT_COMPLEMENTARY_ALPHA = 0.02f;  // 2% 加速度计，98% 陀螺仪
 
-// Betaflight风格的数值稳定性阈值（仅用于避免极小向量归一化）
-// 约0.05mG = 0.00005G，转换为ADC：0.00005G * 2048 ≈ 0.1 ADC
-// 平方和阈值：0.1^2 = 0.01 ADC²（与Betaflight一致）
-// 目的：避免对接近零的向量归一化，提高数值稳定性
-// 正常情况：静止时Z轴约±2048（±1G），平方和约为 2048² ≈ 4,194,304，远大于 0.01
-// 异常情况：三轴都接近0（传感器故障、数据异常），平方和可能小于 0.01，此时不应归一化
-constexpr float ACC_NUMERICAL_STABILITY_THRESHOLD_SQ = 0.01f;  // 数值稳定性阈值（ADC²）
+// 加速度计缩放因子（Betaflight 风格：在 attitude 更新中进行缩放）
+// 16G: 32768 -> 16g，转换为 m/s^2: 16g * 9.80665 m/s^2/g = 156.9064 m/s^2
+// 或者直接使用 g 单位: 16.0f / 32768.0f = 0.00048828125 g/ADC
+// 转换为 m/s^2: (16.0f / 32768.0f) * 9.80665f = 0.004788 m/s^2 per ADC
+constexpr float ACC_SCALE_16G_TO_MS2 = (16.0f / 32768.0f) * GRAVITY;  // m/s^2 per ADC
 }  // namespace
 
 // AttitudeBf 单例实现
@@ -321,6 +319,20 @@ void AttitudeBf::quaternionToEuler(const float q[4], float* roll_deg, float* pit
   *yaw_deg = std::atan2(siny_cosp, cosy_cosp) * RAD_TO_DEG;
 }
 
+void AttitudeBf::quaternionMultiply(const float q1[4], const float q2[4], float result[4]) {
+  result[0] = q1[0] * q2[0] - q1[1] * q2[1] - q1[2] * q2[2] - q1[3] * q2[3];  // w
+  result[1] = q1[0] * q2[1] + q1[1] * q2[0] + q1[2] * q2[3] - q1[3] * q2[2];  // x
+  result[2] = q1[0] * q2[2] - q1[1] * q2[3] + q1[2] * q2[0] + q1[3] * q2[1];  // y
+  result[3] = q1[0] * q2[3] + q1[1] * q2[2] - q1[2] * q2[1] + q1[3] * q2[0];  // z
+}
+
+void AttitudeBf::quaternionConjugate(const float q[4], float result[4]) {
+  result[0] = q[0];   // w
+  result[1] = -q[1];  // -x
+  result[2] = -q[2];  // -y
+  result[3] = -q[3];  // -z
+}
+
 void AttitudeBf::quaternionIntegrate(const float q[4], const float gyro[3], float dt, float q_new[4]) {
   // 四元数积分：使用陀螺仪数据更新四元数
   // 参考 Betaflight 的 quaternionIntegrate 函数
@@ -352,109 +364,90 @@ void AttitudeBf::quaternionIntegrate(const float q[4], const float gyro[3], floa
   quaternionNormalize(q_new);
 }
 
-// 从四元数提取重力向量（在机体坐标系中）
-// 重力在NED坐标系中为 [0, 0, 1]（向下），在机体坐标系中的表示为旋转后的向量
-void AttitudeBf::quaternionToGravityVector(const float q[4], float gravity_vec[3]) {
-  // 重力向量在世界坐标系（NED）中为 [0, 0, 1]
-  // 通过四元数旋转到机体坐标系
-  // 重力向量在机体坐标系中的表示为：R^T * [0, 0, 1]
-  // 使用旋转矩阵第三列（Z轴方向）
-  
-  float q0 = q[0], q1 = q[1], q2 = q[2], q3 = q[3];
-  
-  // 旋转矩阵第三列（Z轴在机体坐标系中的方向）
-  gravity_vec[0] = 2.0f * (q1 * q3 - q0 * q2);  // X分量
-  gravity_vec[1] = 2.0f * (q0 * q1 + q2 * q3);  // Y分量
-  gravity_vec[2] = 1.0f - 2.0f * (q1 * q1 + q2 * q2);  // Z分量
+void AttitudeBf::calculateQuaternionFromAccel(const float accel[3], float q_accel[4]) {
+  // 从加速度计计算参考四元数（只能得到 roll 和 pitch，yaw 无法确定）
+  // 参考 Betaflight 的实现
+
+  // 计算加速度计向量的模长
+  float accel_magnitude = std::sqrt(accel[0] * accel[0] + accel[1] * accel[1] + accel[2] * accel[2]);
+
+  if (accel_magnitude < 0.1f) {
+    // 加速度计数据无效（可能是自由落体或异常），返回单位四元数
+    q_accel[0] = 1.0f;
+    q_accel[1] = 0.0f;
+    q_accel[2] = 0.0f;
+    q_accel[3] = 0.0f;
+    return;
+  }
+
+  // 归一化加速度计向量
+  float accel_norm[3];
+  float inv_magnitude = 1.0f / accel_magnitude;
+  accel_norm[0] = accel[0] * inv_magnitude;
+  accel_norm[1] = accel[1] * inv_magnitude;
+  accel_norm[2] = accel[2] * inv_magnitude;
+
+  // 从加速度计计算 roll 和 pitch（假设 yaw = 0）
+  float roll_rad = std::atan2(accel_norm[1], accel_norm[2]);
+  float pitch_rad = -std::asin(accel_norm[0]);
+  float yaw_rad = 0.0f;  // 加速度计无法提供 yaw
+
+  // 转换为四元数
+  eulerToQuaternion(roll_rad * RAD_TO_DEG, pitch_rad * RAD_TO_DEG, yaw_rad * RAD_TO_DEG, q_accel);
 }
 
-// Betaflight风格：使用误差向量修正姿态（类似Mahony互补滤波器）
-void AttitudeBf::updateAttitudeWithErrorVector(const float accel_norm[3], const float gyro[3], float dt) {
-  // 1. 从当前四元数计算重力向量在机体坐标系中的表示
-  float estimated_gravity[3];
-  quaternionToGravityVector(quaternion_, estimated_gravity);
+void AttitudeBf::complementaryFilterUpdateQuaternion(const float q_gyro[4], const float q_accel[4], float alpha, float q_result[4]) {
+  // 四元数互补滤波器：融合陀螺仪积分结果和加速度计参考
+  // 使用球面线性插值（SLERP）或简单的线性插值后归一化
+
+  // 简化的线性插值（对于小角度差异足够准确）
+  q_result[0] = alpha * q_accel[0] + (1.0f - alpha) * q_gyro[0];
+  q_result[1] = alpha * q_accel[1] + (1.0f - alpha) * q_gyro[1];
+  q_result[2] = alpha * q_accel[2] + (1.0f - alpha) * q_gyro[2];
+  q_result[3] = alpha * q_accel[3] + (1.0f - alpha) * q_gyro[3];
+
+  // 归一化
+  quaternionNormalize(q_result);
+}
+
+void AttitudeBf::updateAttitude(const float accel[3], const float gyro[3], float dt) {
+  // 使用四元数进行姿态估计，避免万向锁
   
-  // 2. 计算误差向量：测量的重力方向与估计的重力方向的叉积
-  // 误差向量表示姿态估计的偏差方向
-  float error[3];
-  error[0] = accel_norm[1] * estimated_gravity[2] - accel_norm[2] * estimated_gravity[1];
-  error[1] = accel_norm[2] * estimated_gravity[0] - accel_norm[0] * estimated_gravity[2];
-  error[2] = accel_norm[0] * estimated_gravity[1] - accel_norm[1] * estimated_gravity[0];
-  
-  // 3. 使用互补滤波器系数对误差进行加权（用于积分反馈）
-  float gyro_corrected[3];
-  const float kp = complementary_alpha_;  // 比例增益（通常很小，如0.02）
-  gyro_corrected[0] = gyro[0] + kp * error[0];
-  gyro_corrected[1] = gyro[1] + kp * error[1];
-  gyro_corrected[2] = gyro[2] + kp * error[2];
-  
-  // 4. 使用修正后的陀螺仪数据积分更新四元数
-  quaternionIntegrate(quaternion_, gyro_corrected, dt, quaternion_);
-  
-  // 5. 归一化四元数（防止数值漂移）
-  quaternionNormalize(quaternion_);
-  
-  // 6. 从四元数转换为欧拉角（用于输出）
+  // Betaflight 风格：在 attitude 更新中将 acc 从原始 ADC 值缩放到 m/s^2
+  // accel 输入是原始 ADC 值（未缩放），需要转换为 m/s^2
+  float accel_scaled[3];
+  accel_scaled[0] = accel[0] * ACC_SCALE_16G_TO_MS2;
+  accel_scaled[1] = accel[1] * ACC_SCALE_16G_TO_MS2;
+  accel_scaled[2] = accel[2] * ACC_SCALE_16G_TO_MS2;
+
+  // 1. 使用陀螺仪数据积分更新四元数
+  float q_gyro[4];
+  quaternionIntegrate(quaternion_, gyro, dt, q_gyro);
+
+  // 2. 从加速度计计算参考四元数（用于校正 roll 和 pitch）
+  float q_accel[4];
+  calculateQuaternionFromAccel(accel_scaled, q_accel);
+
+  // 3. 使用互补滤波器融合陀螺仪积分和加速度计参考
+  // 注意：只对 roll 和 pitch 进行校正，yaw 保持陀螺仪积分结果
+  // 为了简化，我们使用互补滤波器融合整个四元数，但 yaw 部分主要来自陀螺仪
+  float q_fused[4];
+  complementaryFilterUpdateQuaternion(q_gyro, q_accel, complementary_alpha_, q_fused);
+
+  // 4. 更新当前四元数
+  std::memcpy(quaternion_, q_fused, sizeof(quaternion_));
+
+  // 5. 从四元数转换为欧拉角（用于输出）
   quaternionToEuler(quaternion_, &attitude_values_[0], &attitude_values_[1], &attitude_values_[2]);
-  
-  // 7. 限制 yaw 角度范围
+
+  // 6. 限制 yaw 角度范围（roll 和 pitch 已经在四元数转换中自然限制）
   if (attitude_values_[2] > 180.0f) {
     attitude_values_[2] -= 360.0f;
   } else if (attitude_values_[2] < -180.0f) {
     attitude_values_[2] += 360.0f;
   }
-  
-  initialized_ = true;
-}
 
-void AttitudeBf::updateAttitude(const float accel[3], const float gyro[3], float dt) {
-  // 使用四元数进行姿态估计，避免万向锁
-  // 采用Betaflight风格的误差向量方法（类似Mahony互补滤波器），更高效且数学严谨
-  // 输入：accel[3] 是原始ADC值（16G量程时，2048 ADC = 1G），gyro[3] 是角速度（deg/s）
-  
-  // Betaflight风格：只归一化加速度计（方向信息），不需要物理单位转换
-  // 因为我们只关心重力方向，而不是重力大小
-  // 计算加速度计向量的模长平方（ADC值的平方和）
-  float accel_magnitude_sq = accel[0] * accel[0] + accel[1] * accel[1] + accel[2] * accel[2];
-  
-  // 检查加速度计数据有效性（避免自由落体或异常情况）
-  // 使用数值稳定性阈值（与Betaflight一致）：0.01 ADC²
-  // 这个阈值很小（约0.05mG），主要用于：
-  // 1. 数值稳定性：避免对极小向量归一化时放大噪声
-  // 2. 数据有效性：过滤传感器故障或异常数据（三轴都接近0的情况）
-  // 
-  // 正常情况：静止时Z轴约±2048（±1G），X/Y轴接近0，
-  // 平方和约为 2048² ≈ 4,194,304，远大于 0.01
-  // 
-  // 异常情况：如果三轴都接近0（传感器故障、数据异常），
-  // 平方和可能小于 0.01，此时不应归一化
-  if (accel_magnitude_sq > ACC_NUMERICAL_STABILITY_THRESHOLD_SQ) {
-    // 归一化加速度计向量（转换为单位向量，只保留方向信息）
-    float inv_magnitude = 1.0f / std::sqrt(accel_magnitude_sq);
-    float accel_norm[3];
-    accel_norm[0] = accel[0] * inv_magnitude;
-    accel_norm[1] = accel[1] * inv_magnitude;
-    accel_norm[2] = accel[2] * inv_magnitude;
-    
-    // 使用误差向量方法更新姿态（Betaflight风格）
-    updateAttitudeWithErrorVector(accel_norm, gyro, dt);
-  } else {
-    // 加速度计数据无效（太小，可能是自由落体、传感器故障或异常），
-    // 只使用陀螺仪积分（不进行加速度计修正）
-    float q_new[4];
-    quaternionIntegrate(quaternion_, gyro, dt, q_new);
-    std::memcpy(quaternion_, q_new, sizeof(quaternion_));
-    quaternionNormalize(quaternion_);
-    
-    // 更新欧拉角
-    quaternionToEuler(quaternion_, &attitude_values_[0], &attitude_values_[1], &attitude_values_[2]);
-    
-    if (attitude_values_[2] > 180.0f) {
-      attitude_values_[2] -= 360.0f;
-    } else if (attitude_values_[2] < -180.0f) {
-      attitude_values_[2] += 360.0f;
-    }
-  }
+  initialized_ = true;
 }
 
 // RT-Thread 自动初始化包装函数

@@ -164,24 +164,13 @@ void PidBf::pidController(uint32_t current_time_us) {
     }
     
     // Yaw axis: handle earth reference compensation in angle mode
-    // Reference: Betaflight ref/pid.c pidController() around line 1350-1360
-    // In angle mode, yaw always uses rate mode (no angle loop conversion)
-    // But we apply earth reference attenuation to yaw setpoint when pitched or rolled
     if (is_angle_mode && axis == FD_YAW) {
-      // Store yaw setpoint (before attenuation) for earth reference compensation in roll/pitch
-      // This is the raw yaw rate setpoint from RC input
+      // Store yaw setpoint for earth reference compensation in roll/pitch
       pid_runtime_.angleYawSetpoint = currentSetpoint;
-      
       // Apply earth reference attenuation to yaw setpoint when pitched or rolled
-      // When the craft is tilted, reduce yaw responsiveness to prevent unwanted yaw rotation
-      // The attenuation uses cosine of the maximum tilt angle (roll or pitch)
-      // This naturally reduces yaw response as the craft tilts more
-      float maxAngleTargetAbs = std::fmax(std::fabs(pid_runtime_.angleTarget[FD_ROLL]), 
-                                         std::fabs(pid_runtime_.angleTarget[FD_PITCH]));
-      
-      // Attenuation factor: cos(angle) reduces from 1 to 0 as angle approaches 90 degrees
-      // When craft is level (0°), cos(0°) = 1.0 (full yaw response)
-      // When craft is tilted 90°, cos(90°) = 0.0 (no yaw response)
+      float maxAngleTargetAbs = pid_runtime_.angleEarthRef * 
+          std::fmax(std::fabs(pid_runtime_.angleTarget[FD_ROLL]), 
+                   std::fabs(pid_runtime_.angleTarget[FD_PITCH]));
       currentSetpoint *= std::cos(maxAngleTargetAbs * DEGREES_TO_RADIANS);
     }
 #endif
