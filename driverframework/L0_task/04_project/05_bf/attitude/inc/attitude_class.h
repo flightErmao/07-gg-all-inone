@@ -58,9 +58,6 @@ class AttitudeBf {
   // 姿态估计核心函数
   void updateAttitude(const float accel[3], const float gyro[3], float dt);
 
-  // 从加速度计计算角度（roll 和 pitch）
-  void calculateAngleFromAccel(const float accel[3], float* roll, float* pitch);
-
   // 四元数相关函数
   // 四元数归一化
   void quaternionNormalize(float q[4]);
@@ -71,20 +68,14 @@ class AttitudeBf {
   // 从四元数转换为欧拉角（度）
   void quaternionToEuler(const float q[4], float* roll_deg, float* pitch_deg, float* yaw_deg);
   
-  // 四元数乘法
-  void quaternionMultiply(const float q1[4], const float q2[4], float result[4]);
-  
-  // 四元数共轭
-  void quaternionConjugate(const float q[4], float result[4]);
-  
   // 使用陀螺仪数据更新四元数（四元数积分）
   void quaternionIntegrate(const float q[4], const float gyro[3], float dt, float q_new[4]);
   
-  // 从加速度计计算参考四元数
-  void calculateQuaternionFromAccel(const float accel[3], float q_accel[4]);
+  // 从四元数提取重力向量（在机体坐标系中）
+  void quaternionToGravityVector(const float q[4], float gravity_vec[3]);
   
-  // 互补滤波器更新（四元数版本）
-  void complementaryFilterUpdateQuaternion(const float q_gyro[4], const float q_accel[4], float alpha, float q_result[4]);
+  // Betaflight风格：使用误差向量修正姿态（类似Mahony互补滤波器）
+  void updateAttitudeWithErrorVector(const float accel_norm[3], const float gyro[3], float dt);
 
   // 当前姿态四元数 [q0, q1, q2, q3]（q0 是标量部分）
   float quaternion_[4];
