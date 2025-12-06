@@ -67,6 +67,9 @@ class RcSmoothingFilter {
   // Get smoothed throttle command
   float getSmoothedThrottle() const { return smoothed_throttle_; }
 
+  // Get throttle cutoff frequency
+  float getThrottleCutoffFrequency() const { return smoothing_data_.throttleCutoffFrequency; }
+
  private:
   RcSmoothingFilter(const RcSmoothingFilter&) = delete;
   RcSmoothingFilter& operator=(const RcSmoothingFilter&) = delete;

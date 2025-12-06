@@ -70,34 +70,6 @@ static void sendPitchPidfData(uint16_t count_ms) {
 }
 #endif  // PROJECT_BF_PID_ANOTC_LOG_PITCH_PIDF_EN
 
-#ifdef PROJECT_BF_PID_ANOTC_LOG_ANGLE_EN
-// Static function to send angle setpoint and actual angle data
-static void sendAngleSetpointActual(uint16_t count_ms) {
-  if (!(count_ms % PROJECT_BF_PID_ANOTC_LOG_ANGLE_PERIOD_MS)) {
-    // Get data directly from PidBf singleton
-    PidBf& pid = PidBf::instance();
-    
-#ifdef PROJECT_BF_ATTITUDE_EN
-    // Get actual angle from attitude data
-    const attitude_msg_t& attitude_data = pid.getAttitudeData();
-    
-    // Send angle setpoint (desired) and actual angle
-    // Format: [roll_setpoint, pitch_setpoint, roll_actual, pitch_actual, yaw_setpoint, yaw_actual]
-    // Note: Angle mode only uses roll and pitch, yaw values are set to 0
-    sendUserDatafloat6(
-        PROJECT_BF_PID_ANOTC_LOG_ANGLE_GROUP,
-        pid.getAngleTarget(0),      // roll setpoint (degrees)
-        pid.getAngleTarget(1),      // pitch setpoint (degrees)
-        attitude_data.values[0],    // roll actual (degrees)
-        attitude_data.values[1],    // pitch actual (degrees)
-        0.0f,                       // yaw setpoint (not used in angle mode, set to 0)
-        attitude_data.values[2]     // yaw actual (degrees, for reference)
-    );
-#endif  // PROJECT_BF_ATTITUDE_EN
-  }
-}
-#endif  // PROJECT_BF_PID_ANOTC_LOG_ANGLE_EN
-
 #ifdef PROJECT_BF_PID_ANOTC_LOG_PITCH_ANGLE_LOOP_EN
 // Static function to send pitch axis angle loop debug data
 static void sendPitchAngleLoopData(uint16_t count_ms) {
@@ -161,11 +133,6 @@ int addPeriodFunListPid(void) {
 #ifdef PROJECT_BF_PID_ANOTC_LOG_PITCH_PIDF_EN
   anotcTelemAddSensorFunc(sendPitchPidfData);
   LOG_I("anotcPid: Added pitch PIDF logging function");
-#endif
-
-#ifdef PROJECT_BF_PID_ANOTC_LOG_ANGLE_EN
-  anotcTelemAddSensorFunc(sendAngleSetpointActual);
-  LOG_I("anotcPid: Added angle setpoint/actual logging function");
 #endif
 
 #ifdef PROJECT_BF_PID_ANOTC_LOG_PITCH_ANGLE_LOOP_EN

@@ -240,15 +240,6 @@ class PidBf {
   // Get current attitude data (for angle mode)
   const attitude_msg_t& getAttitudeData() const { return attitude_data_; }
   
-  // Get angle target (setpoint) for angle mode [roll, pitch]
-  // axis: 0 = roll, 1 = pitch
-  float getAngleTarget(int axis) const {
-    if (axis >= 0 && axis < RP_AXIS_COUNT) {
-      return pid_runtime_.angleTarget[axis];
-    }
-    return 0.0f;
-  }
-  
   // Get angle loop debug data for logging
   // axis: 0 = roll, 1 = pitch
   // Returns pointer to debug data structure, or nullptr if invalid axis

@@ -32,6 +32,9 @@ struct pid_mlog_data_t {
   // 角度环数据（Angle loop）
   float angle_setpoint[2];            // 角度期望值 [roll, pitch] (degrees)
   float angle_actual[2];              // 角度当前值 [roll, pitch] (degrees)
+  
+  // 滤波后的油门值（来自RC平滑滤波器）
+  float smoothed_throttle;            // 滤波后的油门值 (1000-2000)
 } __packed;
 
 /**

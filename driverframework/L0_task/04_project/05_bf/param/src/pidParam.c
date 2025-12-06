@@ -63,9 +63,9 @@ static uint8_t bf_pid_angle_feedforward_smoothing_ms;  // 角度前馈平滑时�
 static uint8_t pid_process_denom;  // 对应 activePidLoopDenom，用于计算 targetLooptime
 
 /* 默认值 - Betaflight 典型配置 */
-static const float bf_rate_pid_roll_default[3] = {0.0f, 0.0f, 0.0f};  // 典型 Betaflight 默认值
+static const float bf_rate_pid_roll_default[3] = {42.0f, 60.0f, 28.0f};  // 典型 Betaflight 默认值
 static const float bf_rate_pid_pitch_default[3] = {45.0f, 62.0f, 31.0f};
-static const float bf_rate_pid_yaw_default[3] = {0.0f, 0.0f, 0.0f};
+static const float bf_rate_pid_yaw_default[3] = {30.0f, 30.0f, 0.0f};
 
 /* Rate PID sum限制的默认值（deg/s）- 与Betaflight一致 */
 static const float bf_pid_rate_sum_limit_default = 500.0f;      // Roll/Pitch轴默认500 deg/s

@@ -27,6 +27,8 @@ struct rc_mlog_data_t {
   float raw_channels[6];              // 前 6 个通道的原始数据 [ch0-ch5] (1000-2000)
   float rawSetpoint[3];                // Raw setpoint rates [roll, pitch, yaw] (deg/s)
   float rcCommandThrottle;            // RC command throttle (1000-2000)
+  float rx_rate_hz;                   // RC refresh rate (Hz)
+  float throttle_cutoff;              // Throttle filter cutoff frequency (Hz)
   uint8_t armed;                      // 上锁状态 (0=DISARMED, 1=ARMED)
   uint8_t flight_mode;                // 飞行模式 (0=角速度模式/Rate, 1=角度模式/Angle, 2=高度模式/Altitude)
 } __packed;

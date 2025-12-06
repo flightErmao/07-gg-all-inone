@@ -25,6 +25,9 @@ struct mlogPidData_t {
   // 角度环数据（Angle loop）
   float angle_setpoint[2]; // 角度期望值 [roll, pitch] (degrees)
   float angle_actual[2];   // 角度当前值 [roll, pitch] (degrees)
+  
+  // 滤波后的油门值（来自RC平滑滤波器）
+  float smoothed_throttle; // 滤波后的油门值 (1000-2000)
 } __packed;
 
 // Mlog 元素定义（参考 aMlogStabilze.c:81-85）
@@ -35,6 +38,7 @@ static mlog_elem_t PidData_Elems[] __attribute__((used)) = {
     MLOG_ELEMENT_VEC(rate_actual, MLOG_FLOAT, 3),
     MLOG_ELEMENT_VEC(angle_setpoint, MLOG_FLOAT, 2),
     MLOG_ELEMENT_VEC(angle_actual, MLOG_FLOAT, 2),
+    MLOG_ELEMENT(smoothed_throttle, MLOG_FLOAT),
 };
 
 // Mlog 总线定义（参考 aMlogStabilze.c:86）
@@ -106,6 +110,7 @@ void MlogPid::pushPidData(const pid_mlog_data_t* data) {
   std::memcpy(pid_data.rate_actual, data->rate_actual, sizeof(pid_data.rate_actual));
   std::memcpy(pid_data.angle_setpoint, data->angle_setpoint, sizeof(pid_data.angle_setpoint));
   std::memcpy(pid_data.angle_actual, data->angle_actual, sizeof(pid_data.angle_actual));
+  pid_data.smoothed_throttle = data->smoothed_throttle;
 
   // 推送消息到 mlog（参考 aMlogStabilze.c:211）
   mlog_push_msg(reinterpret_cast<const uint8_t*>(&pid_data), bus_id_, sizeof(mlogPidData_t));

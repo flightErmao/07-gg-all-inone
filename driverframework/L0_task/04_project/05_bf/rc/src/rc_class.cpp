@@ -666,6 +666,8 @@ void RcBf::printDebugInfo(const rc_command_msg_t* setpoint_msg) const {
         (int)rc_data_[YAW], (int)rc_data_[THROTTLE]);
   LOG_I("rcCommand: Roll=%.1f, Pitch=%.1f, Yaw=%.1f, Throttle=%.1f", rc_command_[ROLL], rc_command_[PITCH],
         rc_command_[YAW], rc_command_[THROTTLE]);
+  LOG_I("RC Refresh Rate: current=%.1f Hz, smoothed=%.1f Hz, valid=%d", current_rx_rate_hz_, smoothed_rx_rate_hz_,
+        is_rx_rate_valid_);
   LOG_I("Channel Range Config - Roll: [%u, %u], Pitch: [%u, %u], Yaw: [%u, %u], Throttle: [%u, %u]",
         channel_range_configs_[ROLL].min, channel_range_configs_[ROLL].max, channel_range_configs_[PITCH].min,
         channel_range_configs_[PITCH].max, channel_range_configs_[YAW].min, channel_range_configs_[YAW].max,
@@ -852,6 +854,10 @@ void RcBf::rcThreadEntry(void* parameter) {
     }
     std::memcpy(mlog_data.rawSetpoint, instance->rawSetpoint_, sizeof(mlog_data.rawSetpoint));
     mlog_data.rcCommandThrottle = instance->rc_command_[THROTTLE];
+    mlog_data.rx_rate_hz = instance->smoothed_rx_rate_hz_;
+    // Get throttle cutoff frequency from smoothing filter
+    RcSmoothingFilter& smoothing_filter = RcSmoothingFilter::instance();
+    mlog_data.throttle_cutoff = smoothing_filter.getThrottleCutoffFrequency();
     mlog_data.armed = rc_controls.isArmed() ? RC_ARMED_STATUS_ARMED : RC_ARMED_STATUS_DISARMED;
     mlog_data.flight_mode = rc_controls.getFlightMode();
     instance->pushRcDataToMlog(&mlog_data);

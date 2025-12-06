@@ -144,12 +144,17 @@ void RcBf::publishAuxChannelsToMcn(uint32_t current_time_us) {
 }
 
 void RcBf::echoSetpoint(const rc_command_msg_t* rc_command) {
-  // Print rawSetpoint, rcCommandThrottle, and feedforward from published message
+  // Get throttle cutoff frequency from smoothing filter
+  RcSmoothingFilter& smoothing_filter = RcSmoothingFilter::instance();
+  float throttle_cutoff = smoothing_filter.getThrottleCutoffFrequency();
+
+  // Print rawSetpoint, rcCommandThrottle, feedforward, RC refresh rate, and throttle cutoff frequency
   LOG_I("rawSetpoint: %.2f, %.2f, %.2f | throttle: %.0f | feedforward: %.2f, %.2f, %.2f", rc_command->rawSetpoint[0],
         rc_command->rawSetpoint[1], rc_command->rawSetpoint[2], rc_command->rcCommandThrottle,
         rc_command->feedforward[0], rc_command->feedforward[1], rc_command->feedforward[2]);
+  LOG_I("rx_rate: %.1f Hz (smoothed: %.1f Hz) | throttle_cutoff: %.1f Hz", current_rx_rate_hz_, smoothed_rx_rate_hz_,
+        throttle_cutoff);
 }
-
 void RcBf::echoAux(const rc_aux_msg_t* aux_data) {
   // Get arming state and flight mode from RcControls
   RcControls& rc_controls = RcControls::instance();
@@ -161,4 +166,3 @@ void RcBf::echoAux(const rc_aux_msg_t* aux_data) {
         aux_data->aux_channels[0], aux_data->aux_channels[1], aux_data->aux_channels[2], aux_data->aux_channels[3],
         aux_data->aux_channels[4], aux_data->aux_channels[5]);
 }
-

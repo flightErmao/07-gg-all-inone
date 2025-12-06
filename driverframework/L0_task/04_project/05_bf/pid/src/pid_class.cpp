@@ -310,17 +310,23 @@ void PidBf::pidController(uint32_t current_time_us) {
   }
   // Use gyro_filtered_for_pid (same as anotc) for actual rates
   std::memcpy(mlog_data.rate_actual, gyro_filtered_data_.gyro_filtered_for_pid, sizeof(mlog_data.rate_actual));
-  
+
+  // Record smoothed throttle value (filtered by RC smoothing filter)
+  mlog_data.smoothed_throttle = output_msg.smoothed_throttle;
+
   // Angle loop data: setpoint and actual angles (roll and pitch only)
+  // Reference: pid_anotc.cpp sendPitchAngleLoopData/sendRollAngleLoopData() - use angleLoopDebug snapshot
 #ifdef PROJECT_BF_ATTITUDE_EN
   if (is_angle_mode) {
-    // Get angle loop debug data for roll and pitch
+    // Use angleLoopDebug snapshot data (updated in pidLevel() function)
+    // This is the same data source as anotc angle loop debug logging
     for (int axis = 0; axis < 2; axis++) {
-      const pidRuntime_t::angleLoopDebug_t* debug = getAngleLoopDebug(axis);
-      if (debug != nullptr) {
-        mlog_data.angle_setpoint[axis] = debug->target;
-        mlog_data.angle_actual[axis] = debug->current;
+      if (pid_runtime_.axisInAngleMode[axis]) {
+        // Use angleLoopDebug snapshot: target and current angle (recorded in pidLevel())
+        mlog_data.angle_setpoint[axis] = pid_runtime_.angleLoopDebug[axis].target;  // Angle target (degrees)
+        mlog_data.angle_actual[axis] = pid_runtime_.angleLoopDebug[axis].current;   // Current angle (degrees)
       } else {
+        // Axis not in angle mode: set to zero
         mlog_data.angle_setpoint[axis] = 0.0f;
         mlog_data.angle_actual[axis] = 0.0f;
       }

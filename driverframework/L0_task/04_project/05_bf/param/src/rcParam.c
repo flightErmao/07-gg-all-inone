@@ -102,8 +102,18 @@ static const char rc_channel_map_string_default[] = "AETR1234";
 /* 默认 RC Smoothing 参数 */
 static const float rc_smoothing_setpoint_cutoff_default = 0.0f;       // 0 = 自动
 static const float rc_smoothing_throttle_cutoff_default = 0.0f;       // 0 = 自动
-static const float rc_smoothing_auto_factor_rpy_default = 0.0f;       // 默认值，对应 autoSmoothnessFactor = 1.5
-static const float rc_smoothing_auto_factor_throttle_default = 0.0f;  // 默认值，对应 autoSmoothnessFactor = 1.5
+// Betaflight-style RPY cutoff: typically 60-90Hz for balanced response (higher than throttle, lower than 111Hz)
+// Target: ~75Hz cutoff for typical 65-75Hz RC rate (slightly higher than throttle for faster response)
+// Calculation: 75Hz / 75Hz = 1.0 → auto_factor = (1.5/1.0 - 1) * 10 = 5.0
+// With auto_factor_rpy = 5: autoSmoothnessFactor = 1.5 / (1.0 + 0.5) = 1.0, cutoff ≈ rx_rate * 1.0
+// For 74.4Hz RC rate: cutoff ≈ 74.4 * 1.0 ≈ 75Hz (more reasonable than 111Hz, but faster than throttle ~50Hz)
+static const float rc_smoothing_auto_factor_rpy_default = 5.0f;       // 默认值，对应 autoSmoothnessFactor = 1.0，使RPY截止频率约为RC刷新率（约75Hz）
+// Betaflight-style throttle cutoff: typically 30-50Hz for smoother throttle response
+// Target: ~50Hz cutoff for typical 65-75Hz RC rate
+// Calculation: 50Hz / 75Hz ≈ 0.67 → auto_factor ≈ 12.4
+// With auto_factor_throttle = 12: autoSmoothnessFactor = 1.5 / (1.0 + 1.2) = 0.68, cutoff ≈ rx_rate * 0.68
+// This gives ~50Hz cutoff for 75Hz RC rate, which is more reasonable than 111Hz (rx_rate * 1.5)
+static const float rc_smoothing_auto_factor_throttle_default = 12.0f;  // 默认值，对应 autoSmoothnessFactor ≈ 0.68，使油门截止频率约为RC刷新率的0.68倍（约50Hz）
 static const uint8_t rc_smoothing_enabled_default = 1;                // 默认启用
 
 /* 默认 RC Controls 参数 */

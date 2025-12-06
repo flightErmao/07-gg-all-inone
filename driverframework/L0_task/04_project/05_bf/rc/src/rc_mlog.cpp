@@ -20,6 +20,8 @@ struct mlogRcData_t {
   float raw_channels[6];      // 前 6 个通道的原始数据 [ch0-ch5] (1000-2000)
   float rawSetpoint[3];       // Raw setpoint rates [roll, pitch, yaw] (deg/s)
   float rcCommandThrottle;    // RC command throttle (1000-2000)
+  float rx_rate_hz;           // RC refresh rate (Hz)
+  float throttle_cutoff;      // Throttle filter cutoff frequency (Hz)
   uint8_t armed;              // 上锁状态 (0=DISARMED, 1=ARMED)
   uint8_t flight_mode;        // 飞行模式 (0=角速度模式/Rate, 1=角度模式/Angle, 2=高度模式/Altitude)
 } __packed;
@@ -31,6 +33,8 @@ static mlog_elem_t RcData_Elems[] __attribute__((used)) = {
     MLOG_ELEMENT_VEC(raw_channels, MLOG_FLOAT, 6),
     MLOG_ELEMENT_VEC(rawSetpoint, MLOG_FLOAT, 3),
     MLOG_ELEMENT(rcCommandThrottle, MLOG_FLOAT),
+    MLOG_ELEMENT(rx_rate_hz, MLOG_FLOAT),
+    MLOG_ELEMENT(throttle_cutoff, MLOG_FLOAT),
     MLOG_ELEMENT(armed, MLOG_UINT8),
     MLOG_ELEMENT(flight_mode, MLOG_UINT8),
 };
@@ -103,6 +107,8 @@ void MlogRc::pushRcData(const rc_mlog_data_t* data) {
   std::memcpy(rc_data.raw_channels, data->raw_channels, sizeof(rc_data.raw_channels));
   std::memcpy(rc_data.rawSetpoint, data->rawSetpoint, sizeof(rc_data.rawSetpoint));
   rc_data.rcCommandThrottle = data->rcCommandThrottle;
+  rc_data.rx_rate_hz = data->rx_rate_hz;
+  rc_data.throttle_cutoff = data->throttle_cutoff;
   rc_data.armed = data->armed;
   rc_data.flight_mode = data->flight_mode;
 

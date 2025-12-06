@@ -46,7 +46,7 @@ static const uint8_t gyro_lpf1_type_default = FILTER_PT1;  // PT1 (from filter.h
 static const uint16_t gyro_lpf1_static_hz_default = 80;    // 默认使用动态最小值
 
 static const uint8_t gyro_lpf2_type_default = FILTER_PT1;  // PT1 (from filter.h: lowpassFilterType_e)
-static const uint16_t gyro_lpf2_static_hz_default = 500;   // 默认禁用
+static const uint16_t gyro_lpf2_static_hz_default = 200;   // 默认禁用
 
 static const uint16_t gyro_soft_notch_hz_1_default = 0;
 static const uint16_t gyro_soft_notch_cutoff_1_default = 0;
@@ -58,8 +58,8 @@ static const uint16_t gyro_lpf1_dyn_max_hz_default = 250;
 static const uint8_t gyro_lpf1_dyn_expo_default = 5;
 
 static const uint16_t filter_dyn_notch_q_default = 120;  // Q = 1.2
-static const uint16_t filter_dyn_notch_min_hz_default = 250;
-static const uint16_t filter_dyn_notch_max_hz_default = 550;
+static const uint16_t filter_dyn_notch_min_hz_default = 100;
+static const uint16_t filter_dyn_notch_max_hz_default = 250;
 static const uint8_t filter_dyn_notch_count_default = 1;
 
 static const uint16_t filter_acc_cutoff_hz_default = 50;  // 默认 50Hz

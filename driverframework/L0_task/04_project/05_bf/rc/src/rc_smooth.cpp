@@ -78,7 +78,6 @@ rt_err_t RcSmoothingFilter::init(float target_looptime_s, float smoothed_rx_rate
   smoothing_data_.throttleCutoffFrequency = initial_throttle_cutoff_hz;
 
   // Initialize pt3Filter for setpoint smoothing
-  // filterSetpoint[ROLL/PITCH/YAW] use setpoint cutoff, filterSetpoint[THROTTLE] uses throttle cutoff
   float pt3k_sp = pt3FilterGain(initial_setpoint_cutoff_hz, dt);
   float pt3k_thr = pt3FilterGain(initial_throttle_cutoff_hz, dt);
 
@@ -115,7 +114,15 @@ void RcSmoothingFilter::updateFilterCutoffs(float target_looptime_s, float smoot
   if (!smoothing_data_.enabled || !initialized_) {
     return;
   }
-  
+
+  // NOTE: Thread safety consideration
+  // This function is called from RC task (~100-200Hz) while processFilter() is called from PID task (3.2kHz/8kHz).
+  // pt3FilterUpdateCutoff() only updates filter->k (single float write), which is typically atomic on 32-bit systems.
+  // pt3FilterApply() reads filter->k and writes filter->state/state1/state2, which may cause minor inconsistency
+  // if cutoff is updated during filtering. However, since cutoff updates are infrequent (100-200Hz) compared to
+  // filter application (3.2kHz/8kHz), and cutoff changes are gradual, the impact is minimal.
+  // Same as Betaflight: cutoff updates in rc_smoothing.c (RC task) while filtering in pid_loop.c (PID task).
+
   const float min_cutoff_hz = 15.0f;
   float dt = target_looptime_s;
   
@@ -128,7 +135,7 @@ void RcSmoothingFilter::updateFilterCutoffs(float target_looptime_s, float smoot
   float throttle_cutoff = smoothing_data_.throttleCutoffSetting == 0
       ? std::max(min_cutoff_hz, smoothed_rx_rate_hz * smoothing_data_.autoSmoothnessFactorThrottle)
       : smoothing_data_.throttleCutoffSetting;
-  
+
   // Update filter cutoffs
   float pt3k_sp = pt3FilterGain(setpoint_cutoff, dt);
   float pt3k_thr = pt3FilterGain(throttle_cutoff, dt);
