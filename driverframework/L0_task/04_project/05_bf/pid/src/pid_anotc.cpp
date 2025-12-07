@@ -15,7 +15,7 @@ extern "C" {
 #include "anotc_bf.h"
 }
 
-#ifdef PROJECT_BF_PID_ANOTC_LOG_EN
+#ifdef PROJECT_BF_PID_ANOTC_LOG_ANGULAR_RATE_EN
 static void sendRateSetpointActual(uint16_t count_ms) {
   if (!(count_ms % PROJECT_BF_PID_ANOTC_LOG_ANGULAR_RATE_PERIOD_MS)) {
     // Get data directly from singleton instances

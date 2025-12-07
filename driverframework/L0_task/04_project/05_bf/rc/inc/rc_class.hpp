@@ -38,6 +38,9 @@ struct SimpleLowpass {
 #define YAW 2
 #define NON_AUX_CHANNEL_COUNT 4  // Roll, Pitch, Yaw, Throttle
 
+// Throttle rate limit (maximum increase per cycle)
+#define THROTTLE_RATE_LIMIT 10.0f  // Maximum throttle increase per RC cycle (PWM units)
+
 // Channel range configuration
 struct rxChannelRangeConfig_t {
   uint16_t min;
@@ -89,6 +92,11 @@ class RcBf {
   // Mlog related functions
   rt_err_t initMlog();
   void pushRcDataToMlog(const bf_mlog::rc_mlog_data_t* data);
+
+  // RC thread processing functions (module-based)
+  void processAuxChannelsAndPublish(uint32_t current_time_us);
+  void handleMlogArmControl();
+  void prepareAndPushRcMlogData(uint32_t current_time_us);
 
   // Get RC data and command arrays (for echo functions)
   const float* getRcData() const { return rc_data_; }
@@ -155,7 +163,13 @@ class RcBf {
   
   // Helper: check if pulse is valid
   bool isPulseValid(uint16_t pulseDuration) const;
-  
+
+  // Apply throttle smoothing curve and scale (low throttle smoothing + 70% max scale)
+  float applyThrottleSmoothingAndScale(float throttle) const;
+
+  // Apply throttle rate limiting (limit sudden increases)
+  float applyThrottleRateLimit(float throttle);
+
   // Update RC refresh rate
   void updateRcRefreshRate(uint32_t current_time_us, bool rxReceivingSignal);
   
@@ -271,6 +285,9 @@ class RcBf {
   // Mlog arm control
   uint8_t rc_arm_control_;  // 0=禁用, 1=使能（上锁时启动log，解锁时停止log）
   bool prev_armed_status_;   // 上一次的上锁状态，用于检测状态变化
+
+  // Previous throttle value for rate limiting
+  float prev_rc_command_throttle_;  // 上一次的rcCommandThrottle值，用于限幅滤波
 };
 
 #endif /* RC_BF_HPP__ */

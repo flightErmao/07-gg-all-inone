@@ -29,7 +29,7 @@ static const uint8_t mlog_gyro_en_default = 1;  // 默认使用
 static const uint8_t mlog_rc_en_default = 1;  // 默认使用
 static const uint8_t mlog_motor_en_default = 1;  // 默认使用
 static const uint8_t mlog_pid_en_default = 1;  // 默认使用
-static const uint8_t mlog_rc_arm_control_default = 0;  // 默认禁用（需要手动控制）
+static const uint8_t mlog_rc_arm_control_default = 1;  // 默认使用
 
 static const param_default_t bf_mlog_defaults[] = {
     {&mlog_gyro_en, &mlog_gyro_en_default},

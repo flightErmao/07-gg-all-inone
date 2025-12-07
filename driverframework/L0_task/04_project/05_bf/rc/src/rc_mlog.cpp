@@ -17,13 +17,14 @@ namespace bf_mlog {
 struct mlogRcData_t {
   uint32_t timestamp;
   uint32_t seq;
-  float raw_channels[6];      // 前 6 个通道的原始数据 [ch0-ch5] (1000-2000)
-  float rawSetpoint[3];       // Raw setpoint rates [roll, pitch, yaw] (deg/s)
-  float rcCommandThrottle;    // RC command throttle (1000-2000)
-  float rx_rate_hz;           // RC refresh rate (Hz)
-  float throttle_cutoff;      // Throttle filter cutoff frequency (Hz)
-  uint8_t armed;              // 上锁状态 (0=DISARMED, 1=ARMED)
-  uint8_t flight_mode;        // 飞行模式 (0=角速度模式/Rate, 1=角度模式/Angle, 2=高度模式/Altitude)
+  float raw_channels[6];
+  float rawSetpoint[3];
+  float rcCommandThrottle;
+  float rx_rate_hz;
+  float throttle_cutoff;
+  uint8_t armed;
+  uint8_t flight_mode;
+  uint16_t rc_raw_throttle;
 } __packed;
 
 // Mlog 元素定义（参考 aMlogStabilze.c:81-85）
@@ -37,6 +38,7 @@ static mlog_elem_t RcData_Elems[] __attribute__((used)) = {
     MLOG_ELEMENT(throttle_cutoff, MLOG_FLOAT),
     MLOG_ELEMENT(armed, MLOG_UINT8),
     MLOG_ELEMENT(flight_mode, MLOG_UINT8),
+    MLOG_ELEMENT(rc_raw_throttle, MLOG_UINT16),
 };
 
 // Mlog 总线定义（参考 aMlogStabilze.c:86）
@@ -111,6 +113,7 @@ void MlogRc::pushRcData(const rc_mlog_data_t* data) {
   rc_data.throttle_cutoff = data->throttle_cutoff;
   rc_data.armed = data->armed;
   rc_data.flight_mode = data->flight_mode;
+  rc_data.rc_raw_throttle = data->rc_raw_throttle;
 
   // 推送消息到 mlog（参考 aMlogStabilze.c:211）
   mlog_push_msg(reinterpret_cast<const uint8_t*>(&rc_data), bus_id_, sizeof(mlogRcData_t));

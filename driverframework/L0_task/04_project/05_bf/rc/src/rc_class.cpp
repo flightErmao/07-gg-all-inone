@@ -85,7 +85,8 @@ RcBf::RcBf()
       rcCommandYawDivider_(500.0f),
       rc_loss_count_(0),
       rc_arm_control_(0),
-      prev_armed_status_(false) {
+      prev_armed_status_(false),
+      prev_rc_command_throttle_(PWM_RANGE_MIN) {  // Initialize to minimum throttle
   std::memset(rc_raw_channels_, 0, sizeof(rc_raw_channels_));
   std::memset(rc_data_, 0, sizeof(rc_data_));
   std::memset(rc_command_, 0, sizeof(rc_command_));
@@ -549,6 +550,10 @@ void RcBf::updateRcCommands() {
   float throttle_min = PWM_RANGE_MIN;
   float throttle_max = PWM_RANGE_MAX;
   float throttle = constrainf(rc_data_[THROTTLE], throttle_min, throttle_max);
+
+  // Apply throttle rate limiting (limit sudden increases)
+  throttle = applyThrottleRateLimit(throttle);
+
   rc_command_[THROTTLE] = throttle;
   
   // Mark new data available for PID task
@@ -617,6 +622,26 @@ void RcBf::updateRcRefreshRate(uint32_t current_time_us, bool rxReceivingSignal)
   last_rc_time_us_ = current_time_us;
 }
 
+float RcBf::applyThrottleRateLimit(float throttle) {
+  // Calculate throttle increase
+  float throttle_increase = throttle - prev_rc_command_throttle_;
+
+  // Limit maximum increase per cycle
+  if (throttle_increase > THROTTLE_RATE_LIMIT) {
+    throttle = prev_rc_command_throttle_ + THROTTLE_RATE_LIMIT;
+    // Calculate original requested value inline to avoid unused variable warning if LOG_E is disabled
+    // LOG_E("Throttle rate limit applied: prev=%.1f, requested=%.1f, increase=%.1f, limited to %.1f (max
+    // increase=%.1f)",
+    //       prev_rc_command_throttle_, throttle + throttle_increase - THROTTLE_RATE_LIMIT, throttle_increase, throttle,
+    //       THROTTLE_RATE_LIMIT);
+  }
+
+  // Update previous throttle value
+  prev_rc_command_throttle_ = throttle;
+
+  return throttle;
+}
+
 float RcBf::applyBetaflightRates(int axis, float rcCommandf, float rcCommandfAbs) const {
   float rc_commandf = rcCommandf;
   
@@ -656,96 +681,6 @@ float RcBf::getMaxRcRate(int axis) const {
   return 0.0f;
 }
 
-void RcBf::printDebugInfo(const rc_command_msg_t* setpoint_msg) const {
-  if (setpoint_msg == nullptr) {
-    return;
-  }
-
-  LOG_I("=== RC Debug Info ===");
-  LOG_I("Raw channels: Roll=%d, Pitch=%d, Yaw=%d, Throttle=%d", (int)rc_data_[ROLL], (int)rc_data_[PITCH],
-        (int)rc_data_[YAW], (int)rc_data_[THROTTLE]);
-  LOG_I("rcCommand: Roll=%.1f, Pitch=%.1f, Yaw=%.1f, Throttle=%.1f", rc_command_[ROLL], rc_command_[PITCH],
-        rc_command_[YAW], rc_command_[THROTTLE]);
-  LOG_I("RC Refresh Rate: current=%.1f Hz, smoothed=%.1f Hz, valid=%d", current_rx_rate_hz_, smoothed_rx_rate_hz_,
-        is_rx_rate_valid_);
-  LOG_I("Channel Range Config - Roll: [%u, %u], Pitch: [%u, %u], Yaw: [%u, %u], Throttle: [%u, %u]",
-        channel_range_configs_[ROLL].min, channel_range_configs_[ROLL].max, channel_range_configs_[PITCH].min,
-        channel_range_configs_[PITCH].max, channel_range_configs_[YAW].min, channel_range_configs_[YAW].max,
-        channel_range_configs_[THROTTLE].min, channel_range_configs_[THROTTLE].max);
-  LOG_I("Dividers: rcCommandDivider=%.1f, rcCommandYawDivider=%.1f (calculated from deadband)", rcCommandDivider_,
-        rcCommandYawDivider_);
-  LOG_I("Rate Profile - rcRates: [%.1f, %.1f, %.1f], rcExpo: [%.1f, %.1f, %.1f]", rate_profile_.rcRates[FD_ROLL],
-        rate_profile_.rcRates[FD_PITCH], rate_profile_.rcRates[FD_YAW], rate_profile_.rcExpo[FD_ROLL],
-        rate_profile_.rcExpo[FD_PITCH], rate_profile_.rcExpo[FD_YAW]);
-  LOG_I("Rate Profile - rates (super): [%.1f, %.1f, %.1f], rate_limit: [%.1f, %.1f, %.1f]",
-        rate_profile_.rates[FD_ROLL], rate_profile_.rates[FD_PITCH], rate_profile_.rates[FD_YAW],
-        rate_profile_.rate_limit[FD_ROLL], rate_profile_.rate_limit[FD_PITCH], rate_profile_.rate_limit[FD_YAW]);
-  LOG_I("Note: Base angle_rate = 200.0 * rc_rate * rc_commandf");
-  LOG_I("      - 200.0 is a FIXED constant from Betaflight (not adjustable)");
-  LOG_I("      - To get higher rates, increase rcRates parameter (default 100)");
-  LOG_I("      - Example: rcRates=360 gives max angle_rate = 200 * 3.6 * 1.0 = 720 deg/s");
-
-  // Print detailed calculation for each axis
-  const char* axis_names[] = {"Roll", "Pitch", "Yaw"};
-  const int channel_idx[] = {FD_ROLL, FD_PITCH, FD_YAW};
-
-  for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
-    LOG_I("--- %s Axis ---", axis_names[axis]);
-    LOG_I("  rc_data[%s]=%.1f (raw input, mapped from [%u, %u] -> [1000, 2000])", axis_names[axis],
-          rc_data_[channel_idx[axis]], channel_range_configs_[channel_idx[axis]].min,
-          channel_range_configs_[channel_idx[axis]].max);
-    LOG_I("  rc_command[%s]=%.1f (after deadband, should be in [1000, 2000])", axis_names[axis],
-          rc_command_[channel_idx[axis]]);
-
-    // Calculate rc_commandf (same as in processRcCommand)
-    float rc_commandf = 0.0f;
-    if (axis == FD_ROLL) {
-      rc_commandf = (rc_command_[FD_ROLL] - PWM_RANGE_MIDDLE) / rcCommandDivider_;
-    } else if (axis == FD_PITCH) {
-      rc_commandf = (rc_command_[FD_PITCH] - PWM_RANGE_MIDDLE) / rcCommandDivider_;
-    } else if (axis == FD_YAW) {
-      rc_commandf = (rc_command_[FD_YAW] - PWM_RANGE_MIDDLE) / rcCommandYawDivider_;
-    }
-    rc_commandf = constrainf(rc_commandf, -1.0f, 1.0f);
-    float rc_commandf_abs = std::abs(rc_commandf);
-
-    // Calculate theoretical max rc_commandf based on channel range
-    float max_possible_rc = std::max((channel_range_configs_[channel_idx[axis]].max - PWM_RANGE_MIDDLE) /
-                                         (axis == FD_YAW ? rcCommandYawDivider_ : rcCommandDivider_),
-                                     std::abs((channel_range_configs_[channel_idx[axis]].min - PWM_RANGE_MIDDLE) /
-                                              (axis == FD_YAW ? rcCommandYawDivider_ : rcCommandDivider_)));
-
-    LOG_I("  rc_commandf=%.4f (normalized from rc_command, range: [-1.0, 1.0], abs=%.4f)", rc_commandf,
-          rc_commandf_abs);
-    LOG_I("    -> Max possible rc_commandf with current range = %.4f (should be ~1.0 for full range)", max_possible_rc);
-
-    // Recalculate angle_rate to show before limit (same calculation as in processRcCommand)
-    float angle_rate = applyBetaflightRates(axis, rc_commandf, rc_commandf_abs);
-    float angle_rate_limited =
-        constrainf(angle_rate, -1.0f * rate_profile_.rate_limit[axis], 1.0f * rate_profile_.rate_limit[axis]);
-
-    LOG_I("  angle_rate=%.2f deg/s (before limit, calculated)", angle_rate);
-    LOG_I("  rate_limit=%.1f deg/s", rate_profile_.rate_limit[axis]);
-    LOG_I("  rawSetpoint=%.2f deg/s (final, limited by rate_limit, from msg)", setpoint_msg->rawSetpoint[axis]);
-
-    // Show if angle_rate was limited
-    if (std::abs(angle_rate) > rate_profile_.rate_limit[axis]) {
-      LOG_I("    -> angle_rate was limited from %.2f to %.2f deg/s", angle_rate, angle_rate_limited);
-    }
-
-    // Warning if rc_commandf is not reaching full range
-    if (rc_commandf_abs < 0.95f) {
-      LOG_W("  WARNING: rc_commandf (%.4f) is not reaching ±1.0! Channel range needs calibration.", rc_commandf);
-      LOG_W("  Problem: rc_data[%s]=%.1f is not mapped to full [1000, 2000] range", axis_names[axis],
-            rc_data_[channel_idx[axis]]);
-      LOG_W("  Solution: Set rc_channel_range_%s parameter to actual min/max values",
-            (axis == FD_ROLL ? "roll" : (axis == FD_PITCH ? "pitch" : "yaw")));
-      LOG_W("            Example: If roll channel range is [1068, 1932], set: par set 27 0 1068 1932");
-      LOG_W("            This will map [1068, 1932] -> [1000, 2000], allowing rc_commandf to reach ±1.0");
-    }
-  }
-}
-
 float RcBf::constrainf(float x, float min, float max) const {
   if (x < min) return min;
   if (x > max) return max;
@@ -772,6 +707,90 @@ float RcBf::applyDeadband(float value, float deadband) const {
   }
 }
 
+// Process auxiliary channels and publish to MCN
+// Combines RcControls processing and MCN publishing
+void RcBf::processAuxChannelsAndPublish(uint32_t current_time_us) {
+  // Process auxiliary channels with RcControls (including failsafe protection)
+  // This handles stick positions, arming/disarming, and flight mode switching
+  RcControls& rc_controls = RcControls::instance();
+  rc_controls.processRcStickPositions(rc_data_, current_time_us);
+  
+  // Publish auxiliary channels data to MCN (after failsafe protection)
+  publishAuxChannelsToMcn(current_time_us);
+}
+
+// Handle mlog start/stop based on arm status change
+void RcBf::handleMlogArmControl() {
+  if (rc_arm_control_ != 1) {
+    return;  // Mlog arm control disabled
+  }
+  
+  RcControls& rc_controls = RcControls::instance();
+  bool current_armed = rc_controls.isArmed();
+  
+  // Check if this is the first run (prev_armed_status_ is uninitialized)
+  // On first run, initialize prev_armed_status_ to current state without triggering action
+  static bool first_run = true;
+  if (first_run) {
+    prev_armed_status_ = current_armed;
+    first_run = false;
+    return;
+  }
+  
+  // Check if arm status changed
+  if (prev_armed_status_ != current_armed) {
+    if (current_armed) {
+      // Disarmed -> Armed: Start mlog
+#ifdef TASK_TOOL_02_SD_MLOG
+      task_mlog_start_logging(NULL);
+      LOG_I("RC arm detected, mlog started");
+#endif
+    } else {
+      // Armed -> Disarmed: Stop mlog
+#ifdef TASK_TOOL_02_SD_MLOG
+      task_mlog_stop_logging();
+      LOG_I("RC disarm detected, mlog stopped");
+#endif
+    }
+    prev_armed_status_ = current_armed;
+  }
+}
+
+// Prepare and push RC data to mlog
+void RcBf::prepareAndPushRcMlogData(uint32_t current_time_us) {
+  bf_mlog::rc_mlog_data_t mlog_data;
+  
+  // Note: seq_ was incremented in both publishRcCommandToMcn and publishAuxChannelsToMcn
+  // So use seq_ - 2 to match the seq from publishRcCommandToMcn
+  mlog_data.seq = seq_ - 2;
+  mlog_data.timestamp = current_time_us;
+  
+  // Copy first 6 channels of raw RC data
+  for (int i = 0; i < 6; i++) {
+    mlog_data.raw_channels[i] = rc_data_[i];
+  }
+  
+  // Copy rawSetpoint rates
+  std::memcpy(mlog_data.rawSetpoint, rawSetpoint_, sizeof(mlog_data.rawSetpoint));
+  
+  // Copy throttle and related data
+  mlog_data.rcCommandThrottle = rc_command_[THROTTLE];
+  mlog_data.rx_rate_hz = smoothed_rx_rate_hz_;
+  mlog_data.rc_raw_throttle = rc_raw_channels_[THROTTLE];
+  
+  // Get throttle cutoff frequency from smoothing filter
+  RcSmoothingFilter& smoothing_filter = RcSmoothingFilter::instance();
+  mlog_data.throttle_cutoff = smoothing_filter.getThrottleCutoffFrequency();
+  
+  // Get arm status and flight mode from RcControls
+  RcControls& rc_controls = RcControls::instance();
+  mlog_data.armed = rc_controls.isArmed() ? RC_ARMED_STATUS_ARMED : RC_ARMED_STATUS_DISARMED;
+  mlog_data.flight_mode = rc_controls.getFlightMode();
+  
+  // Push to mlog
+  pushRcDataToMlog(&mlog_data);
+}
+
 // Thread entry point - RX Task (100-200Hz)
 void RcBf::rcThreadEntry(void* parameter) {
   RcBf* instance = static_cast<RcBf*>(parameter);
@@ -787,86 +806,43 @@ void RcBf::rcThreadEntry(void* parameter) {
   while (true) {
     uint32_t current_time_us = timestamp_micros();
     
-    // RX Task: Read raw channels and process to rcCommand[]
+    // ========== Module 1: Read and Process Raw RC Channels ==========
     instance->readRawRcChannels();
 
 #ifdef PROJECT_BF_RC_DEBUG_PIN_EN
     DEBUG_PIN_DEBUG3_HIGH();  // Debug pin: RC task execution start (monitor RC task frequency ~100-200Hz)
 #endif
+    
     instance->applyRangeScaling();
     instance->applyFailsafeAndConstraints(current_time_us);
     instance->updateRcCommands();  // rcData[] → rcCommand[]
     
-    // Update refresh rate
+    // ========== Module 2: Update RC Refresh Rate ==========
     bool rx_receiving_signal = (instance->rc_loss_count_ <= 10);
     instance->updateRcRefreshRate(current_time_us, rx_receiving_signal);
 
-    // Process RC command and publish to MCN (in RC thread)
+    // ========== Module 3: Process RC Command and Publish Setpoint ==========
     // This calculates rawSetpoint[] from rcCommand[] and publishes to MCN for PID thread
     instance->processRcCommand(current_time_us);
 
-    // Process auxiliary channels with RcControls (including failsafe protection)
-    // This handles stick positions, arming/disarming, and flight mode switching
-    RcControls& rc_controls = RcControls::instance();
-    rc_controls.processRcStickPositions(instance->rc_data_, current_time_us);
+    // ========== Module 4: Process Auxiliary Channels and Publish ==========
+    // Combines RcControls processing and MCN publishing
+    instance->processAuxChannelsAndPublish(current_time_us);
 
-    // Handle mlog start/stop based on arm status change (if mlog_rc_arm_control is enabled)
-    if (instance->rc_arm_control_ == 1) {
-      bool current_armed = rc_controls.isArmed();
-      // Check if this is the first run (prev_armed_status_ is uninitialized)
-      // On first run, initialize prev_armed_status_ to current state without triggering action
-      static bool first_run = true;
-      if (first_run) {
-        instance->prev_armed_status_ = current_armed;
-        first_run = false;
-      } else if (instance->prev_armed_status_ != current_armed) {
-        // Arm status changed
-        if (current_armed) {
-          // Disarmed -> Armed: Start mlog
-#ifdef TASK_TOOL_02_SD_MLOG
-          task_mlog_start_logging(NULL);
-          LOG_I("RC arm detected, mlog started");
-#endif
-        } else {
-          // Armed -> Disarmed: Stop mlog
-#ifdef TASK_TOOL_02_SD_MLOG
-          task_mlog_stop_logging();
-          LOG_I("RC disarm detected, mlog stopped");
-#endif
-        }
-        instance->prev_armed_status_ = current_armed;
-      }
-    }
+    // ========== Module 5: Handle Mlog Arm Control ==========
+    // Start/stop mlog based on arm status change (if enabled)
+    instance->handleMlogArmControl();
 
-    // Publish auxiliary channels data to MCN (after failsafe protection)
-    instance->publishAuxChannelsToMcn(current_time_us);
-
-    // Push RC data to mlog (record raw channels, rawSetpoint, throttle, armed, flight_mode)
-    // This is the last step in RC thread execution
-    // Note: seq_ was incremented in both publishRcCommandToMcn and publishAuxChannelsToMcn
-    // So use seq_ - 2 to match the seq from publishRcCommandToMcn
-    bf_mlog::rc_mlog_data_t mlog_data;
-    mlog_data.seq = instance->seq_ - 2;  // Use the seq from publishRcCommandToMcn (seq_ was incremented twice: once in publishRcCommandToMcn, once in publishAuxChannelsToMcn)
-    mlog_data.timestamp = current_time_us;
-    // Copy first 6 channels of raw RC data
-    for (int i = 0; i < 6; i++) {
-      mlog_data.raw_channels[i] = instance->rc_data_[i];
-    }
-    std::memcpy(mlog_data.rawSetpoint, instance->rawSetpoint_, sizeof(mlog_data.rawSetpoint));
-    mlog_data.rcCommandThrottle = instance->rc_command_[THROTTLE];
-    mlog_data.rx_rate_hz = instance->smoothed_rx_rate_hz_;
-    // Get throttle cutoff frequency from smoothing filter
-    RcSmoothingFilter& smoothing_filter = RcSmoothingFilter::instance();
-    mlog_data.throttle_cutoff = smoothing_filter.getThrottleCutoffFrequency();
-    mlog_data.armed = rc_controls.isArmed() ? RC_ARMED_STATUS_ARMED : RC_ARMED_STATUS_DISARMED;
-    mlog_data.flight_mode = rc_controls.getFlightMode();
-    instance->pushRcDataToMlog(&mlog_data);
+    // ========== Module 6: Prepare and Push RC Data to Mlog ==========
+    // Record raw channels, rawSetpoint, throttle, armed, flight_mode
+    instance->prepareAndPushRcMlogData(current_time_us);
 
 #ifdef PROJECT_BF_RC_DEBUG_PIN_EN
     DEBUG_PIN_DEBUG3_LOW();  // Debug pin: RC task execution end
 #endif
 
-    // Rate control - maintain 100-200Hz
+    // ========== Rate Control ==========
+    // Maintain 100-200Hz
     uint32_t elapsed = timestamp_micros() - current_time_us;
     if (elapsed < target_interval_us) {
       rt_thread_mdelay((target_interval_us - elapsed) / 1000);

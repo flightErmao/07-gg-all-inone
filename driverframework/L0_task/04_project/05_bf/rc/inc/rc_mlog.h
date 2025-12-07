@@ -31,6 +31,7 @@ struct rc_mlog_data_t {
   float throttle_cutoff;              // Throttle filter cutoff frequency (Hz)
   uint8_t armed;                      // 上锁状态 (0=DISARMED, 1=ARMED)
   uint8_t flight_mode;                // 飞行模式 (0=角速度模式/Rate, 1=角度模式/Angle, 2=高度模式/Altitude)
+  uint16_t rc_raw_throttle;           // 原始油门通道值 (1000-2000)
 } __packed;
 
 /**
