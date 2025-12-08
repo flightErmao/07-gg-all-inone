@@ -1,0 +1,107 @@
+# =============================================================================
+# RT-Thread STM32H743 BSP Build Configuration
+# =============================================================================
+
+import os
+import sys
+import rtconfig
+
+# =============================================================================
+# 1. RT-Thread 内核路径设置
+# =============================================================================
+if os.getenv('RTT_ROOT'):
+    RTT_ROOT = os.getenv('RTT_ROOT')
+else:
+    RTT_ROOT = os.path.normpath(os.getcwd() + '/../../../kernel/rtthread')
+
+# 添加 RT-Thread 工具路径和当前目录到Python路径
+sys.path = sys.path + [os.path.join(RTT_ROOT, 'tools'), os.getcwd()]
+try:
+    from building import *
+except:
+    print('Cannot found RT-Thread root directory, please check RTT_ROOT')
+    print(RTT_ROOT)
+    exit(-1)
+
+# =============================================================================
+# 2. 依赖包检查
+# =============================================================================
+# def bsp_pkg_check():
+#     import subprocess
+
+#     check_paths = [
+#         os.path.join("packages", "CMSIS-Core-latest"),
+#         os.path.join("packages", "stm32h7_cmsis_driver-latest"),
+#         os.path.join("packages", "stm32h7_hal_driver-latest")
+#     ]
+
+#     need_update = not all(os.path.exists(p) for p in check_paths)
+
+#     if need_update:
+#         print("\n===============================================================================")
+#         print("Dependency packages missing, please running 'pkgs --update'...")
+#         print("If no packages are fetched, run 'pkgs --upgrade' first, then 'pkgs --update'...")
+#         print("===============================================================================")
+#         exit(1)
+
+# RegisterPreBuildingAction(bsp_pkg_check)
+
+# =============================================================================
+# 3. 构建目标设置
+# =============================================================================
+TARGET = 'rt-thread.' + rtconfig.TARGET_EXT
+
+# =============================================================================
+# 4. 编译环境配置
+# =============================================================================
+DefaultEnvironment(tools=[])
+env = Environment(tools = ['mingw'],
+    AS = rtconfig.AS, ASFLAGS = rtconfig.AFLAGS,
+    CC = rtconfig.CC, CFLAGS = rtconfig.CFLAGS,
+    AR = rtconfig.AR, ARFLAGS = '-rc',
+    CXX = rtconfig.CXX, CXXFLAGS = rtconfig.CXXFLAGS,
+    LINK = rtconfig.LINK, LINKFLAGS = rtconfig.LFLAGS)
+env.PrependENVPath('PATH', rtconfig.EXEC_PATH)
+
+# ICCARM 平台特殊配置
+if rtconfig.PLATFORM in ['iccarm']:
+    env.Replace(CCCOM = ['$CC $CFLAGS $CPPFLAGS $_CPPDEFFLAGS $_CPPINCFLAGS -o $TARGET $SOURCES'])
+    env.Replace(ARFLAGS = [''])
+    env.Replace(LINKCOM = env["LINKCOM"] + ' --map rt-thread.map')
+
+# =============================================================================
+# 5. 路径变量定义和计算
+# =============================================================================
+
+BSP_DIR = os.path.abspath('./')                                     # 当前 BSP 目录
+PROJECT_ROOT = os.path.normpath(os.path.join(BSP_DIR, '../../../')) # 项目根目录（相对于当前 BSP 目录）
+RTT_DIR = os.path.join(PROJECT_ROOT, 'kernel/rtthread')             # RT-Thread 内核路径
+driverframework_path = os.path.join(PROJECT_ROOT, 'driverframework')  # 驱动框架路径
+libraries_path_prefix = os.path.join(PROJECT_ROOT, 'kernel', 'rtthread', 'bsp', 'stm32', 'libraries') ## 计算 libraries 路径（改为使用内核路径中的 libraries）
+
+# =============================================================================
+# 6. 导出必要的变量到构建环境
+# =============================================================================
+Export('BSP_DIR')
+Export('RTT_ROOT')
+Export('RTT_DIR')
+Export('driverframework_path')
+Export('PROJECT_ROOT')
+Export('env')
+Export('rtconfig')
+
+# =============================================================================
+# 7. 构建过程
+# =============================================================================
+# 准备构建环境
+objs = PrepareBuilding(env, RTT_ROOT, has_libcpu=False)
+
+# 设置库类型
+rtconfig.BSP_LIBRARY_TYPE = None
+
+# 包含 HAL 驱动程序
+objs.extend(SConscript(os.path.join(libraries_path_prefix, 'HAL_Drivers', 'SConscript'),
+                      variant_dir='build/libraries/HAL_Drivers', duplicate=0))
+
+# 执行构建
+DoBuilding(TARGET, objs)
