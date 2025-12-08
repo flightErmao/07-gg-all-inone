@@ -255,7 +255,7 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* huart)
 void HAL_PCD_MspInit(PCD_HandleTypeDef* hpcd)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
+  // RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
   if(hpcd->Instance==USB_OTG_FS)
   {
   /* USER CODE BEGIN USB_OTG_FS_MspInit 0 */
@@ -263,12 +263,14 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef* hpcd)
   /* USER CODE END USB_OTG_FS_MspInit 0 */
   /** Initializes the peripherals clock
   */
-    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USB;
-    PeriphClkInitStruct.UsbClockSelection = RCC_USBCLKSOURCE_PLL;
-    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
-    {
-      Error_Handler();
-    }
+    // USB时钟已在SystemClock_Config中配置为PLL3 (48MHz)
+    // 这里不再重复配置，避免覆盖正确的时钟设置
+    // PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USB;
+    // PeriphClkInitStruct.UsbClockSelection = RCC_USBCLKSOURCE_PLL3;
+    // if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+    // {
+    //   Error_Handler();
+    // }
   /** Enable USB Voltage detector
   */
     HAL_PWREx_EnableUSBVoltageDetector();

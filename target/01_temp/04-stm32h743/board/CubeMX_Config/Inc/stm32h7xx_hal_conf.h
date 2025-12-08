@@ -20,7 +20,7 @@
 /* Define to prevent recursive inclusion -------------------------------------*/
 #ifndef STM32H7xx_HAL_CONF_H
 #define STM32H7xx_HAL_CONF_H
-
+#include "rtconfig.h"
 #ifdef __cplusplus
  extern "C" {
 #endif

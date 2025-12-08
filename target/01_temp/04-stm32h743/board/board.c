@@ -73,7 +73,7 @@ void SystemClock_Config(void) {
   HAL_PWREx_ConfigSupply(PWR_LDO_SUPPLY);
   /** Configure the main internal regulator output voltage
    */
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE0);
 
   while (!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {
   }
@@ -83,12 +83,12 @@ void SystemClock_Config(void) {
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 1;    // 8MHz / 1 = 8MHz
-  RCC_OscInitStruct.PLL.PLLN = 100;  // 8MHz * 100 = 800MHz
-  RCC_OscInitStruct.PLL.PLLP = 2;    // 800MHz / 2 = 400MHz (系统时钟)
-  RCC_OscInitStruct.PLL.PLLQ = 16;   // 800MHz / 16 = 50MHz (USB时钟)
-  RCC_OscInitStruct.PLL.PLLR = 2;    // 800MHz / 2 = 400MHz (系统时钟)
-  RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1VCIRANGE_2;
+  RCC_OscInitStruct.PLL.PLLM = 1;
+  RCC_OscInitStruct.PLL.PLLN = 120;
+  RCC_OscInitStruct.PLL.PLLP = 2;
+  RCC_OscInitStruct.PLL.PLLQ = 2;
+  RCC_OscInitStruct.PLL.PLLR = 2;
+  RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1VCIRANGE_3;
   RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1VCOWIDE;
   RCC_OscInitStruct.PLL.PLLFRACN = 0;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
@@ -100,24 +100,33 @@ void SystemClock_Config(void) {
                                 RCC_CLOCKTYPE_D3PCLK1 | RCC_CLOCKTYPE_D1PCLK1;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.SYSCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV2;   // 400MHz / 2 = 200MHz
-  RCC_ClkInitStruct.APB3CLKDivider = RCC_APB3_DIV2;  // 200MHz / 2 = 100MHz
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_APB1_DIV2;  // 200MHz / 2 = 100MHz
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV2;  // 200MHz / 2 = 100MHz
-  RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV2;  // 200MHz / 2 = 100MHz
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.APB3CLKDivider = RCC_APB3_DIV2;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_APB1_DIV2;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV2;
+  RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK) {
     Error_Handler();
   }
 
-  // 配置USB时钟为50MHz (使用PLL的Q输出)
-  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USB;
-  PeriphClkInitStruct.UsbClockSelection = RCC_USBCLKSOURCE_PLL;  // 使用PLL的Q输出 (50MHz)
+  // 配置PLL3专门为USB生成48MHz时钟
+  // PLL3配置: 8MHz * 24 / 1 / 4 = 48MHz
+  // VCO频率 = 8MHz * 24 / 1 = 192MHz (需要在150-420MHz范围内)
+  // P输出 = 192MHz / 4 = 48MHz (用于USB)
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USB | RCC_PERIPHCLK_PLL3_DIVP;
+  PeriphClkInitStruct.UsbClockSelection = RCC_USBCLKSOURCE_PLL3;  // 使用PLL3的P输出 (48MHz)
+  PeriphClkInitStruct.PLL3.PLL3M = 1;      // 8MHz / 1 = 8MHz
+  PeriphClkInitStruct.PLL3.PLL3N = 24;     // 8MHz * 24 = 192MHz (VCO频率，在150-420MHz范围内)
+  PeriphClkInitStruct.PLL3.PLL3P = 4;       // 192MHz / 4 = 48MHz (用于USB)
+  PeriphClkInitStruct.PLL3.PLL3Q = 4;       // 192MHz / 4 = 48MHz (备用)
+  PeriphClkInitStruct.PLL3.PLL3R = 4;       // 192MHz / 4 = 48MHz (备用)
+  PeriphClkInitStruct.PLL3.PLL3RGE = RCC_PLL3VCIRANGE_3;  // 输入范围: 8-16MHz (HSE=8MHz在此范围)
+  PeriphClkInitStruct.PLL3.PLL3VCOSEL = RCC_PLL3VCOWIDE;   // VCO输出范围: 150-420MHz (192MHz在此范围)
+  PeriphClkInitStruct.PLL3.PLL3FRACN = 0;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK) {
     Error_Handler();
   }
-
-  // 配置USART3时钟
   PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USART3;
   PeriphClkInitStruct.Usart234578ClockSelection = RCC_USART234578CLKSOURCE_D2PCLK1;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK) {
