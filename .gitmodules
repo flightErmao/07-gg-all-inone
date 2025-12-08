@@ -37,3 +37,9 @@
 [submodule "driverframework/L1_middleWare/03_package/sample_peripheral"]
 	path = driverframework/L1_middleWare/03_package/sample_peripheral
 	url = https://github.com/Tool-01-middleware/peripheral-sample.git
+[submodule "driverframework/L1_middleWare/03_package/stm32h7_cmsis_driver-latest"]
+	path = driverframework/L1_middleWare/03_package/stm32h7_cmsis_driver-latest
+	url = https://github.com/Tool-01-middleware/cmsis-device-h7.git
+[submodule "driverframework/L1_middleWare/03_package/stm32h7_hal_driver-latest"]
+	path = driverframework/L1_middleWare/03_package/stm32h7_hal_driver-latest
+	url = https://github.com/RT-Thread-packages/stm32h7xx-hal-driver.git
