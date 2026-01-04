@@ -11,7 +11,16 @@ inc_path = [
     os.path.join(cwd, "../common/inc"),  # init_sync.h 所在目录
 ]
 
+# Add timer config include path if hardware timer is enabled
+if GetDepend('SENSOR_BMI270_BF_TRIGGER_TIMER'):
+    # Get path to 22_timConfig
+    tim_config_path = os.path.join(cwd, "..", "..", "..", "..", "L3_peripheral", "22_timConfig", "inc")
+    inc_path.append(tim_config_path)
+
 depend_list = ['PROJECT_BF_BMI270_EN']
+# Add hardware timer dependency if timer mode is enabled
+if GetDepend('SENSOR_BMI270_BF_TRIGGER_TIMER'):
+    depend_list.append('RT_USING_HWTIMER')
 # Add debugPin dependency if enabled
 if GetDepend('PROJECT_BF_BMI270_DEBUG_PIN_EN'):
     depend_list.append('L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN')

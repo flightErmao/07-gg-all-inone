@@ -71,8 +71,13 @@ class BMI270 {
 
   void workerLoop();
   
+#ifdef SENSOR_BMI270_BF_TRIGGER_TIMER
+  /* 硬件定时器回调 */
+  static rt_err_t timerCallback(rt_device_t dev, rt_size_t size);
+#else
   /* 软件定时器回调（临时替代中断） */
   static void timerCallback(void *parameter);
+#endif
 
   bool readImu(int16_t acc[3], int16_t gyro[3]);
   bool readGyroOnly(int16_t gyro[3]);
@@ -98,8 +103,12 @@ class BMI270 {
   rt_event event_;
   bool event_inited_;
   
-  /* 软件定时器（临时替代中断，用于调试） */
-  struct rt_timer timer_;
+  /* 硬件定时器（用于定时触发） */
+#ifdef SENSOR_BMI270_BF_TRIGGER_TIMER
+  rt_device_t timer_dev_;
+#else
+  struct rt_timer timer_;  // 保留用于兼容性
+#endif
   bool timer_inited_;
 
   rt_thread_t worker_thread_;

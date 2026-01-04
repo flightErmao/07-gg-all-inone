@@ -4,7 +4,7 @@
  * 基于 Betaflight BMI270 寄存器配置的简化版 RT-Thread C++ 驱动：
  * - 只使用数据就绪中断 + 直接寄存器读取，不使用 FIFO；
  * - 将原始加速度/角速度转换为 float，并通过 imu MCN 话题发布。
- * - 支持通过 Kconfig 选择触发方式：硬件中断（DRDY 引脚）或软件定时器；
+ * - 支持通过 Kconfig 选择触发方式：硬件中断（DRDY 引脚）或硬件定时器；
  * - 支持通过 Kconfig 选择输出数据率（ODR）：800Hz、1600Hz、3200Hz。
  */
 
@@ -12,12 +12,21 @@
 // #include "../mlog/inc/mlog_gyro.hpp"  // 已屏蔽：由 testThread 模块负责 mlog 记录
 
 extern "C" {
+#include "rtconfig.h"
 #include "timestamp.h"
 #include "pinInterface.h"
 #include <ulog.h>
 #include <stdlib.h>  // for rand()
 #include "debugPin.h"
 #include "init_sync.h"  // For initSyncNotify
+#ifdef SENSOR_BMI270_BF_TRIGGER_TIMER
+#include <drivers/hwtimer.h>
+#ifdef SOC_FAMILY_STM32
+#include "stm32TimerConfig.h"
+#elif defined(SOC_FAMILY_AT32)
+#include "at32TimerConfig.h"
+#endif
+#endif
 }
 
 /* 定义 IMU 原始数据话题（在本文件内完成定义与发布）
@@ -168,6 +177,11 @@ BMI270::BMI270()
       init_ok_(false),
       int_pin_(-1),
       event_inited_(false),
+#ifdef SENSOR_BMI270_BF_TRIGGER_TIMER
+      timer_dev_(RT_NULL),
+#else
+      timer_{},
+#endif
       timer_inited_(false),  // 调整顺序，在 worker_inited_ 之前初始化
       worker_thread_(RT_NULL),
       worker_inited_(false),
@@ -177,7 +191,9 @@ BMI270::BMI270()
       imu_process_denom_(2),  // 默认分频因子为2（800Hz acc -> 400Hz attitude）
       gyro_scale_(GYRO_SCALE_2000DPS) {  // BMI270 陀螺仪配置为 2000DPS
   cfg_ = {};
+#ifndef SENSOR_BMI270_BF_TRIGGER_TIMER
   rt_memset(&timer_, 0, sizeof(timer_));
+#endif
 }
 
 BMI270::~BMI270() {
@@ -387,33 +403,87 @@ bool BMI270::configureInterrupt() {
   return true;
 
 #else  // SENSOR_BMI270_BF_TRIGGER_TIMER
-  // 使用软件定时器方式
+  // 使用硬件定时器方式
   if (!timer_inited_ && event_inited_) {
-    // 根据选择的 ODR 计算定时器周期（tick）
-    // 定时器周期 = RT_TICK_PER_SECOND / ODR_HZ
-    // 为了确保至少 1 tick，使用最大值
-    rt_tick_t timer_period = RT_TICK_PER_SECOND / static_cast<rt_tick_t>(BMI270_SELECTED_ODR_HZ);
-    if (timer_period < 1) {
-      timer_period = 1;
-    }
-
-    // 创建软件定时器
-    // 注意：rt_timer_init 返回 void，不返回错误码
-    rt_timer_init(&timer_, "b270_tmr", &BMI270::timerCallback, this,
-                  timer_period,
-                  RT_TIMER_FLAG_PERIODIC | RT_TIMER_FLAG_HARD_TIMER);
-
-    // 启动定时器
-    rt_err_t ret = rt_timer_start(&timer_);
+    rt_device_t hw_dev = RT_NULL;
+    rt_hwtimerval_t timeout_val;
+    rt_hwtimer_mode_t mode;
+    rt_uint32_t freq = 1000000;  // 1MHz timer frequency (for microsecond precision)
+    
+    // 初始化硬件定时器设备（必须在中断之前初始化）
+#ifdef SOC_FAMILY_STM32
+    rt_err_t ret = hwtimerDeviceInit(SENSOR_BMI270_BF_HWTIMER_DEV_NAME);
+#elif defined(SOC_FAMILY_AT32)
+    rt_err_t ret = hwtimerDeviceInit(SENSOR_BMI270_BF_HWTIMER_DEV_NAME);
+#else
+    rt_err_t ret = -RT_ERROR;
+    LOG_E("Unsupported platform for hardware timer");
+    return false;
+#endif
+    
     if (ret != RT_EOK) {
-      LOG_E("BMI270 timer start failed: %d", ret);
-      rt_timer_detach(&timer_);
+      LOG_E("BMI270 hardware timer device init failed: %d", ret);
       return false;
     }
 
+    // 查找硬件定时器设备
+    hw_dev = rt_device_find(SENSOR_BMI270_BF_HWTIMER_DEV_NAME);
+    if (hw_dev == RT_NULL) {
+      LOG_E("BMI270 hardware timer init failed! Can't find %s device!", SENSOR_BMI270_BF_HWTIMER_DEV_NAME);
+      return false;
+    }
+    
+    // 打开硬件定时器设备
+    ret = rt_device_open(hw_dev, RT_DEVICE_OFLAG_RDWR);
+    if (ret != RT_EOK) {
+      LOG_E("Open %s device failed: %d", SENSOR_BMI270_BF_HWTIMER_DEV_NAME, ret);
+      return false;
+    }
+    
+    // 设置超时回调
+    rt_device_set_rx_indicate(hw_dev, BMI270::timerCallback);
+    
+    // 设置定时器频率
+    ret = rt_device_control(hw_dev, HWTIMER_CTRL_FREQ_SET, &freq);
+    if (ret != RT_EOK) {
+      LOG_E("Set timer frequency failed: %d", ret);
+      rt_device_close(hw_dev);
+      return false;
+    }
+    
+    // 设置周期模式
+    mode = HWTIMER_MODE_PERIOD;
+    ret = rt_device_control(hw_dev, HWTIMER_CTRL_MODE_SET, &mode);
+    if (ret != RT_EOK) {
+      LOG_E("Set timer mode failed: %d", ret);
+      rt_device_close(hw_dev);
+      return false;
+    }
+    
+    // 计算超时值（基于配置的 ODR）
+    // Period (in seconds) = 1 / frequency
+    // Period in microseconds = 1,000,000 / frequency
+    rt_uint32_t period_usec = 1000000 / static_cast<rt_uint32_t>(BMI270_SELECTED_ODR_HZ);
+    
+    timeout_val.sec = 0;
+    timeout_val.usec = period_usec;
+    
+    ret = rt_device_write(hw_dev, 0, &timeout_val, sizeof(timeout_val));
+    if (ret != sizeof(timeout_val)) {
+      LOG_E("Set timer timeout value failed: %d", ret);
+      rt_device_close(hw_dev);
+      return false;
+    }
+    
+    // 保存设备指针
+    timer_dev_ = hw_dev;
     timer_inited_ = true;
-    LOG_I("BMI270 using software timer (period: %lu ticks, ODR: %.0f Hz)", 
-          timer_period, BMI270_SELECTED_ODR_HZ);
+    
+    LOG_I("BMI270 using hardware timer %s (freq=%dHz, period=%d.%03dms, ODR=%.0f Hz)", 
+          SENSOR_BMI270_BF_HWTIMER_DEV_NAME, 
+          static_cast<rt_uint32_t>(BMI270_SELECTED_ODR_HZ),
+          period_usec / 1000, period_usec % 1000,
+          BMI270_SELECTED_ODR_HZ);
   }
 
   return true;
@@ -429,10 +499,10 @@ void BMI270::disableInterrupt() {
     int_pin_ = -1;
   }
 #else  // SENSOR_BMI270_BF_TRIGGER_TIMER
-  // 停止软件定时器
-  if (timer_inited_) {
-    rt_timer_stop(&timer_);
-    rt_timer_detach(&timer_);
+  // 停止硬件定时器
+  if (timer_inited_ && timer_dev_ != RT_NULL) {
+    rt_device_close(timer_dev_);
+    timer_dev_ = RT_NULL;
     timer_inited_ = false;
   }
 #endif
@@ -549,6 +619,25 @@ void BMI270::drdyIsr(void *parameter) {
 }
 
 /* 软件定时器回调（通过 Kconfig 选择使用定时器模式时调用） */
+#ifdef SENSOR_BMI270_BF_TRIGGER_TIMER
+/* 硬件定时器回调（通过 Kconfig 选择使用定时器模式时调用） */
+rt_err_t BMI270::timerCallback(rt_device_t dev, rt_size_t size) {
+  RT_UNUSED(dev);
+  RT_UNUSED(size);
+  
+  // 获取 BMI270 实例
+  auto& self = BMI270::instance();
+  if (!self.init_ok_ || !self.event_inited_) {
+    return RT_EOK;
+  }
+
+  /* 在定时器回调中发送事件，和中断回调一样，让工作线程去做 SPI 读取和发布 */
+  rt_event_send(&self.event_, 0x01);
+  
+  return RT_EOK;
+}
+#else
+/* 软件定时器回调（通过 Kconfig 选择使用定时器模式时调用） */
 void BMI270::timerCallback(void* parameter) {
   auto* self = static_cast<BMI270*>(parameter);
   if (!self || !self->init_ok_ || !self->event_inited_) {
@@ -558,6 +647,7 @@ void BMI270::timerCallback(void* parameter) {
   /* 在定时器回调中发送事件，和中断回调一样，让工作线程去做 SPI 读取和发布 */
   rt_event_send(&self->event_, 0x01);
 }
+#endif
 
 void BMI270::workerLoop() {
   // 计数器：每4次中断，前3次只读gyro，第4次读acc+gyro

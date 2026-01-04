@@ -18,6 +18,8 @@ elif GetDepend('SOC_FAMILY_STM32'):
 if GetDepend('RT_USING_HWTIMER'):
     if GetDepend('SOC_FAMILY_AT32'):
         src += ['src/at32TimerConfig.c']
+    elif GetDepend('SOC_FAMILY_STM32'):
+        src += ['src/stm32TimerConfig.c']
 
 # Create group with timestamp functionality always available
 group = DefineGroup('TIMER_CONFIG', src, depend = [], CPPPATH = path)
