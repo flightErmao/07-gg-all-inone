@@ -1,0 +1,18 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "C Macro Highlight",
+  "patterns": [
+    {
+      "match": "\\b([A-Z][A-Z0-9_]{2,})\\b",
+      "name": "constant.name.macro.c",
+      "captures": {
+        "1": {
+          "name": "entity.name.macro.c"
+        }
+      }
+    }
+  ],
+  "scopeName": "source.c"
+}
+
+

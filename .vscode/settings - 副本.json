@@ -1,0 +1,356 @@
+{
+    // C/C++ 格式化配置
+    "C_Cpp.clang_format_fallbackStyle": "google",
+    "C_Cpp.clang_format_style": "{BasedOnStyle: google, ColumnLimit: 120, SortIncludes: false}",
+    // 禁用 C/C++ 扩展的 IntelliSense，使用 clangd
+    "C_Cpp.intelliSenseEngine": "disabled",
+    "C_Cpp.autocomplete": "disabled",
+    "C_Cpp.errorSquiggles": "disabled",
+    // clangd 配置 - 仅用于语义高亮识别全局变量
+    "clangd.arguments": [
+        "--background-index",
+        "--completion-style=detailed",
+        "--header-insertion=iwyu",
+        "--pch-storage=memory",
+        "--log=error",
+        "--fallback-style=google",
+        "--function-arg-placeholders=false"
+    ],
+    "clangd.detectExtensionConflicts": true,
+    "clangd.onConfigChanged": "restart",
+    "clangd.diagnostic.enable": false,
+    "clangd.compilationDatabasePath": "",
+    "clangd.checkUpdates": false,
+    "clangd.serverCompletionRanking": false,
+    // 编辑器配置
+    "editor.formatOnSave": true,
+    "editor.formatOnSaveMode": "modifications",
+    "editor.mouseWheelZoom": true,
+    // 文件关联 - 确保 C/C++ 文件使用正确的语法
+    "files.associations": {
+        "*.c": "c",
+        "*.h": "c",
+        "*.cpp": "cpp",
+        "*.hpp": "cpp",
+        "*.cc": "cpp",
+        "*.cxx": "cpp"
+    },
+    // 代码高亮颜色配置 - 确保没有白色字体
+    "editor.tokenColorCustomizations": {
+        "textMateRules": [
+            {
+                "scope": [
+                    "source"
+                ],
+                "settings": {
+                    "foreground": "#D4D4D4"
+                }
+            },
+            // 宏规则 - 必须放在最前面以确保优先级
+            // 只匹配真正能识别为宏的 scope，避免误识别变量
+            {
+                "scope": [
+                    "entity.name.macro",
+                    "meta.preprocessor.macro",
+                    "constant.name.macro",
+                    "constant.other.macro",
+                    "support.constant.macro"
+                ],
+                "settings": {
+                    "foreground": "#D4A574",
+                    "fontStyle": "bold"
+                }
+            },
+            // 匹配函数调用参数中的常量（可能是宏）
+            {
+                "scope": [
+                    "meta.function-call.c constant",
+                    "meta.function-call.c constant.name",
+                    "meta.function-call.c constant.other"
+                ],
+                "settings": {
+                    "foreground": "#D4A574",
+                    "fontStyle": "bold"
+                }
+            },
+            // 匹配条件语句中的常量（可能是宏）
+            {
+                "scope": [
+                    "meta.conditional.c constant",
+                    "meta.conditional.c constant.name",
+                    "meta.conditional.c constant.other",
+                    "meta.comparison.c constant",
+                    "meta.comparison.c constant.name",
+                    "meta.comparison.c constant.other"
+                ],
+                "settings": {
+                    "foreground": "#D4A574",
+                    "fontStyle": "bold"
+                }
+            },
+            {
+                "scope": [
+                    "keyword",
+                    "storage.type",
+                    "storage.modifier"
+                ],
+                "settings": {
+                    "foreground": "#569CD6",
+                    "fontStyle": "bold"
+                }
+            },
+            // 函数调用 - 使用较亮的黄色
+            {
+                "scope": [
+                    "meta.function-call.c entity.name.function",
+                    "meta.function-call.c support.function"
+                ],
+                "settings": {
+                    "foreground": "#E6D87A",
+                    "fontStyle": "bold"
+                }
+            },
+            // 函数定义 - 使用较暗的黄色，与调用区分
+            {
+                "scope": [
+                    "entity.name.function",
+                    "support.function",
+                    "meta.function.definition.c entity.name.function",
+                    "meta.function.c entity.name.function"
+                ],
+                "settings": {
+                    "foreground": "#B8A85C",
+                    "fontStyle": "bold"
+                }
+            },
+            {
+                "scope": [
+                    "entity.name.type",
+                    "entity.name.class",
+                    "entity.name.struct",
+                    "entity.name.enum"
+                ],
+                "settings": {
+                    "foreground": "#7FB3A3"
+                }
+            },
+            {
+                "scope": [
+                    "variable.member",
+                    "variable.other.member",
+                    "entity.name.variable.member",
+                    "meta.member-access",
+                    "support.type.property-name"
+                ],
+                "settings": {
+                    "foreground": "#79C0FF",
+                    "fontStyle": "bold"
+                }
+            },
+            // 全局变量规则 - 必须放在局部变量规则之前
+            // 匹配文件作用域的变量（全局变量和静态变量）
+            {
+                "scope": [
+                    "variable.other.readwrite.global",
+                    "variable.other.global",
+                    "variable.file",
+                    "variable.static",
+                    "meta.block.c variable.other.readwrite.global",
+                    "source.c variable.other.readwrite.global",
+                    "meta.definition.variable.static",
+                    "meta.declaration.variable.static"
+                ],
+                "settings": {
+                    "foreground": "#4FC1FF",
+                    "fontStyle": "bold"
+                }
+            },
+            {
+                "scope": [
+                    "variable",
+                    "variable.other",
+                    "variable.parameter",
+                    "variable.other.readwrite"
+                ],
+                "settings": {
+                    "foreground": "#9CDCFE"
+                }
+            },
+            {
+                "scope": [
+                    "constant.numeric",
+                    "constant.language",
+                    "constant.character.escape"
+                ],
+                "settings": {
+                    "foreground": "#9FA89F"
+                }
+            },
+            {
+                "scope": [
+                    "string",
+                    "string.quoted"
+                ],
+                "settings": {
+                    "foreground": "#CE9178"
+                }
+            },
+            {
+                "scope": [
+                    "comment"
+                ],
+                "settings": {
+                    "foreground": "#6A9955",
+                    "fontStyle": "italic"
+                }
+            },
+            {
+                "scope": [
+                    "punctuation",
+                    "punctuation.definition",
+                    "punctuation.separator",
+                    "punctuation.terminator"
+                ],
+                "settings": {
+                    "foreground": "#D4D4D4"
+                }
+            },
+            {
+                "scope": [
+                    "operator",
+                    "keyword.operator"
+                ],
+                "settings": {
+                    "foreground": "#D4D4D4"
+                }
+            },
+            {
+                "scope": [
+                    "meta.preprocessor",
+                    "keyword.control.import"
+                ],
+                "settings": {
+                    "foreground": "#C586C0"
+                }
+            },
+            {
+                "scope": [
+                    "entity.name.tag",
+                    "entity.name.namespace"
+                ],
+                "settings": {
+                    "foreground": "#569CD6"
+                }
+            },
+            {
+                "scope": [
+                    "support.type",
+                    "support.class"
+                ],
+                "settings": {
+                    "foreground": "#4EC9B0"
+                }
+            },
+            {
+                "scope": [
+                    "storage.type.primitive"
+                ],
+                "settings": {
+                    "foreground": "#569CD6"
+                }
+            },
+            {
+                "scope": [
+                    "entity.name.function.macro"
+                ],
+                "settings": {
+                    "foreground": "#C49A6A",
+                    "fontStyle": "bold"
+                }
+            }
+        ]
+    },
+    // 启用语义高亮以帮助识别全局变量（与 TextMate 语法高亮结合使用）
+    "editor.semanticHighlighting.enabled": true,
+    // Better C++ Syntax 扩展配置
+    "better-cpp-syntax.enableSemanticHighlighting": false,
+    "better-cpp-syntax.enableIntelliSense": false,
+    "editor.semanticTokenColorCustomizations": {
+        "rules": {
+            "macro": {
+                "foreground": "#D4A574",
+                "fontStyle": "bold"
+            },
+            "enumMember": {
+                "foreground": "#D4A574",
+                "fontStyle": "bold"
+            },
+            "enum": {
+                "foreground": "#7FB3A3"
+            },
+            "property": {
+                "foreground": "#79C0FF",
+                "fontStyle": "bold"
+            },
+            "variable.readonly": {
+                "foreground": "#9CDCFE"
+            },
+            "variable": {
+                "foreground": "#9CDCFE"
+            },
+            "variable.static": {
+                "foreground": "#4FC1FF",
+                "fontStyle": "bold"
+            },
+            "variable.file": {
+                "foreground": "#4FC1FF",
+                "fontStyle": "bold"
+            },
+            "variable.defaultLibrary": {
+                "foreground": "#4FC1FF",
+                "fontStyle": "bold"
+            },
+            "parameter": {
+                "foreground": "#9CDCFE"
+            },
+            "member": {
+                "foreground": "#79C0FF",
+                "fontStyle": "bold"
+            },
+            "field": {
+                "foreground": "#79C0FF",
+                "fontStyle": "bold"
+            }
+        },
+        "enabled": true
+    },
+    // 禁用所有诊断信息显示（避免波浪线）
+    "problems.showCurrentInStatus": false,
+    "editor.renderValidationDecorations": "off",
+    "editor.hover.delay": 300,
+    // 完全禁用所有语言服务器的诊断
+    "editor.inlayHints.enabled": "off",
+    "editor.codeActionsOnSave": {},
+    // 完全禁用所有诊断和错误提示
+    "editor.validate": false,
+    "editor.quickSuggestions": {
+        "other": false,
+        "comments": false,
+        "strings": false
+    },
+    "editor.parameterHints.enabled": false,
+    "editor.suggest.showStatusBar": false,
+    // 禁用所有语言服务器的诊断
+    "[c]": {
+        "editor.validate": false,
+        "editor.formatOnSave": true
+    },
+    "[cpp]": {
+        "editor.validate": false,
+        "editor.formatOnSave": true
+    },
+    // 确保默认文本颜色不是白色
+    "workbench.colorCustomizations": {
+        "editor.foreground": "#D4D4D4"
+    }
+}

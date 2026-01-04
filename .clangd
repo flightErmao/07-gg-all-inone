@@ -1,0 +1,11 @@
+Diagnostics:
+  UnusedIncludes: None
+  MissingIncludes: None
+
+Index:
+  Background: Build
+
+CompileFlags:
+  Add: [-std=c11, -Wall]
+
+

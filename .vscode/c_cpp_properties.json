@@ -1,0 +1,31 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/kernel/rtthread/include",
+                "${workspaceFolder}/kernel/rtthread/include/libc",
+                "${workspaceFolder}/kernel/rtthread/include/components",
+                "${workspaceFolder}/driverframework/**",
+                "${workspaceFolder}/driverframework/L2_device/02_RC/01_sbus/inc",
+                "${workspaceFolder}/driverframework/L2_device/02_RC",
+                "${workspaceFolder}/driverframework/L3_peripheral/**",
+                "${workspaceFolder}/target/**"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE"
+            ],
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-x64",
+            "compilerPath": "",
+            "compilerArgs": []
+        }
+    ],
+    "version": 4
+}
+
+

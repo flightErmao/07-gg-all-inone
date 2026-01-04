@@ -1,0 +1,6 @@
+{
+    "C_Cpp.clang_format_fallbackStyle": "google",
+    "C_Cpp.clang_format_style": "{BasedOnStyle: google, ColumnLimit: 120, SortIncludes: false}",
+    "editor.formatOnSave": true,
+    "editor.formatOnSaveMode": "modifications",    
+}
