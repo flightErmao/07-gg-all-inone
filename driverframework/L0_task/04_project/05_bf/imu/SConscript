@@ -8,6 +8,7 @@ src += Glob('src/*.c')
 
 inc_path = [
     os.path.join(cwd, 'inc'),
+    os.path.join(cwd, "../common/inc"),  # init_sync.h 所在目录
 ]
 
 depend_list = ['PROJECT_BF_BMI270_EN']

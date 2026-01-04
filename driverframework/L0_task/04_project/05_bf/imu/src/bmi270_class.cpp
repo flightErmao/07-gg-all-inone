@@ -17,7 +17,7 @@ extern "C" {
 #include <ulog.h>
 #include <stdlib.h>  // for rand()
 #include "debugPin.h"
-#include "../common/inc/init_sync.h"  // For initSyncNotify
+#include "init_sync.h"  // For initSyncNotify
 }
 
 /* 定义 IMU 原始数据话题（在本文件内完成定义与发布）

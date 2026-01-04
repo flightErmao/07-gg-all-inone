@@ -8,6 +8,7 @@ src = Glob("./src/*.cpp")
 include_paths = [
     cwd,
     os.path.join(cwd, "inc"),  # gyro_mcn.h, pid_mcn.h, rc_bf.hpp
+    os.path.join(cwd, "../common/inc"),  # init_sync.h 所在目录
     os.path.join(cwd, "../rc/inc"),  # rc_bf.h
     os.path.join(cwd, "../param/inc"),  # param.h (getParam function)
     os.path.join(cwd, "../gyroFilter/inc"),  # gyro_mcn.h

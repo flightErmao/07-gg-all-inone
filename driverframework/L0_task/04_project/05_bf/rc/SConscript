@@ -8,6 +8,7 @@ src = Glob("./src/*.cpp")
 include_paths = [
     cwd,
     os.path.join(cwd, "inc"),  # rc_bf.h
+    os.path.join(cwd, "../common/inc"),  # init_sync.h 所在目录
     os.path.join(cwd, "../param/inc"),  # param.h (getParam function)
     os.path.join(
         cwd, "..", "..", "02_fmt", "01_TASK_RC", "inc"

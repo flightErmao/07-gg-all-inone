@@ -183,6 +183,7 @@
 #define RT_USING_SERIAL_V2
 #define RT_SERIAL_BUF_STRATEGY_OVERWRITE
 #define RT_SERIAL_USING_DMA
+#define RT_USING_SPI
 #define RT_USING_BLK
 
 /* Partition Types */
@@ -191,6 +192,7 @@
 #define RT_BLK_PARTITION_EFI
 /* end of Partition Types */
 #define RT_USING_PIN
+#define RT_USING_KTIME
 /* end of Device Drivers */
 
 /* C/C++ and POSIX layer */
@@ -208,6 +210,7 @@
 
 /* POSIX (Portable Operating System Interface) layer */
 
+#define RT_USING_POSIX_DELAY
 
 /* Interprocess Communication (IPC) */
 
@@ -216,6 +219,7 @@
 
 /* end of Interprocess Communication (IPC) */
 /* end of POSIX (Portable Operating System Interface) layer */
+#define RT_USING_CPLUSPLUS
 /* end of C/C++ and POSIX layer */
 
 /* Network */
@@ -329,6 +333,9 @@
 
 /* tools packages */
 
+#define PKG_USING_UMCN
+#define PKG_USING_UMCN_LATEST_VERSION
+#define UMCN_USING_CMD
 #define PKG_USING_VCONSOLE
 #define PKG_USING_VCONSOLE_LATEST_VERSION
 /* end of tools packages */
@@ -425,6 +432,8 @@
 /* entertainment: terminal games and other interesting software packages */
 
 /* end of entertainment: terminal games and other interesting software packages */
+#define PKG_USING_OPTPARSE
+#define PKG_USING_OPTPARSE_LATEST_VERSION
 /* end of miscellaneous packages */
 
 /* Arduino libraries */
@@ -479,13 +488,26 @@
 
 /* L0_TASK_CONFIG */
 
+#define PROJECT_BF_BMI270_EN
+#define SENSOR_SPI_NAME_BMI270_BF "spi2"
+#define SENSOR_SPI_SLAVE_NAME_BMI270_BF "spi20"
+#define SENSOR_BMI270_BF_SPI_MAX_HZ 10000000
+#define SENSOR_BMI270_BF_SPI_CS_PIN "PA15"
+#define SENSOR_BMI270_BF_INT_PIN "PA4"
+#define SENSOR_BMI270_BF_ODR_800HZ
+#define SENSOR_BMI270_BF_TRIGGER_INTERRUPT
 /* end of L0_TASK_CONFIG */
 
 /* L1_MIDDLEWARE_CONFIG */
 
 #define L1_MIDDLEWARE_01_MODULE_01_FLOATCONVER_EN
+#define L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN
+#define L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_0_EN
+#define L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_0_PIN "PC15"
+#define L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_TESTSELF_EN
 #define L1_MIDDLEWARE_06_BF_LIB_COMMON_EN
 #define L1_MIDDLEWARE_06_BF_LIB_SENSOR_EN
+#define L1_MIDDLEWARE_PACKAGE_01_UMCN_USING_UMCN
 /* end of L1_MIDDLEWARE_CONFIG */
 
 /* L2_DEVICE_CONFIG */
@@ -558,6 +580,8 @@
 #define BSP_USING_UART1
 #define BSP_UART1_RX_BUFSIZE 256
 #define BSP_UART1_TX_BUFSIZE 64
+#define BSP_USING_SPI
+#define BSP_USING_SPI2
 
 /* Enable 14 USB CONFIG */
 
