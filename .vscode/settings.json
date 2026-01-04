@@ -1,6 +1,98 @@
 {
-    "C_Cpp.clang_format_fallbackStyle": "google",
-    "C_Cpp.clang_format_style": "{BasedOnStyle: google, ColumnLimit: 120, SortIncludes: false}",
-    "editor.formatOnSave": true,
-    "editor.formatOnSaveMode": "modifications",    
+    // 启用鼠标滚轮缩放代码字体大小
+    "editor.mouseWheelZoom": true,
+    
+    
+    // 启用语义高亮
+    "editor.semanticHighlighting.enabled": true,
+    
+    // C++ 插件配置 - 启用语义高亮
+    "C_Cpp.semanticHighlighting": true,
+    "C_Cpp.intelliSenseEngine": "default",
+    "C_Cpp.errorSquiggles": "enabled",
+    "C_Cpp.autocomplete": "default",
+    "C_Cpp.suggestSnippets": true,
+    // 启用增强的颜色主题（提供更多语义标记）
+    "C_Cpp.enhancedColorization": "enabled",
+    // 强制启用语义高亮（重要！）
+    "C_Cpp.workspaceParsingPriority": "highest",
+    "C_Cpp.intelliSenseUpdateDelay": 0,
+    
+    // 配置 C++ 语义高亮，为全局变量设置颜色
+    // 注意：需要根据您当前使用的主题名称来配置，常见主题如 "Default Dark+", "Dark+", "Monokai" 等
+    "editor.semanticTokenColorCustomizations": {
+        // 全局配置（适用于所有主题）
+        "rules": {
+            // 全局变量 - 使用浅青色 (#4EC9B0)
+            // 您可以修改颜色值，例如：
+            // "#9CDCFE" - 浅蓝色
+            // "#DCDCAA" - 浅黄色
+            // "#CE9178" - 浅橙色
+            // "#4EC9B0" - 浅青色（当前设置）
+            "variable": {
+                "foreground": "#4EC9B0"
+            },
+            "variable.readonly": {
+                "foreground": "#4EC9B0"
+            },
+            "variable.defaultLibrary": {
+                "foreground": "#4EC9B0"
+            }
+        },
+        // 针对特定主题的配置（如果需要覆盖全局设置）
+        "[Default Dark+]": {
+            "rules": {
+                "variable": "#4EC9B0",
+                "variable.readonly": "#4EC9B0"
+            }
+        },
+        "[Dark+]": {
+            "rules": {
+                "variable": "#4EC9B0",
+                "variable.readonly": "#4EC9B0"
+            }
+        }
+    },
+    
+    // 备用方案：使用 TextMate 语法高亮（如果语义高亮不生效）
+    // 规则：当标识符只有 meta.function-call.c, meta.block.c, source.c 这三种 scope 时
+    // （即没有 entity.name.function.c 等更具体的 scope），应用高亮颜色
+    // 这样可以匹配变量，而函数名因为有 entity.name.function.c scope 不会被匹配
+    "editor.tokenColorCustomizations": {
+        "textMateRules": [
+            {
+                // 匹配全局变量（如果 TextMate 能识别）
+                "scope": [
+                    "variable.other.readwrite.global",
+                    "variable.other.readonly.global",
+                    "variable.other.global"
+                ],
+                "settings": {
+                    "foreground": "#4EC9B0"
+                }
+            },
+            {
+                // 精确匹配：只有当标识符包含 meta.function-call.c scope 时才应用颜色
+                // 这意味着只匹配函数调用中的变量（如 sbus_uart_ 在 rt_device_control(...) 中）
+                // 如果标识符只有 meta.block.c 和 source.c（没有 meta.function-call.c），则不会被匹配
+                // 函数名因为有 entity.name.function.c scope 会被主题默认规则覆盖，不会被此规则影响
+                "scope": "meta.function-call.c",
+                "settings": {
+                    "foreground": "#4EC9B0"
+                }
+            },
+            {
+                // 新规则：匹配包含 meta.parens.block.c 的标识符（通常在函数调用的括号内）
+                // 例如：sbus_uart_ 在 rt_device_open(sbus_uart_, ...) 中
+                // 这个规则会匹配函数调用参数中的变量和宏定义
+                "scope": "meta.parens.block.c",
+                "settings": {
+                    "foreground": "#4EC9B0"
+                }
+            }
+        ]
+    }
 }
+
+
+
