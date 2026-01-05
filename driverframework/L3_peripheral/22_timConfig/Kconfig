@@ -21,12 +21,16 @@ if SOC_FAMILY_STM32
         select RT_USING_HWTIMER
         if BSP_USING_TIM
             config BSP_USING_TIM10
-                bool "Enable TIM10"
+                bool "Enable TIM10 (H7 no support)"
                 default n
 
             config BSP_USING_TIM11
-                bool "Enable TIM11"
+                bool "Enable TIM11 (H7 no support)"
                 default n
+            
+            config BSP_USING_TIM13
+                bool "Enable TIM13"
+                default n            
         endif
 endif
 

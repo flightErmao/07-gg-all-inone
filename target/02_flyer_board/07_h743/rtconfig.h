@@ -193,6 +193,7 @@
 /* end of Partition Types */
 #define RT_USING_PIN
 #define RT_USING_KTIME
+#define RT_USING_HWTIMER
 /* end of Device Drivers */
 
 /* C/C++ and POSIX layer */
@@ -494,8 +495,9 @@
 #define SENSOR_BMI270_BF_SPI_MAX_HZ 10000000
 #define SENSOR_BMI270_BF_SPI_CS_PIN "PA15"
 #define SENSOR_BMI270_BF_INT_PIN "PA4"
-#define SENSOR_BMI270_BF_ODR_800HZ
-#define SENSOR_BMI270_BF_TRIGGER_INTERRUPT
+#define SENSOR_BMI270_BF_ODR_3200HZ
+#define SENSOR_BMI270_BF_TRIGGER_TIMER
+#define SENSOR_BMI270_BF_HWTIMER_DEV_NAME "timer13"
 /* end of L0_TASK_CONFIG */
 
 /* L1_MIDDLEWARE_CONFIG */
@@ -575,6 +577,8 @@
 #define L3_PERIPHERAL_01_HSE_CONFIG_EN
 #define MCU_HSE_8MHZ
 #define HSE_VALUE 8000000
+#define L3_PERIPHERAL_02_NVIC_CONFIG_EN
+#define L3_PERIPHERAL_02_NVIC_STM32_PRIORITY_GROUP 0
 #define BSP_USING_GPIO
 #define BSP_USING_UART
 #define BSP_USING_UART1
@@ -587,6 +591,8 @@
 
 #define BSP_USING_USBD
 /* end of Enable 14 USB CONFIG */
+#define BSP_USING_TIM
+#define BSP_USING_TIM13
 /* end of L3_PERIPHERAL_CONFIG */
 /* end of DriverFramework Config */
 

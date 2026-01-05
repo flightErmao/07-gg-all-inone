@@ -411,15 +411,8 @@ bool BMI270::configureInterrupt() {
     rt_uint32_t freq = 1000000;  // 1MHz timer frequency (for microsecond precision)
     
     // 初始化硬件定时器设备（必须在中断之前初始化）
-#ifdef SOC_FAMILY_STM32
+    // Note: Both STM32 and AT32 use the same interface
     rt_err_t ret = hwtimerDeviceInit(SENSOR_BMI270_BF_HWTIMER_DEV_NAME);
-#elif defined(SOC_FAMILY_AT32)
-    rt_err_t ret = hwtimerDeviceInit(SENSOR_BMI270_BF_HWTIMER_DEV_NAME);
-#else
-    rt_err_t ret = -RT_ERROR;
-    LOG_E("Unsupported platform for hardware timer");
-    return false;
-#endif
     
     if (ret != RT_EOK) {
       LOG_E("BMI270 hardware timer device init failed: %d", ret);
