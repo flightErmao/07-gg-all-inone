@@ -13,10 +13,22 @@
 
 #include <rtconfig.h>
 #include "drv_dma.h"
-#include "at32f435_437.h"
 #include "dmaConfig.h"
 #include "rtconfig.h"
 #include "debugPin.h"
+
+/* Platform detection and header selection */
+#if defined(SOC_FAMILY_STM32) || defined(SOC_SERIES_STM32H7)
+    /* STM32 platform */
+    #include "stm32h7xx_hal.h"
+    #define DSHOT_PLATFORM_STM32
+#elif defined(SOC_FAMILY_AT32)
+    /* AT32 platform */
+    #include "at32f435_437.h"
+    #define DSHOT_PLATFORM_AT32
+#else
+    #error "Unsupported platform for DShot driver"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -55,16 +67,31 @@ typedef enum {
   PWM_TYPE_DSHOT600,
 } motorPwmProtocolTypes_e;
 
+/* Platform-specific type definitions */
+#ifdef DSHOT_PLATFORM_STM32
+    typedef GPIO_TypeDef dshot_gpio_type;
+    typedef TIM_HandleTypeDef dshot_timer_type;
+    typedef void* dshot_gpio_clock_type;  /* Not used in STM32, use RCC macros instead */
+    typedef void* dshot_timer_clock_type; /* Not used in STM32, use RCC macros instead */
+    typedef uint32_t dshot_tmr_dma_request_type; /* DMA request type for STM32 */
+#elif defined(DSHOT_PLATFORM_AT32)
+    typedef gpio_type dshot_gpio_type;
+    typedef tmr_type dshot_timer_type;
+    typedef crm_periph_clock_type dshot_gpio_clock_type;
+    typedef crm_periph_clock_type dshot_timer_clock_type;
+    typedef tmr_dma_request_type dshot_tmr_dma_request_type;
+#endif
+
 typedef struct {
   /*about gpio*/
-  gpio_type *gpio;
-  crm_periph_clock_type gpio_clock;
+  dshot_gpio_type *gpio;
+  dshot_gpio_clock_type gpio_clock;
   uint8_t pin_index_arr[DSHOT_MOTOR_NUMS];
 
   /*about timer*/
-  tmr_type *timer_x;
-  crm_periph_clock_type timer_clock;
-  tmr_dma_request_type tmr_dma_request;
+  dshot_timer_type *timer_x;
+  dshot_timer_clock_type timer_clock;
+  dshot_tmr_dma_request_type tmr_dma_request;
   uint8_t timer_count_send;
   uint8_t timer_count_rec;
 

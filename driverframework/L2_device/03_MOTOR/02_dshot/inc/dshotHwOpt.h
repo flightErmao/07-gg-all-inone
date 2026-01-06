@@ -17,7 +17,11 @@
 extern "C" {
 #endif
 
+#ifdef DSHOT_PLATFORM_STM32
+void bbSaveDMARegs(void *dmaResource, dmaRegCache_t *dmaRegCache);
+#elif defined(DSHOT_PLATFORM_AT32)
 void bbSaveDMARegs(dma_channel_type *dmaResource, dmaRegCache_t *dmaRegCache);
+#endif
 rt_err_t setDshotValue(void);
 
 #ifdef __cplusplus

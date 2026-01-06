@@ -1,0 +1,20 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+src  = []
+path = []
+
+# Add include path for dmaConfig.h
+path += [cwd]
+
+# DMA configuration header file is always available when enabled
+if GetDepend(['L3_PERIPHERAL_40_DMA_CONFIG_EN']):
+    # Header file is included via CPPPATH, no source files needed
+    pass
+
+# Define group with include path
+group = DefineGroup('DMA_CONFIG', src, depend = ['L3_PERIPHERAL_40_DMA_CONFIG_EN'], CPPPATH = path)
+
+Return('group')
+

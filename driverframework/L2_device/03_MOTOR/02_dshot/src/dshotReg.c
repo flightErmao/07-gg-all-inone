@@ -29,10 +29,18 @@ static rt_err_t dshot_control(actuator_dev_t dev, int cmd, void *arg) {
 
   switch (cmd) {
     case ACT_CMD_CHANNEL_ENABLE:
-      tmr_counter_enable(dshot_config_.timer_x, TRUE);
+#ifdef DSHOT_PLATFORM_STM32
+      __HAL_TIM_ENABLE((TIM_HandleTypeDef *)dshot_config_.timer_x);
+#elif defined(DSHOT_PLATFORM_AT32)
+      tmr_counter_enable((tmr_type *)dshot_config_.timer_x, TRUE);
+#endif
       break;
     case ACT_CMD_CHANNEL_DISABLE:
-      tmr_counter_enable(dshot_config_.timer_x, FALSE);
+#ifdef DSHOT_PLATFORM_STM32
+      __HAL_TIM_DISABLE((TIM_HandleTypeDef *)dshot_config_.timer_x);
+#elif defined(DSHOT_PLATFORM_AT32)
+      tmr_counter_enable((tmr_type *)dshot_config_.timer_x, FALSE);
+#endif
       break;
     case ACT_CMD_SET_PROTOCOL:
       ret = RT_EINVAL;

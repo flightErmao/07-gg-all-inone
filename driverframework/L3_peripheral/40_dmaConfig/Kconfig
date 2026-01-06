@@ -1,0 +1,16 @@
+menuconfig L3_PERIPHERAL_40_DMA_CONFIG_EN
+    bool "Enable: 40 DMA CONFIG"
+    default n
+    help
+        Enable DMA configuration support for DShot and other peripherals
+
+    if L3_PERIPHERAL_40_DMA_CONFIG_EN
+
+        config DMA_CONFIG_DSHOT_EN
+            bool "Enable DShot DMA Configuration"
+            default n
+            help
+                Enable DMA configuration for DShot motor driver
+
+    endif
+

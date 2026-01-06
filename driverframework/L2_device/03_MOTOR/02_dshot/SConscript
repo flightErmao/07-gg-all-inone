@@ -8,10 +8,20 @@ src = []
 src = Glob("./src/*.c")
 path = [cwd, os.path.join(cwd, "inc")]
 
+# Add DMA config include path
+# Get the driverframework root path relative to current directory
+# Current: driverframework/L2_device/03_MOTOR/02_dshot
+# Target: driverframework/L3_peripheral/40_dmaConfig
+driverframework_root = os.path.normpath(os.path.join(cwd, "../../../"))
+dma_config_path = os.path.join(driverframework_root, "L3_peripheral", "40_dmaConfig")
+dma_config_path = os.path.normpath(dma_config_path)
+if os.path.exists(dma_config_path):
+    path += [dma_config_path]
+
 group = DefineGroup(
     "L2_DEVICE_03_MOTOR_02_DSHOT_EN",
     src,
-    depend=["L2_DEVICE_03_MOTOR_02_DSHOT_EN"],
+    depend=["L2_DEVICE_03_MOTOR_02_DSHOT_EN", "L3_PERIPHERAL_40_DMA_CONFIG_EN"],
     CPPPATH=path,
 )
 
