@@ -125,11 +125,8 @@ static void timerSetForRec(void) {
 #endif
 }
 
-/* Global DMA handle for STM32 interrupt handling */
-#ifdef DSHOT_PLATFORM_STM32
-extern DMA_HandleTypeDef dshot_dma_handle_static;
-
 /* DMA transfer complete callback function */
+#ifdef DSHOT_PLATFORM_STM32
 void dshot_dma_xfer_cplt_callback(DMA_HandleTypeDef *hdma) {
   /* 安全检查：确保所有必要的指针都有效 */
   if (hdma == NULL || 
@@ -166,17 +163,9 @@ void dshot_dma_xfer_cplt_callback(DMA_HandleTypeDef *hdma) {
 }
 #endif
 
-/* Clear DMA interrupt flag */
+/* Clear DMA interrupt flag - 仅用于 AT32 */
+#ifdef DSHOT_PLATFORM_AT32
 static void dma_isr_clear_flag(struct dma_config *dma_instance) {
-#ifdef DSHOT_PLATFORM_STM32
-  /* 使用 HAL 标准中断处理 */
-  if (dshot_dma_handle_static.Instance == NULL) {
-    return;  /* DMA not initialized yet */
-  }
-  
-  /* 调用 HAL DMA 中断处理函数，它会自动调用回调函数 */
-  HAL_DMA_IRQHandler(&dshot_dma_handle_static);
-#elif defined(DSHOT_PLATFORM_AT32)
   if (dma_flag_get(DSHOT_DMA_INT_FLAG)) {
     dma_flag_clear(DSHOT_DMA_INT_FLAG);
     
@@ -191,10 +180,24 @@ static void dma_isr_clear_flag(struct dma_config *dma_instance) {
       rt_event_send(dshot_config_.event_dma, EVENT_DMA_SAMPLING_DONE);
     }
   }
-#endif
 }
+#endif
 
-/* DShot DMA interrupt handler */
+/* STM32H7 DMA interrupt handler - 直接调用 HAL 库函数 */
+/* 注意：对于 STM32H7，只需要调用 HAL_DMA_IRQHandler，业务逻辑在回调函数中处理 */
+#ifdef DSHOT_PLATFORM_STM32
+void DSHOT_DMA_IRQHandler(void) {
+  rt_interrupt_enter();
+  /* 调用 HAL 库的中断处理函数，它会自动调用回调函数 dshot_dma_xfer_cplt_callback */
+  if (dshot_config_.dma_handle.Instance != NULL) {
+    HAL_DMA_IRQHandler(&dshot_config_.dma_handle);
+  }
+  rt_interrupt_leave();
+}
+#endif
+
+/* AT32 DMA interrupt handler - 需要手动处理中断标志和业务逻辑 */
+#ifdef DSHOT_PLATFORM_AT32
 void DSHOT_DMA_IRQHandler(void) {
   rt_interrupt_enter();
   /* 安全检查 */
@@ -203,6 +206,7 @@ void DSHOT_DMA_IRQHandler(void) {
   }
   rt_interrupt_leave();
 }
+#endif
 
 /* Set DShot value and start transmission */
 rt_err_t setDshotValue(void) {

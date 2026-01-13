@@ -102,6 +102,9 @@ typedef struct {
   dmaRegCache_t dmaRegOutput;
   dmaRegCache_t dmaRegInput;
   uint8_t dshot_dma_dir;
+#ifdef DSHOT_PLATFORM_STM32
+  DMA_HandleTypeDef dma_handle;  /* STM32 DMA handle for interrupt handling */
+#endif
 
   /*about buf*/
   uint32_t dshot_encode_cache_buf[MOTOR_DSHOT_BUF_LENGTH * DSHOT_MOTOR_NUMS];

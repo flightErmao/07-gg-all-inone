@@ -21,9 +21,6 @@
 /* External functions from drv_tim.c */
 extern void stm32_tim_enable_clock(TIM_HandleTypeDef* htim_base);
 extern void stm32_tim_pclkx_doubler_get(rt_uint32_t *pclk1_doubler, rt_uint32_t *pclk2_doubler);
-
-/* Global DMA handle for STM32 interrupt handling */
-DMA_HandleTypeDef dshot_dma_handle_static = {0};
 #endif
 
 /*about DMA config parameter*/
@@ -145,8 +142,32 @@ static void *convert_gpio_clock(void) {
 static void *convert_timer_type(void) {
 #ifdef DSHOT_PLATFORM_STM32
   /* For STM32, we need to return TIM_HandleTypeDef pointer */
-  /* This will be initialized in dshotTimerInit */
-  static TIM_HandleTypeDef htim_dshot;
+  /* Set timer instance based on DSHOT_TIMER_SELECT */
+  static TIM_HandleTypeDef htim_dshot = {0};
+  TIM_TypeDef *tim_instance = NULL;
+  
+  switch (DSHOT_TIMER_SELECT) {
+    case 1: tim_instance = TIM1; break;
+    case 2: tim_instance = TIM2; break;
+    case 3: tim_instance = TIM3; break;
+    case 4: tim_instance = TIM4; break;
+    case 5: tim_instance = TIM5; break;
+    case 6: tim_instance = TIM6; break;
+    case 7: tim_instance = TIM7; break;
+    case 8: tim_instance = TIM8; break;
+#ifdef TIM9
+    case 9: tim_instance = TIM9; break;
+#endif
+#ifdef TIM10
+    case 10: tim_instance = TIM10; break;
+#endif
+#ifdef TIM11
+    case 11: tim_instance = TIM11; break;
+#endif
+    default: tim_instance = TIM4; break;  // default fallback
+  }
+  
+  htim_dshot.Instance = tim_instance;
   return (void *)&htim_dshot;
 #elif defined(DSHOT_PLATFORM_AT32)
   switch (DSHOT_TIMER_SELECT) {
@@ -331,8 +352,10 @@ rt_err_t dshotConfigInit(void) {
   dshot_config_.timer_x = convert_timer_type();
   dshot_config_.timer_clock = convert_timer_clock();
 #ifdef DSHOT_PLATFORM_STM32
-  dshot_config_.tmr_dma_request = TIM_DMA_UPDATE;  /* STM32 DMA request for update event */
+  /* STM32: Update Event = 定时器溢出事件（计数器达到 ARR 值并重载时产生） */
+  dshot_config_.tmr_dma_request = TIM_DMA_UPDATE;
 #elif defined(DSHOT_PLATFORM_AT32)
+  /* AT32: Overflow Event = 定时器溢出事件（计数器达到 Period 值并溢出时产生） */
   dshot_config_.tmr_dma_request = TMR_OVERFLOW_DMA_REQUEST;
 #endif
 
@@ -419,28 +442,10 @@ void dshotTimerInit(void) {
 
 #ifdef DSHOT_PLATFORM_STM32
   TIM_HandleTypeDef *htim = (TIM_HandleTypeDef *)dshot_config_.timer_x;
-  TIM_TypeDef *tim_instance = NULL;
+  TIM_TypeDef *tim_instance = htim->Instance;  /* Instance already set in convert_timer_type() */
   
-  /* Get timer instance based on DSHOT_TIMER_SELECT */
-  switch (DSHOT_TIMER_SELECT) {
-    case 1: tim_instance = TIM1; break;
-    case 2: tim_instance = TIM2; break;
-    case 3: tim_instance = TIM3; break;
-    case 4: tim_instance = TIM4; break;
-    case 5: tim_instance = TIM5; break;
-    case 6: tim_instance = TIM6; break;
-    case 7: tim_instance = TIM7; break;
-    case 8: tim_instance = TIM8; break;
-#ifdef TIM9
-    case 9: tim_instance = TIM9; break;
-#endif
-#ifdef TIM10
-    case 10: tim_instance = TIM10; break;
-#endif
-#ifdef TIM11
-    case 11: tim_instance = TIM11; break;
-#endif
-    default: tim_instance = TIM4; break;
+  if (tim_instance == NULL) {
+    return;  /* Timer instance not set, initialization failed */
   }
   
   /* Enable timer clock */
@@ -469,7 +474,7 @@ void dshotTimerInit(void) {
   dshot_config_.timer_count_rec = tmr_clock / dshot_sampleing_freq - 1;
   
   /* Initialize timer */
-  htim->Instance = tim_instance;
+  /* Note: htim->Instance is already set in convert_timer_type() */
   htim->Init.Prescaler = 0;
   htim->Init.CounterMode = TIM_COUNTERMODE_UP;
   htim->Init.Period = dshot_config_.timer_count_send;
@@ -548,9 +553,6 @@ void dshotDmaConfigureInit(void) {
   /* Save DMA registers for input */
   bbSaveDMARegs((void *)hdma.Instance, &dshot_config_.dmaRegInput);
   
-  /* Save DMA handle for interrupt handling */
-  dshot_dma_handle_static = hdma;
-  
   /* Configure DMA for output (memory -> GPIO ODR) */
   hdma.Init.Direction = DMA_MEMORY_TO_PERIPH;
   hdma.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
@@ -564,14 +566,15 @@ void dshotDmaConfigureInit(void) {
   bbSaveDMARegs((void *)hdma.Instance, &dshot_config_.dmaRegOutput);
   
   /* Update DMA handle for interrupt handling (output config) */
-  dshot_dma_handle_static = hdma;
+  dshot_config_.dma_handle = hdma;
   
   /* Set DMA transfer complete callback - declared in dshotHwOpt.c */
   extern void dshot_dma_xfer_cplt_callback(DMA_HandleTypeDef *hdma);
-  dshot_dma_handle_static.XferCpltCallback = dshot_dma_xfer_cplt_callback;
+  dshot_config_.dma_handle.XferCpltCallback = dshot_dma_xfer_cplt_callback;
   
   /* Enable DMA transfer complete interrupt */
-  __HAL_DMA_ENABLE_IT(&dshot_dma_handle_static, DMA_IT_TC);
+  /* 使用 DSHOT_DMA_INT_FLAG 宏，对于 STM32H7 它等于 DMA_IT_TC */
+  __HAL_DMA_ENABLE_IT(&dshot_config_.dma_handle, DSHOT_DMA_INT_FLAG);
   
   /* Enable DMA interrupt in NVIC */
   HAL_NVIC_SetPriority(dshot_config_.dma_cfg->dma_irq, 1, 0);
