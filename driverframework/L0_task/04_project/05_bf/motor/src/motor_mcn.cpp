@@ -6,10 +6,21 @@ extern "C" {
 #define LOG_TAG "motor_bf"
 #define LOG_LVL LOG_LVL_INFO
 #include <ulog.h>
-#include "rc_mcn.h"  // For rc_aux_msg_t, rc_armed_status_t
-#include "pid_mcn.h"
 #include "uMCN.h"
 }
+
+// Optional dependencies
+#ifdef PROJECT_BF_PID_EN
+extern "C" {
+#include "pid_mcn.h"
+}
+#endif
+
+#ifdef PROJECT_BF_RC_EN
+extern "C" {
+#include "rc_mcn.h"  // For rc_aux_msg_t, rc_armed_status_t
+}
+#endif
 
 // Initialize MCN (no hub publishing needed for now)
 rt_err_t MotorBf::initMcn() {
@@ -17,6 +28,7 @@ rt_err_t MotorBf::initMcn() {
   return RT_EOK;
 }
 
+#ifdef PROJECT_BF_PID_EN
 // Subscribe to PID output MCN topic (with event semaphore for blocking poll)
 rt_err_t MotorBf::subscribePidOutput() {
   // Create event semaphore for pid (required for mcn_poll_sync)
@@ -42,7 +54,9 @@ rt_err_t MotorBf::subscribePidOutput() {
   LOG_I("Subscribed to pid MCN topic");
   return RT_EOK;
 }
+#endif  // PROJECT_BF_PID_EN
 
+#ifdef PROJECT_BF_RC_EN
 // Subscribe to RC aux MCN topic (for arm status and flight mode)
 rt_err_t MotorBf::subscribeRcAux() {
   rc_aux_node_ = mcn_subscribe(MCN_HUB(aux), RT_NULL, RT_NULL);
@@ -54,18 +68,6 @@ rt_err_t MotorBf::subscribeRcAux() {
 
   LOG_I("Subscribed to aux MCN topic");
   return RT_EOK;
-}
-
-// Unsubscribe from all MCN topics
-void MotorBf::unsubscribeMcnTopics() {
-  if (pid_output_node_ != RT_NULL) {
-    mcn_unsubscribe(MCN_HUB(pid), pid_output_node_);
-    pid_output_node_ = RT_NULL;
-  }
-  if (rc_aux_node_ != RT_NULL) {
-    mcn_unsubscribe(MCN_HUB(aux), rc_aux_node_);
-    rc_aux_node_ = RT_NULL;
-  }
 }
 
 // Update aux data from MCN (non-blocking)
@@ -83,4 +85,21 @@ bool MotorBf::updateAuxData(rc_aux_msg_t* aux_data, bool* aux_data_valid) {
     }
   }
   return false;  // No new data, but cached data may still be valid
+}
+#endif  // PROJECT_BF_RC_EN
+
+// Unsubscribe from all MCN topics
+void MotorBf::unsubscribeMcnTopics() {
+#ifdef PROJECT_BF_PID_EN
+  if (pid_output_node_ != RT_NULL) {
+    mcn_unsubscribe(MCN_HUB(pid), pid_output_node_);
+    pid_output_node_ = RT_NULL;
+  }
+#endif
+#ifdef PROJECT_BF_RC_EN
+  if (rc_aux_node_ != RT_NULL) {
+    mcn_unsubscribe(MCN_HUB(aux), rc_aux_node_);
+    rc_aux_node_ = RT_NULL;
+  }
+#endif
 }

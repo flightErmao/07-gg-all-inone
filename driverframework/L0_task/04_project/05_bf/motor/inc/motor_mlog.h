@@ -12,20 +12,34 @@
 
 extern "C" {
 #include <rtthread.h>
-#include "mlog.h"
 }
 
+// Optional dependency: MLOG module
+#ifdef PROJECT_BF_MOTOR_MLOG_EN
+extern "C" {
+#include "mlog.h"
+}
+#endif
+
+// Motor mlog 数据结构体（即使 mlog 模块未启用也定义，用于接口兼容）
+// Note: __packed attribute is only needed when mlog is enabled, but we define it here for compatibility
+#ifndef __packed
+#define __packed __attribute__((packed))
+#endif
+struct motor_mlog_data_t {
+  uint32_t seq;                       // 序列号
+  uint32_t timestamp;                 // 时间戳（微秒）
+  uint16_t motor_values[4];            // 最终下发给 dshot 的 4 个通道数据 (16bit uint16)
+} __packed;
+
+#ifdef PROJECT_BF_MOTOR_MLOG_EN
 namespace bf_mlog {
 
 /**
  * @brief Motor mlog 数据结构体
  * 用于快速修改需要记录到 log 中的数据
  */
-struct motor_mlog_data_t {
-  uint32_t seq;                       // 序列号
-  uint32_t timestamp;                 // 时间戳（微秒）
-  uint16_t motor_values[4];            // 最终下发给 dshot 的 4 个通道数据 (16bit uint16)
-} __packed;
+typedef ::motor_mlog_data_t motor_mlog_data_t;
 
 /**
  * @brief Mlog Motor 数据记录类
@@ -73,4 +87,5 @@ private:
 };
 
 }  // namespace bf_mlog
+#endif  // PROJECT_BF_MOTOR_MLOG_EN
 

@@ -45,7 +45,17 @@ extern void stm32_tim_pclkx_doubler_get(rt_uint32_t *pclk1_doubler, rt_uint32_t 
 #error "Unsupported platform for DShot DMA configuration"
 #endif
 
-/* DShot symbol rates */
+/* DShot symbol rates (bit rates)
+ * DSHOT600: 600kbit/s, bit period = 1.67µs, T1H=1.25µs, T0H=0.625µs, frame=26.72µs
+ * DSHOT300: 300kbit/s, bit period = 3.33µs, T1H=2.50µs, T0H=1.25µs, frame=53.28µs
+ * DSHOT150: 150kbit/s, bit period = 6.67µs, T1H=5.00µs, T0H=2.50µs, frame=106.72µs
+ * 
+ * Note: 定时器中断频率（DMA触发频率）使用T0H时间的倒数：
+ * - DSHOT600: 1.6MHz (中断间隔 = 0.625µs = T0H)
+ * - DSHOT300: 0.8MHz (中断间隔 = 1.25µs = T0H)
+ * - DSHOT150: 0.4MHz (中断间隔 = 2.5µs = T0H)
+ * 每个bit有3个状态，每个状态需要一次定时器中断触发DMA传输
+ */
 #define MOTOR_DSHOT600_SYMBOL_RATE (600 * 1000)
 #define MOTOR_DSHOT300_SYMBOL_RATE (300 * 1000)
 #define MOTOR_DSHOT150_SYMBOL_RATE (150 * 1000)
@@ -77,6 +87,18 @@ static void *convert_gpio_port(void) {
 #elif defined(DSHOT_PLATFORM_AT32)
       return (void *)GPIOC;
 #endif
+    } else if (port_letter == 'D') {
+#ifdef DSHOT_PLATFORM_STM32
+      return (void *)GPIOD;
+#elif defined(DSHOT_PLATFORM_AT32)
+      return (void *)GPIOD;
+#endif
+    } else if (port_letter == 'E') {
+#ifdef DSHOT_PLATFORM_STM32
+      return (void *)GPIOE;
+#elif defined(DSHOT_PLATFORM_AT32)
+      return (void *)GPIOE;
+#endif
     }
   }
   // Fallback: check first character for backward compatibility
@@ -97,6 +119,18 @@ static void *convert_gpio_port(void) {
       return (void *)GPIOC;
 #elif defined(DSHOT_PLATFORM_AT32)
       return (void *)GPIOC;
+#endif
+  } else if (port_str[0] == 'D') {
+#ifdef DSHOT_PLATFORM_STM32
+      return (void *)GPIOD;
+#elif defined(DSHOT_PLATFORM_AT32)
+      return (void *)GPIOD;
+#endif
+  } else if (port_str[0] == 'E') {
+#ifdef DSHOT_PLATFORM_STM32
+      return (void *)GPIOE;
+#elif defined(DSHOT_PLATFORM_AT32)
+      return (void *)GPIOE;
 #endif
   }
 
@@ -123,6 +157,10 @@ static void *convert_gpio_clock(void) {
       return (void *)CRM_GPIOB_PERIPH_CLOCK;
     } else if (port_letter == 'C') {
       return (void *)CRM_GPIOC_PERIPH_CLOCK;
+    } else if (port_letter == 'D') {
+      return (void *)CRM_GPIOD_PERIPH_CLOCK;
+    } else if (port_letter == 'E') {
+      return (void *)CRM_GPIOE_PERIPH_CLOCK;
     }
   }
   // Fallback: check first character for backward compatibility
@@ -132,6 +170,10 @@ static void *convert_gpio_clock(void) {
     return (void *)CRM_GPIOB_PERIPH_CLOCK;
   } else if (port_str[0] == 'C') {
     return (void *)CRM_GPIOC_PERIPH_CLOCK;
+  } else if (port_str[0] == 'D') {
+    return (void *)CRM_GPIOD_PERIPH_CLOCK;
+  } else if (port_str[0] == 'E') {
+    return (void *)CRM_GPIOE_PERIPH_CLOCK;
   }
 
   return (void *)CRM_GPIOB_PERIPH_CLOCK;  // default fallback
@@ -244,6 +286,10 @@ static rt_uint32_t __attribute__((unused)) convert_dma_input_io_addr(void) {
     return (rt_uint32_t)&GPIOB->IDR;
   } else if (gpio == (void *)GPIOC) {
     return (rt_uint32_t)&GPIOC->IDR;
+  } else if (gpio == (void *)GPIOD) {
+    return (rt_uint32_t)&GPIOD->IDR;
+  } else if (gpio == (void *)GPIOE) {
+    return (rt_uint32_t)&GPIOE->IDR;
   }
   return (rt_uint32_t)&GPIOB->IDR;
 #elif defined(DSHOT_PLATFORM_AT32)
@@ -253,6 +299,10 @@ static rt_uint32_t __attribute__((unused)) convert_dma_input_io_addr(void) {
     return (rt_uint32_t)&GPIOB->idt;
   } else if (gpio == (void *)GPIOC) {
     return (rt_uint32_t)&GPIOC->idt;
+  } else if (gpio == (void *)GPIOD) {
+    return (rt_uint32_t)&GPIOD->idt;
+  } else if (gpio == (void *)GPIOE) {
+    return (rt_uint32_t)&GPIOE->idt;
   }
   return (rt_uint32_t)&GPIOB->idt;
 #endif
@@ -267,6 +317,10 @@ static rt_uint32_t __attribute__((unused)) convert_dma_output_io_addr(void) {
     return (rt_uint32_t)&GPIOB->ODR;
   } else if (gpio == (void *)GPIOC) {
     return (rt_uint32_t)&GPIOC->ODR;
+  } else if (gpio == (void *)GPIOD) {
+    return (rt_uint32_t)&GPIOD->ODR;
+  } else if (gpio == (void *)GPIOE) {
+    return (rt_uint32_t)&GPIOE->ODR;
   }
   return (rt_uint32_t)&GPIOB->ODR;
 #elif defined(DSHOT_PLATFORM_AT32)
@@ -276,6 +330,10 @@ static rt_uint32_t __attribute__((unused)) convert_dma_output_io_addr(void) {
     return (rt_uint32_t)&GPIOB->odt;
   } else if (gpio == (void *)GPIOC) {
     return (rt_uint32_t)&GPIOC->odt;
+  } else if (gpio == (void *)GPIOD) {
+    return (rt_uint32_t)&GPIOD->odt;
+  } else if (gpio == (void *)GPIOE) {
+    return (rt_uint32_t)&GPIOE->odt;
   }
   return (rt_uint32_t)&GPIOB->odt;
 #endif
@@ -391,6 +449,10 @@ void dshotGpioInit(void) {
     __HAL_RCC_GPIOB_CLK_ENABLE();
   } else if (gpio == GPIOC) {
     __HAL_RCC_GPIOC_CLK_ENABLE();
+  } else if (gpio == GPIOD) {
+    __HAL_RCC_GPIOD_CLK_ENABLE();
+  } else if (gpio == GPIOE) {
+    __HAL_RCC_GPIOE_CLK_ENABLE();
   }
   
   GPIO_InitStruct.Pin = 0;
@@ -401,6 +463,25 @@ void dshotGpioInit(void) {
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
   HAL_GPIO_Init(gpio, &GPIO_InitStruct);
+  
+#ifdef DSHOT_DEBUGPIN_EN
+#ifdef DSHOT_PLATFORM_STM32
+  /* Initialize PD12 for debug pin - direct register access for fast toggle */
+  /* Enable GPIOD clock if not already enabled */
+  __HAL_RCC_GPIOD_CLK_ENABLE();
+  
+  /* Configure PD12 as output, push-pull, maximum speed */
+  GPIO_InitTypeDef PD12_InitStruct = {0};
+  PD12_InitStruct.Pin = GPIO_PIN_12;
+  PD12_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  PD12_InitStruct.Pull = GPIO_NOPULL;  /* No pull-up/pull-down for debug pin */
+  PD12_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;  /* Maximum speed for fast toggle */
+  HAL_GPIO_Init(GPIOD, &PD12_InitStruct);
+  
+  /* Set initial state to low */
+  GPIOD->BSRR = (GPIO_PIN_12 << 16);  /* Set PD12 low */
+#endif
+#endif
 #elif defined(DSHOT_PLATFORM_AT32)
   gpio_init_type gpio_init_struct;
   crm_periph_clock_enable((crm_periph_clock_type)(rt_uint32_t)dshot_config_.gpio_clock, TRUE);
@@ -425,13 +506,28 @@ void dshotTimerInit(void) {
 
   switch (dshot_config_.dshot_protocol) {
     case (PWM_TYPE_DSHOT600):
-      dshot_send_dma_freq = MOTOR_DSHOT600_SYMBOL_RATE * MOTOR_DSHOT_STATE_PER_SYMBOL;
+      /* 定时器中断频率 = 1.6MHz (中断间隔 = 0.625µs)
+       * 每个bit周期1.67µs，每个bit有3个状态，每个状态需要一次定时器中断触发DMA
+       * 0.625µs × 3 ≈ 1.875µs (略大于1.67µs，但符合编码需求)
+       * 0.625µs对应T0H时间（0 bit的高电平时间）
+       */
+      dshot_send_dma_freq = 1600000;  /* 1.6MHz = 1/0.625µs */
       break;
     case (PWM_TYPE_DSHOT300):
-      dshot_send_dma_freq = MOTOR_DSHOT300_SYMBOL_RATE * MOTOR_DSHOT_STATE_PER_SYMBOL;
+      /* 定时器中断频率 = 0.8MHz (中断间隔 = 1.25µs)
+       * 每个bit周期3.33µs，每个bit有3个状态
+       * 1.25µs × 3 = 3.75µs (略大于3.33µs)
+       * 1.25µs对应T0H时间
+       */
+      dshot_send_dma_freq = 800000;  /* 0.8MHz = 1/1.25µs */
       break;
     case (PWM_TYPE_DSHOT150):
-      dshot_send_dma_freq = MOTOR_DSHOT150_SYMBOL_RATE * MOTOR_DSHOT_STATE_PER_SYMBOL;
+      /* 定时器中断频率 = 0.4MHz (中断间隔 = 2.5µs)
+       * 每个bit周期6.67µs，每个bit有3个状态
+       * 2.5µs × 3 = 7.5µs (略大于6.67µs)
+       * 2.5µs对应T0H时间
+       */
+      dshot_send_dma_freq = 400000;  /* 0.4MHz = 1/2.5µs */
       break;
     default:
       break;
@@ -475,7 +571,7 @@ void dshotTimerInit(void) {
   
   /* Initialize timer */
   /* Note: htim->Instance is already set in convert_timer_type() */
-  htim->Init.Prescaler = 0;
+  htim->Init.Prescaler = 0;  /* Critical: Prescaler must be 0 for correct timing */
   htim->Init.CounterMode = TIM_COUNTERMODE_UP;
   htim->Init.Period = dshot_config_.timer_count_send;
   htim->Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -484,6 +580,74 @@ void dshotTimerInit(void) {
   if (HAL_TIM_Base_Init(htim) != HAL_OK) {
     return;
   }
+  
+  /* Ensure Prescaler is set to 0 after HAL initialization (HAL may modify it) */
+  __HAL_TIM_SET_PRESCALER(htim, 0);
+  
+  /* Ensure Repetition Counter (RCR) is 0 - critical for UPDATE event frequency */
+  /* RCR causes UPDATE event only after (RCR+1) overflows, default should be 0 */
+  if (htim->Instance->RCR != 0) {
+    rt_kprintf("[DSHOT] WARNING: RCR is %u, expected 0! Fixing...\n", htim->Instance->RCR);
+    htim->Instance->RCR = 0;  /* Force set to 0 */
+  }
+  
+  /* Set counter initial value to 0 */
+  __HAL_TIM_SET_COUNTER(htim, 0);
+  
+  /* Verify Prescaler is actually 0 */
+  if (htim->Instance->PSC != 0) {
+    rt_kprintf("[DSHOT] WARNING: Prescaler is %u, expected 0! Fixing...\n", htim->Instance->PSC);
+    htim->Instance->PSC = 0;  /* Force set to 0 */
+  }
+  
+  /* Ensure timer DMA request is disabled during initialization */
+  __HAL_TIM_DISABLE_DMA(htim, dshot_config_.tmr_dma_request);
+  
+  /* Debug: Print essential timer configuration */
+  rt_uint32_t actual_prescaler = htim->Instance->PSC + 1;
+  rt_uint32_t actual_period = htim->Instance->ARR + 1;
+  rt_uint32_t actual_timer_freq = tmr_clock / actual_prescaler;
+  rt_uint32_t actual_interrupt_freq = actual_timer_freq / actual_period;
+  float actual_interrupt_period_us = 1000000.0f / actual_interrupt_freq;
+  
+  rt_kprintf("[DSHOT] Timer: DSHOT%d, tmr_clock=%luHz, PSC=%u, ARR=%u, freq=%luHz (%.3fus), expected=%luHz\n",
+             (dshot_config_.dshot_protocol == PWM_TYPE_DSHOT600) ? 600 :
+             (dshot_config_.dshot_protocol == PWM_TYPE_DSHOT300) ? 300 : 150,
+             tmr_clock, htim->Instance->PSC, htim->Instance->ARR, 
+             actual_interrupt_freq, actual_interrupt_period_us, dshot_send_dma_freq);
+  
+  if (actual_interrupt_freq != dshot_send_dma_freq) {
+    rt_kprintf("[DSHOT] WARNING: freq mismatch! diff=%.1f%%\n",
+               ((float)actual_interrupt_freq - (float)dshot_send_dma_freq) * 100.0f / dshot_send_dma_freq);
+  }
+  
+#ifdef DSHOT_DEBUGPIN_EN
+  /* Enable timer update interrupt for debugging */
+  __HAL_TIM_ENABLE_IT(htim, TIM_IT_UPDATE);
+  /* Enable timer interrupt in NVIC */
+  rt_uint32_t tim_irq = 0;
+  if (tim_instance == TIM1) tim_irq = TIM1_UP_IRQn;
+  else if (tim_instance == TIM2) tim_irq = TIM2_IRQn;
+  else if (tim_instance == TIM3) tim_irq = TIM3_IRQn;
+  else if (tim_instance == TIM4) tim_irq = TIM4_IRQn;
+  else if (tim_instance == TIM5) tim_irq = TIM5_IRQn;
+#ifdef TIM8
+  else if (tim_instance == TIM8) tim_irq = TIM8_UP_TIM13_IRQn;  /* TIM8和TIM13共享中断向量 */
+#endif
+#ifdef TIM9
+  else if (tim_instance == TIM9) tim_irq = TIM1_BRK_TIM9_IRQn;
+#endif
+#ifdef TIM10
+  else if (tim_instance == TIM10) tim_irq = TIM1_UP_TIM10_IRQn;
+#endif
+#ifdef TIM11
+  else if (tim_instance == TIM11) tim_irq = TIM1_TRG_COM_TIM11_IRQn;
+#endif
+  if (tim_irq != 0) {
+    HAL_NVIC_SetPriority(tim_irq, 2, 0);
+    HAL_NVIC_EnableIRQ(tim_irq);
+  }
+#endif
   
   __HAL_TIM_ENABLE(htim);
   
@@ -509,6 +673,26 @@ void dshotTimerInit(void) {
 
   crm_periph_clock_enable((crm_periph_clock_type)(rt_uint32_t)dshot_config_.timer_clock, TRUE);
   tmr_cnt_dir_set(tmr_x, TMR_COUNT_UP);
+  
+#ifdef DSHOT_DEBUGPIN_EN
+  /* Enable timer overflow interrupt for debugging */
+  tmr_interrupt_enable(tmr_x, TMR_OVF_INT, TRUE);
+  /* Enable timer interrupt in NVIC */
+  rt_uint32_t tmr_irqn = 0;
+  if (tmr_x == TMR1) tmr_irqn = TMR1_OVF_TMR10_IRQn;
+  else if (tmr_x == TMR2) tmr_irqn = TMR2_GLOBAL_IRQn;
+  else if (tmr_x == TMR3) tmr_irqn = TMR3_GLOBAL_IRQn;
+  else if (tmr_x == TMR4) tmr_irqn = TMR4_GLOBAL_IRQn;
+  else if (tmr_x == TMR5) tmr_irqn = TMR5_GLOBAL_IRQn;
+  else if (tmr_x == TMR8) tmr_irqn = TMR8_OVF_TMR13_IRQn;
+  else if (tmr_x == TMR9) tmr_irqn = TMR1_BRK_TMR9_IRQn;
+  else if (tmr_x == TMR10) tmr_irqn = TMR1_OVF_TMR10_IRQn;
+  else if (tmr_x == TMR11) tmr_irqn = TMR1_TRG_HALL_TMR11_IRQn;
+  if (tmr_irqn != 0) {
+    nvic_irq_enable(tmr_irqn, 2, 0);
+  }
+#endif
+  
   tmr_counter_enable(tmr_x, TRUE);
 #endif
 }
@@ -516,57 +700,86 @@ void dshotTimerInit(void) {
 /* Initialize DShot DMA configuration */
 void dshotDmaConfigureInit(void) {
 #ifdef DSHOT_PLATFORM_STM32
-  DMA_HandleTypeDef hdma;
-  
   /* STM32 dma_config doesn't have dma_done member */
   
   /* Enable DMA clock */
   __HAL_RCC_DMA1_CLK_ENABLE();
   __HAL_RCC_DMA2_CLK_ENABLE();
+
+  /* Initialize DMA handle in dshot_config_ */
+  memset(&dshot_config_.dma_handle, 0, sizeof(DMA_HandleTypeDef));
   
   /* Configure DMA for input (GPIO IDR -> memory) */
-  hdma.Instance = (DMA_Stream_TypeDef *)dshot_config_.dma_cfg->Instance;
+  dshot_config_.dma_handle.Instance = (DMA_Stream_TypeDef *)dshot_config_.dma_cfg->Instance;
 #if defined(SOC_SERIES_STM32H7)
-  hdma.Init.Request = dshot_config_.dma_cfg->request;
+  dshot_config_.dma_handle.Init.Request = dshot_config_.dma_cfg->request;
 #else
-  hdma.Init.Channel = dshot_config_.dma_cfg->channel;
+  dshot_config_.dma_handle.Init.Channel = dshot_config_.dma_cfg->channel;
 #endif
-  hdma.Init.Direction = DMA_PERIPH_TO_MEMORY;
-  hdma.Init.PeriphInc = DMA_PINC_DISABLE;
-  hdma.Init.MemInc = DMA_MINC_ENABLE;
-  hdma.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
-  hdma.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
-  hdma.Init.Mode = DMA_NORMAL;
-  hdma.Init.Priority = DMA_PRIORITY_VERY_HIGH;
-  hdma.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
-  hdma.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_FULL;
-  hdma.Init.MemBurst = DMA_MBURST_SINGLE;
-  hdma.Init.PeriphBurst = DMA_PBURST_SINGLE;
+  dshot_config_.dma_handle.Init.Direction = DMA_PERIPH_TO_MEMORY;
+  dshot_config_.dma_handle.Init.PeriphInc = DMA_PINC_DISABLE;
+  dshot_config_.dma_handle.Init.MemInc = DMA_MINC_ENABLE;
+  dshot_config_.dma_handle.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
+  dshot_config_.dma_handle.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
+  dshot_config_.dma_handle.Init.Mode = DMA_NORMAL;
+  dshot_config_.dma_handle.Init.Priority = DMA_PRIORITY_VERY_HIGH;
+  dshot_config_.dma_handle.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+  dshot_config_.dma_handle.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_FULL;
+  dshot_config_.dma_handle.Init.MemBurst = DMA_MBURST_SINGLE;
+  dshot_config_.dma_handle.Init.PeriphBurst = DMA_PBURST_SINGLE;
   
   /* These are not part of Init structure, set them directly */
   /* Note: PeriphAddr and Mem0Addr are set via HAL_DMA_Start_IT, not in Init */
   
-  if (HAL_DMA_Init(&hdma) != HAL_OK) {
+  if (HAL_DMA_Init(&dshot_config_.dma_handle) != HAL_OK) {
     return;
   }
   
-  /* Save DMA registers for input */
-  bbSaveDMARegs((void *)hdma.Instance, &dshot_config_.dmaRegInput);
+  /* Ensure DMA is disabled before modifying registers */
+  DMA_Stream_TypeDef *dma_stream = (DMA_Stream_TypeDef *)dshot_config_.dma_handle.Instance;
+  dma_stream->CR &= ~DMA_SxCR_EN;  /* Disable DMA */
+  /* Wait for disable with timeout to avoid infinite loop */
+  rt_uint32_t timeout = 1000;
+  while ((dma_stream->CR & DMA_SxCR_EN) && (timeout-- > 0));
+  if (timeout == 0) {
+    rt_kprintf("[DSHOT] Warning: DMA disable timeout\n");
+  }
+  
+  /* Set DMA peripheral and memory addresses for input configuration */
+  dma_stream->PAR = (rt_uint32_t)convert_dma_input_io_addr();  /* GPIO IDR address */
+  dma_stream->M0AR = (rt_uint32_t)(dshot_config_.dshot_dma_rec_buf);  /* Receive buffer address */
+  dma_stream->NDTR = RECEIVE_BUFFER_NUMBER;  /* Transfer count */
+  
+  /* Save DMA registers for input (DMA is disabled, so safe to save) */
+  bbSaveDMARegs((void *)dshot_config_.dma_handle.Instance, &dshot_config_.dmaRegInput);
   
   /* Configure DMA for output (memory -> GPIO ODR) */
-  hdma.Init.Direction = DMA_MEMORY_TO_PERIPH;
-  hdma.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
-  hdma.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
+  dshot_config_.dma_handle.Init.Direction = DMA_MEMORY_TO_PERIPH;
+  dshot_config_.dma_handle.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
+  dshot_config_.dma_handle.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
   
-  if (HAL_DMA_Init(&hdma) != HAL_OK) {
+  if (HAL_DMA_Init(&dshot_config_.dma_handle) != HAL_OK) {
     return;
   }
   
-  /* Save DMA registers for output */
-  bbSaveDMARegs((void *)hdma.Instance, &dshot_config_.dmaRegOutput);
+  /* Ensure DMA is disabled before modifying registers */
+  dma_stream = (DMA_Stream_TypeDef *)dshot_config_.dma_handle.Instance;
+  dma_stream->CR &= ~DMA_SxCR_EN;  /* Disable DMA */
+  /* Wait for disable with timeout to avoid infinite loop */
+  timeout = 1000;
+  while ((dma_stream->CR & DMA_SxCR_EN) && (timeout-- > 0));
+  if (timeout == 0) {
+    rt_kprintf("[DSHOT] Warning: DMA disable timeout\n");
+  }
   
-  /* Update DMA handle for interrupt handling (output config) */
-  dshot_config_.dma_handle = hdma;
+  /* Set DMA peripheral and memory addresses for output configuration */
+  /* This is critical - without these addresses, DMA cannot transfer data */
+  dma_stream->PAR = (rt_uint32_t)convert_dma_output_io_addr();  /* GPIO ODR address */
+  dma_stream->M0AR = (rt_uint32_t)(dshot_config_.dshot_dma_send_buf);  /* Send buffer address */
+  dma_stream->NDTR = MOTOR_DSHOT_BUF_LENGTH;  /* Transfer count */
+  
+  /* Save DMA registers for output (DMA is disabled, so safe to save) */
+  bbSaveDMARegs((void *)dshot_config_.dma_handle.Instance, &dshot_config_.dmaRegOutput);
   
   /* Set DMA transfer complete callback - declared in dshotHwOpt.c */
   extern void dshot_dma_xfer_cplt_callback(DMA_HandleTypeDef *hdma);

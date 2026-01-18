@@ -9,13 +9,15 @@ include_paths = [
     cwd,
     os.path.join(cwd, "inc"),  # motor_bf.h, motor_mcn.h
     os.path.join(cwd, "../common/inc"),  # init_sync.h 所在目录
-    os.path.join(cwd, "../pid/inc"),  # pid_mcn.h
-        os.path.join(cwd, "../rc/inc"),  # rc_aux_msg.h
-    os.path.join(cwd, "../param/inc"),  # param.h (getParam function)
-    os.path.join(cwd, "../anotc/inc"),  # anotc_bf.h, protocolAtkpInterface.h
+    # Optional dependencies: include paths are kept for forward declarations
+    # but compilation doesn't depend on these modules
+    os.path.join(cwd, "../pid/inc"),  # pid_mcn.h (optional)
+    os.path.join(cwd, "../rc/inc"),  # rc_aux_msg.h (optional)
+    os.path.join(cwd, "../param/inc"),  # param.h (optional)
+    os.path.join(cwd, "../anotc/inc"),  # anotc_bf.h, protocolAtkpInterface.h (optional)
     os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "01_module", "05_timestamp", "inc"),  # timestamp.h
     os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "03_package", "uMCN-latest", "inc"),  # uMCN.h
-    os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "01_module", "03_debugPin"),  # debugPin.h 所在目录
+    os.path.join(cwd, "..", "..", "..", "..", "L1_middleWare", "01_module", "03_debugPin"),  # debugPin.h (optional)
 ]
 
 group = DefineGroup(
@@ -23,11 +25,12 @@ group = DefineGroup(
     src,
     depend=[
         "PROJECT_BF_MOTOR_EN",
-        "PROJECT_BF_PID_EN",  # Depends on PID module for pid_output data
-        "PROJECT_BF_RC_EN",  # Depends on RC module for rc_aux (arm status) data
-        "PROJECT_BF_PARAM_EN",  # getParam function for mixer configuration
-        "PROJECT_BF_ANOTC_EN",  # Depends on ANOTC for logging functions (sendUserDatafloatN, etc.)
-        "L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN",  # Required when PROJECT_BF_MOTOR_DEBUG_PIN_EN is enabled
+        # All other modules are now optional dependencies - motor can run standalone
+        # "PROJECT_BF_PID_EN",  # Optional: PID module for pid_output data
+        # "PROJECT_BF_RC_EN",  # Optional: RC module for rc_aux (arm status) data
+        # "PROJECT_BF_PARAM_EN",  # Optional: getParam function for mixer configuration
+        # "PROJECT_BF_ANOTC_EN",  # Optional: ANOTC for logging functions (sendUserDatafloatN, etc.)
+        # "L1_MIDDLEWARE_01_MODULE_03_DEBUGPIN_EN",  # Optional: Required only when PROJECT_BF_MOTOR_DEBUG_PIN_EN is enabled
     ],
     CPPPATH=include_paths,
 )

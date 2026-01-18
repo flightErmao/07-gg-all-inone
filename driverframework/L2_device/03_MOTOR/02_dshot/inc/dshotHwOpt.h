@@ -24,6 +24,11 @@ void bbSaveDMARegs(dma_channel_type *dmaResource, dmaRegCache_t *dmaRegCache);
 #endif
 rt_err_t setDshotValue(void);
 
+/* Timer interrupt handler for debugging */
+#ifdef DSHOT_DEBUGPIN_EN
+void DSHOT_TIMER_IRQHandler(void);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

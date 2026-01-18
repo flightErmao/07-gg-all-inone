@@ -7,16 +7,39 @@ extern "C" {
 #define LOG_TAG "motor_class"
 #define LOG_LVL LOG_LVL_INFO
 #include <ulog.h>
-#include "pid_mcn.h"
 #include "uMCN.h"
-#include "rc_mcn.h"  // For PWM_RANGE_MIN and PWM_RANGE constants (if defined there)
 #include "../common/inc/init_sync.h"  // For initSyncWait, initSyncNotify
 #ifdef PROJECT_BF_MOTOR_DEBUG_PIN_EN
 #include "debugPin.h"
 #endif
 }
-#include "gyro_class.h"
+
+// Optional dependencies
+#ifdef PROJECT_BF_PID_EN
+extern "C" {
+#include "pid_mcn.h"
+}
 #include "pid_class.h"
+#endif
+
+#ifdef PROJECT_BF_RC_EN
+extern "C" {
+#include "rc_mcn.h"  // For PWM_RANGE_MIN and PWM_RANGE constants
+}
+#endif
+
+// Define PWM range constants if RC module is not available
+#ifndef PWM_RANGE_MIN
+#define PWM_RANGE_MIN 1000.0f
+#endif
+#ifndef PWM_RANGE
+#define PWM_RANGE 1000.0f
+#endif
+
+// Optional: gyro_class.h is only needed for USE_DYN_LPF feature
+#if defined(USE_DYN_LPF) && defined(PROJECT_BF_PID_EN)
+#include "gyro_class.h"
+#endif
 #include <cmath>
 #include <cstring>
 
@@ -83,9 +106,13 @@ MotorBf::MotorBf()
     : mixer_mode_(MIXER_QUADX),
       mixer_type_(MIXER_LEGACY),
       motor_count_(4),
+#ifdef PROJECT_BF_PID_EN
       pid_output_event_(RT_NULL),
       pid_output_node_(RT_NULL),
+#endif
+#ifdef PROJECT_BF_RC_EN
       rc_aux_node_(RT_NULL),
+#endif
       motor_thread_(RT_NULL),
       motor_thread_stack_(nullptr),
       thread_inited_(false),
@@ -108,10 +135,12 @@ MotorBf::~MotorBf() {
   // Unsubscribe from MCN topics
   unsubscribeMcnTopics();
   // Delete event semaphore
+#ifdef PROJECT_BF_PID_EN
   if (pid_output_event_ != RT_NULL) {
     rt_sem_delete(pid_output_event_);
     pid_output_event_ = RT_NULL;
   }
+#endif
 }
 
 rt_err_t MotorBf::init() {
@@ -129,11 +158,11 @@ rt_err_t MotorBf::init() {
     return ret;
   }
 
-  // Step 2.5: Initialize mlog
+  // Step 2.5: Initialize mlog (optional)
   ret = initMlog();
   if (ret != RT_EOK) {
-    LOG_E("Mlog init failed");
-    return ret;
+    LOG_W("Mlog init failed or not available, continuing without mlog");
+    // Don't return error, mlog is optional
   }
 
   // Step 3: Initialize thread resources
@@ -207,13 +236,23 @@ void MotorBf::cleanupThreadResources() {
 // initMcn() is now in motor_mcn.cpp
 
 void MotorBf::initMixerConfig() {
-  // Load mixer parameters
+  // Load mixer parameters (use defaults if PARAM module is not available)
   uint8_t mixer_mode_temp = MIXER_QUADX;
+#ifdef PROJECT_BF_PARAM_EN
   getParam("motor_mixer_mode", &mixer_mode_temp, sizeof(mixer_mode_temp));
+#else
+  // Use default value when PARAM module is not available
+  LOG_I("PARAM module not available, using default mixer_mode: %d", mixer_mode_temp);
+#endif
   mixer_mode_ = mixer_mode_temp;
 
   uint8_t mixer_type_temp = MIXER_LEGACY;
+#ifdef PROJECT_BF_PARAM_EN
   getParam("motor_mixer_type", &mixer_type_temp, sizeof(mixer_type_temp));
+#else
+  // Use default value when PARAM module is not available
+  LOG_I("PARAM module not available, using default mixer_type: %d", mixer_type_temp);
+#endif
   mixer_type_ = mixer_type_temp;
 
   // Initialize mixer based on mode
@@ -234,6 +273,7 @@ void MotorBf::initMixerConfig() {
   LOG_I("Mixer initialized: mode=%d, type=%d, motors=%d", mixer_mode_, mixer_type_, motor_count_);
 }
 
+#ifdef PROJECT_BF_PID_EN
 void MotorBf::mixTable(const pid_output_msg_t* pid_output, float* motor_output) {
   if (pid_output == nullptr || motor_output == nullptr) {
     return;
@@ -288,6 +328,26 @@ void MotorBf::mixTable(const pid_output_msg_t* pid_output, float* motor_output) 
   // Step 4: Apply mix to motors (with throttle) - store result in motor_output array
   applyMixToMotors(motorMix, current_mixer_, throttle, motor_output);
 }
+#else
+// Standalone mode: direct throttle control without PID mixing
+void MotorBf::mixTableStandalone(float throttle, float* motor_output) {
+  if (motor_output == nullptr) {
+    return;
+  }
+
+  // Constrain throttle to valid range [0.0, 1.0]
+  throttle = constrainf(throttle, 0.0f, 1.0f);
+  
+  // Save normalized throttle for logging
+  throttle_log_ = throttle;
+
+  // Apply throttle to all motors equally (no roll/pitch/yaw mixing)
+  for (int i = 0; i < motor_count_; i++) {
+    motor_output[i] = throttle * current_mixer_[i].throttle;
+    motor_output[i] = constrainf(motor_output[i], MOTOR_OUTPUT_MIN, MOTOR_OUTPUT_MAX);
+  }
+}
+#endif
 
 void MotorBf::normalizeMotorMix(float* motorMix, float* motorMixMin, float* motorMixMax) {
   // Find min/max of motor mix values
@@ -395,7 +455,8 @@ void MotorBf::writeMotors(const float* motor_output, rt_device_t motor_device) {
   rt_device_write(motor_device, 0x0F, motor_values, 4);
 
   // Push motor data to mlog (record final dshot values)
-  bf_mlog::motor_mlog_data_t mlog_data;
+#ifdef PROJECT_BF_MOTOR_MLOG_EN
+  motor_mlog_data_t mlog_data;
   mlog_data.seq = seq_++;
   mlog_data.timestamp = timestamp_micros();
   // Copy first 4 motor values (uint16_t) to mlog data
@@ -403,6 +464,7 @@ void MotorBf::writeMotors(const float* motor_output, rt_device_t motor_device) {
     mlog_data.motor_values[i] = motor_values[i];
   }
   pushMotorDataToMlog(&mlog_data);
+#endif
 }
 
 // Motor thread initialization helpers
@@ -443,6 +505,14 @@ void MotorBf::motorThreadEntry(void* parameter) {
 
   LOG_I("Motor thread started");
 
+  // Step 1: Initialize motor device
+  rt_device_t motor_device = instance->initMotorDevice();
+  if (motor_device == nullptr) {
+    return;
+  }
+
+  // Step 2: Subscribe to MCN topics (optional, only if PID/RC modules are enabled)
+#ifdef PROJECT_BF_PID_EN
   // 在线程调度器启动后，等待 PID 初始化完成（Motor 需要 PID 输出）
   // 这部分初始化依赖其他线程状态，必须在线程入口函数中执行
   rt_err_t ret = initSyncWait(INIT_SYNC_PID, 2000);  // 等待最多2秒
@@ -450,30 +520,28 @@ void MotorBf::motorThreadEntry(void* parameter) {
     LOG_W("PID not ready, continuing anyway (ret=%d)", ret);
   }
 
-  // Step 1: Initialize motor device
-  rt_device_t motor_device = instance->initMotorDevice();
-  if (motor_device == nullptr) {
-    return;
-  }
-
-  // Step 2: Subscribe to MCN topics (each subscription is independent)
   ret = instance->subscribePidOutput();
   if (ret != RT_EOK) {
     LOG_E("Failed to subscribe to PID output MCN topic");
     instance->cleanupMotorDevice(motor_device);
     return;
   }
+#else
+  LOG_I("Motor running in standalone mode (no PID module)");
+#endif
 
+#ifdef PROJECT_BF_RC_EN
   // Subscribe to RC aux (non-critical, continue even if fails)
   instance->subscribeRcAux();
+#else
+  LOG_I("Motor running without RC module (no arm status check)");
+#endif
   
-  // 通知 Motor 初始化完成（在等待 PID 之后）
+  // 通知 Motor 初始化完成
   initSyncNotify(INIT_SYNC_MOTOR);
 
   // Step 3: Initialize thread-local data
   float motor_output_array[MAX_SUPPORTED_MOTORS];
-  rc_aux_msg_t aux_data = {0};
-  bool aux_data_valid = false;
 
 #ifdef USE_DYN_LPF
   // Dynamic LPF update state
@@ -485,6 +553,17 @@ void MotorBf::motorThreadEntry(void* parameter) {
 
   // Step 4: Main loop - process PID output and control motors
   while (true) {
+#ifdef PROJECT_BF_PID_EN
+    // Initialize aux data variables (only needed when PID is enabled)
+#ifdef PROJECT_BF_RC_EN
+    rc_aux_msg_t aux_data = {0};
+    bool aux_data_valid = false;
+#else
+    // Default to disarmed when RC module is not available
+    rc_aux_msg_t aux_data = {RC_ARMED_STATUS_DISARMED};
+    bool aux_data_valid = false;
+#endif
+
     // Wait for PID output data (blocking) - this releases CPU when waiting
     // This ensures CPU is released even when disarmed
     if (mcn_poll_sync(instance->pid_output_node_, RT_WAITING_FOREVER) == RT_TRUE) {
@@ -493,8 +572,14 @@ void MotorBf::motorThreadEntry(void* parameter) {
 #endif
       pid_output_msg_t pid_output;
       if (mcn_copy(MCN_HUB(pid), instance->pid_output_node_, &pid_output) == RT_EOK) {
+#ifdef PROJECT_BF_RC_EN
         // Update aux data (non-blocking)
         instance->updateAuxData(&aux_data, &aux_data_valid);
+#else
+        // No RC module: assume disarmed for safety
+        aux_data.armed = RC_ARMED_STATUS_DISARMED;
+        aux_data_valid = false;
+#endif
 
         // Safety: If disarmed or no aux data available (assume disarmed for safety), stop motors
         // Betaflight behavior: motors must be stopped when disarmed
@@ -518,7 +603,7 @@ void MotorBf::motorThreadEntry(void* parameter) {
         // Throttle comes from pid_output->smoothed_throttle
         instance->mixTable(&pid_output, motor_output_array);
 
-#ifdef USE_DYN_LPF
+#if defined(USE_DYN_LPF) && defined(PROJECT_BF_PID_EN)
         // Update dynamic LPF cutoffs based on throttle (same as Betaflight)
         // Reference: ref/pid.c updateDynLpfCutoffs()
         uint32_t currentTimeUs = timestamp_micros();
@@ -546,6 +631,32 @@ void MotorBf::motorThreadEntry(void* parameter) {
         instance->writeMotors(motor_output_array, motor_device);
       }
     }
+#else
+    // Standalone mode: direct throttle control (no PID)
+    // In standalone mode, we use a simple loop with delay
+    rt_thread_mdelay(10);  // 100Hz update rate
+    
+#ifdef PROJECT_BF_MOTOR_DEBUG_PIN_EN
+    DEBUG_PIN_DEBUG2_HIGH();  // Debug pin: Motor task execution start
+#endif
+
+    // In standalone mode, throttle is set to 0 by default (safety)
+    // This can be changed by external control or parameter
+    float throttle = 0.0f;
+    
+    // TODO: Add parameter or external interface to set throttle in standalone mode
+    // For now, motors are stopped in standalone mode
+    
+    instance->mixTableStandalone(throttle, motor_output_array);
+
+    // Update motor output data for logging (normalized values before scaling to 48-2047)
+    std::memcpy(instance->motor_output_log_, motor_output_array, instance->motor_count_ * sizeof(float));
+    // Note: throttle_log_ is updated in mixTableStandalone()
+    instance->motor_output_timestamp_ = timestamp_micros();
+
+    // Write motors to device
+    instance->writeMotors(motor_output_array, motor_device);
+#endif  // PROJECT_BF_PID_EN
 #ifdef PROJECT_BF_MOTOR_DEBUG_PIN_EN
     DEBUG_PIN_DEBUG2_LOW();  // Debug pin: Motor task execution end
 #endif

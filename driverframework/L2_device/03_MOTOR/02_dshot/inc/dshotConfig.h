@@ -103,7 +103,7 @@ typedef struct {
   dmaRegCache_t dmaRegInput;
   uint8_t dshot_dma_dir;
 #ifdef DSHOT_PLATFORM_STM32
-  DMA_HandleTypeDef dma_handle;  /* STM32 DMA handle for interrupt handling */
+  DMA_HandleTypeDef dma_handle;  /* STM32 DMA handle for HAL library APIs */
 #endif
 
   /*about buf*/

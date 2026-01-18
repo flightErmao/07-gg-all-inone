@@ -6,10 +6,18 @@ extern "C" {
 #define LOG_TAG "motor_mlog"
 #define LOG_LVL LOG_LVL_INFO
 #include <ulog.h>
-#include "param.h"
 }
 
+// Optional dependency: PARAM module
+#ifdef PROJECT_BF_PARAM_EN
+extern "C" {
+#include "param.h"
+}
+#endif
+
 #include "motor_mlog.h"
+
+#ifdef PROJECT_BF_MOTOR_MLOG_EN
 
 namespace bf_mlog {
 
@@ -100,14 +108,18 @@ void MlogMotor::pushMotorData(const motor_mlog_data_t* data) {
 
 }  // namespace bf_mlog
 
+#endif  // PROJECT_BF_MOTOR_MLOG_EN
+
 // 初始化 mlog_motor
 rt_err_t MotorBf::initMlog() {
+#ifdef PROJECT_BF_MOTOR_MLOG_EN
   // 初始化 mlog_motor（使用单例）
   bf_mlog::MlogMotor* mlog_motor = bf_mlog::MlogMotor::getInstance();
   mlog_motor->init();
   
   // 从参数系统读取 mlog_motor_en 参数并设置使能状态
   uint8_t mlog_motor_en = 0;
+#ifdef PROJECT_BF_PARAM_EN
   if (getParam("mlog_motor_en", &mlog_motor_en, sizeof(mlog_motor_en)) == RT_EOK) {
     mlog_motor->setParamEnabled(mlog_motor_en != 0);
     LOG_I("Mlog motor enabled: %u", mlog_motor_en);
@@ -116,17 +128,31 @@ rt_err_t MotorBf::initMlog() {
     mlog_motor->setParamEnabled(false);
     LOG_W("Mlog motor parameter not found, disabled by default");
   }
+#else
+  // PARAM module not available, use default (disabled)
+  mlog_motor->setParamEnabled(false);
+  LOG_I("PARAM module not available, mlog motor disabled by default");
+#endif
+#else
+  // MLOG module not available, do nothing
+  LOG_I("MLOG module not available, mlog motor disabled");
+#endif
 
   return RT_EOK;
 }
 
 // 推送 Motor 数据到 mlog
-void MotorBf::pushMotorDataToMlog(const bf_mlog::motor_mlog_data_t* data) {
+void MotorBf::pushMotorDataToMlog(const motor_mlog_data_t* data) {
   if (data == nullptr) {
     return;
   }
 
+#ifdef PROJECT_BF_MOTOR_MLOG_EN
   // 使用结构体参数直接推送
   bf_mlog::MlogMotor::getInstance()->pushMotorData(data);
+#else
+  // MLOG module not available, do nothing
+  (void)data;  // Suppress unused parameter warning
+#endif
 }
 
