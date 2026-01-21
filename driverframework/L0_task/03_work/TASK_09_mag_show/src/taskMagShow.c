@@ -65,9 +65,13 @@ static void mag_task_read_data(void) {
     if (size > 0) {
       /* Get timestamp using timestamp_micros() and convert to milliseconds */
       uint32_t timestamp_us = timestamp_micros();
-      mag_report.timestamp_ms = timestamp_us / 1000;
+      raw_report.timestamp_ms = timestamp_us / 1000;
+      
+      /* Publish raw data (LSB values) to mag_raw_data topic */
+      mcnMagRawDataPublish(&raw_report);
       
       /* Apply LSB scaling: raw values are in LSB units, scale to uT */
+      mag_report.timestamp_ms = raw_report.timestamp_ms;
       mag_report.value_x = raw_report.value_x * mag_lsb;
       mag_report.value_y = raw_report.value_y * mag_lsb;
       mag_report.value_z = raw_report.value_z * mag_lsb;
@@ -91,6 +95,7 @@ static void mag_thread_entry(void* parameter) {
   
   task_dev_init();
   mcnMagReportInit();
+  mcnMagRawDataInit();
   
   /* Create event */
   mag_event = rt_event_create("mag_evt", RT_IPC_FLAG_FIFO);

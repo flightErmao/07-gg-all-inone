@@ -10,11 +10,17 @@
 #define MAG_REF_FIELD_UT (MAG_REF_FIELD_NT / 1000.0f)
 #define MAG_REF_FIELD_MGS (MAG_REF_FIELD_UT * 10.0f)
 
+/* LSB to mGs conversion: 3000 LSB = 1G = 1000 mGs */
+#define MAG_LSB_PER_G 3000.0f
+#define MAG_LSB_TO_MGS (1000.0f / MAG_LSB_PER_G)  /* 1 LSB = 0.333333 mGs */
+
 /* MCN topic definition */
 MCN_DEFINE(mag, sizeof(mag_report_t));
+MCN_DEFINE(mag_raw_data, sizeof(mag_report_t));
 
 /* MCN subscriber node */
 static McnNode_t mag_sub_node = RT_NULL;
+static McnNode_t mag_raw_sub_node = RT_NULL;
 
 /* Previous magnetometer data for difference calculation */
 static mag_report_t prev_mag_data = {0};
@@ -108,6 +114,35 @@ static int mag_echo(void* parameter) {
   return 0;
 }
 
+/* Echo function for raw magnetometer data */
+static int mag_raw_echo(void* parameter) {
+  mag_report_t raw_data;
+
+  if (mcn_copy_from_hub((McnHub*)parameter, &raw_data) != RT_EOK) {
+    return -1;
+  }
+
+  /* Convert LSB to mGs */
+  float x_mgs = raw_data.value_x * MAG_LSB_TO_MGS;
+  float y_mgs = raw_data.value_y * MAG_LSB_TO_MGS;
+  float z_mgs = raw_data.value_z * MAG_LSB_TO_MGS;
+  
+  /* Calculate magnitude in mGs */
+  float magnitude_mgs = calculate_magnitude(x_mgs, y_mgs, z_mgs);
+
+  /* Print raw data: LSB values, mGs values and magnitude in one line */
+  LOG_I("LSB: X=%.1f Y=%.1f Z=%.1f | mGs: X=%.1f Y=%.1f Z=%.1f Mag=%.1f",
+        raw_data.value_x,
+        raw_data.value_y,
+        raw_data.value_z,
+        x_mgs,
+        y_mgs,
+        z_mgs,
+        magnitude_mgs);
+
+  return 0;
+}
+
 /* Initialize MCN magnetometer reporting */
 int mcnMagReportInit(void) {
   rt_err_t result = mcn_advertise(MCN_HUB(mag), mag_echo);
@@ -140,6 +175,42 @@ int mcnMagReportAcquire(mag_report_t* mag_data) {
     return -1;
   }
   mcn_copy(MCN_HUB(mag), mag_sub_node, mag_data);
+
+  return 0;
+}
+
+/* Initialize MCN raw magnetometer data reporting */
+int mcnMagRawDataInit(void) {
+  rt_err_t result = mcn_advertise(MCN_HUB(mag_raw_data), mag_raw_echo);
+  if (result != RT_EOK) {
+    LOG_E("Failed to advertise mag_raw_data topic: %d", result);
+    return -1;
+  }
+
+  mag_raw_sub_node = mcn_subscribe(MCN_HUB(mag_raw_data), RT_NULL, RT_NULL);
+  if (mag_raw_sub_node == RT_NULL) {
+    LOG_E("Failed to subscribe to mag_raw_data topic");
+    return -1;
+  }
+
+  return 0;
+}
+
+/* Publish raw magnetometer data to MCN */
+int mcnMagRawDataPublish(const mag_report_t* raw_data) {
+  if (!raw_data) {
+    return -1;
+  }
+
+  return mcn_publish(MCN_HUB(mag_raw_data), raw_data);
+}
+
+/* Acquire raw magnetometer data from MCN */
+int mcnMagRawDataAcquire(mag_report_t* raw_data) {
+  if (!raw_data) {
+    return -1;
+  }
+  mcn_copy(MCN_HUB(mag_raw_data), mag_raw_sub_node, raw_data);
 
   return 0;
 }

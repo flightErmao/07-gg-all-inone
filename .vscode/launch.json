@@ -342,7 +342,7 @@
             "executable": "target/03_tools_work/07_mag_show/rt-thread.elf",
             "serverpath": "${env:JLINK_SERVER}",
             "servertype": "jlink",
-            "device": "STM32F401CC",
+            "device": "STM32F411CE",
             "interface": "swd",
             "armToolchainPath": "${workspaceRoot}/tools/toolchain/arm-gnu-toolchain-12.3.rel1-mingw-w64-i686-arm-none-eabi/bin",
             "serialNumber": "", //If you have more than one J-Link probe, add the serial number here.
