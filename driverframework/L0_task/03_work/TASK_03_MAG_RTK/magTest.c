@@ -3,6 +3,7 @@
 
 #include "I2cInterface.h"
 #include "uartConfig.h"
+#include "qmc6309_selftest.h"
 
 #define THREAD_PRIORITY 7
 #define THREAD_STACK_SIZE 2048
@@ -74,25 +75,30 @@ static uint8_t calc_crc8(const uint8_t* buf, uint8_t len) {
   return crc;
 }
 
-/* 解析触发帧，返回是否触发 */
-static rt_bool_t try_parse_trigger(void) {
+/* 命令类型定义 */
+#define CMD_TYPE_NONE    0
+#define CMD_TYPE_ID_TEST 1  /* ID 测试命令：0x55 0x55 0x01 0x00 */
+#define CMD_TYPE_SELFTEST 2 /* 自测命令：0x55 0x55 0x02 0x00 */
+
+/* 解析触发帧，返回命令类型，0 表示未匹配 */
+static uint8_t try_parse_command(void) {
   /* 寻找帧头 */
   uint8_t b;
   while (1) {
     /* 至少需要 5 字节 */
     uint16_t available = (g_ring_head >= g_ring_tail) ? (g_ring_head - g_ring_tail)
                                                       : (RINGBUF_SIZE - (g_ring_tail - g_ring_head));
-    if (available < 5) return RT_FALSE;
+    if (available < 5) return CMD_TYPE_NONE;
 
     /* 对齐到 0x55 0x55 */
     uint16_t saved_tail = g_ring_tail;
-    if (!ringbuf_pop(&b)) return RT_FALSE;
+    if (!ringbuf_pop(&b)) return CMD_TYPE_NONE;
     if (b != 0x55) {
       continue;
     }
     if (!ringbuf_pop(&b)) {
       g_ring_tail = saved_tail;
-      return RT_FALSE;
+      return CMD_TYPE_NONE;
     }
     if (b != 0x55) {
       /* 第二字节不是 0x55，则从第二字节重新开始 */
@@ -101,17 +107,24 @@ static rt_bool_t try_parse_trigger(void) {
     /* 读取 cmd, data, crc */
     uint8_t frame[5];
     frame[0] = 0x55; frame[1] = 0x55;
-    if (!ringbuf_pop(&frame[2])) { g_ring_tail = saved_tail; return RT_FALSE; }
-    if (!ringbuf_pop(&frame[3])) { g_ring_tail = saved_tail; return RT_FALSE; }
-    if (!ringbuf_pop(&frame[4])) { g_ring_tail = saved_tail; return RT_FALSE; }
+    if (!ringbuf_pop(&frame[2])) { g_ring_tail = saved_tail; return CMD_TYPE_NONE; }
+    if (!ringbuf_pop(&frame[3])) { g_ring_tail = saved_tail; return CMD_TYPE_NONE; }
+    if (!ringbuf_pop(&frame[4])) { g_ring_tail = saved_tail; return CMD_TYPE_NONE; }
 
-    if (frame[2] == 0x01 && frame[3] == 0x00) {
-      uint8_t crc = calc_crc8(frame, 4);
-      if (crc == frame[4]) {
-        return RT_TRUE;
-      }
+    /* 校验 CRC */
+    uint8_t crc = calc_crc8(frame, 4);
+    if (crc != frame[4]) {
+      /* CRC 不匹配，继续搜索 */
+      continue;
     }
-    /* 未匹配，则继续搜索 */
+
+    /* 根据命令码返回命令类型 */
+    if (frame[2] == 0x01 && frame[3] == 0x00) {
+      return CMD_TYPE_ID_TEST;
+    } else if (frame[2] == 0x02 && frame[3] == 0x00) {
+      return CMD_TYPE_SELFTEST;
+    }
+    /* 未匹配的命令，继续搜索 */
   }
 }
 
@@ -153,8 +166,10 @@ static void mag_thread_entry(void* parameter) {
         ringbuf_push((uint8_t)rx_buffer[i]);
       }
 
-      if (try_parse_trigger()) {
-        /* 触发 I2C 读取并比对，使用重测机制防止误判 */
+      uint8_t cmd_type = try_parse_command();
+      
+      if (cmd_type == CMD_TYPE_ID_TEST) {
+        /* ID 测试命令：触发 I2C 读取并比对，使用重测机制防止误判 */
         rt_bool_t test_result = RT_FALSE;
         uint8_t id_val = 0;
 
@@ -179,6 +194,17 @@ static void mag_thread_entry(void* parameter) {
           rt_device_write(g_mag_uart, 0, ok_msg, sizeof(ok_msg) - 1);
         } else {
           const char ng_msg[] = "MAG6308 FAIL\r\n";
+          rt_device_write(g_mag_uart, 0, ng_msg, sizeof(ng_msg) - 1);
+        }
+      } else if (cmd_type == CMD_TYPE_SELFTEST) {
+        /* 自测命令：执行 QMC6309 自测功能 */
+        int selftest_result = qmc6309_self_test(&g_i2c_interface);
+        
+        if (selftest_result == QMC6309_OK) {
+          const char ok_msg[] = "MAG6309 SELFTEST OK\r\n";
+          rt_device_write(g_mag_uart, 0, ok_msg, sizeof(ok_msg) - 1);
+        } else {
+          const char ng_msg[] = "MAG6309 SELFTEST FAIL\r\n";
           rt_device_write(g_mag_uart, 0, ng_msg, sizeof(ng_msg) - 1);
         }
       }
