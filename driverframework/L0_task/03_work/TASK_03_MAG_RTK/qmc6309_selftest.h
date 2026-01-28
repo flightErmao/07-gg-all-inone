@@ -13,20 +13,25 @@ extern "C" {
 #define QMC6309_CTL_REG_ONE        0x0A  /* Control register one */
 #define QMC6309_CTL_REG_TWO        0x0B  /* Control register two */
 #define QMC6309_CTL_REG_THREE      0x0D  /* Control register three */
-#define QMC6309_SELFTEST_TRIGGER   0x0E  /* Self-test trigger register */
-#define QMC6309_DATA_OUT_ST_X      0x13  /* Self-test data output X register */
 
-/* 自测阈值定义 */
-#define QMC6309_SELFTEST_MIN_X     1
-#define QMC6309_SELFTEST_MAX_X     50
-#define QMC6309_SELFTEST_MIN_Y     1
-#define QMC6309_SELFTEST_MAX_Y     50
-#define QMC6309_SELFTEST_MIN_Z     1
-#define QMC6309_SELFTEST_MAX_Z     50
+/* 数据输出寄存器（16位数据，每个轴2字节） */
+#define QMC6309_DATA_OUT_X_LSB     0x01  /* X axis LSB */
+#define QMC6309_DATA_OUT_X_MSB     0x02  /* X axis MSB */
+#define QMC6309_DATA_OUT_Y_LSB     0x03  /* Y axis LSB */
+#define QMC6309_DATA_OUT_Y_MSB     0x04  /* Y axis MSB */
+#define QMC6309_DATA_OUT_Z_LSB     0x05  /* Z axis LSB */
+#define QMC6309_DATA_OUT_Z_MSB     0x06  /* Z axis MSB */
+
+/* 自测阈值定义（差值范围，单位：LSB） */
+#define QMC6309_SELFTEST_MIN_X     120
+#define QMC6309_SELFTEST_MAX_X     1800
+#define QMC6309_SELFTEST_MIN_Y     120
+#define QMC6309_SELFTEST_MAX_Y     1800
+#define QMC6309_SELFTEST_MIN_Z     120
+#define QMC6309_SELFTEST_MAX_Z     1800
 
 /* 状态位定义 */
-#define QMC6309_STATUS_DRDY        0x04  /* Data ready bit (bit 2) */
-#define QMC6309_STATUS_OVFL        0x02  /* Overflow bit */
+#define QMC6309_STATUS_DRDY_MASK   0x03  /* Data ready mask (bit[1:0]) */
 
 /* 宏定义 */
 #define QMC6309_ABS(x)              ((x) < 0 ? -(x) : (x))
