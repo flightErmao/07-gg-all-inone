@@ -1,5 +1,6 @@
 #include <rtdevice.h>
 #include <rtthread.h>
+#include <stdarg.h>
 
 #include "I2cInterface.h"
 #include "uartConfig.h"
@@ -145,6 +146,13 @@ static rt_err_t mag_i2c_read_reg(uint8_t reg, uint8_t* val) {
   return RT_EOK;
 }
 
+/* 自测输出函数：通过 UART 输出自测过程信息 */
+static void mag_selftest_output(const char* str) {
+  if (g_mag_uart != RT_NULL && str != RT_NULL) {
+    rt_device_write(g_mag_uart, 0, str, rt_strlen(str));
+  }
+}
+
 static void mag_thread_entry(void* parameter) {
   rt_err_t result;
   mag_uart_rx_msg_t msg;
@@ -198,15 +206,11 @@ static void mag_thread_entry(void* parameter) {
         }
       } else if (cmd_type == CMD_TYPE_SELFTEST) {
         /* 自测命令：执行 QMC6309 自测功能 */
-        int selftest_result = qmc6309_self_test(&g_i2c_interface);
+        /* 通过串口输出自测过程信息 */
+        int selftest_result = qmc6309_self_test(&g_i2c_interface, mag_selftest_output);
         
-        if (selftest_result == QMC6309_OK) {
-          const char ok_msg[] = "MAG6309 SELFTEST OK\r\n";
-          rt_device_write(g_mag_uart, 0, ok_msg, sizeof(ok_msg) - 1);
-        } else {
-          const char ng_msg[] = "MAG6309 SELFTEST FAIL\r\n";
-          rt_device_write(g_mag_uart, 0, ng_msg, sizeof(ng_msg) - 1);
-        }
+        /* 最终结果已在自测函数中输出，这里不再重复输出 */
+        (void)selftest_result;
       }
     }
   }

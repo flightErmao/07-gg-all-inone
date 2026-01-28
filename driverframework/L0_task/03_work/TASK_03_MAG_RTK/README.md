@@ -102,9 +102,9 @@ for (uint8_t i = 0; i < 4; i++) {
 4. 等待数据就绪（STATUS_REG DRDY 位）
 5. 读取自测数据（X/Y/Z 三轴）
 6. 验证数据范围：
-   - X 轴: 100 < |X| < 500
-   - Y 轴: 100 < |Y| < 500
-   - Z 轴: 100 < |Z| < 500
+   - X 轴: 1 < |X| < 50
+   - Y 轴: 1 < |Y| < 50
+   - Z 轴: 1 < |Z| < 50
 
 **响应格式：**
 - **成功**: `MAG6309 SELFTEST OK\r\n`
@@ -192,12 +192,12 @@ cmd_selftest[4] = calc_crc8(cmd_selftest, 4);
 自测功能的阈值定义在 `qmc6309_selftest.h` 中：
 
 ```c
-#define QMC6309_SELFTEST_MIN_X     100
-#define QMC6309_SELFTEST_MAX_X     500
-#define QMC6309_SELFTEST_MIN_Y     100
-#define QMC6309_SELFTEST_MAX_Y     500
-#define QMC6309_SELFTEST_MIN_Z     100
-#define QMC6309_SELFTEST_MAX_Z     500
+#define QMC6309_SELFTEST_MIN_X     1
+#define QMC6309_SELFTEST_MAX_X     50
+#define QMC6309_SELFTEST_MIN_Y     1
+#define QMC6309_SELFTEST_MAX_Y     50
+#define QMC6309_SELFTEST_MIN_Z     1
+#define QMC6309_SELFTEST_MAX_Z     50
 ```
 
 可根据实际硬件特性调整这些阈值。
