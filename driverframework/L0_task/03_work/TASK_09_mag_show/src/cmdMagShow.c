@@ -15,6 +15,7 @@
 #include "mag.h"
 #include "mcnMagShow.h"
 #include "magCalibration.h"
+#include "magSdEval.h"
 #include "rtconfig.h"
 
 #ifdef RT_USING_FINSH
@@ -460,6 +461,85 @@ static void cmd_mag_result(int argc, char **argv)
 }
 
 MSH_CMD_EXPORT_ALIAS(cmd_mag_result, mag_result, Show magnetometer before/after comparison result);
+
+/* ============================================================================
+ * SD对磁力计影响评估命令
+ * ============================================================================ */
+
+static void cmd_mag_sd_stream_start(int argc, char **argv)
+{
+    RT_UNUSED(argc);
+    RT_UNUSED(argv);
+
+    if (magSdEvalStartStream() == RT_EOK) {
+        LOG_I("磁力计评估数据流已开启: uart=%s baud=%u period=%ums",
+              magSdEvalGetUartName(),
+              magSdEvalGetBaudRate(),
+              magSdEvalGetPeriodMs());
+        LOG_I("数据格式: MAG_RAW,timestamp_ms,x_raw,y_raw,z_raw");
+    } else {
+        LOG_E("磁力计评估数据流开启失败");
+    }
+}
+
+MSH_CMD_EXPORT_ALIAS(cmd_mag_sd_stream_start, mag_sd_stream_start, Start MAG raw stream on eval uart for SD influence test);
+
+static void cmd_mag_sd_stream_stop(int argc, char **argv)
+{
+    RT_UNUSED(argc);
+    RT_UNUSED(argv);
+
+    if (magSdEvalStopStream() == RT_EOK) {
+        LOG_I("磁力计评估数据流已关闭");
+    } else {
+        LOG_E("磁力计评估数据流关闭失败");
+    }
+}
+
+MSH_CMD_EXPORT_ALIAS(cmd_mag_sd_stream_stop, mag_sd_stream_stop, Stop MAG raw stream on eval uart for SD influence test);
+
+static void cmd_mag_sd_test_start(int argc, char **argv)
+{
+    RT_UNUSED(argc);
+    RT_UNUSED(argv);
+
+    if (magSdEvalMarkTestStart() == RT_EOK) {
+        LOG_I("已标记测试开始，保持姿态和外界条件不变，开始让SD进入工作状态");
+    } else {
+        LOG_E("测试开始标记失败");
+    }
+}
+
+MSH_CMD_EXPORT_ALIAS(cmd_mag_sd_test_start, mag_sd_test_start, Mark SD magnetic influence test start);
+
+static void cmd_mag_sd_test_stop(int argc, char **argv)
+{
+    RT_UNUSED(argc);
+    RT_UNUSED(argv);
+
+    if (magSdEvalMarkTestStop() == RT_EOK) {
+        LOG_I("已标记测试结束，可导出并评估最大航向偏移");
+    } else {
+        LOG_E("测试结束标记失败，请确认数据流已开启");
+    }
+}
+
+MSH_CMD_EXPORT_ALIAS(cmd_mag_sd_test_stop, mag_sd_test_stop, Mark SD magnetic influence test stop);
+
+static void cmd_mag_sd_status(int argc, char **argv)
+{
+    RT_UNUSED(argc);
+    RT_UNUSED(argv);
+
+    LOG_I("=== SD磁干扰评估状态 ===");
+    LOG_I("输出串口: %s", magSdEvalGetUartName());
+    LOG_I("输出波特率: %u", magSdEvalGetBaudRate());
+    LOG_I("输出周期: %u ms", magSdEvalGetPeriodMs());
+    LOG_I("数据流状态: %s", magSdEvalIsStreamEnabled() ? "开启" : "关闭");
+    LOG_I("测试状态: %s", magSdEvalIsTestActive() ? "进行中" : "未开始/已结束");
+}
+
+MSH_CMD_EXPORT_ALIAS(cmd_mag_sd_status, mag_sd_status, Show MAG SD influence evaluation status);
 
 #endif /* RT_USING_FINSH */
 

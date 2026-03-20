@@ -170,6 +170,10 @@ public:
    * @return Configuration structure
    */
   const qmc6308_config_t& getConfig() const { return config_; }
+  uint8_t getChipIDValue() const { return chipid_; }
+  uint8_t getCtlRegOneValue() const { return ctl_reg_one_; }
+  uint8_t getCtlRegTwoValue() const { return ctl_reg_two_; }
+  uint8_t getCtlRegThreeValue() const { return ctl_reg_three_; }
 
  private:
   /**
@@ -216,6 +220,9 @@ public:
 
   // Internal state
   uint8_t chipid_;
+  uint8_t ctl_reg_one_;
+  uint8_t ctl_reg_two_;
+  uint8_t ctl_reg_three_;
   qmc6308_config_t config_;
 
   // LSB lookup table

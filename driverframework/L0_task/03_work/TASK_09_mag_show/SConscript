@@ -3,7 +3,11 @@ import os
 
 cwd = GetCurrentDir()
 src = Glob("./src/*.c")
-path = [cwd, os.path.join(cwd, "inc")]
+path = [
+    cwd,
+    os.path.join(cwd, "inc"),
+    os.path.join(cwd, "..", "..", "..", "..", "L2_device", "05_mag", "02_qmc6308", "inc"),
+]
 
 group = DefineGroup(
     "WORK_TASK_MAG_REPORT_EN",

@@ -17,3 +17,5 @@ target/flyer_board/02_fmuV2/board/CubeMX_Config/Src/stm32f4xx_it.c
 **/*/*.sconsign.dblite
 **/*.csv
 **/*.mat
+**/__pycache__/
+**/*.pyc

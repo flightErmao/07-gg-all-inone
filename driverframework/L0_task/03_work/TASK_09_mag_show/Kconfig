@@ -28,5 +28,24 @@ menuconfig WORK_TASK_MAG_REPORT_EN
                         ATKP channel number (1-8) for sending magnetometer data
             endif
 
+        config TASK_MAG_SD_EVAL_UART_NAME
+            string "UART device for SD influence evaluation stream"
+            default "uart1"
+            help
+                UART device used to output raw magnetometer data for the PC evaluation tool.
+
+        config TASK_MAG_SD_EVAL_UART_BAUD
+            int "UART baudrate for SD influence evaluation stream"
+            default 115200
+            help
+                Baudrate used by the evaluation data stream.
+
+        config TASK_MAG_SD_EVAL_STREAM_PERIOD_MS
+            int "Output period for SD influence evaluation stream (ms)"
+            range 1 1000
+            default 20
+            help
+                Output period in milliseconds for raw magnetometer data on the evaluation UART.
+
     endif
 

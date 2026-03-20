@@ -2,6 +2,7 @@
 
 #include "mag.h"
 #include "qmc6308.hpp"
+#include "qmc6308_debug.h"
 #include "I2cInterface.h"
 #include "rtdevice.h"
 
@@ -70,6 +71,27 @@ static rt_size_t mag_read(mag_dev_t mag, mag_report_t* report) {
 }
 
 static struct mag_ops _mag_ops = {.mag_control = mag_control, .mag_read = mag_read};
+
+rt_err_t qmc6308_get_debug_info(qmc6308_debug_info_t* info) {
+  const qmc6308_config_t* config = RT_NULL;
+
+  if (info == RT_NULL || qmc6308_instance == NULL) {
+    return -RT_ERROR;
+  }
+
+  config = &qmc6308_instance->getConfig();
+
+  info->chip_id = qmc6308_instance->getChipIDValue();
+  info->ctl_reg_one = qmc6308_instance->getCtlRegOneValue();
+  info->ctl_reg_two = qmc6308_instance->getCtlRegTwoValue();
+  info->ctl_reg_three = qmc6308_instance->getCtlRegThreeValue();
+  info->range_g = config->range_g;
+  info->odr_hz = config->odr_hz;
+  info->lsb_to_ut = config->lsb;
+  info->lsb_per_g = (config->lsb > 0.0f) ? (rt_uint16_t)(100.0f / config->lsb + 0.5f) : 0;
+
+  return RT_EOK;
+}
 
 rt_err_t drv_mqc6308_init(const char* i2c_device_name, const char* device_name) {
   rt_err_t ret = RT_EOK;

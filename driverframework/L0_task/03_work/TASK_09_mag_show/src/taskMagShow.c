@@ -2,6 +2,7 @@
 #include "string.h"
 #include "rtconfig.h"
 #include "mcnMagShow.h"
+#include "magSdEval.h"
 #include "timestamp.h"
 
 #define DBG_TAG "task_mag"
@@ -69,6 +70,7 @@ static void mag_task_read_data(void) {
       
       /* Publish raw data (LSB values) to mag_raw_data topic */
       mcnMagRawDataPublish(&raw_report);
+      magSdEvalOnRawSample(&raw_report);
       
       /* Apply LSB scaling: raw values are in LSB units, scale to uT */
       mag_report.timestamp_ms = raw_report.timestamp_ms;

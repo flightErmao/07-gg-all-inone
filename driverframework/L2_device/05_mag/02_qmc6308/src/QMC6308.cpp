@@ -25,7 +25,7 @@ const QMC6308_LSB_Table QMC6308::lsb_table_[4] = {
   {2,  QMC6308_LSB_PER_G_2G,  QMC6308_LSB_TO_UT_2G}    /* ±2G:  15000 LSB/G, 0.00667 uT/LSB */
 };
 
-QMC6308::QMC6308(I2cInterface_t* i2c_interface) : i2c_interface_(i2c_interface), chipid_(0) {
+QMC6308::QMC6308(I2cInterface_t* i2c_interface) : i2c_interface_(i2c_interface), chipid_(0), ctl_reg_one_(0), ctl_reg_two_(0), ctl_reg_three_(0) {
   // Initialize config to default values
   config_.range_g = 8;
   config_.odr_hz = 100;
@@ -160,6 +160,7 @@ int QMC6308::config() {
 
   /* 配置控制寄存器三 (0x0D) - 软复位控制 */
   uint8_t CONTROL_REG_THREE_VALUE = QMC6308_SET_SRCTRL_ON;
+  ctl_reg_three_ = CONTROL_REG_THREE_VALUE;
   // Configure control register three - 软复位控制开启
   if (i2c_write_reg8_mult_pack(*i2c_interface_, QMC6308_CTL_REG_THREE, &CONTROL_REG_THREE_VALUE, 1) == 0) {
     LOG_D("[Mag]QMC6308 write control reg three success");
@@ -171,6 +172,7 @@ int QMC6308::config() {
   /* 配置控制寄存器一 (0x0A) - 工作模式、输出数据速率、过采样率、降采样率 */
   uint8_t CONTROL_REG_ONE_VALUE = QMC6308_CONTINUOUS_MODE | QMC6308_SET_OUTPUT_DATA_RATE_100 |
                                   QMC6308_SET_OVERSAMPLE_RATIO_8 | QMC6308_SET_DOWNSAMPLE_RATIO_1;
+  ctl_reg_one_ = CONTROL_REG_ONE_VALUE;
   // Configure control register one - 连续模式 | 100Hz输出速率 | 过采样率8 | 降采样率1
   if (i2c_write_reg8_mult_pack(*i2c_interface_, QMC6308_CTL_REG_ONE, &CONTROL_REG_ONE_VALUE, 1) == 0) {
     LOG_D("[Mag]QMC6308 write control reg one success");
@@ -181,6 +183,7 @@ int QMC6308::config() {
 
   /* 配置控制寄存器二 (0x0B) - 量程和设置/复位周期 */
   uint8_t CONTROL_REG_TWO_VALUE = QMC6308_SET_RESET_RESET_ON | QMC6308_SET_RANGE_8G;
+  ctl_reg_two_ = CONTROL_REG_TWO_VALUE;
   // Configure control register two - 复位开启 | ±8G量程
   if (i2c_write_reg8_mult_pack(*i2c_interface_, QMC6308_CTL_REG_TWO, &CONTROL_REG_TWO_VALUE, 1) == 0) {
     LOG_D("[Mag]QMC6308 write control reg two success");
