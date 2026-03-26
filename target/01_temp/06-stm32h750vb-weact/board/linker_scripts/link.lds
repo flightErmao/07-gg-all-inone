@@ -110,6 +110,7 @@ SECTIONS
         *(.bss)
         *(.bss.*)
         *(COMMON)
+        *(.noncacheable)    /* USB buffers: zero-init like BSS, no DMA so cache N/A */
 
         . = ALIGN(4);
         /* This is used by the startup in order to initialize the .bss secion */

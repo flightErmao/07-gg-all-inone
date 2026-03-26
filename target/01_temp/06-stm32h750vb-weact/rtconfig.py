@@ -39,7 +39,7 @@ else:
 if os.getenv('RTT_EXEC_PATH'):
     EXEC_PATH = os.getenv('RTT_EXEC_PATH')
 
-BUILD = 'debug'
+BUILD = 'release'
 
 # GCC toolchain configuration
 PREFIX = 'arm-none-eabi-'
@@ -65,7 +65,7 @@ if BUILD == 'debug':
     CFLAGS += ' -O0 -gdwarf-2 -g'
     AFLAGS += ' -gdwarf-2'
 else:
-    CFLAGS += ' -O2'
+    CFLAGS += ' -Os'
 
 # 定义 CXXFLAGS
 CXXFLAGS = CFLAGS
