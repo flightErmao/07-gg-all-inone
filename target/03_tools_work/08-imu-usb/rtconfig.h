@@ -506,6 +506,8 @@
 #define BSP_USING_UART1
 #define BSP_UART1_RX_BUFSIZE 256
 #define BSP_UART1_TX_BUFSIZE 256
+#define BSP_USING_SPI
+#define BSP_USING_SPI2
 
 /* Enable 14 USB CONFIG */
 
