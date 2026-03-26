@@ -49,7 +49,7 @@ except:
 # =============================================================================
 # 3. 构建目标设置
 # =============================================================================
-TARGET = 'rt-thread.' + rtconfig.TARGET_EXT
+TARGET = 'build/rt-thread.' + rtconfig.TARGET_EXT
 
 # =============================================================================
 # 4. 编译环境配置
@@ -99,6 +99,8 @@ objs = PrepareBuilding(env, RTT_ROOT, has_libcpu=False)
 
 # 设置库类型
 rtconfig.BSP_LIBRARY_TYPE = None
+
+SConsignFile('build/.sconsign')
 
 # 执行构建
 DoBuilding(TARGET, objs)
