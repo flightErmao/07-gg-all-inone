@@ -1,0 +1,32 @@
+import os
+Import('RTT_ROOT')
+Import('env')
+Import('driverframework_path')
+Import('libraries_path_prefix')
+from building import *
+
+cwd = GetCurrentDir()
+objs = []
+list = os.listdir(cwd)
+
+env.Append(CPPDEFINES = ['STM32H750xx'])
+
+# 设置构建输出目录
+env['BUILD_DIR'] = os.path.join(cwd, 'build')
+
+for d in list:
+    path = os.path.join(cwd, d)
+    if os.path.isfile(os.path.join(path, 'SConscript')):
+        objs = objs + SConscript(os.path.join(d, 'SConscript'))
+
+# 包含 HAL 驱动程序
+objs.extend(SConscript(os.path.join(libraries_path_prefix, 'HAL_Drivers', 'SConscript'),
+                      variant_dir='build/libraries/HAL_Drivers', duplicate=0))
+
+# 为驱动框架添加variant_dir参数，使用相对路径
+objs = objs + SConscript(os.path.join(driverframework_path, 'SConscript'), 
+                         variant_dir='driverframework', duplicate=0)
+
+
+
+Return('objs')
