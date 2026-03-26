@@ -1,6 +1,7 @@
 menuconfig PROJECT_BF_PARAM_EN
     bool "ENABLE: PROJECT_BF_PARAM_EN"
     default n
+    select PROJECT_BF_COMMON_EN
     help
         Enable Betaflight-style parameter system.
 

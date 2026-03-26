@@ -1,6 +1,7 @@
 menuconfig PROJECT_BF_MOTOR_EN
     bool "ENABLE: PROJECT_BF_MOTOR_EN"
     default n
+    select PROJECT_BF_COMMON_EN
     help
         Enable Betaflight-style motor mixer and motor control thread.
         This module handles motor mixing from PID output and RC throttle,

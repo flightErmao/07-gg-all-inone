@@ -1,6 +1,7 @@
 menuconfig PROJECT_BF_PID_EN
     bool "ENABLE: PROJECT_BF_PID_EN"
     default n
+    select PROJECT_BF_COMMON_EN
     depends on PROJECT_BF_GYRO_FILTER_EN
     help
         Enable Betaflight-style PID controller.

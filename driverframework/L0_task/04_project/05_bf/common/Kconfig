@@ -1,0 +1,6 @@
+config PROJECT_BF_COMMON_EN
+    bool
+    default n
+    help
+        Automatically enabled when any BF module is active.
+        Provides shared init_sync mechanism for BF modules.

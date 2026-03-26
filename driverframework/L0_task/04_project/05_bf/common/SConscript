@@ -9,7 +9,7 @@ inc_path = [
     os.path.join(cwd, 'inc'),
 ]
 
-group = DefineGroup('init_sync', src, depend=[], CPPPATH=inc_path)
+group = DefineGroup('init_sync', src, depend=['PROJECT_BF_COMMON_EN'], CPPPATH=inc_path)
 
 Return('group')
 
