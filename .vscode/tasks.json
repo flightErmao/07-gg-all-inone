@@ -1,0 +1,15 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build-1-06-STM32H750VB-25M",
+            "type": "shell",
+            "command": "scons -j8",
+            "options": {
+                "cwd": "${workspaceFolder}/target/01_temp/06-stm32h750vb-weact"
+            },
+            "group": "build",
+            "problemMatcher": []
+        }
+    ]
+}
