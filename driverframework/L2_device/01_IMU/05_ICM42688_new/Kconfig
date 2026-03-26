@@ -1,0 +1,35 @@
+config BSP_USING_ICM42688_NEW
+    bool "Enable ICM42688 IMU Sensor"
+    default n
+    select BSP_USING_SPI
+    help
+        Enable ICM42688 IMU sensor support
+        
+    if BSP_USING_ICM42688_NEW
+        config SENSOR_NAME_ICM42688
+            string "IMU ICM42688 NAME FOR TASK FIND"
+            default "ICM42688"
+            
+        config SENSOR_SPI_NAME_ICM42688
+            string "IMU ICM42688 SPI NAME"
+            default "spi1"
+
+        config SENSOR_SPI_SLAVE_NAME_ICM42688
+            string "IMU ICM42688 SPI SLAVE NAME"
+            default "spi10"
+
+        config SENSOR_ICM42688_SPI_MAX_HZ
+            int "IMU ICM42688 SPI MAX CLOCK (Hz)"
+            default 10000000
+            range 100000 20000000
+
+        config SENSOR_ICM42688_SPI_CS_PIN
+            string "IMU ICM42688 SPI CS PIN"
+            default "PA4"
+
+        config SENSOR_ICM42688_DEBUGPIN_EN
+            bool "ENABLE: DEBUG PIN"
+            default n
+            help
+                ENABLE: DEBUG PIN
+    endif

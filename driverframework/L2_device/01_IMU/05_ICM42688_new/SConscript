@@ -1,0 +1,15 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+path = []
+src = []
+
+src = Glob("./src/*.c")
+src += Glob("./src/*.cpp")
+
+path = [cwd, os.path.join(cwd, 'inc')]
+
+group = DefineGroup("BSP_USING_ICM42688_NEW", src, depend=["BSP_USING_ICM42688_NEW"], CPPPATH=path)
+
+Return("group")

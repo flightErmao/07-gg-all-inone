@@ -31,7 +31,7 @@ extern "C" {
 
 /*-------------------------- ROM/RAM CONFIG BEGIN --------------------------*/
 #define ROM_START              ((uint32_t)0x08000000)
-#define ROM_SIZE               (128)
+#define ROM_SIZE               (2048)
 #define ROM_END                ((uint32_t)(ROM_START + ROM_SIZE * 1024))
 
 #define RAM_START              (0x24000000) /* AXI SRAM */
