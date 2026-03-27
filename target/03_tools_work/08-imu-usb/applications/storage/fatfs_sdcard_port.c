@@ -13,6 +13,7 @@
 
 #define FATFS_SDCARD_DRIVE        "0:"
 #define FATFS_SDCARD_LOG_PATH     "0:/imu_log.csv"
+#define FATFS_SDCARD_TEST_PATH    "0:/imu_test.csv"
 #define FATFS_SDCARD_BLOCK_DEVICE "sd0"
 
 static FATFS g_fatfs;
@@ -222,6 +223,108 @@ int fatfs_sdcard_append_line(const char *line, rt_size_t len, rt_bool_t sync_now
     }
 
     return (int)written;
+}
+
+int fatfs_sdcard_write_fake_imu_test(rt_uint32_t lines, rt_bool_t overwrite, rt_uint32_t *written_lines)
+{
+    FRESULT res;
+    FIL test_file;
+    UINT written = 0;
+    rt_uint32_t i;
+    rt_uint32_t committed = 0;
+    char line[96];
+    BYTE open_mode;
+
+    if (written_lines != RT_NULL)
+    {
+        *written_lines = 0;
+    }
+
+    if (lines == 0U)
+    {
+        return -RT_EINVAL;
+    }
+
+    rt_mutex_take(g_fatfs_lock, RT_WAITING_FOREVER);
+
+    if (g_fs_mounted != RT_TRUE)
+    {
+        rt_mutex_release(g_fatfs_lock);
+        return -RT_ERROR;
+    }
+
+    open_mode = FA_WRITE | FA_OPEN_ALWAYS;
+    if (overwrite == RT_TRUE)
+    {
+        open_mode |= FA_CREATE_ALWAYS;
+    }
+
+    res = f_open(&test_file, FATFS_SDCARD_TEST_PATH, open_mode);
+    if (res != FR_OK)
+    {
+        LOG_E("fake test f_open failed: %d", res);
+        rt_mutex_release(g_fatfs_lock);
+        return -RT_ERROR;
+    }
+
+    if (overwrite != RT_TRUE)
+    {
+        res = f_lseek(&test_file, f_size(&test_file));
+        if (res != FR_OK)
+        {
+            LOG_E("fake test f_lseek failed: %d", res);
+            f_close(&test_file);
+            rt_mutex_release(g_fatfs_lock);
+            return -RT_ERROR;
+        }
+    }
+
+    for (i = 0; i < lines; i++)
+    {
+        int len = rt_snprintf(line,
+                              sizeof(line),
+                              "%lu,%lu,%ld,%ld,%ld\r\n",
+                              (unsigned long)(i + 1U),
+                              (unsigned long)rt_tick_get(),
+                              (long)(((i * 3U) % 200U) - 100),
+                              (long)(((i * 5U) % 200U) - 100),
+                              (long)(((i * 7U) % 200U) - 100));
+
+        if (len <= 0)
+        {
+            res = FR_INT_ERR;
+            break;
+        }
+
+        written = 0;
+        res = f_write(&test_file, line, (UINT)len, &written);
+        if ((res != FR_OK) || (written != (UINT)len))
+        {
+            LOG_E("fake test f_write failed: res=%d written=%u len=%d", res, written, len);
+            break;
+        }
+
+        committed++;
+    }
+
+    if (res == FR_OK)
+    {
+        res = f_sync(&test_file);
+        if ((res == FR_OK) && (g_sd_dev != RT_NULL))
+        {
+            rt_device_control(g_sd_dev, RT_DEVICE_CTRL_BLK_SYNC, RT_NULL);
+        }
+    }
+
+    f_close(&test_file);
+    rt_mutex_release(g_fatfs_lock);
+
+    if (written_lines != RT_NULL)
+    {
+        *written_lines = committed;
+    }
+
+    return res == FR_OK ? RT_EOK : -RT_ERROR;
 }
 
 DWORD get_fattime(void)

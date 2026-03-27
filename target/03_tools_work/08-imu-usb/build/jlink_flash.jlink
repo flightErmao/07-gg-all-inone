@@ -1,0 +1,12 @@
+device STM32H750VB
+if SWD
+speed 4000
+si 1
+connect
+r
+h
+loadbin d:\48-gg-all-inone-copy\07-gg-all-inone\target\03_tools_work\08-imu-usb\build\rtthread.bin, 0x08000000
+verifybin d:\48-gg-all-inone-copy\07-gg-all-inone\target\03_tools_work\08-imu-usb\build\rtthread.bin, 0x08000000
+r
+g
+q

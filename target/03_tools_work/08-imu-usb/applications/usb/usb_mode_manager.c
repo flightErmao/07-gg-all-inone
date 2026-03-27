@@ -493,6 +493,19 @@ static void usb_mode_request(usb_app_mode_t mode)
     rt_event_send(g_usb_mode.event, APP_USB_SWITCH_EVENT);
 }
 
+static const char *usb_mode_name(usb_app_mode_t mode)
+{
+    switch (mode)
+    {
+    case USB_APP_MODE_CDC:
+        return "cdc";
+    case USB_APP_MODE_MSC:
+        return "cdc+msc";
+    default:
+        return "switching";
+    }
+}
+
 static void usb_mode_switch_entry(void *parameter)
 {
     rt_uint32_t event;
@@ -592,38 +605,45 @@ static void usb_mode_logger_entry(void *parameter)
 
 int enter_msc_mode(void)
 {
+    rt_kprintf("ACK cmd=enter_msc received current=%s target=cdc+msc\r\n",
+               usb_mode_name(g_usb_mode.active_mode));
     usb_mode_request(USB_APP_MODE_MSC);
+    rt_thread_mdelay(20);
+    rt_kprintf("RESULT cmd=enter_msc status=accepted action=reboot_to_cdc_msc\r\n");
     return RT_EOK;
 }
 MSH_CMD_EXPORT(enter_msc_mode, switch USB device to CDC+MSC mode);
+MSH_CMD_EXPORT_ALIAS(enter_msc_mode, enter_msc, switch USB device to CDC+MSC mode);
 
 int enter_cdc_mode(void)
 {
+    rt_kprintf("ACK cmd=enter_cdc received current=%s target=cdc\r\n",
+               usb_mode_name(g_usb_mode.active_mode));
     usb_mode_request(APP_USB_BOOT_MODE);
+    rt_thread_mdelay(20);
+    rt_kprintf("RESULT cmd=enter_cdc status=accepted action=reboot_to_cdc\r\n");
     return RT_EOK;
 }
 MSH_CMD_EXPORT(enter_cdc_mode, switch USB device to CDC-only mode);
+MSH_CMD_EXPORT_ALIAS(enter_cdc_mode, enter_cdc, switch USB device to CDC-only mode);
 
 static int usb_mode_status(void)
 {
-    const char *state = "switching";
-
-    if (g_usb_mode.active_mode == USB_APP_MODE_CDC)
-    {
-        state = "cdc";
-    }
-    else if (g_usb_mode.active_mode == USB_APP_MODE_MSC)
-    {
-        state = "cdc+msc";
-    }
-
-    rt_kprintf("mode=%s fs=%d log_fd=%d\r\n",
-               state,
+    rt_kprintf("ACK cmd=status received\r\n");
+    rt_kprintf("STATUS mode=%s fs=%d usb_ready=%d logger=%d log_fd=%d target=%s last_result=%d last_stage=%lu\r\n",
+               usb_mode_name(g_usb_mode.active_mode),
                g_usb_mode.fs_ready,
-               g_usb_mode.log_fd);
+               g_usb_mode.usb_ready,
+               g_usb_mode.logger_running,
+               g_usb_mode.log_fd,
+               usb_mode_name(g_usb_mode.target_mode),
+               g_usb_mode.last_result,
+               (unsigned long)g_usb_mode.last_stage);
+    rt_kprintf("RESULT cmd=status status=ok\r\n");
     return RT_EOK;
 }
 MSH_CMD_EXPORT(usb_mode_status, show USB mode manager state);
+MSH_CMD_EXPORT_ALIAS(usb_mode_status, status, show USB mode manager state);
 
 usb_app_mode_t usb_mode_manager_current_mode(void)
 {
