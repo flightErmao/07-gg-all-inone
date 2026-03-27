@@ -12,7 +12,7 @@
 #include <rtdevice.h>
 #include <board.h>
 
-extern int imu_reader_thread_start(void);
+#include "usb_mode_manager.h"
 
 /* defined the LED0 pin: PE3 */
 #define LED0_PIN    GET_PIN(E, 3)
@@ -21,7 +21,7 @@ int main(void)
 {
     /* set LED0 pin mode to output */
     rt_pin_mode(LED0_PIN, PIN_MODE_OUTPUT);
-    imu_reader_thread_start();
+    usb_mode_manager_start();
 
     while (1)
     {

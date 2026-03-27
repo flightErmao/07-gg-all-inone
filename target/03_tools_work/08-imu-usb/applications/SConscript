@@ -2,9 +2,17 @@ import rtconfig
 from building import *
 import os
 
+Import('RTT_DIR')
+
 cwd  = GetCurrentDir()
 path = [cwd]
+fatfs_dir = os.path.join(RTT_DIR, 'components', 'dfs', 'dfs_v1', 'filesystems', 'elmfat')
+path += [fatfs_dir]
 src  = Glob('*.c') + Glob('*.cpp')
+src += [
+    os.path.join(fatfs_dir, 'ff.c'),
+    os.path.join(fatfs_dir, 'ffunicode.c'),
+]
 
 group = DefineGroup('Applications', src, depend = [''], CPPPATH = path)
 

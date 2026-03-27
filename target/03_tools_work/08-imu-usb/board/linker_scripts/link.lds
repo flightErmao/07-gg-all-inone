@@ -91,6 +91,16 @@ SECTIONS
         _edata = . ;
     } >RAM
 
+    .noinit (NOLOAD) :
+    {
+        . = ALIGN(4);
+        *(.noinit)
+        *(.noinit.*)
+        *(.bss.noinit)
+        *(.bss.noinit.*)
+        . = ALIGN(4);
+    } > RAM
+
     .stack :
     {
         . = ALIGN(4);

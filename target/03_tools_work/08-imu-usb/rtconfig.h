@@ -139,6 +139,8 @@
 
 /* DFS: device virtual file system */
 
+#define RT_USING_DFS
+#define DFS_USING_POSIX
 /* end of DFS: device virtual file system */
 
 /* Device Drivers */
@@ -149,8 +151,11 @@
 #define RT_USING_SERIAL_V2
 #define RT_SERIAL_BUF_STRATEGY_OVERWRITE
 #define RT_SERIAL_USING_DMA
+#define RT_USING_BLK
 #define RT_USING_SPI
 #define RT_USING_QSPI
+#define RT_USING_SDIO
+#define RT_MMCSD_STACK_SIZE 2048
 #define RT_USING_SFUD
 #define RT_SFUD_USING_SFDP
 #define RT_SFUD_USING_FLASH_INFO_TABLE
@@ -219,13 +224,15 @@
 #define USB_VENDOR_ID 0x0FFE
 #define USB_PRODUCT_ID 0x0001
 #define RT_USB_DEVICE_COMPOSITE
+#define RT_USB_DYNAMIC_CLASS_SELECT
 #define RT_USB_DEVICE_CDC
-#define RT_USB_DEVICE_NONE
+#define RT_USB_DEVICE_MSTORAGE
 #define RT_VCOM_TASK_STK_SIZE 512
 #define RT_CDC_RX_BUFSIZE 128
 #define RT_VCOM_SERNO "32021919830108"
 #define RT_VCOM_SER_LEN 14
 #define RT_VCOM_TX_TIMEOUT 1000
+#define RT_USB_MSTORAGE_DISK_NAME "sd0"
 /* end of Using USB legacy version */
 /* end of RT-Thread Components */
 
@@ -533,6 +540,8 @@
 #define BSP_UART1_TX_BUFSIZE 256
 #define BSP_USING_SPI
 #define BSP_USING_SPI2
+#define BSP_USING_SDIO
+#define BSP_USING_SDIO1
 
 /* Enable 14 USB CONFIG */
 
