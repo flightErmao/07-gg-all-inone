@@ -8,7 +8,15 @@ cwd  = GetCurrentDir()
 path = [cwd]
 fatfs_dir = os.path.join(RTT_DIR, 'components', 'dfs', 'dfs_v1', 'filesystems', 'elmfat')
 path += [fatfs_dir]
-src  = Glob('*.c') + Glob('*.cpp')
+src = []
+
+for root, dirs, files in os.walk(cwd):
+    path.append(root)
+
+    for name in files:
+        if name.endswith(('.c', '.cpp')):
+            src.append(os.path.relpath(os.path.join(root, name), cwd))
+
 src += [
     os.path.join(fatfs_dir, 'ff.c'),
     os.path.join(fatfs_dir, 'ffunicode.c'),

@@ -17,7 +17,12 @@ env['BUILD_DIR'] = os.path.join(cwd, 'build')
 for d in list:
     path = os.path.join(cwd, d)
     if os.path.isfile(os.path.join(path, 'SConscript')):
-        objs = objs + SConscript(os.path.join(d, 'SConscript'))
+        if d == 'applications':
+            objs.extend(SConscript(os.path.join(d, 'SConscript'),
+                                   variant_dir='build/applications',
+                                   duplicate=0))
+        else:
+            objs = objs + SConscript(os.path.join(d, 'SConscript'))
 
 # 包含 HAL 驱动程序
 objs.extend(SConscript(os.path.join(libraries_path_prefix, 'HAL_Drivers', 'SConscript'),
