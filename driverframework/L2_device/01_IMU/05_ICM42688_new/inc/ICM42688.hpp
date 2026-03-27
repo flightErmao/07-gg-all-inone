@@ -4,9 +4,7 @@
 
 #include <cmath>
 //#include <device/GPIO.hpp>
-#include <device/SPI.hpp>
-#include <device/Scheduler.hpp>
-
+#include "spi_interface.hpp"
 #include "imu/IMU.hpp"
 
 /*
@@ -883,36 +881,24 @@ typedef enum icm4x6xx_fifo_format {
 class ICM42688 : public IMURaw {
  public:
   ICM42688(int id,int cs);
-
   ~ICM42688();
-  
-
-  bool Init(bool clkin_enable);
-  int DebugInit();
-  int DebugInit(bool clkin_enable);
-
-  // choose different config parameters group
-  int DebugInit(ConfigGroup group_Id);
-  bool Deinit();
-  bool Read(IMURawData &data);
+  int DebugInit(bool clkin_enable = true);
   bool ReadRaw(IMURawData &data);
-
-  bool ReadWhoAmI(uint8_t *who_am_i);
-  int ReadAccel(int16_t accel_raw_data[3]);
-  int ReadGyro(int16_t gyro_raw_data[3]);
-  int ReadTemp(int16_t &temp_raw_data);
-  bool WriteByte(uint8_t reg, uint8_t val);
-  bool ReadBlock(uint8_t first_reg, uint8_t buf[], int len);
-  void ExecutePeriodically();
 
  public:
   static constexpr uint8_t WHO_AM_I_ID = 0x47;
 
  private:
-  bool Init();
+  bool initSpi();
+  bool probe();
+  bool readRegister(uint8_t reg, uint8_t *value);
+  bool readRegisters(uint8_t reg, uint8_t *buf, uint16_t len);
+  bool writeRegister(uint8_t reg, uint8_t value);
+  bool WriteByte(uint8_t reg, uint8_t val);
+  bool ReadBlock(uint8_t first_reg, uint8_t buf[], int len);
 
- protected:
-  Device *port_ = nullptr;
+  SpiInterface spi_;
+  bool spi_inited_ = false;
   bool WriteMask(uint32_t reg_addr, uint8_t reg_value, uint8_t mask);
 
   bool icm4x6xx_disable_aux_pins();

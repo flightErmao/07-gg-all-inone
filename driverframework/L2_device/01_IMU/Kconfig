@@ -24,4 +24,8 @@ menu "01 IMU CONFIG"
         source "$(PROJECT_ROOT)/driverframework/L2_device/01_IMU/04_BMI270/Kconfig"
     endmenu
 
+    menu "05 ICM42688_new CONFIG"
+        source "$(PROJECT_ROOT)/driverframework/L2_device/01_IMU/05_ICM42688_new/Kconfig"
+    endmenu
+
 endmenu

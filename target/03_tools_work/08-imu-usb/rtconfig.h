@@ -63,7 +63,7 @@
 
 /* end of rt_strnlen options */
 /* end of klibc options */
-#define RT_NAME_MAX 8
+#define RT_NAME_MAX 16
 #define RT_CPUS_NR 1
 #define RT_ALIGN_SIZE 8
 #define RT_THREAD_PRIORITY_32
@@ -194,6 +194,20 @@
 
 /* Utilities */
 
+#define RT_USING_ULOG
+#define ULOG_OUTPUT_LVL_D
+#define ULOG_OUTPUT_LVL 7
+#define ULOG_ASSERT_ENABLE
+#define ULOG_LINE_BUF_SIZE 128
+
+/* log format */
+
+#define ULOG_USING_COLOR
+#define ULOG_OUTPUT_TIME
+#define ULOG_OUTPUT_LEVEL
+#define ULOG_OUTPUT_TAG
+/* end of log format */
+#define ULOG_BACKEND_USING_CONSOLE
 /* end of Utilities */
 
 /* Using USB legacy version */
@@ -459,6 +473,16 @@
 /* 04 BMI270 CONFIG */
 
 /* end of 04 BMI270 CONFIG */
+
+/* 05 ICM42688_new CONFIG */
+
+#define BSP_USING_ICM42688_NEW
+#define SENSOR_NAME_ICM42688 "ICM42688"
+#define SENSOR_SPI_NAME_ICM42688 "spi2"
+#define SENSOR_SPI_SLAVE_NAME_ICM42688 "spi20"
+#define SENSOR_ICM42688_SPI_MAX_HZ 10000000
+#define SENSOR_ICM42688_SPI_CS_PIN "PB12"
+/* end of 05 ICM42688_new CONFIG */
 /* end of 01 IMU CONFIG */
 
 /* 02 RC CONFIG */

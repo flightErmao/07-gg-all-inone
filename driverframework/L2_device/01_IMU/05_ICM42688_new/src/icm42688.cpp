@@ -1,20 +1,43 @@
 #include "ICM42688.hpp"
-#include <device/DeviceFactory.hpp>
-#include <device/Timer.hpp>
-#include <utils/Utils.hpp>
 
-// #include <ctype.h>
-// #include <fcntl.h>
-// #include <stdio.h>
-// #include <stdlib.h>
-// #include <string.h>
-// #include "DALTLMM.h"
+extern "C" {
+#include "rtconfig.h"
+#include "rtthread.h"
+
+volatile uint32_t g_icm42688_probe_last_whoami = 0;
+volatile uint32_t g_icm42688_probe_last_attempt = 0;
+volatile uint32_t g_icm42688_probe_ok_count = 0;
+volatile uint32_t g_icm42688_probe_fail_count = 0;
+}
+
+#undef LOG_TAG
+#define LOG_TAG "icm42688"
+#ifndef LOG_LVL
+#define LOG_LVL LOG_LVL_INFO
+#endif
+#include <ulog.h>
 
 namespace drvf {
 #define TPM 0
 
+namespace {
+
+static uint64_t GetTimeUs() { return static_cast<uint64_t>(rt_tick_get_millisecond()) * 1000ULL; }
+
+static void DelayMs(rt_uint32_t ms) { rt_thread_mdelay(ms); }
+
+static void DelayUs(rt_uint32_t us) { rt_thread_mdelay((us + 999U) / 1000U); }
+
+static constexpr int kProbeRetryCount = 5;
+static constexpr rt_uint32_t kProbeSpiHz = 1000000;
+static constexpr rt_uint16_t kProbeMode3 = (RT_SPI_MODE_3 | RT_SPI_MSB) & RT_SPI_MODE_MASK;
+static constexpr rt_uint16_t kProbeMode0 = (RT_SPI_MODE_0 | RT_SPI_MSB) & RT_SPI_MODE_MASK;
+
+}  // namespace
+
 
 ICM42688::ICM42688(int id,int cs) : id_(id),cs_(cs){
+  spi_inited_ = false;
   use_hi_res_ = false;
   fifo_info_record_mode_ = false;
   fifo_mode_ = STREAM;
@@ -33,524 +56,347 @@ ICM42688::ICM42688(int id,int cs) : id_(id),cs_(cs){
 
 ICM42688::~ICM42688() {}
 
-bool ICM42688::Init() {
-
-  return true; 
-}
-
-bool ICM42688::Init(bool clkin_enable) {
-
-  // io_port_open(160,1);
-  // io_port_write(160,1);
-  // 3 is mainboard imu of spi instance numble
-  port_ = DeviceFactory::ShareInstance()->GetSPIDeviceById(id_,cs_,BAUDRATE_SPI);
-  if (port_ == nullptr) {
-    logger.Info("[ICM42688.cpp][ICM42688::Init][spi init fail!]");
-  }
-  has_inited_ = false;
-  logger.Info("[%d]ICM42688::Start init(), clkin = %d\n", id_, clkin_enable);
-  gyro_fsr_ = GYRO_RANGE_2000DPS;
-  accel_fsr_ = ACC_RANGE_16G;
-  fifo_mode_ = STREAM;
-  accel_bandwith_ = BW_LL_MAX_200_8X_ODR;
-  accel_power_mode_ = ICM4X6XX_A_LNM;
-  use_hi_res_ = false;
-  /////////// Check Who Am I
-  uint8_t id = 0;
-  if (port_->ReadRegister(RegAddrNew::WHO_AM_I, &id)) {
-    logger.Info("[%d]ICM42688::CheckWhoAmI(): error! cannot read WHO_AM_I id!", id_);
-    return false;
-  }
-  if (id != WHO_AM_I_ID) {
-    logger.Info("[%d]ICM42688::CheckWhoAmI(): error! wanted ID: 0x%02X, got: 0x%02X", id_, WHO_AM_I_ID, id);
-    return false;
-  }
-
-  clkin_enable_ = clkin_enable;
-
-  if (!icm4x6xx_config_ui_intf(SPI_INTF)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_config_ui_intf() faild", id_);
-    return false;
-  }
-
-  if (!icm4x6xx_enable_rtc_mode(clkin_enable)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_enable_rtc_mode() faild", id_);
-    return false;
-  }
-
-#if 0
-    /* Enable Timestamp field contains the measurement of time
-     * since the last occurrence of ODR.*/
-   if (!icm4x6xx_enable_delta_tmst(true))
-   {
-     logger.Info("[%d]ICM42688::icm4x6xx_enable_delta_tmst() faild", id_);
-     return false;
-   }
-#else
-
-  if (clkin_enable) {
-    /* Enable timestamp register */
-    if (!icm4x6xx_enable_tmst(true)) {
-      logger.Info("[%d]ICM42688::icm4x6xx_enable_tmst() faild", id_);
-      return false;
-    }
-  }
-#endif
-
-  /*if (!icm4x6xx_en_int_push_pull(false)) {
-    return false;
-  }
-
-  if (!icm4x6xx_en_int_latched_mode(false)) {
-    return false;
-  }
-
-  if (!icm4x6xx_config_int_polarity(ICM4X6XX_INT_ACTIVE_HIGH)) {
-    return false;
-  }*/
-
-  /* Choose big endian mode for fifo count and sensor data
-   * default mode for FPGA and chip may be different,
-   * so we choose one mode here for both */
-  if (!icm4x6xx_en_big_endian_mode(true)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_en_big_endian_mode() faild", id_);
-    return false;
-  }
-
-  /* enable fifo hold last data */
-  /*if (!icm4x6xx_en_fifo_hold_last_data(false)) {
-    return false;
-  }*/
-
-  /* do not tag fsync flag for temperature resolution */
-  if (!icm4x6xx_config_fsync(0)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_config_fsync() faild", id_);
-    return false;
-  }
-
-  /* Choose Accel FSR */
-  if (!icm4x6xx_set_accel_fsr(accel_fsr_)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_set_accel_fsr() faild", id_);
-    return false;
-  }
-
-  /* Choose Gyro FSR */
-  if (!icm4x6xx_set_gyro_fsr(gyro_fsr_)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_set_gyro_fsr() faild", id_);
-    return false;
-  }
-
-  /* Choose Accel filter order */
-  if (!icm4x6xx_set_accel_filter_order(THIRD_ORDER))  // USE 3rd order filter
-  {
-    logger.Info("[%d]ICM42688::icm4x6xx_set_accel_filter_order() faild", id_);
-    return false;
-  }
-
-  /* Choose Gyro filter order */
-  if (!icm4x6xx_set_gyro_filter_order(THIRD_ORDER))  // USE 3rd order filter
-  {
-    logger.Info("[%d]ICM42688::icm4x6xx_set_gyro_filter_order() faild", id_);
-    return false;
-  }
-
-  /* Enable fifo */
-  if (!icm4x6xx_set_fifo_mode(fifo_mode_)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_set_fifo_mode() faild", id_);
-    return false;
-  }
-#if 0
-  /* Enable fifo overflow interrupt */
-  if (!icm4x6xx_en_fifo_full_int(false)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_en_fifo_full_int() faild", id_);
-    return false;
-  }
-
-  /* Enable high shock interrupt */
-  if (!icm4x6xx_en_high_shock_int(false)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_en_high_shock_int() faild", id_);
-    return false;
-  }
-
-  /* Config highg parameter*/
-  if (!icm4x6xx_config_highg_parameter()) {
-    logger.Info("[%d]ICM42688::icm4x6xx_config_highg_parameter() faild", id_);
-    return false;
-  }
-
-  // TODO: Enable wm on IBI here, since we didn't need irq reg ready now
-
-  /* Choose fifo count record or byte mode */
-  // TODO: do test with both byte and record mode
-  /* H_W_B 9450 pls don't use record mode for havana */
-  if (!icm4x6xx_enable_record_mode(fifo_info_record_mode_))
-  {
-    logger.Info("[%d]ICM42688::icm4x6xx_enable_record_mode() faild", id_);
-    return false;
-  }
-  /* The field int_asy_rst_disable must be 0 for Yokohama */
-  if (!icm4x6xx_enable_int_async_reset(true)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_enable_int_async_reset() faild", id_);
-    return false;
-  }
-
-  /* Set periodic reset mode for Yokohama */
-  if (!icm4x6xx_enable_gyro_periodic_reset()) {
-    logger.Info("[%d]ICM42688::icm4x6xx_enable_gyro_periodic_reset() faild", id_);
-    return false;
-  }
-
-#endif
-  /*
-  * [HAVANA/YOKOHAMA] Disable aux pads(pin10&pin11) which are typically
-  connected to OIS controller if applicable.
-  * 1. If the pin10 and pin11 are floating in customer design, need define below
-  macro to disable aux pads to avoid current leak.
-  * 2. If the pin10 and pin11 are used/connected in customer design(e.g. OIS),
-  need comment below macro to enable aux pads.
-  * [YOKO_C1] the aux pads were trimmed to enabled/disable aux, but need to
-  comment below macro to config pads to avoid current leak.
-  * 3. [ICM42631][triple interface mode] pin 2/3/10/7/11 set to pull-up and
-  pin9(AUX2) pull-down
-  * 4. [ICM42631][single/dual interface mode] pin 7/9/9(AUX2) must be set to 0.
-
-  */
-
-  if (!icm4x6xx_disable_aux_pins()) {
-    logger.Info("[%d]ICM42688::icm4x6xx_disable_aux_pins() faild", id_);
-    return false;
-  }
-
-  if (clkin_enable) {
-    if (!icm4x6xx_set_accel_odr(ICM4X6XX_ODR_8000)) {
-      logger.Info("[%d]ICM42688::icm4x6xx_set_accel_odr() faild", id_);
-      return false;
-    }
-
-    if (!icm4x6xx_set_gyro_odr(ICM4X6XX_ODR_8000)) {
-      logger.Info("[%d]ICM42688::icm4x6xx_set_gyro_odr() faild", id_);
-      return false;
-    }
-  } else {
-    if (!icm4x6xx_set_accel_odr(ICM4X6XX_ODR_1000)) {
-      logger.Info("[%d]ICM42688::icm4x6xx_set_accel_odr() faild", id_);
-      return false;
-    }
-
-    if (!icm4x6xx_set_gyro_odr(ICM4X6XX_ODR_1000)) {
-      logger.Info("[%d]ICM42688::icm4x6xx_set_gyro_odr() faild", id_);
-      return false;
-    }
-  }
-
-  if (!icm4x6xx_set_accel_bandwidth(BW_ODR_DIV_5)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_set_accel_bandwidth() faild", id_);
-    return false;
-  }
-
-  if (!icm4x6xx_set_gyro_bandwidth(BW_ODR_DIV_5)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_set_gyro_bandwidth() faild", id_);
-    return false;
-  }
-
-  if (!icm4x6xx_en_gyro(true)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_en_gyro() faild", id_);
-    return false;
-  }
-
-  if (!icm4x6xx_set_accel_mode(accel_power_mode_)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_set_accel_mode() faild", id_);
-    return false;
-  }
-
-  if (!icm4x6xx_en_fifo(en_a_fifo_, en_g_fifo_)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_en_fifo() faild", id_);
-    return false;
-  }
-
-  Timer::SleepUs(20000);
-
-  // interrput_pin_.SetIRQDelegate(this);
-
-  logger.Info("ICM42688::Start ok!\n");
-  return true;
-}
-
-int ICM42688::DebugInit() { return DebugInit(true); }
-
-int ICM42688::DebugInit(bool clkin_enable) {
-
-  port_ = DeviceFactory::ShareInstance()->GetSPIDeviceById(id_,cs_,BAUDRATE_SPI);
-  if (port_ == nullptr) {
-    logger.Info("[ICM42688.cpp][ICM42688::Init][spi init fail!]");
-  }
-  has_inited_ = false;
-  logger.Info("ICM42688::Start DebugInit(), clkin = %d\n", clkin_enable);
-  gyro_fsr_ = GYRO_RANGE_2000DPS;
-  accel_fsr_ = ACC_RANGE_16G;
-  fifo_mode_ = STREAM;
-  accel_bandwith_ = BW_LL_MAX_200_8X_ODR;
-  accel_power_mode_ = ICM4X6XX_A_LNM;
-  use_hi_res_ = false;
-  sync_time_count_ = 0; // reset count to make a tiemstamp sync 
-  /////////// Check Who Am I
-  uint8_t id = 0;
-  if (port_->ReadRegister(RegAddrNew::WHO_AM_I, &id)) {
-    logger.Info("[%d]ICM42688::CheckWhoAmI(): error! cannot read WHO_AM_I id!", id_);
-    return -1;
-  }
-  if (id != WHO_AM_I_ID) {
-    logger.Info("[%d]ICM42688::CheckWhoAmI(): error! wanted ID: 0x%02X, got: 0x%02X\n", id_, WHO_AM_I_ID, id);
-    return -2;
-  }
-
-  clkin_enable_ = clkin_enable;
-
-  if (!icm4x6xx_config_ui_intf(SPI_INTF)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_config_ui_intf() faild", id_);
-    return -3;
-  }
-
-  if (!icm4x6xx_enable_rtc_mode(clkin_enable)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_enable_rtc_mode(): faild", id_);
-    return -4;
-  }
-
-#if 0
-    /* Enable Timestamp field contains the measurement of time
-     * since the last occurrence of ODR.*/
-   if (!icm4x6xx_enable_delta_tmst(true))
-   {
-    logger.Info("[%d]ICM42688::icm4x6xx_enable_delta_tmst(): faild", id_);
-     return false;
-   }
-#else
-
-  if (clkin_enable) {
-    /* Enable timestamp register */
-    if (!icm4x6xx_enable_tmst(true)) {
-      logger.Info("[%d]ICM42688::icm4x6xx_enable_tmst(): faild", id_);
-      return -5;
-    }
-  }
-#endif
-
-  /*if (!icm4x6xx_en_int_push_pull(false)) {
-    return false;
-  }
-
-  if (!icm4x6xx_en_int_latched_mode(false)) {
-    return false;
-  }
-
-  if (!icm4x6xx_config_int_polarity(ICM4X6XX_INT_ACTIVE_HIGH)) {
-    return false;
-  }*/
-
-  /* Choose big endian mode for fifo count and sensor data
-   * default mode for FPGA and chip may be different,
-   * so we choose one mode here for both */
-  if (!icm4x6xx_en_big_endian_mode(true)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_en_big_endian_mode(): faild", id_);
-    return -6;
-  }
-
-  /* enable fifo hold last data */
-  /*if (!icm4x6xx_en_fifo_hold_last_data(false)) {
-    return false;
-  }*/
-
-  /* do not tag fsync flag for temperature resolution */
-  if (!icm4x6xx_config_fsync(0)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_config_fsync():faild", id_);
-    return -7;
-  }
-
-  /* Choose Accel FSR */
-  if (!icm4x6xx_set_accel_fsr(accel_fsr_)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_set_accel_fsr() faild", id_);
-    return -8;
-  }
-
-  /* Choose Gyro FSR */
-  if (!icm4x6xx_set_gyro_fsr(gyro_fsr_)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_set_gyro_fsr() faild", id_);
-    return -9;
-  }
-
-  /* Choose Accel filter order */
-  if (!icm4x6xx_set_accel_filter_order(THIRD_ORDER))  // USE 3rd order filter
-  {
-    logger.Info("[%d]ICM42688::icm4x6xx_set_accel_filter_order() faild", id_);
-    return -10;
-  }
-
-  /* Choose Gyro filter order */
-  if (!icm4x6xx_set_gyro_filter_order(THIRD_ORDER))  // USE 3rd order filter
-  {
-    logger.Info("[%d]ICM42688::icm4x6xx_set_gyro_filter_order() faild", id_);
-    return -11;
-  }
-
-  /* Enable fifo */
-  if (!icm4x6xx_set_fifo_mode(fifo_mode_)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_set_fifo_mode() faild", id_);
-    return -12;
-  }
-#if 0
-  /* Enable fifo overflow interrupt */
-  if (!icm4x6xx_en_fifo_full_int(false)) {
-    return false;
-  }
-
-  /* Enable high shock interrupt */
-  if (!icm4x6xx_en_high_shock_int(false)) {
-    return false;
-  }
-
-  /* Config highg parameter*/
-  if (!icm4x6xx_config_highg_parameter()) {
-    return false;
-  }
-
-  // TODO: Enable wm on IBI here, since we didn't need irq reg ready now
-
-  /* Choose fifo count record or byte mode */
-  // TODO: do test with both byte and record mode
-  /* H_W_B 9450 pls don't use record mode for havana */
-  if (!icm4x6xx_enable_record_mode(fifo_info_record_mode_))
-  {
-    return false;
-  }
-  /* The field int_asy_rst_disable must be 0 for Yokohama */
-  if (!icm4x6xx_enable_int_async_reset(true)) {
-    return false;
-  }
-
-  /* Set periodic reset mode for Yokohama */
-  if (!icm4x6xx_enable_gyro_periodic_reset()) {
-    return false;
-  }
-
-#endif
-  /*
-  * [HAVANA/YOKOHAMA] Disable aux pads(pin10&pin11) which are typically
-  connected to OIS controller if applicable.
-  * 1. If the pin10 and pin11 are floating in customer design, need define below
-  macro to disable aux pads to avoid current leak.
-  * 2. If the pin10 and pin11 are used/connected in customer design(e.g. OIS),
-  need comment below macro to enable aux pads.
-  * [YOKO_C1] the aux pads were trimmed to enabled/disable aux, but need to
-  comment below macro to config pads to avoid current leak.
-  * 3. [ICM42631][triple interface mode] pin 2/3/10/7/11 set to pull-up and
-  pin9(AUX2) pull-down
-  * 4. [ICM42631][single/dual interface mode] pin 7/9/9(AUX2) must be set to 0.
-
-  */
-
-  if (clkin_enable) {
-    icm4x6xx_enable_nflt_gyro(true);
-  }
-
-  if (!icm4x6xx_disable_aux_pins()) {
-    logger.Info("[%d]ICM42688::icm4x6xx_disable_aux_pins() faild", id_);
-    return -13;
-  }
-
-  if (clkin_enable) {
-    if (!icm4x6xx_set_accel_odr(ICM4X6XX_ODR_8000)) {
-      logger.Info("[%d]ICM42688::icm4x6xx_set_accel_odr() faild", id_);
-      return -14;
-    }
-
-    if (!icm4x6xx_set_gyro_odr(ICM4X6XX_ODR_8000)) {
-      logger.Info("[%d]ICM42688::icm4x6xx_set_gyro_odr() faild", id_);
-      return -15;
-    }
-  } else {
-    if (!icm4x6xx_set_accel_odr(ICM4X6XX_ODR_1000)) {
-      logger.Info("[%d]ICM42688::icm4x6xx_set_accel_odr() faild", id_);
-      return -14;
-    }
-
-    if (!icm4x6xx_set_gyro_odr(ICM4X6XX_ODR_1000)) {
-      logger.Info("[%d]ICM42688::icm4x6xx_set_gyro_odr() faild", id_);
-      return -15;
-    }
-  }
-
-  if (!icm4x6xx_set_accel_bandwidth(BW_ODR_DIV_5)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_set_accel_bandwidth() faild", id_);
-    return -16;
-  }
-
-  if (clkin_enable) {
-    if (!icm4x6xx_set_gyro_bandwidth(BW_ODR_DIV_2)) {
-      logger.Info("[%d]ICM42688::icm4x6xx_set_gyro_bandwidth() faild", id_);
-      return -17;
-    }
-  } else {
-    if (!icm4x6xx_set_gyro_bandwidth(BW_ODR_DIV_2)) {
-      logger.Info("[%d]ICM42688::icm4x6xx_set_gyro_bandwidth() faild", id_);
-      return -17;
-    }
-  }
-
-  if (!icm4x6xx_en_fifo(en_a_fifo_, en_g_fifo_)) {
-    logger.Info("[%d]ICM42688::icm4x6xx_en_fifo() faild", id_);
-    return -20;
-  }
-
-  if(!icm4x6xx_accel_gyro_powerup(ACCEL_GYRO_POWERUP)){
-    logger.Info("[%d]ICM42688::icm4x6xx_accel_gyro_powerup() faild", id_);
-    return -18;
-  }
-
-  if (!icm4x6xx_disable_afsr()) {
-    logger.Info("[%d]ICM42688::icm4x6xx_disable_afsr() faild", id_);
-    return -19;
-  }
-
-  // interrput_pin_.SetIRQDelegate(this);
-
-  logger.Info("ICM42688::Start ok!\n");
-  return 0;
-}
-
-bool ICM42688::Deinit() {
-  if (port_ == nullptr) {
+bool ICM42688::initSpi() {
+  if (spi_inited_) {
     return true;
   }
 
-  has_inited_ = false;
-
-  sync_time_count_ = 0; // reset count to make a tiemstamp sync 
-
-  /////////// Check Who Am I
-  uint8_t id = 0;
-  if (port_->ReadRegister(RegAddrNew::WHO_AM_I, &id)) {
-    logger.Info("ICM42688::CheckWhoAmI(): error! cannot read WHO_AM_I id!\n");
+  if (!spi_.init(SENSOR_SPI_NAME_ICM42688, SENSOR_SPI_SLAVE_NAME_ICM42688,
+                 SENSOR_ICM42688_SPI_CS_PIN)) {
     return false;
   }
 
-  if (id != WHO_AM_I_ID) {
-    logger.Info(
-        "ICM42688::CheckWhoAmI(): error! wanted ID: 0x%02X, got: 0x%02X\n",
-        WHO_AM_I_ID, id);
+  if (!spi_.configure(kProbeMode0, kProbeSpiHz)) {
     return false;
   }
 
-  Timer::SleepUs(10000);
-  if (port_->WriteRegister(
-          RegAddrNew::DEVICE_CONFIG,
-          0x01)) {  // after the software reset, it is in sleep mode
-    logger.Info("ICM42688::WriteRegister Fail!");
+  spi_inited_ = true;
+  return true;
+}
+
+bool ICM42688::readRegister(uint8_t reg, uint8_t *value) {
+  if (!spi_inited_) {
     return false;
   }
-  logger.Info("ICM42688::WriteRegister Success!");
-  Timer::SleepUs(10000);
+
+  return spi_.readMultiReg8(reg, value, 1) == RT_EOK;
+}
+
+bool ICM42688::readRegisters(uint8_t reg, uint8_t *buf, uint16_t len) {
+  if (!spi_inited_ || buf == nullptr || len == 0) {
+    return false;
+  }
+
+  uint16_t offset = 0;
+  while (offset < len) {
+    const uint16_t chunk = (len - offset) > 255 ? 255 : (len - offset);
+    if (spi_.readMultiReg8(reg, buf + offset, static_cast<uint8_t>(chunk)) != RT_EOK) {
+      return false;
+    }
+    offset += chunk;
+  }
 
   return true;
+}
+
+bool ICM42688::writeRegister(uint8_t reg, uint8_t value) {
+  if (!spi_inited_) {
+    return false;
+  }
+
+  return spi_.write_reg(reg, value) == RT_EOK;
+}
+
+bool ICM42688::probe() {
+  uint8_t who_am_i = 0;
+  const rt_uint16_t probe_modes[] = {kProbeMode3, kProbeMode0};
+
+  for (rt_size_t mode_index = 0; mode_index < sizeof(probe_modes) / sizeof(probe_modes[0]); ++mode_index) {
+    if (!spi_.configure(probe_modes[mode_index], kProbeSpiHz)) {
+      continue;
+    }
+
+    DelayMs(1);
+
+    for (int attempt = 1; attempt <= kProbeRetryCount; ++attempt) {
+      uint8_t tx_buf[2] = {static_cast<uint8_t>(RegAddrNew::WHO_AM_I | 0x80u), 0xFFu};
+      uint8_t rx_buf[2] = {0};
+
+      g_icm42688_probe_last_attempt = static_cast<uint32_t>(attempt);
+      who_am_i = 0;
+
+      if (spi_.transfer(tx_buf, rx_buf, sizeof(tx_buf)) != RT_EOK) {
+        g_icm42688_probe_last_whoami = 0xFFFFFFFFu;
+        DelayMs(2);
+        continue;
+      }
+
+      who_am_i = rx_buf[1];
+      g_icm42688_probe_last_whoami = who_am_i;
+
+      if (who_am_i == WHO_AM_I_ID) {
+        ++g_icm42688_probe_ok_count;
+        return true;
+      }
+
+      DelayMs(2);
+    }
+  }
+
+  ++g_icm42688_probe_fail_count;
+  return false;
+}
+
+int ICM42688::DebugInit(bool clkin_enable) {
+  if (!initSpi()) {
+    return -1;
+  }
+
+  auto DelayBeforeStep = []() { DelayMs(1); };
+
+  has_inited_ = false;
+  gyro_fsr_ = GYRO_RANGE_2000DPS;
+  accel_fsr_ = ACC_RANGE_16G;
+  fifo_mode_ = STREAM;
+  accel_bandwith_ = BW_LL_MAX_200_8X_ODR;
+  accel_power_mode_ = ICM4X6XX_A_LNM;
+  use_hi_res_ = false;
+  sync_time_count_ = 0;  // reset count to make a timestamp sync
+  clkin_enable_ = clkin_enable;
+
+  // [1] Read WHO_AM_I.
+  //     SPI raw probe frame:
+  //       TX: [0xF5, 0xFF]  -> 0xF5 = REG 0x75 | READ bit 0x80
+  //       RX: [xx,   0x47]  -> RX[1] must be WHO_AM_I_ID = 0x47
+  //     Logic analyzer should see one 2-byte read transaction on register 0x75.
+  DelayBeforeStep();
+  if (!probe()) {
+    return -1;
+  }
+
+  // [2] Configure UI interface to SPI.
+  //     Register: REG_INTF_CONFIG0 (0x4C)
+  //     Operation: read-modify-write, mask UI_INTF_MASK (0x03)
+  //     Field target: bits[1:0] = 0b11 (SPI_INTF = 0x03)
+  //     Expected final write on 0x4C: low 2 bits become 0x03.
+  DelayBeforeStep();
+  if (!icm4x6xx_config_ui_intf(SPI_INTF)) {
+      return -2;
+  }
+
+  // [3] Enable RTC/CLKIN mode. DebugInit(false) skips this entire step.
+  //     If clkin_enable == true, expected packets are:
+  //       a) Write REG_BANK_SEL (0x76) = 0x01  -> switch to bank 1
+  //       b) RMW REG_INTF_CONFIG5 (0x7B), mask BIT_PIN9_FUNC_MASK (0x06),
+  //          set value BIT_PIN9_FUNC_CLKIN (0x04)
+  //          => field bits[2:1] should become 0b10
+  //       c) Write REG_BANK_SEL (0x76) = 0x00  -> back to bank 0
+  //       d) RMW REG_INTF_CONFIG1 (0x4D), mask BIT_RTC_MODE_EN (0x04),
+  //          set value 0x04
+  if (clkin_enable) {
+    DelayBeforeStep();
+  }
+  if (!icm4x6xx_enable_rtc_mode(clkin_enable)) {
+      return -3;
+  }
+
+  // [4] Enable timestamp register only on the CLKIN path.
+  //     Register: REG_TMST_CONFIG_REG (0x54)
+  //     Operation: read-modify-write
+  //     Mask: BIT_TMST_TO_REGS_EN | BIT_TMST_EN = 0x10 | 0x01 = 0x11
+  //     Target value: 0x11
+  //     Logic analyzer should see one RMW sequence on 0x54 when clkin_enable == true.
+  if (clkin_enable) {
+    DelayBeforeStep();
+    if (!icm4x6xx_enable_tmst(true)) {
+      return -4;
+    }
+  }
+
+  // [5] Enable big-endian mode for FIFO count and sensor payload.
+  //     Register: REG_INTF_CONFIG0 (0x4C)
+  //     Operation: read-modify-write
+  //     Mask: FIFO_COUNT_BIG_ENDIAN_MASK | SENSOR_DATA_BIG_ENDIAN_MASK = 0x20 | 0x10 = 0x30
+  //     Target value: 0x30
+  DelayBeforeStep();
+  if (!icm4x6xx_en_big_endian_mode(true)) {
+    return -5;
+  }
+
+  // [6] Clear FSYNC selection bits.
+  //     Register: REG_FSYNC_CONFIG (0x62)
+  //     Operation: read-modify-write
+  //     Mask used by driver: 0x70
+  //     Target value in masked bits: 0x00
+  //     This clears FSYNC_UI_SEL[6:4].
+  DelayBeforeStep();
+  if (!icm4x6xx_config_fsync(0)) {
+    return -6;
+  }
+
+  // [7] Set accelerometer full-scale range to +-16g.
+  //     Register: REG_ACCEL_CONFIG0 (0x50)
+  //     Operation: read-modify-write
+  //     Mask: ACCEL_FSR_MASK = 0xE0
+  //     accel_fsr_ = ACC_RANGE_16G = 0x00, so written field value is 0x00 << 5 = 0x00
+  //     Expected final masked bits on 0x50[7:5] = 000b.
+  DelayBeforeStep();
+  if (!icm4x6xx_set_accel_fsr(accel_fsr_)) {
+    return -7;
+  }
+
+  // [8] Set gyroscope full-scale range to +-2000 dps.
+  //     Register: REG_GYRO_CONFIG0 (0x4F)
+  //     Operation: read-modify-write
+  //     Mask: GYRO_FSR_MASK = 0xE0
+  //     gyro_fsr_ = GYRO_RANGE_2000DPS = 0x00, so written field value is 0x00 << 5 = 0x00
+  //     Expected final masked bits on 0x4F[7:5] = 000b.
+  DelayBeforeStep();
+  if (!icm4x6xx_set_gyro_fsr(gyro_fsr_)) {
+    return -8;
+  }
+
+  // [9] Set accelerometer filter order to 3rd order.
+  //     Register: REG_ACC_CONFIG1 (0x53)
+  //     Operation: read-modify-write
+  //     Mask: BIT_ACC_FILT_ORD_MASK = 0x18
+  //     THIRD_ORDER = 2, shifted by BIT_ACC_FILT_ORD_SHIFT (=3)
+  //     Target field value: 2 << 3 = 0x10
+  DelayBeforeStep();
+  if (!icm4x6xx_set_accel_filter_order(THIRD_ORDER)) {
+    return -9;
+  }
+
+  // [10] Set gyroscope filter order to 3rd order.
+  //      Register: REG_GYRO_CONFIG1 (0x51)
+  //      Operation: read-modify-write
+  //      Mask: BIT_GYRO_FILT_ORD_MASK = 0x0C
+  //      THIRD_ORDER = 2, shifted by BIT_GYRO_FILT_ORD_SHIFT (=2)
+  //      Target field value: 2 << 2 = 0x08
+  DelayBeforeStep();
+  if (!icm4x6xx_set_gyro_filter_order(THIRD_ORDER)) {
+    return -10;
+  }
+
+  // [11] Set FIFO mode to STREAM.
+  //      Register: REG_FIFO_CONFIG (0x16)
+  //      Operation: read-modify-write
+  //      Mask: BIT_FIFO_MODE_CTRL_MASK = 0xC0
+  //      STREAM enum value = 1, shifted by BIT_FIFO_MODE_SHIFT (=6)
+  //      Target field value: 0x40
+  DelayBeforeStep();
+  if (!icm4x6xx_set_fifo_mode(fifo_mode_)) {
+    return -11;
+  }
+
+  // [12] Enable gyro NFLT only on the CLKIN path.
+  //      If clkin_enable == true, expected packets are:
+  //        a) Write REG_BANK_SEL (0x76) = 0x01
+  //        b) RMW bank1 reg 0x0B, mask 0x03, target value 0x03
+  if (clkin_enable) {
+    DelayBeforeStep();
+    if (!icm4x6xx_enable_nflt_gyro(true)) {
+      return -12;
+    }
+  }
+
+  // [13] Disable AUX pins.
+  //      Expected packets:
+  //        a) Write REG_BANK_SEL (0x76) = 0x02
+  //        b) Write reg 0x70 = 0x01
+  //        c) Write reg 0x71 = 0x01
+  //        d) Write reg 0x72 = 0x01
+  //        e) Write reg 0x73 = 0x01
+  //        f) Write REG_BANK_SEL (0x76) = 0x00
+  DelayBeforeStep();
+  if (!icm4x6xx_disable_aux_pins()) {
+    return -13;
+  }
+
+  // [14] Set accelerometer ODR.
+  //      Register: REG_ACCEL_CONFIG0 (0x50)
+  //      Operation: read-modify-write
+  //      Mask: ACCEL_ODR_MASK = 0x0F
+  //      DebugInit(false): ODR_1KHZ = 0x06
+  //      DebugInit(true):  ODR_8KHZ = 0x03
+  //      Expected masked bits on 0x50[3:0] = 0x06 or 0x03.
+  DelayBeforeStep();
+  if (!icm4x6xx_set_accel_odr(clkin_enable ? ICM4X6XX_ODR_8000 : ICM4X6XX_ODR_1000)) {
+    return -14;
+  }
+
+  // [15] Set gyroscope ODR.
+  //      Register: REG_GYRO_CONFIG0 (0x4F)
+  //      Operation: read-modify-write
+  //      Mask: GYRO_ODR_MASK = 0x0F
+  //      DebugInit(false): ODR_1KHZ = 0x06
+  //      DebugInit(true):  ODR_8KHZ = 0x03
+  //      Expected masked bits on 0x4F[3:0] = 0x06 or 0x03.
+  DelayBeforeStep();
+  if (!icm4x6xx_set_gyro_odr(clkin_enable ? ICM4X6XX_ODR_8000 : ICM4X6XX_ODR_1000)) {
+    return -15;
+  }
+
+  // [16] Set accelerometer bandwidth to ODR/5.
+  //      Register: REG_GYRO_ACCEL_CONFIG0 (0x52)
+  //      Operation: read-modify-write
+  //      Mask: BIT_ACCEL_BW_MASK = 0xF0
+  //      BW_ODR_DIV_5 = 2, shifted by BIT_ACCEL_BW_SHIFT (=4)
+  //      Target field value: 0x20
+  DelayBeforeStep();
+  if (!icm4x6xx_set_accel_bandwidth(BW_ODR_DIV_5)) {
+    return -16;
+  }
+
+  // [17] Set gyroscope bandwidth to ODR/2.
+  //      Register: REG_GYRO_ACCEL_CONFIG0 (0x52)
+  //      Operation: read-modify-write
+  //      Mask: BIT_GYRO_BW_MASK = 0x0F
+  //      BW_ODR_DIV_2 = 0
+  //      Target field value: 0x00
+  DelayBeforeStep();
+  if (!icm4x6xx_set_gyro_bandwidth(BW_ODR_DIV_2)) {
+    return -17;
+  }
+
+  // [18] Enable FIFO accel + gyro + temperature.
+  //      Register: REG_FIFO_CONFIG_1 (0x5F)
+  //      Operation: read-modify-write
+  //      Mask: FIFO_ACCEL_EN_MASK | FIFO_GYRO_EN_MASK | FIFO_TEMP_EN_MASK |
+  //            FIFO_TMST_FSYNC_EN_MASK | FIFO_HIRES_EN_MASK
+  //          = 0x01 | 0x02 | 0x04 | 0x08 | 0x10 = 0x1F
+  //      Current target value in DebugInit():
+  //          accel=1, gyro=1, temp=1, tmst/fsync=0, hires=0
+  //          => write masked value 0x07
+  DelayBeforeStep();
+  if (!icm4x6xx_en_fifo(en_a_fifo_, en_g_fifo_)) {
+    return -18;
+  }
+
+  // [19] Power up accel and gyro to low-noise mode.
+  //      Register: REG_PWR_MGMT_0 (0x4E)
+  //      Operation: read-modify-write
+  //      Mask: ACCEL_LNM_MASK | GYRO_LNM_MASK = 0x03 | 0x0C = 0x0F
+  //      ACCEL_GYRO_POWERUP = 0x0F
+  //      Expected masked bits on 0x4E[3:0] = 0x0F
+  //      Helper additionally waits 20ms after successful write.
+  DelayBeforeStep();
+  if (!icm4x6xx_accel_gyro_powerup(ACCEL_GYRO_POWERUP)) {
+    return -19;
+  }
+
+  // [20] Disable AFSR.
+  //      Register: REG_INTF_CONFIG1 (0x4D)
+  //      Operation: read-modify-write
+  //      Mask: 0xC0
+  //      Target value: 0x40
+  //      Expected final bits[7:6] on 0x4D = 01b
+  DelayBeforeStep();
+  if (!icm4x6xx_disable_afsr()) {
+    return -20;
+  }
+
+  return 0;
 }
 
 void ICM42688::GetFIFODataFormat() {
@@ -645,7 +491,7 @@ bool ICM42688::icm4x6xx_accel_gyro_powerup(uint8_t mode){
   bool ret ; 
   ret = WriteMask(REG_PWR_MGMT_0, mode, ACCEL_LNM_MASK|GYRO_LNM_MASK);
   if(ret){
-    Timer::SleepUs(20000);
+    DelayUs(20000);
   }
   return ret;
 }
@@ -659,22 +505,22 @@ bool ICM42688::icm4x6xx_disable_aux_pins() {
 
   reg_value = 0x01;
 
-  if (port_->WriteRegister(static_cast<uint8_t>(0x70), reg_value)) {
+  if (!writeRegister(static_cast<uint8_t>(0x70), reg_value)) {
     return false;
   }
   reg_value = 0x01;
 
-  if (port_->WriteRegister(static_cast<uint8_t>(0x71), reg_value)) {
+  if (!writeRegister(static_cast<uint8_t>(0x71), reg_value)) {
     return false;
   }
   reg_value = 0x01;
 
-  if (port_->WriteRegister(static_cast<uint8_t>(0x72), reg_value)) {
+  if (!writeRegister(static_cast<uint8_t>(0x72), reg_value)) {
     return false;
   }
   reg_value = 0x01;
 
-  if (port_->WriteRegister(static_cast<uint8_t>(0x73), reg_value)) {
+  if (!writeRegister(static_cast<uint8_t>(0x73), reg_value)) {
     return false;
   }
   if (!icm4x6xx_set_reg_bank(0)) {
@@ -751,7 +597,7 @@ bool ICM42688::icm4x6xx_config_highg_parameter() {
   reg_value = ICM4X6XX_APEX_CONFIG6_HIGHG_PEAK_TH_2844MG |
               ICM4X6XX_APEX_CONFIG6_HIGHG_TIME_TH_20MS;
 
-  if (port_->WriteRegister(static_cast<uint8_t>(REG_APEX_CONFIG6),
+  if (!writeRegister(static_cast<uint8_t>(REG_APEX_CONFIG6),
                             reg_value)) {
     return false;
   }
@@ -772,7 +618,7 @@ bool ICM42688::icm4x6xx_config_highg_parameter() {
  *         non-zero value if failed.
  */
 bool ICM42688::icm4x6xx_set_reg_bank(uint8_t bank_num) {
-  if (port_->WriteRegister(static_cast<uint8_t>(REG_BANK_SEL), bank_num)) {
+  if (!writeRegister(static_cast<uint8_t>(REG_BANK_SEL), bank_num)) {
     return false;
   }
   return true;
@@ -918,11 +764,6 @@ bool ICM42688::icm4x6xx_set_gyro_fsr(icm4x6xx_gyro_fsr fsr) {
   return WriteMask(REG_GYRO_CONFIG0, fsr << GYRO_FSR_SHIFT, GYRO_FSR_MASK);
 }
 
-bool ICM42688::ReadWhoAmI(uint8_t* who_am_i) {
-  return port_->ReadRegister(static_cast<uint8_t>(RegAddrNew::WHO_AM_I),
-                             who_am_i);
-}
-
 /**
  * @brief Config Accel FSR
  *
@@ -1040,7 +881,7 @@ bool ICM42688::WriteMask(uint32_t reg_addr, uint8_t reg_value,
                             uint8_t mask) {
   uint8_t rw_buffer = 0;
 
-  if (port_->ReadRegister(reg_addr, &rw_buffer)) {
+  if (!readRegister(static_cast<uint8_t>(reg_addr), &rw_buffer)) {
     return false;
   }
 
@@ -1048,7 +889,7 @@ bool ICM42688::WriteMask(uint32_t reg_addr, uint8_t reg_value,
   rw_buffer = (rw_buffer & (~mask)) | (reg_value & mask);
 
   /* write new value to this register */
-  if (port_->WriteRegister(reg_addr, rw_buffer)) {
+  if (!writeRegister(static_cast<uint8_t>(reg_addr), rw_buffer)) {
     return false;
   }
 
@@ -1177,7 +1018,7 @@ bool ICM42688::icm4x6xx_read_fifo_count(uint16_t* count) {
   uint8_t buff[2];
   uint16_t max_count = 0;
 
-  if (port_->ReadRegisters(REG_FIFO_BYTE_COUNT_L, buff, 2)) {
+  if (!readRegisters(REG_FIFO_BYTE_COUNT_L, buff, 2)) {
     return false;
   }
 
@@ -1280,12 +1121,6 @@ uint32_t ICM42688::get_offset(uint16_t early, uint16_t later) {
 }
 
 
-bool ICM42688::Read(IMURawData& data) {
-  return false; //never use
-}
-
-
-
 // static void timer_period_monitor(void) {
 //   static uint16_t i = 0;
 //   static uint64_t time_latst_test = 0;
@@ -1317,7 +1152,9 @@ bool ICM42688::Read(IMURawData& data) {
 // }
 
 bool ICM42688::ReadRaw(IMURawData& data) {
-  uint64_t dsp_time = Timer::Now();
+  uint64_t dsp_time = GetTimeUs();
+  data.PACKET_SIZE = 20;
+  data.MAX_PACKET_COUNT = 32;
   data.is_need_cali_time = false;
 
   int16_t accel[3] = {0};
@@ -1329,7 +1166,7 @@ bool ICM42688::ReadRaw(IMURawData& data) {
     if (need_sync_time) {
       sync_time_count_++;
       if (!icm4x6xx_enable_tmst_val(true)) {
-        logger.Info("id[%d]: icm4x6xx_enable_tmst_val fail\n", id_);
+        LOG_E("id[%d]: icm4x6xx_enable_tmst_val fail\n", id_);
         return false;
       }
     }
@@ -1350,21 +1187,20 @@ bool ICM42688::ReadRaw(IMURawData& data) {
  
     int16_t temperture = 0;
     
-    uint32_t fifo_timestamp = 0;
 
     if (!icm4x6xx_get_packet_size(&packet_size)) {
-      logger.Info("id[%d]: icm4x6xx_get_packet_size fail\n", id_);
+      LOG_E("id[%d]: icm4x6xx_get_packet_size fail\n", id_);
       return false;
     }
     // logger.Info("icm4x6xx_get_packet_size = %d\n", packet_size);
     if (!icm4x6xx_read_fifo_count(&fifo_count)) {
-      logger.Info("id[%d]: icm4x6xx_read_fifo_count fail\n", id_);
+      LOG_E("id[%d]: icm4x6xx_read_fifo_count fail\n", id_);
       return false;
     }
     // logger.Info("fifo_count = %d\n", fifo_count);
 
     if (fifo_count == 0) {
-      logger.Info("id[%d]: fifo_count = 0\n", id_);
+      LOG_E("id[%d]: fifo_count = 0\n", id_);
       return false;
     }
 
@@ -1376,7 +1212,7 @@ bool ICM42688::ReadRaw(IMURawData& data) {
 
     uint8_t buf[bytes_to_read];
     if (!icm4x6xx_read_fifo_buf(buf, bytes_to_read)) {
-      logger.Info("id[%d]: icm4x6xx_read_fifo_buf(buf, bytes_to_read) fail\n", id_);
+      LOG_E("id[%d]: icm4x6xx_read_fifo_buf(buf, bytes_to_read) fail\n", id_);
       return false;
     }
 
@@ -1393,12 +1229,12 @@ bool ICM42688::ReadRaw(IMURawData& data) {
       // ICM4X6XX_INST_PRINTF(HIGH, instance, "no valid senor data");
       // goto CLEAN_STATUS;
 
-      logger.Info("id[%d]: (valid_buf_len == 0 || packet_cnt == 0) fail, fifo_count = %d", id_, fifo_count);
+      LOG_E("id[%d]: (valid_buf_len == 0 || packet_cnt == 0) fail, fifo_count = %d", id_, fifo_count);
       return false;
     }
 
     if (packet_cnt != valid_buf_len / packet_size) {
-      logger.Info("id[%d]: (packet_cnt != valid_buf_len / packet_size) fail", id_);
+      LOG_E("id[%d]: (packet_cnt != valid_buf_len / packet_size) fail", id_);
       return false;
     }
 
@@ -1407,7 +1243,8 @@ bool ICM42688::ReadRaw(IMURawData& data) {
 
     temperture = p[index * packet_size + 0x0D];
 
-    fifo_timestamp = p[index * packet_size + 0x0E] * 256 + p[index * packet_size + 0x0F];
+    // Timestamp bytes are present at 0x0E/0x0F, but the false path currently
+    // only forwards the calibration timestamp from TMSTVAL.
 
     index = 0;
 
@@ -1428,7 +1265,7 @@ bool ICM42688::ReadRaw(IMURawData& data) {
 
     if (need_sync_time) {
       if (!icm4x6xx_read_tmst_val(&intl_cnt_20b)) {
-        logger.Info("id[%d]: icm4x6xx_read_tmst_val(&intl_cnt_20b) fail\n", id_);
+        LOG_E("id[%d]: icm4x6xx_read_tmst_val(&intl_cnt_20b) fail\n", id_);
         return false;
       }
 
@@ -1531,13 +1368,13 @@ bool ICM42688::ReadRaw(IMURawData& data) {
     // int16_t gyro[3] = {0};
 
     if (!icm4x6xx_get_packet_size(&packet_size)) {
-      logger.Info("id[%d]: icm4x6xx_get_packet_size fail\n", id_);
+      LOG_E("id[%d]: icm4x6xx_get_packet_size fail\n", id_);
       return false;
     }
 
     // logger.Info("icm4x6xx_get_packet_size = %d\n", packet_size);
     if (!icm4x6xx_read_fifo_count(&fifo_count)) {
-      logger.Info("id[%d]: icm4x6xx_read_fifo_count fail\n", id_);
+      LOG_E("id[%d]: icm4x6xx_read_fifo_count fail\n", id_);
       return false;
     }
     // logger.Info("fifo_count = %d\n", fifo_count);
@@ -1555,7 +1392,7 @@ bool ICM42688::ReadRaw(IMURawData& data) {
 
     uint8_t buf[bytes_to_read];
     if (!icm4x6xx_read_fifo_buf(buf, bytes_to_read)) {
-      logger.Info("id[%d]: icm4x6xx_read_fifo_buf(buf, bytes_to_read) fail, fifo_count = %d", id_, fifo_count);
+      LOG_E("id[%d]: icm4x6xx_read_fifo_buf(buf, bytes_to_read) fail, fifo_count = %d", id_, fifo_count);
       return false;
     }
 
@@ -1573,12 +1410,12 @@ bool ICM42688::ReadRaw(IMURawData& data) {
       // ICM4X6XX_INST_PRINTF(HIGH, instance, "no valid senor data");
       // goto CLEAN_STATUS;
 
-      logger.Info("id[%d]: (valid_buf_len == 0 || packet_cnt == 0) fail, fifo_count = %d", id_, fifo_count);
+      LOG_E("id[%d]: (valid_buf_len == 0 || packet_cnt == 0) fail, fifo_count = %d", id_, fifo_count);
       return false;
     }
 
     if (packet_cnt != valid_buf_len / packet_size) {
-      logger.Info("id[%d]: (packet_cnt != valid_buf_len / packet_size) fail", id_);
+      LOG_E("id[%d]: (packet_cnt != valid_buf_len / packet_size) fail", id_);
       return false;
     }
 
@@ -1642,41 +1479,16 @@ bool ICM42688::ReadRaw(IMURawData& data) {
   return true;
 }
 
-int ICM42688::ReadAccel(int16_t accel_raw_data[3]) {
-  uint8_t buffer[6];
-  int r = ReadBlock(static_cast<uint8_t>(RegAddrNew::ACCEL_DATA_X1), buffer, 6);
-  accel_raw_data[0] = buffer[0] * 256 + buffer[1];
-  accel_raw_data[1] = buffer[2] * 256 + buffer[3];
-  accel_raw_data[2] = buffer[4] * 256 + buffer[5];
-  return r;
-}
-
-int ICM42688::ReadGyro(int16_t gyro_raw_data[3]) {
-  uint8_t buffer[6];
-  int r = ReadBlock(static_cast<uint8_t>(RegAddrNew::GYRO_DATA_X1), buffer, 6);
-  gyro_raw_data[0] = buffer[0] * 256 + buffer[1];
-  gyro_raw_data[1] = buffer[2] * 256 + buffer[3];
-  gyro_raw_data[2] = buffer[4] * 256 + buffer[5];
-  return r;
-}
-
-int ICM42688::ReadTemp(int16_t& temp_raw_data) {
-  uint8_t buffer[2];
-  int r = ReadBlock(static_cast<uint8_t>(RegAddrNew::TEMP_DATA1), buffer, 2);
-  temp_raw_data = buffer[0] * 256 + buffer[1];
-  return r;
-}
-
 bool ICM42688::WriteByte(uint8_t reg, uint8_t val) {
-  if (port_->WriteRegister(static_cast<uint8_t>(reg), val)) {
+  if (!writeRegister(static_cast<uint8_t>(reg), val)) {
     return false;
   }
-  Timer::SleepMs(5);
+  DelayMs(5);
   return true;
 }
 
 bool ICM42688::ReadBlock(uint8_t first_reg, uint8_t buf[], int len) {
-  if (port_->ReadRegisters(static_cast<uint8_t>(first_reg), buf, len)) {
+  if (!readRegisters(static_cast<uint8_t>(first_reg), buf, len)) {
     return false;
   }
 
@@ -1694,15 +1506,6 @@ bool ICM42688::ReadBlock(uint8_t first_reg, uint8_t buf[], int len) {
 bool ICM42688::icm4x6xx_read_fifo_buf(uint8_t* buf, uint32_t len) {
   return ReadBlock(REG_FIFO_DATA, buf, len);
 }
-void ICM42688::ExecutePeriodically() {
-  if (!this->ReadRaw(internal_raw_data_)) {
-    // logger.Error("id[%d]: ReadRawRead IMU failed., %ld", id_, err_cnt_++);
-    return;
-  }
-
-  this->Notify(internal_raw_data_);
-}
-
 /**
  * @brief Convert ODR to register value
  *
@@ -1796,7 +1599,7 @@ bool ICM42688::icm4x6xx_set_gyro_odr(float odr) {
  *         non-zero value if failed.
  */
 bool ICM42688::icm4x6xx_read_int_status(uint8_t* status) {
-  if (port_->ReadRegister(REG_INT_STATUS, status)) {
+  if (!readRegister(REG_INT_STATUS, status)) {
     return false;
   }
 
@@ -1813,7 +1616,7 @@ bool ICM42688::icm4x6xx_read_int_status(uint8_t* status) {
  *         non-zero value if failed.
  */
 bool ICM42688::icm4x6xx_read_int_status2(uint8_t* status) {
-  if (port_->ReadRegister(REG_INT_STATUS2, status)) {
+  if (!readRegister(REG_INT_STATUS2, status)) {
     return false;
   }
 

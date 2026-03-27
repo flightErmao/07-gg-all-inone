@@ -32,4 +32,5 @@ class SpiInterface {
   int spi_write_reg_wrapper(uint8_t *cmd, uint8_t cmd_length, uint8_t *data, uint16_t data_len);
 
   rt_spi_device *spi_device_;
+  rt_base_t cs_pin_;
 };

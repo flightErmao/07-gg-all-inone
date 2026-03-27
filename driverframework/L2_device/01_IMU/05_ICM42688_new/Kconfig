@@ -2,6 +2,7 @@ config BSP_USING_ICM42688_NEW
     bool "Enable ICM42688 IMU Sensor"
     default n
     select BSP_USING_SPI
+    select RT_USING_ULOG
     help
         Enable ICM42688 IMU sensor support
         

@@ -10,6 +10,8 @@
 
 #include "board.h"
 
+extern int rt_hw_usart_init(void);
+
 #define AXI_SRAM_ADDR (0X24000000)
 #define AXI_SRAM_SIZE (512*1024)
 #define SRAM1_ADDR (0X30000000)
@@ -106,6 +108,39 @@ void SystemClock_Config(void)
 
   /* Enable the H7 USB 3.3V detector before the FS PHY is used. */
   HAL_PWREx_EnableUSBVoltageDetector();
+}
+
+void rt_hw_board_init(void)
+{
+  rt_hw_cpu_dcache_disable();
+
+  HAL_Init();
+  SystemClock_Config();
+
+#if defined(RT_USING_HEAP)
+  rt_system_heap_init((void *)HEAP_BEGIN, (void *)HEAP_END);
+#endif
+
+#ifdef RT_USING_PIN
+  rt_hw_pin_init();
+#endif
+
+#ifdef RT_USING_SERIAL
+  rt_hw_usart_init();
+#endif
+
+#if defined(RT_USING_CONSOLE) && defined(RT_USING_DEVICE)
+  rt_console_set_device(RT_CONSOLE_DEVICE_NAME);
+#endif
+
+#if defined(RT_USING_CONSOLE) && defined(RT_USING_NANO)
+  extern void rt_hw_console_init(void);
+  rt_hw_console_init();
+#endif
+
+#ifdef RT_USING_COMPONENTS_INIT
+  rt_components_board_init();
+#endif
 }
 
 /* init_sram disabled: AXI SRAM heap is sufficient for basic operation.
