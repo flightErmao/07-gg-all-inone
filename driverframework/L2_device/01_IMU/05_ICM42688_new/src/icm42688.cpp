@@ -29,8 +29,9 @@ static void DelayMs(rt_uint32_t ms) { rt_thread_mdelay(ms); }
 static void DelayUs(rt_uint32_t us) { rt_thread_mdelay((us + 999U) / 1000U); }
 
 static constexpr int kProbeRetryCount = 5;
-static constexpr rt_uint32_t kProbeSpiHz = 1000000;
-static constexpr rt_uint16_t kProbeMode3 = (RT_SPI_MODE_3 | RT_SPI_MSB) & RT_SPI_MODE_MASK;
+// static constexpr rt_uint32_t SENSOR_ICM42688_SPI_MAX_HZ = 1000000;
+// static constexpr rt_uint16_t kProbeMode3 = (RT_SPI_MODE_3 | RT_SPI_MSB) & RT_SPI_MODE_MASK;
+static constexpr rt_uint16_t kProbeMode3 = (RT_SPI_MODE_0 | RT_SPI_MSB) & RT_SPI_MODE_MASK;
 static constexpr rt_uint16_t kProbeMode0 = (RT_SPI_MODE_0 | RT_SPI_MSB) & RT_SPI_MODE_MASK;
 
 }  // namespace
@@ -66,7 +67,7 @@ bool ICM42688::initSpi() {
     return false;
   }
 
-  if (!spi_.configure(kProbeMode0, kProbeSpiHz)) {
+  if (!spi_.configure(kProbeMode0, SENSOR_ICM42688_SPI_MAX_HZ)) {
     return false;
   }
 
@@ -107,12 +108,47 @@ bool ICM42688::writeRegister(uint8_t reg, uint8_t value) {
   return spi_.write_reg(reg, value) == RT_EOK;
 }
 
+bool ICM42688::verifyRegisterMaskedValue(uint8_t reg, uint8_t mask, uint8_t expected, const char *tag) {
+  uint8_t value = 0;
+
+  if (!readRegister(reg, &value)) {
+    LOG_E("id[%d]: verify read failed for %s reg=0x%02X", id_, tag, reg);
+    return false;
+  }
+
+  if ((value & mask) != (expected & mask)) {
+    LOG_E("id[%d]: verify mismatch for %s reg=0x%02X mask=0x%02X expected=0x%02X actual=0x%02X",
+          id_, tag, reg, mask, expected & mask, value & mask);
+    return false;
+  }
+
+  return true;
+}
+
+bool ICM42688::verifyRegisterMaskedValueInBank(uint8_t bank, uint8_t reg, uint8_t mask, uint8_t expected, const char *tag) {
+  bool ok = false;
+
+  if (!icm4x6xx_set_reg_bank(bank)) {
+    LOG_E("id[%d]: switch to bank %u failed for %s", id_, bank, tag);
+    return false;
+  }
+
+  ok = verifyRegisterMaskedValue(reg, mask, expected, tag);
+
+  if (!icm4x6xx_set_reg_bank(0)) {
+    LOG_E("id[%d]: restore bank0 failed after %s", id_, tag);
+    return false;
+  }
+
+  return ok;
+}
+
 bool ICM42688::probe() {
   uint8_t who_am_i = 0;
   const rt_uint16_t probe_modes[] = {kProbeMode3, kProbeMode0};
 
   for (rt_size_t mode_index = 0; mode_index < sizeof(probe_modes) / sizeof(probe_modes[0]); ++mode_index) {
-    if (!spi_.configure(probe_modes[mode_index], kProbeSpiHz)) {
+    if (!spi_.configure(probe_modes[mode_index], SENSOR_ICM42688_SPI_MAX_HZ)) {
       continue;
     }
 
@@ -153,6 +189,10 @@ int ICM42688::DebugInit(bool clkin_enable) {
   }
 
   auto DelayBeforeStep = []() { DelayMs(1); };
+  // Normal bring-up path on this project uses clkin_enable == false.
+  // Keep the default path focused on 1 kHz ODR, and hide the CLKIN branch below.
+  const float target_odr = clkin_enable ? ICM4X6XX_ODR_8000 : ICM4X6XX_ODR_1000;
+  icm4x6xx_sensor_odr target_odr_reg = ODR_NOT_SUPPORTED;
 
   has_inited_ = false;
   gyro_fsr_ = GYRO_RANGE_2000DPS;
@@ -163,6 +203,11 @@ int ICM42688::DebugInit(bool clkin_enable) {
   use_hi_res_ = false;
   sync_time_count_ = 0;  // reset count to make a timestamp sync
   clkin_enable_ = clkin_enable;
+
+  if (!icm4x6xx_odr_to_reg_val(target_odr, &target_odr_reg) || target_odr_reg == ODR_NOT_SUPPORTED) {
+    LOG_E("id[%d]: odr %.1f cannot map to register value", id_, target_odr);
+    return -21;
+  }
 
   // [1] Read WHO_AM_I.
   //     SPI raw probe frame:
@@ -183,33 +228,45 @@ int ICM42688::DebugInit(bool clkin_enable) {
   if (!icm4x6xx_config_ui_intf(SPI_INTF)) {
       return -2;
   }
+  if (!verifyRegisterMaskedValue(REG_INTF_CONFIG0, UI_INTF_MASK, SPI_INTF, "ui_intf")) {
+    return -22;
+  }
 
-  // [3] Enable RTC/CLKIN mode. DebugInit(false) skips this entire step.
-  //     If clkin_enable == true, expected packets are:
-  //       a) Write REG_BANK_SEL (0x76) = 0x01  -> switch to bank 1
-  //       b) RMW REG_INTF_CONFIG5 (0x7B), mask BIT_PIN9_FUNC_MASK (0x06),
-  //          set value BIT_PIN9_FUNC_CLKIN (0x04)
-  //          => field bits[2:1] should become 0b10
-  //       c) Write REG_BANK_SEL (0x76) = 0x00  -> back to bank 0
-  //       d) RMW REG_INTF_CONFIG1 (0x4D), mask BIT_RTC_MODE_EN (0x04),
-  //          set value 0x04
+  // [3] CLKIN-only path.
+  // Hidden in normal review because the common setup keeps clkin_enable == false.
   if (clkin_enable) {
     DelayBeforeStep();
   }
   if (!icm4x6xx_enable_rtc_mode(clkin_enable)) {
       return -3;
   }
+  if (clkin_enable) {
+#if 0
+    // CLKIN bring-up details kept here for future enablement:
+    //   a) Write REG_BANK_SEL (0x76) = 0x01
+    //   b) RMW REG_INTF_CONFIG5 (0x7B), set BIT_PIN9_FUNC_CLKIN
+    //   c) Write REG_BANK_SEL (0x76) = 0x00
+    //   d) RMW REG_INTF_CONFIG1 (0x4D), set BIT_RTC_MODE_EN
+#endif
+    if (!verifyRegisterMaskedValueInBank(1, REG_INTF_CONFIG5, BIT_PIN9_FUNC_MASK, BIT_PIN9_FUNC_CLKIN, "clkin_pinmux")) {
+      return -23;
+    }
+    if (!verifyRegisterMaskedValue(REG_INTF_CONFIG1, BIT_RTC_MODE_EN, BIT_RTC_MODE_EN, "rtc_mode")) {
+      return -24;
+    }
+  }
 
-  // [4] Enable timestamp register only on the CLKIN path.
-  //     Register: REG_TMST_CONFIG_REG (0x54)
-  //     Operation: read-modify-write
-  //     Mask: BIT_TMST_TO_REGS_EN | BIT_TMST_EN = 0x10 | 0x01 = 0x11
-  //     Target value: 0x11
-  //     Logic analyzer should see one RMW sequence on 0x54 when clkin_enable == true.
+  // [4] CLKIN-only timestamp path, skipped for the normal false case.
   if (clkin_enable) {
     DelayBeforeStep();
     if (!icm4x6xx_enable_tmst(true)) {
       return -4;
+    }
+    if (!verifyRegisterMaskedValue(REG_TMST_CONFIG_REG,
+                                   BIT_TMST_TO_REGS_EN | BIT_TMST_EN,
+                                   BIT_TMST_TO_REGS_EN | BIT_TMST_EN,
+                                   "tmst_enable")) {
+      return -25;
     }
   }
 
@@ -222,19 +279,14 @@ int ICM42688::DebugInit(bool clkin_enable) {
   if (!icm4x6xx_en_big_endian_mode(true)) {
     return -5;
   }
-
-  // [6] Clear FSYNC selection bits.
-  //     Register: REG_FSYNC_CONFIG (0x62)
-  //     Operation: read-modify-write
-  //     Mask used by driver: 0x70
-  //     Target value in masked bits: 0x00
-  //     This clears FSYNC_UI_SEL[6:4].
-  DelayBeforeStep();
-  if (!icm4x6xx_config_fsync(0)) {
-    return -6;
+  if (!verifyRegisterMaskedValue(REG_INTF_CONFIG0,
+                                 FIFO_COUNT_BIG_ENDIAN_MASK | SENSOR_DATA_BIG_ENDIAN_MASK,
+                                 FIFO_COUNT_BIG_ENDIAN_MASK | SENSOR_DATA_BIG_ENDIAN_MASK,
+                                 "big_endian")) {
+    return -26;
   }
 
-  // [7] Set accelerometer full-scale range to +-16g.
+  // [6] Set accelerometer full-scale range to +-16g.
   //     Register: REG_ACCEL_CONFIG0 (0x50)
   //     Operation: read-modify-write
   //     Mask: ACCEL_FSR_MASK = 0xE0
@@ -244,8 +296,14 @@ int ICM42688::DebugInit(bool clkin_enable) {
   if (!icm4x6xx_set_accel_fsr(accel_fsr_)) {
     return -7;
   }
+  if (!verifyRegisterMaskedValue(REG_ACCEL_CONFIG0,
+                                 ACCEL_FSR_MASK,
+                                 accel_fsr_ << ACCEL_FSR_SHIFT,
+                                 "accel_fsr")) {
+    return -28;
+  }
 
-  // [8] Set gyroscope full-scale range to +-2000 dps.
+  // [7] Set gyroscope full-scale range to +-2000 dps.
   //     Register: REG_GYRO_CONFIG0 (0x4F)
   //     Operation: read-modify-write
   //     Mask: GYRO_FSR_MASK = 0xE0
@@ -255,30 +313,14 @@ int ICM42688::DebugInit(bool clkin_enable) {
   if (!icm4x6xx_set_gyro_fsr(gyro_fsr_)) {
     return -8;
   }
-
-  // [9] Set accelerometer filter order to 3rd order.
-  //     Register: REG_ACC_CONFIG1 (0x53)
-  //     Operation: read-modify-write
-  //     Mask: BIT_ACC_FILT_ORD_MASK = 0x18
-  //     THIRD_ORDER = 2, shifted by BIT_ACC_FILT_ORD_SHIFT (=3)
-  //     Target field value: 2 << 3 = 0x10
-  DelayBeforeStep();
-  if (!icm4x6xx_set_accel_filter_order(THIRD_ORDER)) {
-    return -9;
+  if (!verifyRegisterMaskedValue(REG_GYRO_CONFIG0,
+                                 GYRO_FSR_MASK,
+                                 gyro_fsr_ << GYRO_FSR_SHIFT,
+                                 "gyro_fsr")) {
+    return -29;
   }
 
-  // [10] Set gyroscope filter order to 3rd order.
-  //      Register: REG_GYRO_CONFIG1 (0x51)
-  //      Operation: read-modify-write
-  //      Mask: BIT_GYRO_FILT_ORD_MASK = 0x0C
-  //      THIRD_ORDER = 2, shifted by BIT_GYRO_FILT_ORD_SHIFT (=2)
-  //      Target field value: 2 << 2 = 0x08
-  DelayBeforeStep();
-  if (!icm4x6xx_set_gyro_filter_order(THIRD_ORDER)) {
-    return -10;
-  }
-
-  // [11] Set FIFO mode to STREAM.
+  // [8] Set FIFO mode to STREAM.
   //      Register: REG_FIFO_CONFIG (0x16)
   //      Operation: read-modify-write
   //      Mask: BIT_FIFO_MODE_CTRL_MASK = 0xC0
@@ -288,32 +330,14 @@ int ICM42688::DebugInit(bool clkin_enable) {
   if (!icm4x6xx_set_fifo_mode(fifo_mode_)) {
     return -11;
   }
-
-  // [12] Enable gyro NFLT only on the CLKIN path.
-  //      If clkin_enable == true, expected packets are:
-  //        a) Write REG_BANK_SEL (0x76) = 0x01
-  //        b) RMW bank1 reg 0x0B, mask 0x03, target value 0x03
-  if (clkin_enable) {
-    DelayBeforeStep();
-    if (!icm4x6xx_enable_nflt_gyro(true)) {
-      return -12;
-    }
+  if (!verifyRegisterMaskedValue(REG_FIFO_CONFIG,
+                                 BIT_FIFO_MODE_CTRL_MASK,
+                                 fifo_mode_ << BIT_FIFO_MODE_SHIFT,
+                                 "fifo_mode")) {
+    return -32;
   }
 
-  // [13] Disable AUX pins.
-  //      Expected packets:
-  //        a) Write REG_BANK_SEL (0x76) = 0x02
-  //        b) Write reg 0x70 = 0x01
-  //        c) Write reg 0x71 = 0x01
-  //        d) Write reg 0x72 = 0x01
-  //        e) Write reg 0x73 = 0x01
-  //        f) Write REG_BANK_SEL (0x76) = 0x00
-  DelayBeforeStep();
-  if (!icm4x6xx_disable_aux_pins()) {
-    return -13;
-  }
-
-  // [14] Set accelerometer ODR.
+  // [9] Set accelerometer ODR.
   //      Register: REG_ACCEL_CONFIG0 (0x50)
   //      Operation: read-modify-write
   //      Mask: ACCEL_ODR_MASK = 0x0F
@@ -321,11 +345,17 @@ int ICM42688::DebugInit(bool clkin_enable) {
   //      DebugInit(true):  ODR_8KHZ = 0x03
   //      Expected masked bits on 0x50[3:0] = 0x06 or 0x03.
   DelayBeforeStep();
-  if (!icm4x6xx_set_accel_odr(clkin_enable ? ICM4X6XX_ODR_8000 : ICM4X6XX_ODR_1000)) {
+  if (!icm4x6xx_set_accel_odr(target_odr)) {
     return -14;
   }
+  if (!verifyRegisterMaskedValue(REG_ACCEL_CONFIG0,
+                                 ACCEL_ODR_MASK,
+                                 target_odr_reg,
+                                 "accel_odr")) {
+    return -38;
+  }
 
-  // [15] Set gyroscope ODR.
+  // [10] Set gyroscope ODR.
   //      Register: REG_GYRO_CONFIG0 (0x4F)
   //      Operation: read-modify-write
   //      Mask: GYRO_ODR_MASK = 0x0F
@@ -333,47 +363,17 @@ int ICM42688::DebugInit(bool clkin_enable) {
   //      DebugInit(true):  ODR_8KHZ = 0x03
   //      Expected masked bits on 0x4F[3:0] = 0x06 or 0x03.
   DelayBeforeStep();
-  if (!icm4x6xx_set_gyro_odr(clkin_enable ? ICM4X6XX_ODR_8000 : ICM4X6XX_ODR_1000)) {
+  if (!icm4x6xx_set_gyro_odr(target_odr)) {
     return -15;
   }
-
-  // [16] Set accelerometer bandwidth to ODR/5.
-  //      Register: REG_GYRO_ACCEL_CONFIG0 (0x52)
-  //      Operation: read-modify-write
-  //      Mask: BIT_ACCEL_BW_MASK = 0xF0
-  //      BW_ODR_DIV_5 = 2, shifted by BIT_ACCEL_BW_SHIFT (=4)
-  //      Target field value: 0x20
-  DelayBeforeStep();
-  if (!icm4x6xx_set_accel_bandwidth(BW_ODR_DIV_5)) {
-    return -16;
+  if (!verifyRegisterMaskedValue(REG_GYRO_CONFIG0,
+                                 GYRO_ODR_MASK,
+                                 target_odr_reg,
+                                 "gyro_odr")) {
+    return -39;
   }
 
-  // [17] Set gyroscope bandwidth to ODR/2.
-  //      Register: REG_GYRO_ACCEL_CONFIG0 (0x52)
-  //      Operation: read-modify-write
-  //      Mask: BIT_GYRO_BW_MASK = 0x0F
-  //      BW_ODR_DIV_2 = 0
-  //      Target field value: 0x00
-  DelayBeforeStep();
-  if (!icm4x6xx_set_gyro_bandwidth(BW_ODR_DIV_2)) {
-    return -17;
-  }
-
-  // [18] Enable FIFO accel + gyro + temperature.
-  //      Register: REG_FIFO_CONFIG_1 (0x5F)
-  //      Operation: read-modify-write
-  //      Mask: FIFO_ACCEL_EN_MASK | FIFO_GYRO_EN_MASK | FIFO_TEMP_EN_MASK |
-  //            FIFO_TMST_FSYNC_EN_MASK | FIFO_HIRES_EN_MASK
-  //          = 0x01 | 0x02 | 0x04 | 0x08 | 0x10 = 0x1F
-  //      Current target value in DebugInit():
-  //          accel=1, gyro=1, temp=1, tmst/fsync=0, hires=0
-  //          => write masked value 0x07
-  DelayBeforeStep();
-  if (!icm4x6xx_en_fifo(en_a_fifo_, en_g_fifo_)) {
-    return -18;
-  }
-
-  // [19] Power up accel and gyro to low-noise mode.
+  // [11] Power up accel and gyro to low-noise mode.
   //      Register: REG_PWR_MGMT_0 (0x4E)
   //      Operation: read-modify-write
   //      Mask: ACCEL_LNM_MASK | GYRO_LNM_MASK = 0x03 | 0x0C = 0x0F
@@ -384,16 +384,33 @@ int ICM42688::DebugInit(bool clkin_enable) {
   if (!icm4x6xx_accel_gyro_powerup(ACCEL_GYRO_POWERUP)) {
     return -19;
   }
+  if (!verifyRegisterMaskedValue(REG_PWR_MGMT_0, ACCEL_LNM_MASK | GYRO_LNM_MASK, ACCEL_GYRO_POWERUP, "powerup")) {
+    return -43;
+  }
 
-  // [20] Disable AFSR.
-  //      Register: REG_INTF_CONFIG1 (0x4D)
-  //      Operation: read-modify-write
-  //      Mask: 0xC0
-  //      Target value: 0x40
-  //      Expected final bits[7:6] on 0x4D = 01b
+  // [12] Flush FIFO once after power-up so the first count starts from a clean state.
   DelayBeforeStep();
-  if (!icm4x6xx_disable_afsr()) {
+  if (!WriteMask(REG_SIGNAL_PATH_RESET_REG, BIT_FIFO_FLUSH, BIT_FIFO_FLUSH)) {
     return -20;
+  }
+  DelayMs(2);
+
+  // [13] Enable FIFO accel + gyro + temperature after power-up and flush.
+  DelayBeforeStep();
+  if (!icm4x6xx_en_fifo(en_a_fifo_, en_g_fifo_)) {
+    return -18;
+  }
+  const uint8_t expected_fifo_config1 =
+      (en_a_fifo_ ? FIFO_ACCEL_EN_MASK : 0) |
+      (en_g_fifo_ ? FIFO_GYRO_EN_MASK : 0) |
+      ((en_a_fifo_ || en_g_fifo_) ? FIFO_TEMP_EN_MASK : 0) |
+      (use_hi_res_ ? ((en_a_fifo_ || en_g_fifo_) ? FIFO_HIRES_EN_MASK : 0) : 0);
+  if (!verifyRegisterMaskedValue(REG_FIFO_CONFIG_1,
+                                 FIFO_ACCEL_EN_MASK | FIFO_GYRO_EN_MASK | FIFO_TEMP_EN_MASK |
+                                     FIFO_TMST_FSYNC_EN_MASK | FIFO_HIRES_EN_MASK,
+                                 expected_fifo_config1,
+                                 "fifo_enable")) {
+    return -42;
   }
 
   return 0;
@@ -1197,6 +1214,13 @@ bool ICM42688::ReadRaw(IMURawData& data) {
       LOG_E("id[%d]: icm4x6xx_read_fifo_count fail\n", id_);
       return false;
     }
+    for (int retry = 0; fifo_count == 0 && retry < 2; ++retry) {
+      DelayMs(1);
+      if (!icm4x6xx_read_fifo_count(&fifo_count)) {
+        LOG_E("id[%d]: icm4x6xx_read_fifo_count retry fail\n", id_);
+        return false;
+      }
+    }
     // logger.Info("fifo_count = %d\n", fifo_count);
 
     if (fifo_count == 0) {
@@ -1376,6 +1400,13 @@ bool ICM42688::ReadRaw(IMURawData& data) {
     if (!icm4x6xx_read_fifo_count(&fifo_count)) {
       LOG_E("id[%d]: icm4x6xx_read_fifo_count fail\n", id_);
       return false;
+    }
+    for (int retry = 0; fifo_count == 0 && retry < 2; ++retry) {
+      DelayMs(1);
+      if (!icm4x6xx_read_fifo_count(&fifo_count)) {
+        LOG_E("id[%d]: icm4x6xx_read_fifo_count retry fail\n", id_);
+        return false;
+      }
     }
     // logger.Info("fifo_count = %d\n", fifo_count);
 

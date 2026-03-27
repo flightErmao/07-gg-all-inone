@@ -896,6 +896,8 @@ class ICM42688 : public IMURaw {
   bool writeRegister(uint8_t reg, uint8_t value);
   bool WriteByte(uint8_t reg, uint8_t val);
   bool ReadBlock(uint8_t first_reg, uint8_t buf[], int len);
+  bool verifyRegisterMaskedValue(uint8_t reg, uint8_t mask, uint8_t expected, const char *tag);
+  bool verifyRegisterMaskedValueInBank(uint8_t bank, uint8_t reg, uint8_t mask, uint8_t expected, const char *tag);
 
   SpiInterface spi_;
   bool spi_inited_ = false;

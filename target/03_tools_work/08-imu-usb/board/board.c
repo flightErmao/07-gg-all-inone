@@ -12,6 +12,16 @@
 
 extern int rt_hw_usart_init(void);
 
+static void board_disable_dcache_if_enabled(void)
+{
+#if defined(__DCACHE_PRESENT) && (__DCACHE_PRESENT == 1U)
+  if ((SCB->CCR & SCB_CCR_DC_Msk) != 0U)
+  {
+    SCB_DisableDCache();
+  }
+#endif
+}
+
 #define AXI_SRAM_ADDR (0X24000000)
 #define AXI_SRAM_SIZE (512*1024)
 #define SRAM1_ADDR (0X30000000)
@@ -112,7 +122,7 @@ void SystemClock_Config(void)
 
 void rt_hw_board_init(void)
 {
-  rt_hw_cpu_dcache_disable();
+  board_disable_dcache_if_enabled();
 
   HAL_Init();
   SystemClock_Config();
