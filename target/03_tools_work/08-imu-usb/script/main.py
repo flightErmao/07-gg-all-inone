@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import queue
-import shutil
 import threading
-import time
 import tkinter as tk
 from datetime import datetime
 from pathlib import Path
@@ -11,41 +9,55 @@ from tkinter import filedialog, messagebox, ttk
 
 from imu_usb_tool import (
     DEFAULT_BAUDRATE,
-    DEFAULT_LOG_FILE,
     DEFAULT_WAIT_SECONDS,
+    TEST_OPTIONS,
+    analyze_real_imu_bin_file,
     find_cdc_port,
-    find_new_drive,
-    jlink_reset,
+    parse_imu_probe_response,
+    parse_noise_prepare_response,
+    parse_noise_status_response,
+    parse_status_response,
     snapshot_volumes,
     wait_for_any_target_port,
     wait_for_mode_transition,
-    wait_for_port_presence,
 )
 from serial_client import DeviceClient, PortInfo
 
 
 APP_ROOT = Path(__file__).resolve().parent
-DOWNLOAD_ROOT = APP_ROOT / "downloads"
+PROJECT_ROOT = APP_ROOT.parent
 APP_LOG_DIR = APP_ROOT / "logs"
+APP_DATA_DIR = PROJECT_ROOT / "data"
+TEST_LABELS = {key: label for key, label in TEST_OPTIONS}
+ANALYSIS_OUTPUT_DIRS = {
+    "bias": APP_DATA_DIR / "01_bias",
+    "temp": APP_DATA_DIR / "02_temp",
+    "arw": APP_DATA_DIR / "03_arw",
+    "vibe": APP_DATA_DIR / "04_vibration",
+    "shock": APP_DATA_DIR / "05_shock",
+}
 
 
 class App:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("IMU USB Tool")
-        self.root.geometry("980x720")
+        self.root.geometry("1080x760")
 
         self.client = DeviceClient()
-        self.message_queue: queue.Queue[tuple[str, str]] = queue.Queue()
+        self.message_queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self.port_map: dict[str, PortInfo] = {}
         self.connected_port: PortInfo | None = None
         self.session_log_path: Path | None = None
+        self.active_test_key: str | None = None
+        self.test_stop_event = threading.Event()
+        self.device_mode: str = "unknown"
 
-        DOWNLOAD_ROOT.mkdir(parents=True, exist_ok=True)
         APP_LOG_DIR.mkdir(parents=True, exist_ok=True)
         self._init_session_log()
         self._build_ui()
         self._refresh_ports()
+        self._auto_connect_preferred_port()
         self._update_connection_ui()
         self._drain_messages()
 
@@ -66,51 +78,79 @@ class App:
         action_panel = ttk.LabelFrame(self.root, text="设备操作", padding=12)
         action_panel.pack(fill=tk.X, padx=12, pady=(0, 8))
 
-        ttk.Button(action_panel, text="查询状态", command=lambda: self._run_async(self._query_status)).pack(
-            side=tk.LEFT
+        ttk.Button(action_panel, text="查询状态", command=lambda: self._run_async(self._query_status)).pack(side=tk.LEFT)
+        self.mode_toggle_button = ttk.Button(
+            action_panel,
+            text="进入U盘模式",
+            command=lambda: self._run_async(self._toggle_usb_mode),
         )
-        ttk.Button(action_panel, text="进入U盘模式", command=lambda: self._run_async(self._enter_msc)).pack(
-            side=tk.LEFT, padx=8
-        )
-        ttk.Button(action_panel, text="导出日志", command=lambda: self._run_async(self._export_log)).pack(
-            side=tk.LEFT
-        )
-        ttk.Button(action_panel, text="退出U盘模式", command=lambda: self._run_async(self._enter_cdc)).pack(
-            side=tk.LEFT, padx=8
-        )
-        ttk.Button(action_panel, text="复位回CDC", command=lambda: self._run_async(self._reset_to_cdc)).pack(
-            side=tk.LEFT, padx=24
-        )
+        self.mode_toggle_button.pack(side=tk.LEFT, padx=8)
 
-        test_panel = ttk.LabelFrame(self.root, text="SD 测试", padding=12)
+        probe_panel = ttk.LabelFrame(self.root, text="IMU 探测", padding=12)
+        probe_panel.pack(fill=tk.X, padx=12, pady=(0, 8))
+        for imu_index in range(1, 5):
+            ttk.Button(
+                probe_panel,
+                text=f"IMU{imu_index} Probe",
+                command=lambda idx=imu_index: self._run_async(lambda: self._probe_imu(idx)),
+            ).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(
+            probe_panel,
+            text="探测全部",
+            command=lambda: self._run_async(self._probe_all_imus),
+        ).pack(side=tk.LEFT, padx=(0, 8))
+
+        test_panel = ttk.LabelFrame(self.root, text="测试", padding=12)
         test_panel.pack(fill=tk.X, padx=12, pady=(0, 8))
-
-        ttk.Label(test_panel, text="假数据行数").pack(side=tk.LEFT)
-        self.fake_lines_var = tk.StringVar(value="128")
-        ttk.Entry(test_panel, textvariable=self.fake_lines_var, width=10).pack(side=tk.LEFT, padx=(8, 12))
-        self.fake_overwrite_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(test_panel, text="覆盖 IMU_TEST.CSV", variable=self.fake_overwrite_var).pack(side=tk.LEFT)
-        ttk.Button(test_panel, text="假数据写 SD 测试", command=lambda: self._run_async(self._fake_sd_test)).pack(
-            side=tk.LEFT, padx=12
+        ttk.Label(test_panel, text="测试项").pack(side=tk.LEFT)
+        self.test_option_var = tk.StringVar(value=TEST_OPTIONS[0][1])
+        self.test_box = ttk.Combobox(
+            test_panel,
+            textvariable=self.test_option_var,
+            values=[label for _, label in TEST_OPTIONS],
+            width=38,
+            state="readonly",
         )
+        self.test_box.pack(side=tk.LEFT, padx=(8, 12))
+        ttk.Button(test_panel, text="开始测试", command=lambda: self._run_async(self._start_test)).pack(side=tk.LEFT)
+        ttk.Button(test_panel, text="中止测试", command=lambda: self._run_async(self._stop_test)).pack(side=tk.LEFT, padx=(8, 0))
 
-        path_panel = ttk.LabelFrame(self.root, text="导出目录", padding=12)
-        path_panel.pack(fill=tk.X, padx=12, pady=(0, 8))
-        self.output_dir_var = tk.StringVar(value=str(DOWNLOAD_ROOT))
-        ttk.Entry(path_panel, textvariable=self.output_dir_var).pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Button(path_panel, text="选择目录", command=self._choose_output_dir).pack(side=tk.LEFT, padx=8)
+        analysis_panel = ttk.LabelFrame(self.root, text="分析", padding=12)
+        analysis_panel.pack(fill=tk.X, padx=12, pady=(0, 8))
+        ttk.Label(analysis_panel, text="分析项").pack(side=tk.LEFT)
+        self.analysis_option_var = tk.StringVar(value=TEST_OPTIONS[0][1])
+        self.analysis_box = ttk.Combobox(
+            analysis_panel,
+            textvariable=self.analysis_option_var,
+            values=[label for _, label in TEST_OPTIONS],
+            width=38,
+            state="readonly",
+        )
+        self.analysis_box.pack(side=tk.LEFT, padx=(8, 12))
+        ttk.Button(analysis_panel, text="选择 BIN 分析", command=self._choose_analysis_bin).pack(side=tk.LEFT, padx=(0, 8))
 
-        self.progress_var = tk.StringVar(value="就绪")
-        ttk.Label(self.root, textvariable=self.progress_var, padding=(12, 0)).pack(fill=tk.X)
+        log_panel = ttk.LabelFrame(self.root, text="日志框", padding=12)
+        log_panel.pack(fill=tk.BOTH, expand=True, padx=12, pady=12)
 
-        self.log_text = tk.Text(self.root, height=32)
-        self.log_text.pack(fill=tk.BOTH, expand=True, padx=12, pady=12)
+        self.log_text = tk.Text(log_panel, height=30)
+        self.log_text.pack(fill=tk.BOTH, expand=True)
         self.log_text.configure(state=tk.DISABLED)
 
     def _init_session_log(self) -> None:
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.session_log_path = APP_LOG_DIR / f"imu_usb_tool_{stamp}.log"
         self.session_log_path.write_text("", encoding="utf-8")
+
+    def _append_log(self, message: str) -> None:
+        stamp = datetime.now().strftime("%H:%M:%S")
+        line = f"[{stamp}] {message}\n"
+        self.log_text.configure(state=tk.NORMAL)
+        self.log_text.insert(tk.END, line)
+        self.log_text.see(tk.END)
+        self.log_text.configure(state=tk.DISABLED)
+        if self.session_log_path is not None:
+            with self.session_log_path.open("a", encoding="utf-8") as handle:
+                handle.write(line)
 
     def _refresh_ports(self) -> None:
         ports = self.client.list_port_infos()
@@ -128,8 +168,6 @@ class App:
             self.port_var.set(preferred.label)
         elif labels and self.port_var.get() not in self.port_map:
             self.port_var.set(labels[0])
-
-        self._append_log(f"串口列表: {labels or ['<none>']}")
 
     def _toggle_connection(self) -> None:
         if self.client.is_open:
@@ -151,42 +189,42 @@ class App:
         try:
             self.client.open(port_info.device, DEFAULT_BAUDRATE)
             self.connected_port = port_info
-            self.progress_var.set(f"已连接: {port_info.device}")
             self._append_log(f"已连接 {port_info.device}")
-            self._update_connection_ui()
+            self._run_async(self._query_status)
         except Exception as exc:  # noqa: BLE001
             self.client.close()
             self.connected_port = None
             messagebox.showerror("连接失败", str(exc))
             self._append_log(f"连接失败: {exc}")
+        finally:
+            self._update_connection_ui()
+
+    def _auto_connect_preferred_port(self) -> None:
+        selected = self.port_var.get().strip()
+        if not selected:
+            return
+
+        port_info = self.port_map.get(selected)
+        if port_info is None:
+            return
+
+        try:
+            self.client.open(port_info.device, DEFAULT_BAUDRATE)
+            self.connected_port = port_info
+            self._append_log(f"串口自动连接成功: {port_info.device}")
+            self._run_async(self._query_status)
+        except Exception as exc:  # noqa: BLE001
+            self.client.close()
+            self.connected_port = None
+            self._append_log(f"串口自动连接失败: {exc}")
+        finally:
             self._update_connection_ui()
 
     def _disconnect(self) -> None:
         self.client.close()
         self.connected_port = None
-        self.progress_var.set("已断开")
         self._append_log("串口已断开")
         self._update_connection_ui()
-
-    def _drop_active_connection(self) -> None:
-        if self.client.is_open:
-            self.client.close()
-        self.connected_port = None
-
-    def _reconnect_preferred_port(
-        self,
-        timeout: float,
-        action_text: str,
-        preferred_port: PortInfo | None = None,
-    ) -> PortInfo:
-        port = preferred_port if preferred_port is not None else wait_for_any_target_port(timeout=timeout)
-        self.client.close()
-        self.client.open(port.device, DEFAULT_BAUDRATE)
-        self.connected_port = port
-        self.message_queue.put(("refresh", "ports"))
-        self.message_queue.put(("refresh", "connect"))
-        self.message_queue.put(("info", f"{action_text}，已重连 {port.device}"))
-        return port
 
     def _update_connection_ui(self) -> None:
         if self.client.is_open and self.connected_port is not None:
@@ -195,12 +233,14 @@ class App:
         else:
             self.connect_button.configure(text="连接")
             self.connection_var.set("未连接")
+            self.device_mode = "unknown"
+        self._update_usb_mode_button()
 
-    def _choose_output_dir(self) -> None:
-        current = Path(self.output_dir_var.get()).resolve()
-        chosen = filedialog.askdirectory(initialdir=str(current))
-        if chosen:
-            self.output_dir_var.set(chosen)
+    def _update_usb_mode_button(self) -> None:
+        if self.device_mode == "cdc+msc":
+            self.mode_toggle_button.configure(text="退出U盘模式")
+        else:
+            self.mode_toggle_button.configure(text="进入U盘模式")
 
     def _selected_port_info(self) -> PortInfo | None:
         selected = self.port_var.get().strip()
@@ -223,16 +263,38 @@ class App:
 
         return None
 
-    def _append_log(self, message: str) -> None:
-        stamp = datetime.now().strftime("%H:%M:%S")
-        line = f"[{stamp}] {message}\n"
-        self.log_text.configure(state=tk.NORMAL)
-        self.log_text.insert(tk.END, line)
-        self.log_text.see(tk.END)
-        self.log_text.configure(state=tk.DISABLED)
-        if self.session_log_path is not None:
-            with self.session_log_path.open("a", encoding="utf-8") as handle:
-                handle.write(line)
+    def _ensure_connected_port(self) -> PortInfo:
+        if self.connected_port is not None:
+            return self.connected_port
+
+        selected = self._selected_port_info()
+        if selected is not None:
+            return selected
+
+        port_name = self.port_var.get().strip()
+        if " - " in port_name:
+            port_name = port_name.split(" - ", 1)[0].strip()
+        return find_cdc_port(port_name if port_name else None)
+
+    def _drop_active_connection(self) -> None:
+        if self.client.is_open:
+            self.client.close()
+        self.connected_port = None
+
+    def _reconnect_preferred_port(
+        self,
+        timeout: float,
+        action_text: str,
+        preferred_port: PortInfo | None = None,
+    ) -> PortInfo:
+        port = preferred_port if preferred_port is not None else wait_for_any_target_port(timeout=timeout)
+        self.client.close()
+        self.client.open(port.device, DEFAULT_BAUDRATE)
+        self.connected_port = port
+        self.message_queue.put(("refresh", "ports"))
+        self.message_queue.put(("refresh", "connect"))
+        self.message_queue.put(("info", f"{action_text}，已连接 {port.device}"))
+        return port
 
     def _run_async(self, target) -> None:
         thread = threading.Thread(target=self._thread_wrapper, args=(target,), daemon=True)
@@ -244,46 +306,33 @@ class App:
         except Exception as exc:  # noqa: BLE001
             self.message_queue.put(("error", str(exc)))
 
-    def _ensure_connected_port(self) -> PortInfo:
-        if self.connected_port is None:
-            selected = self._selected_port_info()
-            if selected is not None:
-                return selected
-            port_name = self.port_var.get().strip()
-            if " - " in port_name:
-                port_name = port_name.split(" - ", 1)[0].strip()
-            return find_cdc_port(port_name if port_name else None)
-        return self.connected_port
+    def _ask_yes_no(self, title: str, message: str) -> bool:
+        result: list[bool] = []
+        done = threading.Event()
+
+        def _show() -> None:
+            result.append(messagebox.askyesno(title, message))
+            done.set()
+
+        self.root.after(0, _show)
+        done.wait()
+        return result[0] if result else False
 
     @staticmethod
-    def _format_protocol_response(command: str, response: str) -> str:
+    def _format_simple_response(command: str, response: str) -> str:
         if not response:
-            return f"{command}: <no response>"
-
+            return f"{command}: 未收到响应"
         if "command not found." in response:
-            return f"{command}: command not found. MCU firmware is not updated to the latest command set."
+            return f"{command}: 固件未实现该命令"
+        return response.strip().replace("0:/", "")
 
-        ack = ""
-        status = ""
-        result = ""
-        others: list[str] = []
-
-        for line in response.splitlines():
-            stripped = line.strip()
-            if not stripped:
-                continue
-            if stripped.startswith("ACK "):
-                ack = stripped
-            elif stripped.startswith("STATUS "):
-                status = stripped
-            elif stripped.startswith("RESULT "):
-                result = stripped
-            else:
-                others.append(stripped)
-
-        parts = [item for item in [ack, status, result] if item]
-        parts.extend(others)
-        return " | ".join(parts) if parts else response
+    @staticmethod
+    def _format_device_path(path_text: str) -> str:
+        if not path_text:
+            return "03_arw/000.BIN"
+        if path_text.startswith("0:/"):
+            return path_text[3:]
+        return path_text
 
     def _send_shell_command(
         self,
@@ -291,30 +340,85 @@ class App:
         command: str,
         timeout: float,
         allow_disconnect: bool = False,
+        force_reopen: bool = False,
     ) -> str:
-        active_client = self.client if (self.client.is_open and self.connected_port and self.connected_port.device == port.device) else None
+        active_client = None
         temp_client = DeviceClient()
 
         try:
+            if (
+                force_reopen
+                and self.client.is_open
+                and self.connected_port is not None
+                and self.connected_port.device == port.device
+            ):
+                self.client.close()
+                self.connected_port = None
+                self.message_queue.put(("refresh", "disconnect"))
+
+            if (
+                not force_reopen
+                and self.client.is_open
+                and self.connected_port
+                and self.connected_port.device == port.device
+            ):
+                active_client = self.client
+
             if active_client is None:
                 temp_client.open(port.device, DEFAULT_BAUDRATE)
                 active_client = temp_client
 
-            response = active_client.send_command(command, timeout=timeout, allow_disconnect=allow_disconnect)
-            return self._format_protocol_response(command, response)
+            return active_client.send_command(command, timeout=timeout, allow_disconnect=allow_disconnect)
         finally:
             temp_client.close()
+
+    @staticmethod
+    def _status_text_from_response(response: str) -> str:
+        status = parse_status_response(response)
+        mode_map = {
+            "cdc": "仅 CDC",
+            "cdc+msc": "CDC + MSC",
+            "switching": "切换中",
+        }
+        ready_map = {
+            "ready": "正常",
+            "not_ready": "未就绪",
+            "unknown": "查询不到",
+        }
+        return (
+            f"当前模式: {mode_map.get(status.mode, '查询不到')} | "
+            f"SD卡: {ready_map.get(status.sd, '查询不到')} | "
+            f"测试: {ready_map.get(status.test, '查询不到')}"
+        )
+
+    def _sync_mode_from_response(self, response: str) -> None:
+        try:
+            status = parse_status_response(response)
+        except Exception:
+            return
+
+        self.device_mode = status.mode
+        self.message_queue.put(("refresh", "usb_mode"))
 
     def _query_status(self) -> None:
         port = self._ensure_connected_port()
         response = self._send_shell_command(port, "status", timeout=2.0)
-        self.message_queue.put(("info", f"{port.device} -> {response}"))
+        self._sync_mode_from_response(response)
+        message = self._status_text_from_response(response)
+        self.message_queue.put(("info", message))
+
+    def _toggle_usb_mode(self) -> None:
+        if self.device_mode == "cdc+msc":
+            self._enter_cdc()
+        else:
+            self._enter_msc()
 
     def _enter_msc(self) -> None:
         port = self._ensure_connected_port()
         before = snapshot_volumes()
         response = self._send_shell_command(port, "enter_msc", timeout=2.0, allow_disconnect=True)
-        self.message_queue.put(("info", f"{port.device} -> {response}"))
+        self.message_queue.put(("info", self._format_simple_response("enter_msc", response)))
+
         if self.client.is_open and self.connected_port and self.connected_port.device == port.device:
             self._drop_active_connection()
         self.message_queue.put(("refresh", "disconnect"))
@@ -322,100 +426,189 @@ class App:
         new_port, drive = wait_for_mode_transition(
             before,
             wait=DEFAULT_WAIT_SECONDS,
-            expected_drive_file=DEFAULT_LOG_FILE,
+            expected_drive_file=None,
             expect_cdc=True,
         )
         if new_port is not None:
-            self._reconnect_preferred_port(8.0, "已进入 CDC+MSC", preferred_port=new_port)
+            self._reconnect_preferred_port(8.0, "已进入 CDC + MSC", preferred_port=new_port)
+        self.device_mode = "cdc+msc"
+        self.message_queue.put(("refresh", "usb_mode"))
         if drive is not None:
-            self.message_queue.put(("info", f"MSC 已挂载: {drive}"))
-
-    def _export_log(self) -> None:
-        port = self._ensure_connected_port()
-        output_dir = Path(self.output_dir_var.get()).resolve()
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        before = snapshot_volumes()
-        response = self._send_shell_command(port, "enter_msc", timeout=2.0, allow_disconnect=True)
-        self.message_queue.put(("info", f"{port.device} -> {response}"))
-        if self.client.is_open and self.connected_port and self.connected_port.device == port.device:
-            self._drop_active_connection()
-        self.message_queue.put(("refresh", "disconnect"))
-
-        new_port, drive = wait_for_mode_transition(
-            before,
-            wait=DEFAULT_WAIT_SECONDS,
-            expected_drive_file=DEFAULT_LOG_FILE,
-            expect_cdc=True,
-        )
-        if drive is None:
-            raise FileNotFoundError("未等到 MSC 盘符或日志文件")
-        source = Path(f"{drive}\\{DEFAULT_LOG_FILE}")
-        if not source.exists():
-            raise FileNotFoundError(f"log file not found: {source}")
-
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        destination = output_dir / f"imu_log_{timestamp}.csv"
-        shutil.copy2(source, destination)
-        if new_port is not None:
-            self._reconnect_preferred_port(8.0, "导出模式已就绪", preferred_port=new_port)
-        self.message_queue.put(("info", f"日志已导出: {destination}"))
+            self.message_queue.put(("info", f"U盘已就绪: {drive}"))
 
     def _enter_cdc(self) -> None:
         port = self._ensure_connected_port()
         response = self._send_shell_command(port, "enter_cdc", timeout=2.0, allow_disconnect=True)
-        self.message_queue.put(("info", f"{port.device} -> {response}"))
+        self.message_queue.put(("info", self._format_simple_response("enter_cdc", response)))
+
         if self.client.is_open and self.connected_port and self.connected_port.device == port.device:
             self._drop_active_connection()
         self.message_queue.put(("refresh", "disconnect"))
 
-        restored = self._reconnect_preferred_port(DEFAULT_WAIT_SECONDS, "已回到 CDC-only")
+        restored = self._reconnect_preferred_port(DEFAULT_WAIT_SECONDS, "已回到仅 CDC")
+        self.device_mode = "cdc"
+        self.message_queue.put(("refresh", "usb_mode"))
         self.message_queue.put(("info", f"CDC 已恢复: {restored.device}"))
 
-    def _fake_sd_test(self) -> None:
+    def _probe_imu(self, imu_index: int) -> None:
         port = self._ensure_connected_port()
+        response = self._send_shell_command(port, f"imu_probe{imu_index}", timeout=2.0)
+        probe_results = parse_imu_probe_response(response)
+        result = next((item for item in probe_results if item.imu == imu_index), None)
+        if result is None:
+            raise ValueError(f"IMU{imu_index} probe result not found")
 
-        try:
-            lines = int(self.fake_lines_var.get().strip())
-        except ValueError as exc:
-            raise ValueError("假数据行数必须是整数") from exc
+        status_map = {
+            "ready": "探测正常",
+            "not_found": "未探测到",
+            "unknown": "查询不到",
+        }
+        self.message_queue.put(("info", f"IMU{imu_index}: {status_map.get(result.status, result.status)} ({result.name})"))
 
-        if lines <= 0:
-            raise ValueError("假数据行数必须大于 0")
+    def _probe_all_imus(self) -> None:
+        port = self._ensure_connected_port()
+        response = self._send_shell_command(port, "imu_probe_all", timeout=2.0)
+        probe_results = parse_imu_probe_response(response)
+        status_map = {
+            "ready": "探测正常",
+            "not_found": "未探测到",
+            "unknown": "查询不到",
+        }
+        summary = " | ".join(
+            f"IMU{item.imu}: {status_map.get(item.status, item.status)} ({item.name})"
+            for item in probe_results
+        )
+        self.message_queue.put(("info", summary))
 
-        overwrite = 1 if self.fake_overwrite_var.get() else 0
-        command = f"fake_imu_sd_test {lines} {overwrite}"
-        response = self._send_shell_command(port, command, timeout=5.0)
-        self.message_queue.put(("info", f"{port.device} -> {response}"))
+    def _selected_test_key(self, label: str) -> str:
+        for key, item_label in TEST_OPTIONS:
+            if item_label == label:
+                return key
+        raise ValueError(f"unknown test option: {label}")
 
-    def _reset_to_cdc(self) -> None:
-        selected = self._selected_port_info()
-        port_name = selected.device if selected is not None else (self.port_var.get().strip() or None)
-        self.message_queue.put(("info", "开始通过 J-Link 复位目标板"))
-        jlink_reset()
-        if port_name:
-            wait_for_port_presence(port_name, present=True, timeout=DEFAULT_WAIT_SECONDS)
-        self.message_queue.put(("refresh", "ports"))
-        self.message_queue.put(("info", "CDC 已恢复"))
+    def _start_test(self) -> None:
+        test_key = self._selected_test_key(self.test_option_var.get())
+        if test_key != "arw":
+            self.message_queue.put(("info", f"{TEST_LABELS[test_key]}：测试命令入口已预留，等待固件命令补齐"))
+            return
+
+        port = self._ensure_connected_port()
+        prepare_response = self._send_shell_command(port, "noise_test_prepare", timeout=2.0)
+        prepare = parse_noise_prepare_response(prepare_response)
+
+        if prepare.detected <= 0 or prepare.status != "ok":
+            self.message_queue.put(("info", "噪声测试准备失败：未探测到可用 IMU"))
+            return
+
+        confirm = self._ask_yes_no(
+            "噪声测试确认",
+            f"已探测到 {prepare.detected} 个 IMU。\n将开始 {prepare.duration_s} 秒噪声采集并写入 BIN。\n是否继续？",
+        )
+        if not confirm:
+            self.message_queue.put(("info", "已取消噪声测试"))
+            return
+
+        start_response = self._send_shell_command(port, "noise_test_start", timeout=2.0)
+        self.message_queue.put(("info", self._format_simple_response("noise_test_start", start_response)))
+        if "status=accepted" not in start_response:
+            self.active_test_key = None
+            self.test_stop_event.set()
+            self.message_queue.put(("info", "噪声测试启动失败"))
+            return
+        self.active_test_key = "arw"
+        self.test_stop_event.clear()
+        self.message_queue.put(("info", "噪声测试已启动，固件将记录 10 秒 IMU 数据到测试目录下的新 BIN 文件"))
+        self._monitor_noise_test(port, prepare.duration_s)
+
+    def _monitor_noise_test(self, port: PortInfo, duration_s: int) -> None:
+        elapsed = 0
+        while elapsed < duration_s:
+            if self.test_stop_event.wait(timeout=3.0):
+                return
+            elapsed = min(elapsed + 3, duration_s)
+            self.message_queue.put(("info", f"噪声测试进度: {elapsed}/{duration_s}s"))
+
+        self._finalize_noise_test(port)
+
+    def _finalize_noise_test(self, port: PortInfo) -> None:
+        last_error: Exception | None = None
+        threading.Event().wait(0.6)
+        for _ in range(3):
+            try:
+                status_response = self._send_shell_command(
+                    port,
+                    "noise_test_status",
+                    timeout=5.0,
+                    force_reopen=True,
+                )
+                status = parse_noise_status_response(status_response)
+                self.active_test_key = None
+                self.message_queue.put((
+                    "info",
+                    f"噪声测试完成: frames={status.frames} duration={status.duration_s}s",
+                ))
+                self.message_queue.put(("info", f"bin 文件路径: {self._format_device_path(status.file)}"))
+                self._reconnect_preferred_port(3.0, "测试结束后已恢复串口连接", preferred_port=port)
+                return
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+                threading.Event().wait(0.5)
+
+        self.active_test_key = None
+        self.message_queue.put(("info", "噪声测试已结束，但状态查询失败"))
+        self.message_queue.put(("info", "bin 文件路径: 03_arw/000.BIN"))
+        if last_error is not None:
+            self.message_queue.put(("info", f"状态查询异常: {last_error}"))
+
+    def _stop_test(self) -> None:
+        if self.active_test_key != "arw":
+            self.message_queue.put(("info", "当前没有可中止的实际测试"))
+            return
+
+        port = self._ensure_connected_port()
+        response = self._send_shell_command(port, "noise_test_stop", timeout=2.0)
+        self.test_stop_event.set()
+        self.active_test_key = None
+        self.message_queue.put(("info", self._format_simple_response("noise_test_stop", response)))
+        self.message_queue.put(("info", "测试已中止，bin 文件路径请以状态查询返回为准"))
+
+    def _choose_analysis_bin(self) -> None:
+        chosen = filedialog.askopenfilename(
+            title="选择 BIN 文件",
+            filetypes=[("BIN files", "*.bin"), ("All files", "*.*")],
+        )
+        if chosen:
+            self._run_async(lambda: self._start_analysis(Path(chosen)))
+
+    def _start_analysis(self, source: Path) -> None:
+        test_key = self._selected_test_key(self.analysis_option_var.get())
+        output_dir = ANALYSIS_OUTPUT_DIRS[test_key]
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        source = source.resolve()
+        csv_path, md_path, summary = analyze_real_imu_bin_file(test_key, source, output_dir=output_dir)
+        self.message_queue.put(("info", f"{TEST_LABELS[test_key]} 分析完成"))
+        self.message_queue.put(("info", f"源文件: {source}"))
+        self.message_queue.put(("info", f"输出目录: {output_dir}"))
+        self.message_queue.put(("info", f"CSV: {csv_path}"))
+        self.message_queue.put(("info", f"报告: {md_path}"))
 
     def _drain_messages(self) -> None:
         try:
             while True:
                 level, payload = self.message_queue.get_nowait()
                 if level == "error":
-                    self.progress_var.set("失败")
                     self._append_log(f"错误: {payload}")
-                    messagebox.showerror("执行失败", payload)
+                    messagebox.showerror("执行失败", str(payload))
                 elif level == "info":
-                    self.progress_var.set(payload)
-                    self._append_log(payload)
+                    self._append_log(str(payload))
                 elif level == "refresh":
                     if payload == "ports":
                         self._refresh_ports()
-                    elif payload == "disconnect":
+                    elif payload in ("disconnect", "connect"):
                         self._update_connection_ui()
-                    elif payload == "connect":
-                        self._update_connection_ui()
+                    elif payload == "usb_mode":
+                        self._update_usb_mode_button()
         except queue.Empty:
             pass
         finally:

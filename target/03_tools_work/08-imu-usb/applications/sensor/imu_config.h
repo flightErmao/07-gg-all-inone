@@ -1,0 +1,11 @@
+#ifndef APPLICATIONS_IMU_CONFIG_H
+#define APPLICATIONS_IMU_CONFIG_H
+
+#define IMU_SENSOR_COUNT             4
+#define IMU_DEFAULT_ODR_HZ           1000
+#define IMU_DEFAULT_ACCEL_FS_G       16
+#define IMU_DEFAULT_GYRO_FS_DPS      2000
+#define IMU_DEFAULT_FIFO_DEPTH       64
+#define IMU_DEFAULT_POLL_PERIOD_MS   10
+
+#endif

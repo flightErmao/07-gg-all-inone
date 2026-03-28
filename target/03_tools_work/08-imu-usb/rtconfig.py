@@ -81,7 +81,10 @@ else:
     CFLAGS += ' -Wall'
     CXXFLAGS += ' -Wall' 
 
-POST_ACTION = OBJCPY + ' -O binary $TARGET build/rtthread.bin\n' + SIZE + ' $TARGET \n'
+import sys as _sys
+POST_ACTION = (OBJCPY + ' -O binary $TARGET build/rtthread.bin\n'
+               + SIZE + ' $TARGET \n'
+               + '"' + _sys.executable.replace('\\', '/') + '" script/build/gen_mem_report.py\n')
 
 def dist_handle(BSP_ROOT, dist_dir):
     import sys

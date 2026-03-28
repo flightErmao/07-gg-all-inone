@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import csv
+import math
 import shutil
 import string
+import struct
 import subprocess
 import sys
 import tempfile
 import time
 from dataclasses import dataclass
+from math import sqrt
 from pathlib import Path
 
 from serial_client import DeviceClient, PortInfo
@@ -20,6 +24,19 @@ DEFAULT_PID_COMPOSITE = 0x0003
 DEFAULT_LOG_FILE = "IMU_LOG.CSV"
 DEFAULT_BAUDRATE = 115200
 DEFAULT_WAIT_SECONDS = 25.0
+TEST_OPTIONS: list[tuple[str, str]] = [
+    ("bias", "测试项目 1：零偏及零偏稳定性"),
+    ("temp", "测试项目 2：温漂"),
+    ("arw", "测试项目 3：角度随机游走 ARW / 噪声"),
+    ("vibe", "测试项目 4：振动条件下输出连续性"),
+    ("shock", "测试项目 5：冲击后数据恢复"),
+]
+REAL_IMU_FRAME_STRUCT = struct.Struct("<HBQHBHhhhhhhhH")
+REAL_IMU_FRAME_MAGIC_HEAD = 0x55AA
+ICM42688_ACCEL_SCALER_MPS2 = 16.0 / float(1 << 15) * 9.80665
+ICM42688_GYRO_SCALER_RAD_S = 2000.0 / float(1 << 15) * math.pi / 180.0
+ICM42688_TEMP_SCALER_LSB_PER_C = 2.07
+ICM42688_TEMP_OFFSET_C = 25.0
 JLINK_CANDIDATES = [
     Path(r"C:\Program Files\SEGGER\JLink_V844a\JLink.exe"),
     Path(r"C:\Program Files\SEGGER\JLink\JLink.exe"),
@@ -31,6 +48,77 @@ class VolumeInfo:
     drive: str
     label: str
     filesystem: str
+
+
+@dataclass(frozen=True)
+class RealImuFrame:
+    some_flag: int
+    fifo_packet_count: int
+    timestamp_us: int
+    fifo_header: int
+    fifo_timestamp: int
+    accel_x: int
+    accel_y: int
+    accel_z: int
+    gyro_x: int
+    gyro_y: int
+    gyro_z: int
+    temp_raw: int
+    same_header: int
+    same_fifo_timestamp: int
+    same_acc_x: int
+    same_acc_y: int
+    same_acc_z: int
+    same_gyro_x: int
+    same_gyro_y: int
+    same_gyro_z: int
+
+
+def _raw_accel_to_mps2(raw_value: int) -> float:
+    return float(raw_value) * ICM42688_ACCEL_SCALER_MPS2
+
+
+def _raw_gyro_to_rad_s(raw_value: int) -> float:
+    return float(raw_value) * ICM42688_GYRO_SCALER_RAD_S
+
+
+def _raw_temp_to_celsius(raw_value: int) -> float:
+    return float(raw_value) / ICM42688_TEMP_SCALER_LSB_PER_C + ICM42688_TEMP_OFFSET_C
+
+
+def _format_float(value: float) -> str:
+    return f"{value:.6f}"
+
+
+@dataclass(frozen=True)
+class DeviceStatus:
+    mode: str
+    sd: str
+    test: str
+
+
+@dataclass(frozen=True)
+class ImuProbeResult:
+    imu: int
+    name: str
+    status: str
+
+
+@dataclass(frozen=True)
+class NoisePrepareResult:
+    detected: int
+    duration_s: int
+    recording: int
+    status: str
+
+
+@dataclass(frozen=True)
+class NoiseStatusResult:
+    recording: int
+    frames: int
+    duration_s: int
+    file: str
+    status: str
 
 
 def list_ports() -> list[PortInfo]:
@@ -202,6 +290,126 @@ def send_cdc_command(
         client.close()
 
 
+def parse_status_response(response: str) -> DeviceStatus:
+    for line in response.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("STATUS "):
+            continue
+
+        parts: dict[str, str] = {}
+        for token in stripped[7:].split():
+            if "=" not in token:
+                continue
+            key, value = token.split("=", 1)
+            parts[key] = value
+
+        return DeviceStatus(
+            mode=parts.get("mode", "unknown"),
+            sd=parts.get("sd", "unknown"),
+            test=parts.get("test", "unknown"),
+        )
+
+    raise ValueError("STATUS line not found")
+
+
+def parse_imu_probe_response(response: str) -> list[ImuProbeResult]:
+    results: list[ImuProbeResult] = []
+
+    for line in response.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("IMU_PROBE "):
+            continue
+
+        parts: dict[str, str] = {}
+        for token in stripped[10:].split():
+            if "=" not in token:
+                continue
+            key, value = token.split("=", 1)
+            parts[key] = value
+
+        imu_text = parts.get("imu")
+        if imu_text is None:
+            continue
+
+        results.append(
+            ImuProbeResult(
+                imu=int(imu_text),
+                name=parts.get("name", "unknown"),
+                status=parts.get("status", "unknown"),
+            )
+        )
+
+    if not results:
+        raise ValueError("IMU_PROBE line not found")
+
+    return results
+
+
+def parse_noise_prepare_response(response: str) -> NoisePrepareResult:
+    status_text = "unknown"
+
+    for line in response.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("RESULT cmd=noise_test_prepare "):
+            for token in stripped.split():
+                if token.startswith("status="):
+                    status_text = token.split("=", 1)[1]
+
+    for line in response.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("NOISE_TEST "):
+            continue
+
+        parts: dict[str, str] = {}
+        for token in stripped[11:].split():
+            if "=" not in token:
+                continue
+            key, value = token.split("=", 1)
+            parts[key] = value
+
+        return NoisePrepareResult(
+            detected=int(parts.get("detected", "0")),
+            duration_s=int(parts.get("duration_s", "0")),
+            recording=int(parts.get("recording", "0")),
+            status=status_text,
+        )
+
+    raise ValueError("NOISE_TEST line not found")
+
+
+def parse_noise_status_response(response: str) -> NoiseStatusResult:
+    status_text = "unknown"
+
+    for line in response.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("RESULT cmd=noise_test_status "):
+            for token in stripped.split():
+                if token.startswith("status="):
+                    status_text = token.split("=", 1)[1]
+
+    for line in response.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("NOISE_TEST_STATUS "):
+            continue
+
+        parts: dict[str, str] = {}
+        for token in stripped[18:].split():
+            if "=" not in token:
+                continue
+            key, value = token.split("=", 1)
+            parts[key] = value
+
+        return NoiseStatusResult(
+            recording=int(parts.get("recording", "0")),
+            frames=int(parts.get("frames", "0")),
+            duration_s=int(parts.get("duration_s", "0")),
+            file=parts.get("file", ""),
+            status=status_text,
+        )
+
+    raise ValueError("NOISE_TEST_STATUS line not found")
+
+
 def locate_jlink() -> Path:
     for candidate in JLINK_CANDIDATES:
         if candidate.exists():
@@ -234,6 +442,298 @@ def jlink_reset(device: str = "STM32H743VI", speed: int = 4000) -> None:
         command_file.unlink(missing_ok=True)
 
 
+def _crc16_ccitt(data: bytes, init: int = 0) -> int:
+    crc = init & 0xFFFF
+    for byte in data:
+        crc ^= (byte & 0xFF) << 8
+        for _ in range(8):
+            if crc & 0x8000:
+                crc = ((crc << 1) ^ 0x1021) & 0xFFFF
+            else:
+                crc = (crc << 1) & 0xFFFF
+    return crc
+
+
+def iter_real_imu_frames(payload: bytes) -> list[RealImuFrame]:
+    frames: list[RealImuFrame] = []
+    frame_size = REAL_IMU_FRAME_STRUCT.size
+    if len(payload) % frame_size != 0:
+        raise ValueError(f"invalid real imu bin size {len(payload)}, frame size is {frame_size}")
+
+    for offset in range(0, len(payload), frame_size):
+        fields = REAL_IMU_FRAME_STRUCT.unpack_from(payload, offset)
+        (
+            magic_head,
+            some_flag,
+            timestamp_us,
+            fifo_packet_count,
+            fifo_header,
+            fifo_timestamp,
+            accel_x,
+            accel_y,
+            accel_z,
+            gyro_x,
+            gyro_y,
+            gyro_z,
+            temp_raw,
+            crc16,
+        ) = fields
+
+        if magic_head != REAL_IMU_FRAME_MAGIC_HEAD:
+            raise ValueError(f"invalid frame head at offset {offset}: 0x{magic_head:04X}")
+        calc_crc = _crc16_ccitt(payload[offset + 2 : offset + frame_size - 2])
+        if crc16 != calc_crc:
+            raise ValueError(f"invalid real frame crc at offset {offset}: 0x{crc16:04X} != 0x{calc_crc:04X}")
+
+        frames.append(
+            RealImuFrame(
+                some_flag=some_flag,
+                fifo_packet_count=fifo_packet_count,
+                timestamp_us=timestamp_us,
+                fifo_header=fifo_header,
+                fifo_timestamp=fifo_timestamp,
+                accel_x=accel_x,
+                accel_y=accel_y,
+                accel_z=accel_z,
+                gyro_x=gyro_x,
+                gyro_y=gyro_y,
+                gyro_z=gyro_z,
+                temp_raw=temp_raw,
+                same_header=1 if (some_flag & (1 << 7)) else 0,
+                same_fifo_timestamp=1 if (some_flag & (1 << 6)) else 0,
+                same_acc_x=1 if (some_flag & (1 << 5)) else 0,
+                same_acc_y=1 if (some_flag & (1 << 4)) else 0,
+                same_acc_z=1 if (some_flag & (1 << 3)) else 0,
+                same_gyro_x=1 if (some_flag & (1 << 2)) else 0,
+                same_gyro_y=1 if (some_flag & (1 << 1)) else 0,
+                same_gyro_z=1 if (some_flag & (1 << 0)) else 0,
+            )
+        )
+
+    return frames
+
+
+def decode_real_imu_bin_to_csv(source: Path, destination: Path) -> int:
+    payload = source.read_bytes()
+    frames = iter_real_imu_frames(payload)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+
+    with destination.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(
+            [
+                "timestamp_us",
+                "fifo_packet_count",
+                "fifo_header",
+                "fifo_timestamp",
+                "raw_accel_x",
+                "raw_accel_y",
+                "raw_accel_z",
+                "raw_gyro_x",
+                "raw_gyro_y",
+                "raw_gyro_z",
+                "temp_raw",
+                "accel_x_mps2",
+                "accel_y_mps2",
+                "accel_z_mps2",
+                "gyro_x_rad_s",
+                "gyro_y_rad_s",
+                "gyro_z_rad_s",
+                "temp_c",
+                "same_flag",
+                "same_header",
+                "same_fifo_timestamp",
+                "same_acc_x",
+                "same_acc_y",
+                "same_acc_z",
+                "same_gyro_x",
+                "same_gyro_y",
+                "same_gyro_z",
+            ]
+        )
+        for frame in frames:
+            writer.writerow(
+                [
+                    frame.timestamp_us,
+                    frame.fifo_packet_count,
+                    frame.fifo_header,
+                    frame.fifo_timestamp,
+                    frame.accel_x,
+                    frame.accel_y,
+                    frame.accel_z,
+                    frame.gyro_x,
+                    frame.gyro_y,
+                    frame.gyro_z,
+                    frame.temp_raw,
+                    _format_float(_raw_accel_to_mps2(frame.accel_x)),
+                    _format_float(_raw_accel_to_mps2(frame.accel_y)),
+                    _format_float(_raw_accel_to_mps2(frame.accel_z)),
+                    _format_float(_raw_gyro_to_rad_s(frame.gyro_x)),
+                    _format_float(_raw_gyro_to_rad_s(frame.gyro_y)),
+                    _format_float(_raw_gyro_to_rad_s(frame.gyro_z)),
+                    _format_float(_raw_temp_to_celsius(frame.temp_raw)),
+                    frame.some_flag,
+                    frame.same_header,
+                    frame.same_fifo_timestamp,
+                    frame.same_acc_x,
+                    frame.same_acc_y,
+                    frame.same_acc_z,
+                    frame.same_gyro_x,
+                    frame.same_gyro_y,
+                    frame.same_gyro_z,
+                ]
+            )
+
+    return len(frames)
+
+
+def _mean(values: list[float]) -> float:
+    return float(sum(values)) / float(len(values)) if values else 0.0
+
+
+def _std(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    avg = _mean(values)
+    return sqrt(sum((float(v) - avg) ** 2 for v in values) / float(len(values)))
+
+
+def _rms(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    return sqrt(sum(float(v) * float(v) for v in values) / float(len(values)))
+
+
+def analyze_real_imu_frames(test_key: str, frames: list[RealImuFrame]) -> dict[str, str]:
+    if not frames:
+        raise ValueError("no frames found")
+
+    acc_x = [_raw_accel_to_mps2(frame.accel_x) for frame in frames]
+    acc_y = [_raw_accel_to_mps2(frame.accel_y) for frame in frames]
+    acc_z = [_raw_accel_to_mps2(frame.accel_z) for frame in frames]
+    gyro_x = [_raw_gyro_to_rad_s(frame.gyro_x) for frame in frames]
+    gyro_y = [_raw_gyro_to_rad_s(frame.gyro_y) for frame in frames]
+    gyro_z = [_raw_gyro_to_rad_s(frame.gyro_z) for frame in frames]
+    temp_c = [_raw_temp_to_celsius(frame.temp_raw) for frame in frames]
+    timestamps = [frame.timestamp_us for frame in frames]
+    fifo_counts = [frame.fifo_packet_count for frame in frames]
+    same_flag_count = sum(1 for frame in frames if frame.some_flag != 0)
+    same_header = sum(frame.same_header for frame in frames)
+    same_fifo_timestamp = sum(frame.same_fifo_timestamp for frame in frames)
+    same_acc_x = sum(frame.same_acc_x for frame in frames)
+    same_acc_y = sum(frame.same_acc_y for frame in frames)
+    same_acc_z = sum(frame.same_acc_z for frame in frames)
+    same_gyro_x = sum(frame.same_gyro_x for frame in frames)
+    same_gyro_y = sum(frame.same_gyro_y for frame in frames)
+    same_gyro_z = sum(frame.same_gyro_z for frame in frames)
+    timestamp_steps = [timestamps[i] - timestamps[i - 1] for i in range(1, len(timestamps))]
+
+    common = {
+        "test": test_key,
+        "frames": str(len(frames)),
+        "timestamp_start_us": str(timestamps[0]),
+        "timestamp_end_us": str(timestamps[-1]),
+        "timestamp_step_mean_us": f"{_mean(timestamp_steps):.3f}" if timestamp_steps else "0.000",
+        "timestamp_step_std_us": f"{_std(timestamp_steps):.3f}" if timestamp_steps else "0.000",
+        "fifo_packet_mean": f"{_mean(fifo_counts):.3f}",
+        "fifo_packet_max": str(max(fifo_counts)),
+        "same_flag_frames": str(same_flag_count),
+        "same_header_count": str(same_header),
+        "same_fifo_timestamp_count": str(same_fifo_timestamp),
+        "same_acc_x_count": str(same_acc_x),
+        "same_acc_y_count": str(same_acc_y),
+        "same_acc_z_count": str(same_acc_z),
+        "same_gyro_x_count": str(same_gyro_x),
+        "same_gyro_y_count": str(same_gyro_y),
+        "same_gyro_z_count": str(same_gyro_z),
+    }
+
+    if test_key == "bias":
+        common.update(
+            {
+                "acc_mean_x_mps2": f"{_mean(acc_x):.3f}",
+                "acc_mean_y_mps2": f"{_mean(acc_y):.3f}",
+                "acc_mean_z_mps2": f"{_mean(acc_z):.3f}",
+                "gyro_mean_x_rad_s": f"{_mean(gyro_x):.3f}",
+                "gyro_mean_y_rad_s": f"{_mean(gyro_y):.3f}",
+                "gyro_mean_z_rad_s": f"{_mean(gyro_z):.3f}",
+            }
+        )
+    elif test_key == "temp":
+        common.update(
+            {
+                "temp_mean_c": f"{_mean(temp_c):.3f}",
+                "temp_std_c": f"{_std(temp_c):.3f}",
+            }
+        )
+    elif test_key == "arw":
+        common.update(
+            {
+                "gyro_rms_x_rad_s": f"{_rms(gyro_x):.3f}",
+                "gyro_rms_y_rad_s": f"{_rms(gyro_y):.3f}",
+                "gyro_rms_z_rad_s": f"{_rms(gyro_z):.3f}",
+                "acc_rms_x_mps2": f"{_rms(acc_x):.3f}",
+                "acc_rms_y_mps2": f"{_rms(acc_y):.3f}",
+                "acc_rms_z_mps2": f"{_rms(acc_z):.3f}",
+            }
+        )
+    elif test_key == "vibe":
+        common.update(
+            {
+                "fifo_abnormal_count": str(sum(1 for value in fifo_counts if value != 1)),
+                "acc_peak_x_mps2": f"{max(abs(v) for v in acc_x):.3f}",
+                "acc_peak_y_mps2": f"{max(abs(v) for v in acc_y):.3f}",
+                "acc_peak_z_mps2": f"{max(abs(v) for v in acc_z):.3f}",
+            }
+        )
+    elif test_key == "shock":
+        common.update(
+            {
+                "gyro_peak_x_rad_s": f"{max(abs(v) for v in gyro_x):.3f}",
+                "gyro_peak_y_rad_s": f"{max(abs(v) for v in gyro_y):.3f}",
+                "gyro_peak_z_rad_s": f"{max(abs(v) for v in gyro_z):.3f}",
+            }
+        )
+    else:
+        raise ValueError(f"unsupported test key: {test_key}")
+
+    return common
+
+
+def _write_markdown_report(destination: Path, source: Path, summary: dict[str, str]) -> None:
+    lines = [
+        "# 数据分析报告",
+        "",
+        f"- 源文件: `{source}`",
+        "",
+        "## 摘要",
+        "",
+    ]
+    for key, value in summary.items():
+        lines.append(f"- {key}: `{value}`")
+    destination.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def analyze_real_imu_bin_file(test_key: str, source: Path, output_dir: Path | None = None) -> tuple[Path, Path, dict[str, str]]:
+    source = source.resolve()
+    if not source.exists():
+        raise FileNotFoundError(source)
+
+    if output_dir is None:
+        output_dir = source.parent
+    output_dir = output_dir.resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    csv_path = output_dir / f"{source.stem}_{test_key}.csv"
+    md_path = output_dir / f"{source.stem}_{test_key}_analysis.md"
+
+    decode_real_imu_bin_to_csv(source, csv_path)
+    frames = iter_real_imu_frames(source.read_bytes())
+    summary = analyze_real_imu_frames(test_key, frames)
+    _write_markdown_report(md_path, source, summary)
+    return csv_path, md_path, summary
+
+
 def command_ports(_args: argparse.Namespace) -> int:
     ports = list_ports()
     if not ports:
@@ -262,7 +762,7 @@ def command_enter_msc(args: argparse.Namespace) -> int:
     composite_port, drive = wait_for_mode_transition(
         before,
         wait=args.wait,
-        expected_drive_file=DEFAULT_LOG_FILE,
+        expected_drive_file=None,
         expect_cdc=True,
     )
     if composite_port is not None:
@@ -323,12 +823,67 @@ def command_enter_cdc(args: argparse.Namespace) -> int:
     return 0
 
 
-def command_fake_sd_test(args: argparse.Namespace) -> int:
-    command = f"fake_imu_sd_test {args.lines} {1 if args.overwrite else 0}"
-    port, response = send_cdc_command(args.port, command, timeout=args.timeout)
+def command_probe_imu(args: argparse.Namespace) -> int:
+    port, response = send_cdc_command(args.port, f"imu_probe{args.index}", timeout=args.timeout)
     print(f"port: {port.device}")
     if response:
         print(response)
+    return 0
+
+
+def command_probe_imu_all(args: argparse.Namespace) -> int:
+    port, response = send_cdc_command(args.port, "imu_probe_all", timeout=args.timeout)
+    print(f"port: {port.device}")
+    if response:
+        print(response)
+    return 0
+
+
+def command_noise_prepare(args: argparse.Namespace) -> int:
+    port, response = send_cdc_command(args.port, "noise_test_prepare", timeout=args.timeout)
+    print(f"port: {port.device}")
+    if response:
+        print(response)
+    return 0
+
+
+def command_noise_start(args: argparse.Namespace) -> int:
+    port, response = send_cdc_command(args.port, "noise_test_start", timeout=args.timeout)
+    print(f"port: {port.device}")
+    if response:
+        print(response)
+    return 0
+
+
+def command_noise_status(args: argparse.Namespace) -> int:
+    port, response = send_cdc_command(args.port, "noise_test_status", timeout=args.timeout)
+    print(f"port: {port.device}")
+    if response:
+        print(response)
+    return 0
+
+
+def command_noise_stop(args: argparse.Namespace) -> int:
+    port, response = send_cdc_command(args.port, "noise_test_stop", timeout=args.timeout)
+    print(f"port: {port.device}")
+    if response:
+        print(response)
+    return 0
+
+
+def command_decode_real_bin(args: argparse.Namespace) -> int:
+    source = Path(args.input).resolve()
+    if not source.exists():
+        raise FileNotFoundError(source)
+
+    if args.output:
+        destination = Path(args.output).resolve()
+    else:
+        destination = source.with_suffix(".csv")
+
+    frame_count = decode_real_imu_bin_to_csv(source, destination)
+    print(f"decoded csv: {destination}")
+    print(f"frames: {frame_count}")
     return 0
 
 
@@ -366,16 +921,41 @@ def build_parser() -> argparse.ArgumentParser:
     parser_enter_cdc.add_argument("--wait", type=float, default=DEFAULT_WAIT_SECONDS)
     parser_enter_cdc.set_defaults(func=command_enter_cdc)
 
-    parser_fake_sd = subparsers.add_parser("fake-sd-test", help="write fake imu data into IMU_TEST.CSV on sd card")
-    parser_fake_sd.add_argument("--port", help="CDC serial port, e.g. COM78")
-    parser_fake_sd.add_argument("--lines", type=int, default=64, help="number of fake imu rows to write")
-    parser_fake_sd.add_argument("--timeout", type=float, default=5.0)
-    parser_fake_sd.add_argument(
-        "--overwrite",
-        action="store_true",
-        help="overwrite IMU_TEST.CSV instead of appending",
-    )
-    parser_fake_sd.set_defaults(func=command_fake_sd_test)
+    parser_probe_imu = subparsers.add_parser("probe-imu", help="probe one imu slot")
+    parser_probe_imu.add_argument("index", type=int, choices=[1, 2, 3, 4])
+    parser_probe_imu.add_argument("--port", help="CDC serial port, e.g. COM78")
+    parser_probe_imu.add_argument("--timeout", type=float, default=2.0)
+    parser_probe_imu.set_defaults(func=command_probe_imu)
+
+    parser_probe_all = subparsers.add_parser("probe-imu-all", help="probe all imu slots")
+    parser_probe_all.add_argument("--port", help="CDC serial port, e.g. COM78")
+    parser_probe_all.add_argument("--timeout", type=float, default=2.0)
+    parser_probe_all.set_defaults(func=command_probe_imu_all)
+
+    parser_noise_prepare = subparsers.add_parser("noise-prepare", help="probe imu count before 10s noise recording")
+    parser_noise_prepare.add_argument("--port", help="CDC serial port, e.g. COM78")
+    parser_noise_prepare.add_argument("--timeout", type=float, default=2.0)
+    parser_noise_prepare.set_defaults(func=command_noise_prepare)
+
+    parser_noise_start = subparsers.add_parser("noise-start", help="start 10s imu noise recording")
+    parser_noise_start.add_argument("--port", help="CDC serial port, e.g. COM78")
+    parser_noise_start.add_argument("--timeout", type=float, default=2.0)
+    parser_noise_start.set_defaults(func=command_noise_start)
+
+    parser_noise_status = subparsers.add_parser("noise-status", help="get 10s imu noise recording progress")
+    parser_noise_status.add_argument("--port", help="CDC serial port, e.g. COM78")
+    parser_noise_status.add_argument("--timeout", type=float, default=2.0)
+    parser_noise_status.set_defaults(func=command_noise_status)
+
+    parser_noise_stop = subparsers.add_parser("noise-stop", help="stop 10s imu noise recording")
+    parser_noise_stop.add_argument("--port", help="CDC serial port, e.g. COM78")
+    parser_noise_stop.add_argument("--timeout", type=float, default=2.0)
+    parser_noise_stop.set_defaults(func=command_noise_stop)
+
+    parser_decode_real = subparsers.add_parser("decode-real-bin", help="decode IMUNOISE.BIN into csv")
+    parser_decode_real.add_argument("input", help="path to IMUNOISE.BIN")
+    parser_decode_real.add_argument("--output", help="output csv path")
+    parser_decode_real.set_defaults(func=command_decode_real_bin)
 
     parser_export = subparsers.add_parser("export-log", help="switch to CDC+MSC export mode and copy IMU_LOG.CSV")
     parser_export.add_argument("--port", help="CDC serial port, e.g. COM78")

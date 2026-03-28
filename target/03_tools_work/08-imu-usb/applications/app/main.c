@@ -12,7 +12,7 @@
 #include <rtdevice.h>
 #include <board.h>
 
-#include "usb_mode_manager.h"
+#include "app_init.h"
 
 /* defined the LED0 pin: PE3 */
 #define LED0_PIN    GET_PIN(E, 3)
@@ -21,7 +21,7 @@ int main(void)
 {
     /* set LED0 pin mode to output */
     rt_pin_mode(LED0_PIN, PIN_MODE_OUTPUT);
-    usb_mode_manager_start();
+    app_init_run();
 
     while (1)
     {

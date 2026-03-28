@@ -3,6 +3,11 @@ menuconfig BSP_USING_SPI
     default n
     select RT_USING_SPI
     if BSP_USING_SPI
+        config BSP_SPI_READ_DUMMY_STACK_SIZE
+            int "SPI read dummy stack size"
+            default 512
+            range 32 4096
+
         menuconfig BSP_USING_SPI1
             bool "Enable SPI1 BUS"
             default n

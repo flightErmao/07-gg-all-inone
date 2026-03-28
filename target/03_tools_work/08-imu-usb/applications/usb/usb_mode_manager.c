@@ -6,7 +6,6 @@
 #include "fatfs_sdcard_port.h"
 #include "usb_mode_manager.h"
 #include <vconsole.h>
-#include <finsh.h>
 
 #define DBG_TAG "usb.mode"
 #define DBG_LVL DBG_INFO
@@ -32,7 +31,6 @@ static const char *g_usb_cdc_strings[] =
     "320219198301",
     "Configuration",
     "Interface",
-    USB_STRING_OS,
 };
 
 static const char *g_usb_composite_strings[] =
@@ -43,7 +41,6 @@ static const char *g_usb_composite_strings[] =
     "320219198301",
     "Configuration",
     "Interface",
-    USB_STRING_OS,
 };
 
 static struct udevice_descriptor g_usb_composite_desc =
@@ -77,16 +74,6 @@ static struct usb_qualifier_descriptor g_usb_composite_qualifier =
     0,
 };
 
-static struct usb_os_comp_id_descriptor g_usb_comp_id_desc =
-{
-    {
-        USB_DYNAMIC,
-        0x0100,
-        0x04,
-        USB_DYNAMIC,
-        {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-    },
-};
 #endif
 
 typedef struct
@@ -194,6 +181,37 @@ static void usb_mode_attach_shell_to_vcom(void)
     LOG_I("shell attached to %s", vcom->parent.name);
 }
 
+const char *usb_mode_manager_mode_name(usb_app_mode_t mode)
+{
+    switch (mode)
+    {
+    case USB_APP_MODE_CDC:
+        return "cdc";
+
+    case USB_APP_MODE_MSC:
+        return "cdc+msc";
+
+    default:
+        return "switching";
+    }
+}
+
+rt_bool_t usb_mode_manager_is_sd_ready(void)
+{
+    return (rt_device_find(RT_USB_MSTORAGE_DISK_NAME) != RT_NULL) ? RT_TRUE : RT_FALSE;
+}
+
+rt_bool_t usb_mode_manager_is_test_ready(void)
+{
+    if ((g_usb_mode.active_mode == USB_APP_MODE_CDC) &&
+        (rt_device_find(RT_USB_MSTORAGE_DISK_NAME) != RT_NULL))
+    {
+        return RT_TRUE;
+    }
+
+    return RT_FALSE;
+}
+
 static rt_err_t usb_mode_build_device(usb_app_mode_t mode)
 {
     uconfig_t cfg;
@@ -254,7 +272,6 @@ static rt_err_t usb_mode_build_device(usb_app_mode_t mode)
 #ifdef RT_USB_DEVICE_COMPOSITE
         rt_usbd_device_set_descriptor(dev, &g_usb_composite_desc);
         rt_usbd_device_set_string(dev, g_usb_composite_strings);
-        rt_usbd_device_set_os_comp_id_desc(dev, &g_usb_comp_id_desc);
         if (dev->dcd->device_is_hs)
         {
             rt_usbd_device_set_qualifier(dev, &g_usb_composite_qualifier);
@@ -351,7 +368,11 @@ static void usb_mode_stop_usb(void)
     }
 
     stm_usbd_stop();
-    rt_thread_mdelay(3000);
+    /*
+     * Give the host a short disconnect window so it notices the detach,
+     * but avoid multi-second gaps that make CDC<->MSC switching feel slow.
+     */
+    rt_thread_mdelay(150);
     usb_mode_destroy_device();
     g_usb_mode.usb_ready = RT_FALSE;
 }
@@ -493,19 +514,6 @@ static void usb_mode_request(usb_app_mode_t mode)
     rt_event_send(g_usb_mode.event, APP_USB_SWITCH_EVENT);
 }
 
-static const char *usb_mode_name(usb_app_mode_t mode)
-{
-    switch (mode)
-    {
-    case USB_APP_MODE_CDC:
-        return "cdc";
-    case USB_APP_MODE_MSC:
-        return "cdc+msc";
-    default:
-        return "switching";
-    }
-}
-
 static void usb_mode_switch_entry(void *parameter)
 {
     rt_uint32_t event;
@@ -605,45 +613,15 @@ static void usb_mode_logger_entry(void *parameter)
 
 int enter_msc_mode(void)
 {
-    rt_kprintf("ACK cmd=enter_msc received current=%s target=cdc+msc\r\n",
-               usb_mode_name(g_usb_mode.active_mode));
     usb_mode_request(USB_APP_MODE_MSC);
-    rt_thread_mdelay(20);
-    rt_kprintf("RESULT cmd=enter_msc status=accepted action=reboot_to_cdc_msc\r\n");
     return RT_EOK;
 }
-MSH_CMD_EXPORT(enter_msc_mode, switch USB device to CDC+MSC mode);
-MSH_CMD_EXPORT_ALIAS(enter_msc_mode, enter_msc, switch USB device to CDC+MSC mode);
 
 int enter_cdc_mode(void)
 {
-    rt_kprintf("ACK cmd=enter_cdc received current=%s target=cdc\r\n",
-               usb_mode_name(g_usb_mode.active_mode));
-    usb_mode_request(APP_USB_BOOT_MODE);
-    rt_thread_mdelay(20);
-    rt_kprintf("RESULT cmd=enter_cdc status=accepted action=reboot_to_cdc\r\n");
+    usb_mode_request(USB_APP_MODE_CDC);
     return RT_EOK;
 }
-MSH_CMD_EXPORT(enter_cdc_mode, switch USB device to CDC-only mode);
-MSH_CMD_EXPORT_ALIAS(enter_cdc_mode, enter_cdc, switch USB device to CDC-only mode);
-
-static int usb_mode_status(void)
-{
-    rt_kprintf("ACK cmd=status received\r\n");
-    rt_kprintf("STATUS mode=%s fs=%d usb_ready=%d logger=%d log_fd=%d target=%s last_result=%d last_stage=%lu\r\n",
-               usb_mode_name(g_usb_mode.active_mode),
-               g_usb_mode.fs_ready,
-               g_usb_mode.usb_ready,
-               g_usb_mode.logger_running,
-               g_usb_mode.log_fd,
-               usb_mode_name(g_usb_mode.target_mode),
-               g_usb_mode.last_result,
-               (unsigned long)g_usb_mode.last_stage);
-    rt_kprintf("RESULT cmd=status status=ok\r\n");
-    return RT_EOK;
-}
-MSH_CMD_EXPORT(usb_mode_status, show USB mode manager state);
-MSH_CMD_EXPORT_ALIAS(usb_mode_status, status, show USB mode manager state);
 
 usb_app_mode_t usb_mode_manager_current_mode(void)
 {

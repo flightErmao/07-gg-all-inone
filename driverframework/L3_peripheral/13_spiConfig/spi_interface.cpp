@@ -92,7 +92,7 @@ int SpiInterface::spi_read_reg_wrapper(uint8_t *cmd, uint8_t cmd_length, uint8_t
   if (spi_device_ == RT_NULL) return -RT_ERROR;
   if (cmd == RT_NULL || cmd_length == 0 || data == RT_NULL || data_len == 0) return -RT_ERROR;
 
-  uint8_t dummy_stack[32];
+  uint8_t dummy_stack[BSP_SPI_READ_DUMMY_STACK_SIZE];
   uint8_t *dummy_tx = dummy_stack;
   rt_bool_t use_heap = RT_FALSE;
 

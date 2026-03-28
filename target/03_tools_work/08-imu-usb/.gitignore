@@ -1,0 +1,8 @@
+# Build output
+build/
+
+# Test data
+data/
+
+# JLink scripts
+*.jlink

@@ -4,9 +4,20 @@ import threading
 import time
 from dataclasses import dataclass
 
-import serial
-import serial.tools.list_ports
-from serial import SerialException
+try:
+    import serial
+    import serial.tools.list_ports
+    from serial import SerialException
+    from serial import SerialTimeoutException
+except ModuleNotFoundError as exc:
+    if exc.name != "serial":
+        raise
+    raise ModuleNotFoundError(
+        "Missing dependency 'pyserial'. Install it with:\n"
+        "python -m pip install -r requirements.txt\n"
+        "or:\n"
+        "python -m pip install pyserial"
+    ) from exc
 
 
 @dataclass(frozen=True)
@@ -66,7 +77,7 @@ class DeviceClient:
             port=port,
             baudrate=baudrate,
             timeout=0.2,
-            write_timeout=2.0,
+            write_timeout=5.0,
         )
         time.sleep(0.2)
         self._serial.reset_input_buffer()
@@ -94,18 +105,28 @@ class DeviceClient:
     def send_command(self, command: str, timeout: float = 2.0, allow_disconnect: bool = False) -> str:
         with self._lock:
             serial_port = self._require_serial()
-            try:
-                self._prepare_shell(serial_port)
-                # Shell requires \r\n; plain \n is ignored by most RTOS shells
-                serial_port.write((command.strip() + "\r\n").encode("ascii"))
-                serial_port.flush()
-                return self._read_shell_response(command.strip(), timeout)
-            except (SerialException, TimeoutError):
-                # TimeoutError can occur when the device disconnects before
-                # returning a shell prompt (e.g. enter_cdc / enter_msc).
-                if allow_disconnect:
-                    return ""
-                raise
+            attempts = 2
+            for attempt in range(attempts):
+                try:
+                    self._prepare_shell(serial_port)
+                    # Shell requires \r\n; plain \n is ignored by most RTOS shells
+                    serial_port.write((command.strip() + "\r\n").encode("ascii"))
+                    serial_port.flush()
+                    return self._read_shell_response(command.strip(), timeout)
+                except SerialTimeoutException:
+                    if attempt + 1 >= attempts:
+                        if allow_disconnect:
+                            return ""
+                        raise
+                    time.sleep(0.2)
+                    continue
+                except (SerialException, TimeoutError):
+                    # TimeoutError can occur when the device disconnects before
+                    # returning a shell prompt (e.g. enter_cdc / enter_msc).
+                    if allow_disconnect:
+                        return ""
+                    raise
+            return ""
 
     def _prepare_shell(self, serial_port: serial.Serial) -> None:
         serial_port.reset_input_buffer()

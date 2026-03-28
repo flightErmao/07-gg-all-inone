@@ -29,6 +29,7 @@ static void DelayMs(rt_uint32_t ms) { rt_thread_mdelay(ms); }
 static void DelayUs(rt_uint32_t us) { rt_thread_mdelay((us + 999U) / 1000U); }
 
 static constexpr int kProbeRetryCount = 5;
+static volatile uint32_t g_icm42688_packet_parse_mismatch_count = 0;
 // static constexpr rt_uint32_t SENSOR_ICM42688_SPI_MAX_HZ = 1000000;
 // static constexpr rt_uint16_t kProbeMode3 = (RT_SPI_MODE_3 | RT_SPI_MSB) & RT_SPI_MODE_MASK;
 static constexpr rt_uint16_t kProbeMode3 = (RT_SPI_MODE_0 | RT_SPI_MSB) & RT_SPI_MODE_MASK;
@@ -681,7 +682,6 @@ bool ICM42688::icm4x6xx_en_fifo(bool en_accel, bool en_gyro) {
   reg = (en_accel ? FIFO_ACCEL_EN_MASK : 0) |
         (en_gyro ? FIFO_GYRO_EN_MASK : 0) |
         ((en_accel || en_gyro) ? FIFO_TEMP_EN_MASK : 0) |
-        //((en_accel || en_gyro) ? FIFO_TMST_FSYNC_EN_MASK : 0) |
         (use_hi_res_ ? ((en_accel || en_gyro) ? FIFO_HIRES_EN_MASK : 0) : 0);
 
   if (!WriteMask(REG_FIFO_CONFIG_1, reg, bit_mask)) {
@@ -1170,343 +1170,66 @@ uint32_t ICM42688::get_offset(uint16_t early, uint16_t later) {
 
 bool ICM42688::ReadRaw(IMURawData& data) {
   uint64_t dsp_time = GetTimeUs();
-  data.PACKET_SIZE = 20;
-  data.MAX_PACKET_COUNT = 32;
-  data.is_need_cali_time = false;
-
-  int16_t accel[3] = {0};
-  int16_t gyro[3] = {0};
-
-  if (clkin_enable_) {
-    bool need_sync_time = (sync_time_count_ >= 100) ? false : true;
-
-    if (need_sync_time) {
-      sync_time_count_++;
-      if (!icm4x6xx_enable_tmst_val(true)) {
-        LOG_E("id[%d]: icm4x6xx_enable_tmst_val fail\n", id_);
-        return false;
-      }
-    }
-
-    data.id = 0x47;  // ffc need it //id_;
-    data.index = id_;
-   
-    /*
-    1.get chip time
-    2.get chip odr time
-    3.get odr offset time = chip time - chip odr time
-    2.odr time  = dsptime  - odr offset time
-    */
-    uint32_t intl_cnt_20b = 0;
-    uint16_t fifo_count = 0;
-    uint16_t bytes_to_read = 0;
-    uint8_t packet_size = 0;
- 
-    int16_t temperture = 0;
-    
-
-    if (!icm4x6xx_get_packet_size(&packet_size)) {
-      LOG_E("id[%d]: icm4x6xx_get_packet_size fail\n", id_);
-      return false;
-    }
-    // logger.Info("icm4x6xx_get_packet_size = %d\n", packet_size);
-    if (!icm4x6xx_read_fifo_count(&fifo_count)) {
-      LOG_E("id[%d]: icm4x6xx_read_fifo_count fail\n", id_);
-      return false;
-    }
-    for (int retry = 0; fifo_count == 0 && retry < 2; ++retry) {
-      DelayMs(1);
-      if (!icm4x6xx_read_fifo_count(&fifo_count)) {
-        LOG_E("id[%d]: icm4x6xx_read_fifo_count retry fail\n", id_);
-        return false;
-      }
-    }
-    // logger.Info("fifo_count = %d\n", fifo_count);
-
-    if (fifo_count == 0) {
-      LOG_E("id[%d]: fifo_count = 0\n", id_);
-      return false;
-    }
-
-    bytes_to_read = fifo_count;
-
-    if (bytes_to_read > (packet_size * MAX_SCP_SAMPLES)) {
-      bytes_to_read = (packet_size * MAX_SCP_SAMPLES);
-    }
-
-    uint8_t buf[bytes_to_read];
-    if (!icm4x6xx_read_fifo_buf(buf, bytes_to_read)) {
-      LOG_E("id[%d]: icm4x6xx_read_fifo_buf(buf, bytes_to_read) fail\n", id_);
-      return false;
-    }
-
-    uint16_t packet_cnt = 0;
-    uint32_t valid_buf_len = icm4x6xx_cal_valid_fifo_len(buf, bytes_to_read, &packet_cnt);
-
-    // logger.Info("(valid_buf_len == %d || packet_cnt == %d) ok\n",
-    // valid_buf_len,
-    //          packet_cnt);
-
-    // ICM4X6XX_INST_PRINTF(LOW, instance, "valid buf_len/packet_cnt %d %d",
-    // valid_buf_len, packet_cnt);
-    if (valid_buf_len == 0 || packet_cnt == 0) {
-      // ICM4X6XX_INST_PRINTF(HIGH, instance, "no valid senor data");
-      // goto CLEAN_STATUS;
-
-      LOG_E("id[%d]: (valid_buf_len == 0 || packet_cnt == 0) fail, fifo_count = %d", id_, fifo_count);
-      return false;
-    }
-
-    if (packet_cnt != valid_buf_len / packet_size) {
-      LOG_E("id[%d]: (packet_cnt != valid_buf_len / packet_size) fail", id_);
-      return false;
-    }
-
-    uint16_t index = packet_cnt - 1;
-    uint8_t* p = buf;
-
-    temperture = p[index * packet_size + 0x0D];
-
-    // Timestamp bytes are present at 0x0E/0x0F, but the false path currently
-    // only forwards the calibration timestamp from TMSTVAL.
-
-    index = 0;
-
-    accel[0] = p[index * packet_size + 0x01] * 256 + p[index * packet_size + 0x02];
-    accel[1] = p[index * packet_size + 0x03] * 256 + p[index * packet_size + 0x04];
-    accel[2] = p[index * packet_size + 0x05] * 256 + p[index * packet_size + 0x06];
-    gyro[0] = p[index * packet_size + 0x07] * 256 + p[index * packet_size + 0x08];
-    gyro[1] = p[index * packet_size + 0x09] * 256 + p[index * packet_size + 0x0A];
-    gyro[2] = p[index * packet_size + 0x0B] * 256 + p[index * packet_size + 0x0C];
-
-    /*
-      temperture = p[index * packet_size + 0x0D];
-
-      fifo_timestamp =
-          p[index * packet_size + 0x0E] * 256 + p[index * packet_size + 0x0F];
-      // logger.Info("ICM42688::fifo_timestamp = %d\n", fifo_timestamp);
-    }*/
-
-    if (need_sync_time) {
-      if (!icm4x6xx_read_tmst_val(&intl_cnt_20b)) {
-        LOG_E("id[%d]: icm4x6xx_read_tmst_val(&intl_cnt_20b) fail\n", id_);
-        return false;
-      }
-
-      // logger.Info("Timer::Now() = %lld\n", Timer::Now());
-      // logger.Info("ICM42688::intl_cnt_20b = %d\n", intl_cnt_20b);
-
-      ////////////////////////////////////
-      //  uint32_t offset_before = 0;
-      // if ((intl_cnt_20b & 0xffff) < fifo_timestamp) {
-      //   offset_before = 0xffff - fifo_timestamp + 1 + (intl_cnt_20b &
-      //   0xffff);
-      // } else {
-      //   offset_before = (intl_cnt_20b & 0xffff) - fifo_timestamp;
-      // }
-
-      // // 1024/1000: 976-> 1000
-      // offset_before = offset_before * 1024 / 1000 ;
-
-      // if (offset_before < odr_time_offset_before) {
-      //   odr_time_offset_before = offset_before;
-      // }
-
-      ////////////////////////////////////////////
-      
-
-      /*
-      uint32_t offset = get_offset(fifo_timestamp, (intl_cnt_20b & 0xffff));
-
-      // 1024/1000: 976-> 1000
-      offset = offset * 1024 / 1000;
-
-      if (offset < odr_time_offset_) {
-        odr_time_offset_ = offset;
-      }
-
-      // 2700us ODR delay
-      dsp_fifo_timestamp_ = dsp_time - 2700 - (odr_time_offset_);
-
-      last_fifo_timestamp_16b_ = fifo_timestamp;*/
-
-      data.is_need_cali_time  = true;
-      data.chip_cali_fifo_timestamp = intl_cnt_20b & 0xffff;
-
-    } else {
-      /*uint32_t fifo_timestamp_offset =
-          get_offset(last_fifo_timestamp_16b_, fifo_timestamp);
-
-      dsp_fifo_timestamp_ += (double)fifo_timestamp_offset * 1.024;
-
-      last_fifo_timestamp_16b_ = fifo_timestamp;*/
-    }
-
-    data.timestamp_us = dsp_time;   //(uint64_t)dsp_fifo_timestamp_;
-    // logger.Info("%d,%lld,%lld,%lld,%lld", odr_time_offset_,
-    //            data.timestamp_us - last_odr_timestamp_, data.timestamp_us,
-    //            before, (int64_t)before - (int64_t)data.timestamp_us);
-    // logger.Info("====================ICM42688::data.timestamp_us =
-    // %lld\n", data.timestamp_us);
-
-    data.temperature = (float)temperture / 2.07 + TEMPERATURE_OFFSET;
-
-    data.accel[0] = accel[0] * ACCEL_SCALER;
-    data.accel[1] = accel[1] * ACCEL_SCALER;
-    data.accel[2] = accel[2] * ACCEL_SCALER;
-
-    data.raw_accel[0] = accel[0];
-    data.raw_accel[1] = accel[1];
-    data.raw_accel[2] = accel[2];
-
-    data.gyro[0] = gyro[0] * GYRO_SCALER;
-    data.gyro[1] = gyro[1] * GYRO_SCALER;
-    data.gyro[2] = gyro[2] * GYRO_SCALER;
-
-    data.raw_gyro[0] = gyro[0];
-    data.raw_gyro[1] = gyro[1];
-    data.raw_gyro[2] = gyro[2];
-    // last_odr_timestamp_ = data.timestamp_us;
-
-    if (packet_cnt > data.MAX_PACKET_COUNT) {
-      packet_cnt = data.MAX_PACKET_COUNT;
-    }
-
-    data.fifo_count = packet_size * packet_cnt;
-    data.packet_count = packet_cnt;
-
-    // logger.Info("packet_cnt = %d, packet_size = %d , data.fifo_count = %d\n",
-    // packet_cnt, packet_size, data.fifo_count);  //lmy_asi
-
-    memcpy(data.fifo_data, p, data.fifo_count);
-
-  } else {
-    data.id = 0x47;  // ffc need it //id_;
-    data.index = id_;
-
-    uint16_t fifo_count = 0;
-    uint16_t bytes_to_read = 0;
-    uint8_t packet_size = 0;
-    // int16_t accel[3] = {0};
-    int16_t temperture = 0;
-    // int16_t gyro[3] = {0};
-
-    if (!icm4x6xx_get_packet_size(&packet_size)) {
-      LOG_E("id[%d]: icm4x6xx_get_packet_size fail\n", id_);
-      return false;
-    }
-
-    // logger.Info("icm4x6xx_get_packet_size = %d\n", packet_size);
-    if (!icm4x6xx_read_fifo_count(&fifo_count)) {
-      LOG_E("id[%d]: icm4x6xx_read_fifo_count fail\n", id_);
-      return false;
-    }
-    for (int retry = 0; fifo_count == 0 && retry < 2; ++retry) {
-      DelayMs(1);
-      if (!icm4x6xx_read_fifo_count(&fifo_count)) {
-        LOG_E("id[%d]: icm4x6xx_read_fifo_count retry fail\n", id_);
-        return false;
-      }
-    }
-    // logger.Info("fifo_count = %d\n", fifo_count);
-
-    if (fifo_count == 0) {
-      // logger.Info("id[%d]: fifo_count == 0\n", id_);
-      return false;
-    }
-
-    bytes_to_read = fifo_count;
-
-    if (bytes_to_read > (packet_size * MAX_SCP_SAMPLES)) {
-      bytes_to_read = (packet_size * MAX_SCP_SAMPLES);
-    }
-
-    uint8_t buf[bytes_to_read];
-    if (!icm4x6xx_read_fifo_buf(buf, bytes_to_read)) {
-      LOG_E("id[%d]: icm4x6xx_read_fifo_buf(buf, bytes_to_read) fail, fifo_count = %d", id_, fifo_count);
-      return false;
-    }
-
-    uint16_t packet_cnt = 0;
-    uint32_t valid_buf_len =
-        icm4x6xx_cal_valid_fifo_len(buf, bytes_to_read, &packet_cnt);
-
-    // logger.Info("(valid_buf_len == %d || packet_cnt == %d) ok\n",
-    // valid_buf_len,
-    //          packet_cnt);
-
-    // ICM4X6XX_INST_PRINTF(LOW, instance, "valid buf_len/packet_cnt %d %d",
-    // valid_buf_len, packet_cnt);
-    if (valid_buf_len == 0 || packet_cnt == 0) {
-      // ICM4X6XX_INST_PRINTF(HIGH, instance, "no valid senor data");
-      // goto CLEAN_STATUS;
-
-      LOG_E("id[%d]: (valid_buf_len == 0 || packet_cnt == 0) fail, fifo_count = %d", id_, fifo_count);
-      return false;
-    }
-
-    if (packet_cnt != valid_buf_len / packet_size) {
-      LOG_E("id[%d]: (packet_cnt != valid_buf_len / packet_size) fail", id_);
-      return false;
-    }
-
-    uint16_t index = packet_cnt - 1;
-    uint8_t* p = buf;
-
-    temperture = p[index * packet_size + 0x0D];
-
-    index = 0;
-    accel[0] = p[index * packet_size + 0x01] * 256 + p[index * packet_size + 0x02];
-    accel[1] = p[index * packet_size + 0x03] * 256 + p[index * packet_size + 0x04];
-    accel[2] = p[index * packet_size + 0x05] * 256 + p[index * packet_size + 0x06];
-    gyro[0] = p[index * packet_size + 0x07] * 256 + p[index * packet_size + 0x08];
-    gyro[1] = p[index * packet_size + 0x09] * 256 + p[index * packet_size + 0x0A];
-    gyro[2] = p[index * packet_size + 0x0B] * 256 + p[index * packet_size + 0x0C];
-    /*  temperture = p[index * packet_size + 0x0D];
-
-      fifo_timestamp =
-          p[index * packet_size + 0x0E] * 256 + p[index * packet_size + 0x0F];
-      // logger.Info("ICM42688::fifo_timestamp = %d\n", fifo_timestamp);
-    }*/
-
-    // uint64_t before = dsp_time - 2700 - (odr_time_offset_before);
-    data.timestamp_us = dsp_time;
-    // logger.Info("%d,%lld,%lld,%lld,%lld", odr_time_offset_,
-    //            data.timestamp_us - last_odr_timestamp_, data.timestamp_us,
-    //            before, (int64_t)before - (int64_t)data.timestamp_us);
-    // logger.Info("====================ICM42688::data.timestamp_us =
-    // %lld\n", data.timestamp_us);
-
-    data.accel[0] = accel[0] * ACCEL_SCALER;
-    data.accel[1] = accel[1] * ACCEL_SCALER;
-    data.accel[2] = accel[2] * ACCEL_SCALER;
-
-    data.raw_accel[0] = accel[0];
-    data.raw_accel[1] = accel[1];
-    data.raw_accel[2] = accel[2];
-
-    data.gyro[0] = gyro[0] * GYRO_SCALER;
-    data.gyro[1] = gyro[1] * GYRO_SCALER;
-    data.gyro[2] = gyro[2] * GYRO_SCALER;
-
-    data.raw_gyro[0] = gyro[0];
-    data.raw_gyro[1] = gyro[1];
-    data.raw_gyro[2] = gyro[2];
-
-    data.temperature = (float)temperture / 2.07 + TEMPERATURE_OFFSET;
-    if (packet_cnt > data.MAX_PACKET_COUNT) {
-      packet_cnt = data.MAX_PACKET_COUNT;
-    }
-    data.fifo_count = packet_size * packet_cnt;
-    data.packet_count = packet_cnt;
-
-    // logger.Info("packet_cnt = %d, packet_size = %d , data.fifo_count = %d\n",
-    // packet_cnt, packet_size, data.fifo_count);  //lmy_asi
-
-    memcpy(data.fifo_data, p, data.fifo_count);
+  uint16_t fifo_count = 0;
+  uint16_t bytes_to_read = 0;
+  uint8_t packet_size = 0;
+  uint16_t packet_cnt = 0;
+  uint32_t valid_buf_len = 0;
+
+  data.timestamp_us = dsp_time;
+  data.packet_size = 20;
+  data.fifo_count = 0;
+  rt_memset(data.fifo_data, 0, sizeof(data.fifo_data));
+
+  if (!icm4x6xx_get_packet_size(&packet_size)) {
+    LOG_E("id[%d]: icm4x6xx_get_packet_size fail\n", id_);
+    return false;
   }
 
-  // this->Notify(data);
+  if (!icm4x6xx_read_fifo_count(&fifo_count)) {
+    LOG_E("id[%d]: icm4x6xx_read_fifo_count fail\n", id_);
+    return false;
+  }
+
+  if (fifo_count == 0) {
+    return false;
+  }
+
+  bytes_to_read = fifo_count;
+  if (bytes_to_read > (packet_size * MAX_SCP_SAMPLES)) {
+    bytes_to_read = (packet_size * MAX_SCP_SAMPLES);
+  }
+
+  uint8_t buf[bytes_to_read];
+  if (!icm4x6xx_read_fifo_buf(buf, bytes_to_read)) {
+    LOG_E("id[%d]: icm4x6xx_read_fifo_buf(buf, bytes_to_read) fail, fifo_count = %d", id_, fifo_count);
+    return false;
+  }
+
+  valid_buf_len = icm4x6xx_cal_valid_fifo_len(buf, bytes_to_read, &packet_cnt);
+  if (valid_buf_len == 0 || packet_cnt == 0) {
+    LOG_E("id[%d]: (valid_buf_len == 0 || packet_cnt == 0) fail, fifo_count = %d", id_, fifo_count);
+    return false;
+  }
+
+  if (packet_cnt != valid_buf_len / packet_size) {
+    ++g_icm42688_packet_parse_mismatch_count;
+    LOG_E("id[%d]: parse_mismatch #%lu fifo_bytes=%u packet_bytes=%u parsed_packets=%lu remain_bytes=%lu packet_cnt=%u",
+          id_,
+          (unsigned long)g_icm42688_packet_parse_mismatch_count,
+          fifo_count,
+          packet_size,
+          (unsigned long)(valid_buf_len / packet_size),
+          (unsigned long)(valid_buf_len % packet_size),
+          packet_cnt);
+    return false;
+  }
+
+  data.timestamp_us = dsp_time;
+  data.packet_size = packet_size;
+  data.fifo_count = (uint16_t)valid_buf_len;
+  memcpy(data.fifo_data, buf, data.fifo_count);
+
   return true;
 }
 

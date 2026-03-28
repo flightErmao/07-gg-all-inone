@@ -494,3 +494,11 @@ enter_cdc_mode
 
 1. 把 `usb_mode_fill_sensor_line()` 改成你当前 IMU 驱动的真实采样输出
 2. 把 SD 卡检测、卡拔出处理、PC 安全弹出策略再补齐成生产版
+
+---
+
+## 13. 调试文件约定
+
+- 所有调试/烧录过程中临时生成或手工维护的 `.jlink` 文件，统一放到 `build/` 目录下
+- 不要把 `flash_flags.jlink`、`flash_verify.jlink` 这类文件放在工程根目录
+- 后续如果新增新的 J-Link 命令脚本，也按这个规则放到 `build/`
