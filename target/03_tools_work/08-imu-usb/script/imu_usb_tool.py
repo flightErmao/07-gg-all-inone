@@ -33,6 +33,8 @@ TEST_OPTIONS: list[tuple[str, str]] = [
 ]
 REAL_IMU_FRAME_STRUCT = struct.Struct("<HBQHBHhhhhhhhH")
 REAL_IMU_FRAME_MAGIC_HEAD = 0x55AA
+REAL_IMU_RAW_RECORD_HEADER = struct.Struct("<HHBBHIQ")
+REAL_IMU_RAW_MAGIC_HEAD = 0x55AB
 ICM42688_ACCEL_SCALER_MPS2 = 16.0 / float(1 << 15) * 9.80665
 ICM42688_GYRO_SCALER_RAD_S = 2000.0 / float(1 << 15) * math.pi / 180.0
 ICM42688_TEMP_SCALER_LSB_PER_C = 2.07
@@ -72,6 +74,22 @@ class RealImuFrame:
     same_gyro_x: int
     same_gyro_y: int
     same_gyro_z: int
+
+
+@dataclass(frozen=True)
+class RawImuCapture:
+    imu_index: int
+    seq: int
+    timestamp_us: int
+    packet_size: int
+    fifo_byte_count: int
+    payload: bytes
+
+
+@dataclass(frozen=True)
+class ParsedRealImuBin:
+    frames: list[RealImuFrame]
+    raw_captures: list[RawImuCapture]
 
 
 def _raw_accel_to_mps2(raw_value: int) -> float:
@@ -454,68 +472,136 @@ def _crc16_ccitt(data: bytes, init: int = 0) -> int:
     return crc
 
 
-def iter_real_imu_frames(payload: bytes) -> list[RealImuFrame]:
+def parse_real_imu_bin(payload: bytes) -> ParsedRealImuBin:
     frames: list[RealImuFrame] = []
+    raw_captures: list[RawImuCapture] = []
+    offset = 0
     frame_size = REAL_IMU_FRAME_STRUCT.size
-    if len(payload) % frame_size != 0:
-        raise ValueError(f"invalid real imu bin size {len(payload)}, frame size is {frame_size}")
 
-    for offset in range(0, len(payload), frame_size):
-        fields = REAL_IMU_FRAME_STRUCT.unpack_from(payload, offset)
-        (
-            magic_head,
-            some_flag,
-            timestamp_us,
-            fifo_packet_count,
-            fifo_header,
-            fifo_timestamp,
-            accel_x,
-            accel_y,
-            accel_z,
-            gyro_x,
-            gyro_y,
-            gyro_z,
-            temp_raw,
-            crc16,
-        ) = fields
+    while offset < len(payload):
+        if offset + 2 > len(payload):
+            raise ValueError(f"truncated record head at offset {offset}")
 
-        if magic_head != REAL_IMU_FRAME_MAGIC_HEAD:
-            raise ValueError(f"invalid frame head at offset {offset}: 0x{magic_head:04X}")
-        calc_crc = _crc16_ccitt(payload[offset + 2 : offset + frame_size - 2])
-        if crc16 != calc_crc:
-            raise ValueError(f"invalid real frame crc at offset {offset}: 0x{crc16:04X} != 0x{calc_crc:04X}")
+        magic_head = struct.unpack_from("<H", payload, offset)[0]
+        if magic_head == REAL_IMU_FRAME_MAGIC_HEAD:
+            if offset + frame_size > len(payload):
+                raise ValueError(f"truncated summary frame at offset {offset}")
 
-        frames.append(
-            RealImuFrame(
-                some_flag=some_flag,
-                fifo_packet_count=fifo_packet_count,
-                timestamp_us=timestamp_us,
-                fifo_header=fifo_header,
-                fifo_timestamp=fifo_timestamp,
-                accel_x=accel_x,
-                accel_y=accel_y,
-                accel_z=accel_z,
-                gyro_x=gyro_x,
-                gyro_y=gyro_y,
-                gyro_z=gyro_z,
-                temp_raw=temp_raw,
-                same_header=1 if (some_flag & (1 << 7)) else 0,
-                same_fifo_timestamp=1 if (some_flag & (1 << 6)) else 0,
-                same_acc_x=1 if (some_flag & (1 << 5)) else 0,
-                same_acc_y=1 if (some_flag & (1 << 4)) else 0,
-                same_acc_z=1 if (some_flag & (1 << 3)) else 0,
-                same_gyro_x=1 if (some_flag & (1 << 2)) else 0,
-                same_gyro_y=1 if (some_flag & (1 << 1)) else 0,
-                same_gyro_z=1 if (some_flag & (1 << 0)) else 0,
+            fields = REAL_IMU_FRAME_STRUCT.unpack_from(payload, offset)
+            (
+                _magic_head,
+                some_flag,
+                timestamp_us,
+                fifo_packet_count,
+                fifo_header,
+                fifo_timestamp,
+                accel_x,
+                accel_y,
+                accel_z,
+                gyro_x,
+                gyro_y,
+                gyro_z,
+                temp_raw,
+                crc16,
+            ) = fields
+
+            calc_crc = _crc16_ccitt(payload[offset + 2 : offset + frame_size - 2])
+            if crc16 != calc_crc:
+                raise ValueError(
+                    f"invalid real frame crc at offset {offset}: 0x{crc16:04X} != 0x{calc_crc:04X}"
+                )
+
+            frames.append(
+                RealImuFrame(
+                    some_flag=some_flag,
+                    fifo_packet_count=fifo_packet_count,
+                    timestamp_us=timestamp_us,
+                    fifo_header=fifo_header,
+                    fifo_timestamp=fifo_timestamp,
+                    accel_x=accel_x,
+                    accel_y=accel_y,
+                    accel_z=accel_z,
+                    gyro_x=gyro_x,
+                    gyro_y=gyro_y,
+                    gyro_z=gyro_z,
+                    temp_raw=temp_raw,
+                    same_header=1 if (some_flag & (1 << 7)) else 0,
+                    same_fifo_timestamp=1 if (some_flag & (1 << 6)) else 0,
+                    same_acc_x=1 if (some_flag & (1 << 5)) else 0,
+                    same_acc_y=1 if (some_flag & (1 << 4)) else 0,
+                    same_acc_z=1 if (some_flag & (1 << 3)) else 0,
+                    same_gyro_x=1 if (some_flag & (1 << 2)) else 0,
+                    same_gyro_y=1 if (some_flag & (1 << 1)) else 0,
+                    same_gyro_z=1 if (some_flag & (1 << 0)) else 0,
+                )
             )
-        )
+            offset += frame_size
+            continue
 
-    return frames
+        if magic_head == REAL_IMU_RAW_MAGIC_HEAD:
+            if offset + REAL_IMU_RAW_RECORD_HEADER.size + 2 > len(payload):
+                raise ValueError(f"truncated raw capture header at offset {offset}")
+
+            (
+                _magic_head,
+                total_size,
+                imu_index,
+                packet_size,
+                fifo_byte_count,
+                seq,
+                timestamp_us,
+            ) = REAL_IMU_RAW_RECORD_HEADER.unpack_from(payload, offset)
+
+            if total_size < REAL_IMU_RAW_RECORD_HEADER.size + 2:
+                raise ValueError(f"invalid raw capture size {total_size} at offset {offset}")
+            if offset + total_size > len(payload):
+                raise ValueError(f"truncated raw capture payload at offset {offset}")
+
+            expected_fifo_bytes = total_size - REAL_IMU_RAW_RECORD_HEADER.size - 2
+            if fifo_byte_count != expected_fifo_bytes:
+                raise ValueError(
+                    f"raw capture size mismatch at offset {offset}: {fifo_byte_count} != {expected_fifo_bytes}"
+                )
+
+            crc16 = struct.unpack_from("<H", payload, offset + total_size - 2)[0]
+            calc_crc = _crc16_ccitt(payload[offset + 2 : offset + total_size - 2])
+            if crc16 != calc_crc:
+                raise ValueError(
+                    f"invalid raw capture crc at offset {offset}: 0x{crc16:04X} != 0x{calc_crc:04X}"
+                )
+
+            raw_captures.append(
+                RawImuCapture(
+                    imu_index=imu_index,
+                    seq=seq,
+                    timestamp_us=timestamp_us,
+                    packet_size=packet_size,
+                    fifo_byte_count=fifo_byte_count,
+                    payload=payload[
+                        offset + REAL_IMU_RAW_RECORD_HEADER.size : offset + REAL_IMU_RAW_RECORD_HEADER.size + fifo_byte_count
+                    ],
+                )
+            )
+            offset += total_size
+            continue
+
+        raise ValueError(f"unknown record head at offset {offset}: 0x{magic_head:04X}")
+
+    return ParsedRealImuBin(frames=frames, raw_captures=raw_captures)
+
+
+def iter_real_imu_frames(payload: bytes) -> list[RealImuFrame]:
+    return parse_real_imu_bin(payload).frames
+
+
+def iter_real_imu_raw_captures(payload: bytes) -> list[RawImuCapture]:
+    return parse_real_imu_bin(payload).raw_captures
 
 
 def decode_real_imu_bin_to_csv(source: Path, destination: Path) -> int:
     payload = source.read_bytes()
-    frames = iter_real_imu_frames(payload)
+    parsed = parse_real_imu_bin(payload)
+    frames = parsed.frames
     destination.parent.mkdir(parents=True, exist_ok=True)
 
     with destination.open("w", newline="", encoding="utf-8") as handle:
@@ -585,6 +671,109 @@ def decode_real_imu_bin_to_csv(source: Path, destination: Path) -> int:
             )
 
     return len(frames)
+
+
+def _packet_timestamp_u16(packet: bytes) -> int:
+    if len(packet) < 16:
+        return 0
+    return (packet[14] << 8) | packet[15]
+
+
+def _packet_hex(packet: bytes) -> str:
+    return packet.hex(" ").upper()
+
+
+def decode_real_imu_raw_packets_to_csv(source: Path, destination: Path) -> int:
+    payload = source.read_bytes()
+    captures = iter_real_imu_raw_captures(payload)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+
+    wrap_count_by_imu: dict[int, int] = {}
+    last_timestamp_by_imu: dict[int, int] = {}
+    global_packet_index = 0
+
+    with destination.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(
+            [
+                "packet_index",
+                "capture_index",
+                "frame_seq",
+                "imu_index",
+                "read_timestamp_us",
+                "packet_index_in_capture",
+                "packet_size",
+                "packet_timestamp_u16",
+                "packet_timestamp_continuous",
+                "fifo_header",
+                "raw_accel_x",
+                "raw_accel_y",
+                "raw_accel_z",
+                "raw_gyro_x",
+                "raw_gyro_y",
+                "raw_gyro_z",
+                "temp_raw",
+                "packet_hex",
+            ]
+        )
+
+        for capture_index, capture in enumerate(captures, start=1):
+            if capture.packet_size <= 0:
+                continue
+
+            packet_count = capture.fifo_byte_count // capture.packet_size
+            for packet_index in range(packet_count):
+                start = packet_index * capture.packet_size
+                end = start + capture.packet_size
+                packet = capture.payload[start:end]
+                if len(packet) != capture.packet_size:
+                    continue
+
+                global_packet_index += 1
+                packet_timestamp = _packet_timestamp_u16(packet)
+                last_timestamp = last_timestamp_by_imu.get(capture.imu_index)
+                wrap_count = wrap_count_by_imu.get(capture.imu_index, 0)
+                if last_timestamp is not None and packet_timestamp < last_timestamp:
+                    wrap_count += 1
+                    wrap_count_by_imu[capture.imu_index] = wrap_count
+                else:
+                    wrap_count_by_imu.setdefault(capture.imu_index, wrap_count)
+                last_timestamp_by_imu[capture.imu_index] = packet_timestamp
+                packet_timestamp_continuous = wrap_count_by_imu[capture.imu_index] * 65536 + packet_timestamp
+
+                fifo_header = packet[0] if packet else 0
+                accel_x = int.from_bytes(packet[1:3], byteorder="big", signed=True) if len(packet) >= 3 else 0
+                accel_y = int.from_bytes(packet[3:5], byteorder="big", signed=True) if len(packet) >= 5 else 0
+                accel_z = int.from_bytes(packet[5:7], byteorder="big", signed=True) if len(packet) >= 7 else 0
+                gyro_x = int.from_bytes(packet[7:9], byteorder="big", signed=True) if len(packet) >= 9 else 0
+                gyro_y = int.from_bytes(packet[9:11], byteorder="big", signed=True) if len(packet) >= 11 else 0
+                gyro_z = int.from_bytes(packet[11:13], byteorder="big", signed=True) if len(packet) >= 13 else 0
+                temp_raw = int.from_bytes(packet[13:14], byteorder="big", signed=True) if len(packet) >= 14 else 0
+
+                writer.writerow(
+                    [
+                        global_packet_index,
+                        capture_index,
+                        capture.seq,
+                        capture.imu_index,
+                        capture.timestamp_us,
+                        packet_index + 1,
+                        capture.packet_size,
+                        packet_timestamp,
+                        packet_timestamp_continuous,
+                        fifo_header,
+                        accel_x,
+                        accel_y,
+                        accel_z,
+                        gyro_x,
+                        gyro_y,
+                        gyro_z,
+                        temp_raw,
+                        _packet_hex(packet),
+                    ]
+                )
+
+    return global_packet_index
 
 
 def _mean(values: list[float]) -> float:
@@ -714,7 +903,7 @@ def _write_markdown_report(destination: Path, source: Path, summary: dict[str, s
     destination.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def analyze_real_imu_bin_file(test_key: str, source: Path, output_dir: Path | None = None) -> tuple[Path, Path, dict[str, str]]:
+def analyze_real_imu_bin_file(test_key: str, source: Path, output_dir: Path | None = None) -> tuple[Path, Path, Path, dict[str, str]]:
     source = source.resolve()
     if not source.exists():
         raise FileNotFoundError(source)
@@ -725,13 +914,15 @@ def analyze_real_imu_bin_file(test_key: str, source: Path, output_dir: Path | No
     output_dir.mkdir(parents=True, exist_ok=True)
 
     csv_path = output_dir / f"{source.stem}_{test_key}.csv"
+    packet_csv_path = output_dir / f"{source.stem}_{test_key}_packets.csv"
     md_path = output_dir / f"{source.stem}_{test_key}_analysis.md"
 
     decode_real_imu_bin_to_csv(source, csv_path)
+    decode_real_imu_raw_packets_to_csv(source, packet_csv_path)
     frames = iter_real_imu_frames(source.read_bytes())
     summary = analyze_real_imu_frames(test_key, frames)
     _write_markdown_report(md_path, source, summary)
-    return csv_path, md_path, summary
+    return csv_path, packet_csv_path, md_path, summary
 
 
 def command_ports(_args: argparse.Namespace) -> int:
@@ -877,13 +1068,17 @@ def command_decode_real_bin(args: argparse.Namespace) -> int:
         raise FileNotFoundError(source)
 
     if args.output:
-        destination = Path(args.output).resolve()
+        summary_destination = Path(args.output).resolve()
     else:
-        destination = source.with_suffix(".csv")
+        summary_destination = source.with_suffix(".csv")
+    packet_destination = summary_destination.with_name(f"{summary_destination.stem}_packets.csv")
 
-    frame_count = decode_real_imu_bin_to_csv(source, destination)
-    print(f"decoded csv: {destination}")
+    frame_count = decode_real_imu_bin_to_csv(source, summary_destination)
+    packet_count = decode_real_imu_raw_packets_to_csv(source, packet_destination)
+    print(f"decoded csv: {summary_destination}")
+    print(f"decoded packet csv: {packet_destination}")
     print(f"frames: {frame_count}")
+    print(f"packets: {packet_count}")
     return 0
 
 

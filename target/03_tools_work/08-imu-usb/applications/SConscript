@@ -9,13 +9,19 @@ path = [cwd]
 fatfs_dir = os.path.join(RTT_DIR, 'components', 'dfs', 'dfs_v1', 'filesystems', 'elmfat')
 path += [fatfs_dir]
 src = []
+excluded_src = {
+    os.path.join('sensor', 'fake_imu', 'fake_imu_sd_test.c'),
+}
 
 for root, dirs, files in os.walk(cwd):
     path.append(root)
 
     for name in files:
         if name.endswith(('.c', '.cpp')):
-            src.append(os.path.relpath(os.path.join(root, name), cwd))
+            relpath = os.path.relpath(os.path.join(root, name), cwd)
+            if relpath in excluded_src:
+                continue
+            src.append(relpath)
 
 src += [
     os.path.join(fatfs_dir, 'ff.c'),

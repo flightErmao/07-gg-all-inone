@@ -321,6 +321,8 @@ class App:
     @staticmethod
     def _format_simple_response(command: str, response: str) -> str:
         if not response:
+            if command in {"enter_msc", "enter_cdc"}:
+                return f"{command}: 命令已发送，设备正在切换模式"
             return f"{command}: 未收到响应"
         if "command not found." in response:
             return f"{command}: 固件未实现该命令"
@@ -586,11 +588,12 @@ class App:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         source = source.resolve()
-        csv_path, md_path, summary = analyze_real_imu_bin_file(test_key, source, output_dir=output_dir)
+        csv_path, packet_csv_path, md_path, summary = analyze_real_imu_bin_file(test_key, source, output_dir=output_dir)
         self.message_queue.put(("info", f"{TEST_LABELS[test_key]} 分析完成"))
         self.message_queue.put(("info", f"源文件: {source}"))
         self.message_queue.put(("info", f"输出目录: {output_dir}"))
         self.message_queue.put(("info", f"CSV: {csv_path}"))
+        self.message_queue.put(("info", f"逐包 CSV: {packet_csv_path}"))
         self.message_queue.put(("info", f"报告: {md_path}"))
 
     def _drain_messages(self) -> None:
