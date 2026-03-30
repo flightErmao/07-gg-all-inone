@@ -81,6 +81,17 @@ static int session_dispatch_start(session_test_type_t test_type)
     }
 }
 
+static int session_dispatch_start_with_duration(session_test_type_t test_type, rt_uint32_t duration_ms)
+{
+    switch (test_type)
+    {
+    case SESSION_TEST_ARW:
+        return test_arw_start_with_duration(duration_ms);
+    default:
+        return session_dispatch_start(test_type);
+    }
+}
+
 static int session_dispatch_stop(session_test_type_t test_type)
 {
     switch (test_type)
@@ -128,6 +139,26 @@ int session_start(session_test_type_t test_type)
     return RT_EOK;
 }
 
+int session_start_with_duration(session_test_type_t test_type, rt_uint32_t duration_ms)
+{
+    int result;
+
+    if (g_session_state != SESSION_STATE_IDLE)
+    {
+        return -RT_EBUSY;
+    }
+
+    result = session_dispatch_start_with_duration(test_type, duration_ms);
+    if (result != RT_EOK)
+    {
+        return result;
+    }
+
+    g_session_test_type = test_type;
+    g_session_state = SESSION_STATE_RUNNING;
+    return RT_EOK;
+}
+
 int session_start_by_name(const char *test_name)
 {
     session_test_type_t test_type = session_find_test_type(test_name);
@@ -138,6 +169,18 @@ int session_start_by_name(const char *test_name)
     }
 
     return session_start(test_type);
+}
+
+int session_start_by_name_with_duration(const char *test_name, rt_uint32_t duration_ms)
+{
+    session_test_type_t test_type = session_find_test_type(test_name);
+
+    if (test_type == SESSION_TEST_NONE)
+    {
+        return -RT_ERROR;
+    }
+
+    return session_start_with_duration(test_type, duration_ms);
 }
 
 int session_stop(void)

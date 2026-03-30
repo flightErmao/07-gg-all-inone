@@ -5,6 +5,7 @@
 #include <string.h>
 
 extern "C" {
+#include "app_timestamp.h"
 #include "fatfs_sdcard_port.h"
 #include "file_naming.h"
 #include "imu.h"
@@ -17,10 +18,11 @@ extern "C" {
 
 #define APP_IMU_RINGBUF_SIZE          (96U * 1024U)
 #define APP_IMU_RINGBUF_HALF_SIZE     (APP_IMU_RINGBUF_SIZE / 2U)
-#define APP_IMU_FRAME_MAGIC_HEAD      0x55AAU
 #define APP_IMU_RAW_MAGIC_HEAD        0x55ABU
 #define APP_IMU_MAX_COUNT             4
 #define APP_IMU_RECORD_DURATION_MS    (10U * 1000U)
+#define APP_IMU_RECORD_DURATION_MIN_MS 1000U
+#define APP_IMU_RECORD_DURATION_MAX_MS (60U * 60U * 1000U)
 #define APP_IMU_POLL_PERIOD_MS        2U
 #define APP_IMU_OUTPUT_DIR_MAX_LEN    32U
 #define APP_IMU_OUTPUT_PATH_MAX_LEN   64U
@@ -97,8 +99,7 @@ static imu_poll_ctx_t g_imu_poll_ctx;
 
 enum
 {
-    APP_IMU_FRAME_SIZE = 32,
-    APP_IMU_RAW_RECORD_HEADER_SIZE = 20,
+    APP_IMU_RAW_RECORD_HEADER_SIZE = 18,
     APP_IMU_RAW_RECORD_MAX_SIZE = APP_IMU_RAW_RECORD_HEADER_SIZE + (drvf::kImuMaxPacketSize * drvf::kImuMaxPacketCount) + 2
 };
 
@@ -213,26 +214,6 @@ static void imu_poll_write_u32_le(rt_uint8_t *dst, rt_uint32_t value)
     {
         dst[index] = (rt_uint8_t)((value >> (index * 8)) & 0xFFU);
     }
-}
-
-static rt_int16_t imu_poll_read_s16_be(const rt_uint8_t *src)
-{
-    return (rt_int16_t)(((rt_uint16_t)src[0] << 8) | src[1]);
-}
-
-static rt_int16_t imu_poll_div_round_s32(rt_int32_t sum, rt_uint16_t count)
-{
-    if (count == 0U)
-    {
-        return 0;
-    }
-
-    if (sum >= 0)
-    {
-        return (rt_int16_t)((sum + ((rt_int32_t)count / 2)) / (rt_int32_t)count);
-    }
-
-    return (rt_int16_t)((sum - ((rt_int32_t)count / 2)) / (rt_int32_t)count);
 }
 
 static int imu_poll_writer_open(imu_file_writer_t *writer, rt_bool_t overwrite)
@@ -399,29 +380,6 @@ static int imu_poll_writer_push_bytes(const rt_uint8_t *data, rt_uint32_t length
     return RT_EOK;
 }
 
-static int imu_poll_writer_push_frame(const rt_uint8_t *frame)
-{
-    int result;
-
-    if (frame == RT_NULL)
-    {
-        return -RT_EINVAL;
-    }
-
-    result = imu_poll_writer_push_bytes(frame, APP_IMU_FRAME_SIZE);
-    if (result == RT_EOK)
-    {
-        imu_writer_runtime_t *writer = &g_imu_poll_ctx.writer;
-
-        imu_poll_lock();
-        writer->frame_count++;
-        g_imu_poll_ctx.recorded_frames = writer->frame_count;
-        imu_poll_unlock();
-    }
-
-    return result;
-}
-
 static void imu_poll_resolve_packet_layout(const drvf::IMURawData *raw_data,
                                            rt_uint16_t *packet_size,
                                            rt_uint16_t *packet_count)
@@ -455,9 +413,7 @@ static void imu_poll_resolve_packet_layout(const drvf::IMURawData *raw_data,
     }
 }
 
-static int imu_poll_writer_push_raw_fifo(rt_uint8_t imu_index,
-                                         rt_uint32_t seq,
-                                         const drvf::IMURawData *raw_data)
+static int imu_poll_writer_push_raw_fifo(rt_uint32_t poll_count, const drvf::IMURawData *raw_data)
 {
     rt_uint8_t record[APP_IMU_RAW_RECORD_MAX_SIZE];
     rt_uint16_t packet_size = 0U;
@@ -465,6 +421,7 @@ static int imu_poll_writer_push_raw_fifo(rt_uint8_t imu_index,
     rt_uint16_t fifo_byte_count = 0U;
     rt_uint16_t total_size;
     rt_uint16_t crc16;
+    int result;
 
     if (raw_data == RT_NULL)
     {
@@ -482,16 +439,25 @@ static int imu_poll_writer_push_raw_fifo(rt_uint8_t imu_index,
 
     rt_memset(record, 0, total_size);
     imu_poll_write_u16_le(&record[0], APP_IMU_RAW_MAGIC_HEAD);
-    imu_poll_write_u16_le(&record[2], total_size);
-    record[4] = imu_index;
-    record[5] = (rt_uint8_t)packet_size;
-    imu_poll_write_u16_le(&record[6], fifo_byte_count);
-    imu_poll_write_u32_le(&record[8], seq);
-    imu_poll_write_u64_le(&record[12], raw_data->timestamp_us);
+    imu_poll_write_u16_le(&record[2], fifo_byte_count);
+    imu_poll_write_u16_le(&record[4], packet_size);
+    imu_poll_write_u64_le(&record[6], app_timestamp_now_us());
+    imu_poll_write_u32_le(&record[14], poll_count);
     rt_memcpy(&record[APP_IMU_RAW_RECORD_HEADER_SIZE], raw_data->fifo_data, fifo_byte_count);
     crc16 = imu_poll_crc16_ccitt(&record[2], total_size - 4U);
     imu_poll_write_u16_le(&record[total_size - 2U], crc16);
-    return imu_poll_writer_push_bytes(record, total_size);
+    result = imu_poll_writer_push_bytes(record, total_size);
+    if (result == RT_EOK)
+    {
+        imu_writer_runtime_t *writer = &g_imu_poll_ctx.writer;
+
+        imu_poll_lock();
+        writer->frame_count++;
+        g_imu_poll_ctx.recorded_frames = writer->frame_count;
+        imu_poll_unlock();
+    }
+
+    return result;
 }
 
 static void imu_poll_refresh_slots(void)
@@ -519,123 +485,6 @@ static void imu_poll_refresh_slots(void)
     }
 
     g_imu_poll_ctx.detected_count = count;
-}
-
-static void imu_poll_build_frame(rt_uint8_t *frame,
-                                 rt_uint8_t imu_index,
-                                 rt_uint32_t seq,
-                                 const drvf::IMURawData *raw_data)
-{
-    rt_uint8_t same_flag = 0U;
-    rt_uint8_t fifo_header = 0U;
-    rt_uint16_t packet_size = 0U;
-    rt_uint16_t packet_count = 0U;
-    rt_uint16_t fifo_timestamp = 0U;
-    rt_int16_t avg_accel[3] = { 0, 0, 0 };
-    rt_int16_t avg_gyro[3] = { 0, 0, 0 };
-    rt_int16_t avg_temp = 0;
-    rt_int32_t acc_sum[3] = { 0, 0, 0 };
-    rt_int32_t gyro_sum[3] = { 0, 0, 0 };
-    rt_int32_t temp_sum = 0;
-    rt_int32_t header_sum = 0;
-    rt_uint16_t parsed_count = 0U;
-    rt_uint16_t i;
-    rt_uint16_t j;
-
-    imu_poll_resolve_packet_layout(raw_data, &packet_size, &packet_count);
-
-    for (i = 0; i < packet_count; ++i)
-    {
-        const rt_uint8_t *pi = &raw_data->fifo_data[(rt_size_t)i * packet_size];
-        rt_int16_t acc_i[3];
-        rt_int16_t gyro_i[3];
-
-        if (packet_size < 14U)
-        {
-            break;
-        }
-
-        acc_i[0] = imu_poll_read_s16_be(&pi[0x01]);
-        acc_i[1] = imu_poll_read_s16_be(&pi[0x03]);
-        acc_i[2] = imu_poll_read_s16_be(&pi[0x05]);
-        gyro_i[0] = imu_poll_read_s16_be(&pi[0x07]);
-        gyro_i[1] = imu_poll_read_s16_be(&pi[0x09]);
-        gyro_i[2] = imu_poll_read_s16_be(&pi[0x0B]);
-
-        acc_sum[0] += acc_i[0];
-        acc_sum[1] += acc_i[1];
-        acc_sum[2] += acc_i[2];
-        gyro_sum[0] += gyro_i[0];
-        gyro_sum[1] += gyro_i[1];
-        gyro_sum[2] += gyro_i[2];
-        temp_sum += (rt_int8_t)pi[0x0D];
-        header_sum += pi[0];
-        parsed_count++;
-
-        for (j = (rt_uint16_t)(i + 1U); j < packet_count; ++j)
-        {
-            const rt_uint8_t *pj = &raw_data->fifo_data[(rt_size_t)j * packet_size];
-            rt_int16_t acc_j[3];
-            rt_int16_t gyro_j[3];
-            rt_uint16_t ts_i;
-            rt_uint16_t ts_j;
-
-            acc_j[0] = imu_poll_read_s16_be(&pj[0x01]);
-            acc_j[1] = imu_poll_read_s16_be(&pj[0x03]);
-            acc_j[2] = imu_poll_read_s16_be(&pj[0x05]);
-            gyro_j[0] = imu_poll_read_s16_be(&pj[0x07]);
-            gyro_j[1] = imu_poll_read_s16_be(&pj[0x09]);
-            gyro_j[2] = imu_poll_read_s16_be(&pj[0x0B]);
-            ts_i = (packet_size >= 16U) ? (rt_uint16_t)(((rt_uint16_t)pi[0x0E] << 8) | pi[0x0F]) : 0U;
-            ts_j = (packet_size >= 16U) ? (rt_uint16_t)(((rt_uint16_t)pj[0x0E] << 8) | pj[0x0F]) : 0U;
-
-            if (acc_i[0] == acc_j[0]) { same_flag |= (rt_uint8_t)(1U << 5); }
-            if (acc_i[1] == acc_j[1]) { same_flag |= (rt_uint8_t)(1U << 4); }
-            if (acc_i[2] == acc_j[2]) { same_flag |= (rt_uint8_t)(1U << 3); }
-            if (gyro_i[0] == gyro_j[0]) { same_flag |= (rt_uint8_t)(1U << 2); }
-            if (gyro_i[1] == gyro_j[1]) { same_flag |= (rt_uint8_t)(1U << 1); }
-            if (gyro_i[2] == gyro_j[2]) { same_flag |= (rt_uint8_t)(1U << 0); }
-            if (pi[0] == pj[0]) { same_flag |= (rt_uint8_t)(1U << 7); }
-            if (ts_i == ts_j) { same_flag |= (rt_uint8_t)(1U << 6); }
-        }
-    }
-
-    if (parsed_count > 0U)
-    {
-        const rt_uint8_t *plast = &raw_data->fifo_data[(rt_size_t)(parsed_count - 1U) * packet_size];
-
-        avg_accel[0] = imu_poll_div_round_s32(acc_sum[0], parsed_count);
-        avg_accel[1] = imu_poll_div_round_s32(acc_sum[1], parsed_count);
-        avg_accel[2] = imu_poll_div_round_s32(acc_sum[2], parsed_count);
-        avg_gyro[0] = imu_poll_div_round_s32(gyro_sum[0], parsed_count);
-        avg_gyro[1] = imu_poll_div_round_s32(gyro_sum[1], parsed_count);
-        avg_gyro[2] = imu_poll_div_round_s32(gyro_sum[2], parsed_count);
-        avg_temp = imu_poll_div_round_s32(temp_sum, parsed_count);
-        fifo_header = (rt_uint8_t)imu_poll_div_round_s32(header_sum, parsed_count);
-        if (packet_size >= 16U)
-        {
-            fifo_timestamp = (rt_uint16_t)(((rt_uint16_t)plast[0x0E] << 8) | plast[0x0F]);
-        }
-    }
-    packet_count = parsed_count;
-
-    rt_memset(frame, 0, APP_IMU_FRAME_SIZE);
-    imu_poll_write_u16_le(&frame[0], APP_IMU_FRAME_MAGIC_HEAD);
-    RT_UNUSED(imu_index);
-    RT_UNUSED(seq);
-    frame[2] = same_flag;
-    imu_poll_write_u64_le(&frame[3], raw_data->timestamp_us);
-    imu_poll_write_u16_le(&frame[11], packet_count);
-    frame[13] = fifo_header;
-    imu_poll_write_u16_le(&frame[14], fifo_timestamp);
-    imu_poll_write_u16_le(&frame[16], (rt_uint16_t)avg_accel[0]);
-    imu_poll_write_u16_le(&frame[18], (rt_uint16_t)avg_accel[1]);
-    imu_poll_write_u16_le(&frame[20], (rt_uint16_t)avg_accel[2]);
-    imu_poll_write_u16_le(&frame[22], (rt_uint16_t)avg_gyro[0]);
-    imu_poll_write_u16_le(&frame[24], (rt_uint16_t)avg_gyro[1]);
-    imu_poll_write_u16_le(&frame[26], (rt_uint16_t)avg_gyro[2]);
-    imu_poll_write_u16_le(&frame[28], (rt_uint16_t)avg_temp);
-    imu_poll_write_u16_le(&frame[30], imu_poll_crc16_ccitt(&frame[2], APP_IMU_FRAME_SIZE - 4U));
 }
 
 static void imu_poll_update_gap_locked(rt_tick_t now_tick)
@@ -763,7 +612,7 @@ static int imu_poll_run_recording(void)
 {
     imu_writer_runtime_t *writer = &g_imu_poll_ctx.writer;
     rt_tick_t start_tick;
-    rt_uint32_t seq = 0;
+    rt_uint32_t poll_count = 0U;
     int result = RT_EOK;
 
     if (g_imu_poll_ctx.detected_count == 0U)
@@ -811,6 +660,8 @@ static int imu_poll_run_recording(void)
             break;
         }
 
+        poll_count++;
+
         for (index = 0; index < APP_IMU_MAX_COUNT; ++index)
         {
             imu_slot_t *slot = &g_imu_poll_ctx.slots[index];
@@ -821,7 +672,6 @@ static int imu_poll_run_recording(void)
             }
 
             drvf::IMURawData raw_data{};
-            rt_uint8_t frame[APP_IMU_FRAME_SIZE];
             rt_ssize_t read_count = rt_device_read(slot->device, IMU_POS_ACC_GYRO, &raw_data, sizeof(raw_data));
 
             if (read_count <= 0)
@@ -829,14 +679,7 @@ static int imu_poll_run_recording(void)
                 continue;
             }
 
-            seq++;
-            imu_poll_build_frame(frame, slot->index, seq, &raw_data);
-            if (imu_poll_writer_push_frame(frame) != RT_EOK)
-            {
-                result = -RT_EFULL;
-                goto __exit;
-            }
-            if (imu_poll_writer_push_raw_fifo(slot->index, seq, &raw_data) != RT_EOK)
+            if (imu_poll_writer_push_raw_fifo(poll_count, &raw_data) != RT_EOK)
             {
                 result = -RT_EFULL;
                 goto __exit;
@@ -894,6 +737,31 @@ extern "C" int imu_reader_thread_probe_count(void)
 extern "C" int imu_reader_thread_start(void)
 {
     return imu_reader_thread_start_for_test("arw");
+}
+
+extern "C" int imu_reader_thread_set_duration_ms(rt_uint32_t duration_ms)
+{
+    if ((duration_ms < APP_IMU_RECORD_DURATION_MIN_MS) ||
+        (duration_ms > APP_IMU_RECORD_DURATION_MAX_MS))
+    {
+        return -RT_EINVAL;
+    }
+
+    if (imu_poll_ensure_init() != RT_EOK)
+    {
+        return -RT_ENOMEM;
+    }
+
+    imu_poll_lock();
+    if (g_imu_poll_ctx.recording == RT_TRUE)
+    {
+        imu_poll_unlock();
+        return -RT_EBUSY;
+    }
+
+    g_imu_poll_ctx.duration_ms = duration_ms;
+    imu_poll_unlock();
+    return RT_EOK;
 }
 
 extern "C" int imu_reader_thread_start_for_test(const char *test_name)

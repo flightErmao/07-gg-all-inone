@@ -5,7 +5,7 @@ import threading
 import tkinter as tk
 from datetime import datetime
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from imu_usb_tool import (
     DEFAULT_BAUDRATE,
@@ -318,6 +318,63 @@ class App:
         done.wait()
         return result[0] if result else False
 
+    def _ask_noise_duration(self, default_minutes: int = 0, default_seconds: int = 10) -> tuple[int, int] | None:
+        result: list[tuple[int, int] | None] = []
+        done = threading.Event()
+
+        def _show() -> None:
+            class NoiseDurationDialog(simpledialog.Dialog):
+                def __init__(self, parent: tk.Misc, minutes: int, seconds: int) -> None:
+                    self.minutes_var = tk.IntVar(value=minutes)
+                    self.seconds_var = tk.IntVar(value=seconds)
+                    self.duration_value: tuple[int, int] | None = None
+                    super().__init__(parent, "噪声测试时长")
+
+                def body(self, master: tk.Misc) -> tk.Widget:
+                    ttk.Label(master, text="请一次性设置噪声测试时长").grid(
+                        row=0, column=0, columnspan=2, sticky="w", padx=6, pady=(6, 10)
+                    )
+                    ttk.Label(master, text="分钟").grid(row=1, column=0, sticky="w", padx=6, pady=4)
+                    minute_box = tk.Spinbox(master, from_=0, to=60, textvariable=self.minutes_var, width=8)
+                    minute_box.grid(row=1, column=1, sticky="ew", padx=6, pady=4)
+                    ttk.Label(master, text="秒钟").grid(row=2, column=0, sticky="w", padx=6, pady=4)
+                    second_box = tk.Spinbox(master, from_=0, to=59, textvariable=self.seconds_var, width=8)
+                    second_box.grid(row=2, column=1, sticky="ew", padx=6, pady=4)
+                    master.grid_columnconfigure(1, weight=1)
+                    return minute_box
+
+                def validate(self) -> bool:
+                    try:
+                        minutes = int(self.minutes_var.get())
+                        seconds = int(self.seconds_var.get())
+                    except (TypeError, ValueError):
+                        messagebox.showwarning("提示", "请输入有效的分钟和秒钟")
+                        return False
+
+                    if minutes < 0 or minutes > 60:
+                        messagebox.showwarning("提示", "分钟范围应为 0 到 60")
+                        return False
+                    if seconds < 0 or seconds > 59:
+                        messagebox.showwarning("提示", "秒钟范围应为 0 到 59")
+                        return False
+                    if (minutes == 0) and (seconds == 0):
+                        messagebox.showwarning("提示", "测试时长不能为 0 秒")
+                        return False
+
+                    self.duration_value = (minutes, seconds)
+                    return True
+
+                def apply(self) -> None:
+                    self.result = self.duration_value
+
+            dialog = NoiseDurationDialog(self.root, default_minutes, default_seconds)
+            result.append(dialog.result if isinstance(dialog.result, tuple) else None)
+            done.set()
+
+        self.root.after(0, _show)
+        done.wait()
+        return result[0] if result else None
+
     @staticmethod
     def _format_simple_response(command: str, response: str) -> str:
         if not response:
@@ -510,7 +567,19 @@ class App:
             self.message_queue.put(("info", "已取消噪声测试"))
             return
 
-        start_response = self._send_shell_command(port, "noise_test_start", timeout=2.0)
+        duration = self._ask_noise_duration(default_minutes=0, default_seconds=prepare.duration_s)
+        if duration is None:
+            self.message_queue.put(("info", "已取消噪声测试时长设置"))
+            return
+
+        minutes, seconds = duration
+        duration_s = (minutes * 60) + seconds
+
+        start_response = self._send_shell_command(
+            port,
+            f"noise_test_start {minutes} {seconds}",
+            timeout=2.0,
+        )
         self.message_queue.put(("info", self._format_simple_response("noise_test_start", start_response)))
         if "status=accepted" not in start_response:
             self.active_test_key = None
@@ -519,8 +588,8 @@ class App:
             return
         self.active_test_key = "arw"
         self.test_stop_event.clear()
-        self.message_queue.put(("info", "噪声测试已启动，固件将记录 10 秒 IMU 数据到测试目录下的新 BIN 文件"))
-        self._monitor_noise_test(port, prepare.duration_s)
+        self.message_queue.put(("info", f"噪声测试已启动，固件将记录 {duration_s} 秒 IMU 数据到测试目录下的新 BIN 文件"))
+        self._monitor_noise_test(port, duration_s)
 
     def _monitor_noise_test(self, port: PortInfo, duration_s: int) -> None:
         elapsed = 0
@@ -593,7 +662,8 @@ class App:
         self.message_queue.put(("info", f"源文件: {source}"))
         self.message_queue.put(("info", f"输出目录: {output_dir}"))
         self.message_queue.put(("info", f"CSV: {csv_path}"))
-        self.message_queue.put(("info", f"逐包 CSV: {packet_csv_path}"))
+        if packet_csv_path != csv_path:
+            self.message_queue.put(("info", f"逐包 CSV: {packet_csv_path}"))
         self.message_queue.put(("info", f"报告: {md_path}"))
 
     def _drain_messages(self) -> None:

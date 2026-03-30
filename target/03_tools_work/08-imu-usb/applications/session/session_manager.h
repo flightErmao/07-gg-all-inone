@@ -22,7 +22,9 @@ typedef enum
 
 int session_manager_init(void);
 int session_start(session_test_type_t test_type);
+int session_start_with_duration(session_test_type_t test_type, rt_uint32_t duration_ms);
 int session_start_by_name(const char *test_name);
+int session_start_by_name_with_duration(const char *test_name, rt_uint32_t duration_ms);
 int session_stop(void);
 void session_complete_current(void);
 session_state_t session_get_state(void);

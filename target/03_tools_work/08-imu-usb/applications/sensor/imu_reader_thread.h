@@ -10,6 +10,7 @@ extern "C" {
 int imu_reader_thread_probe_count(void);
 int imu_reader_thread_start(void);
 int imu_reader_thread_start_for_test(const char *test_name);
+int imu_reader_thread_set_duration_ms(rt_uint32_t duration_ms);
 int imu_reader_thread_stop(void);
 int imu_reader_thread_is_recording(void);
 rt_uint32_t imu_reader_thread_recorded_frames(void);

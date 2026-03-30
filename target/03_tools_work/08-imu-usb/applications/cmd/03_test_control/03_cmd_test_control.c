@@ -1,5 +1,6 @@
 #include <rtthread.h>
 #include <finsh.h>
+#include <stdlib.h>
 
 #include "03_cmd_test_control.h"
 #include "imu_reader_thread.h"
@@ -23,20 +24,23 @@ int cmd_test_control_mark_temperature(rt_int32_t temp_c)
 int cmd_test_control_noise_prepare(void)
 {
     int detected = imu_reader_thread_probe_count();
+    rt_uint32_t duration_s = imu_reader_thread_duration_ms() / 1000U;
 
     rt_kprintf("ACK cmd=noise_test_prepare received\r\n");
-    rt_kprintf("NOISE_TEST detected=%d duration_s=10 recording=%d\r\n",
+    rt_kprintf("NOISE_TEST detected=%d duration_s=%lu recording=%d\r\n",
                detected,
+               (unsigned long)duration_s,
                imu_reader_thread_is_recording());
     rt_kprintf("RESULT cmd=noise_test_prepare status=%s\r\n",
                detected > 0 ? "ok" : "not_found");
     return (detected > 0) ? RT_EOK : -RT_ENOSYS;
 }
 
-int cmd_test_control_noise_start(void)
+int cmd_test_control_noise_start(rt_uint32_t duration_ms)
 {
     int result;
     int detected = imu_reader_thread_probe_count();
+    rt_uint32_t duration_s = duration_ms / 1000U;
 
     rt_kprintf("ACK cmd=noise_test_start received\r\n");
     if (detected <= 0)
@@ -45,10 +49,11 @@ int cmd_test_control_noise_start(void)
         return -RT_ENOSYS;
     }
 
-    result = cmd_test_control_start("arw");
-    rt_kprintf("RESULT cmd=noise_test_start status=%s detected=%d duration_s=10 dir=%s file=%s index=%lu\r\n",
+    result = session_start_by_name_with_duration("arw", duration_ms);
+    rt_kprintf("RESULT cmd=noise_test_start status=%s detected=%d duration_s=%lu dir=%s file=%s index=%lu\r\n",
                result == RT_EOK ? "accepted" : "error",
                detected,
+               (unsigned long)duration_s,
                imu_reader_thread_output_dir(),
                imu_reader_thread_output_path(),
                (unsigned long)imu_reader_thread_output_index());
@@ -95,11 +100,44 @@ MSH_CMD_EXPORT(noise_test_prepare, prepare 10s imu noise test);
 
 static int noise_test_start(int argc, char **argv)
 {
-    RT_UNUSED(argc);
-    RT_UNUSED(argv);
-    return cmd_test_control_noise_start();
+    rt_uint32_t minutes = 0U;
+    rt_uint32_t seconds = 10U;
+    rt_uint32_t total_seconds;
+
+    if (argc > 1)
+    {
+        long value = atol(argv[1]);
+
+        if (value < 0)
+        {
+            rt_kprintf("RESULT cmd=noise_test_start status=invalid_minutes\r\n");
+            return -RT_EINVAL;
+        }
+        minutes = (rt_uint32_t)value;
+    }
+
+    if (argc > 2)
+    {
+        long value = atol(argv[2]);
+
+        if ((value < 0) || (value > 59))
+        {
+            rt_kprintf("RESULT cmd=noise_test_start status=invalid_seconds\r\n");
+            return -RT_EINVAL;
+        }
+        seconds = (rt_uint32_t)value;
+    }
+
+    total_seconds = (minutes * 60U) + seconds;
+    if (total_seconds == 0U)
+    {
+        rt_kprintf("RESULT cmd=noise_test_start status=invalid_duration\r\n");
+        return -RT_EINVAL;
+    }
+
+    return cmd_test_control_noise_start(total_seconds * 1000U);
 }
-MSH_CMD_EXPORT(noise_test_start, start 10s imu noise test recording);
+MSH_CMD_EXPORT(noise_test_start, start imu noise test recording: noise_test_start [minutes] [seconds]);
 
 static int noise_test_status(int argc, char **argv)
 {

@@ -33,7 +33,7 @@ TEST_OPTIONS: list[tuple[str, str]] = [
 ]
 REAL_IMU_FRAME_STRUCT = struct.Struct("<HBQHBHhhhhhhhH")
 REAL_IMU_FRAME_MAGIC_HEAD = 0x55AA
-REAL_IMU_RAW_RECORD_HEADER = struct.Struct("<HHBBHIQ")
+REAL_IMU_RAW_RECORD_HEADER = struct.Struct("<HHHQI")
 REAL_IMU_RAW_MAGIC_HEAD = 0x55AB
 ICM42688_ACCEL_SCALER_MPS2 = 16.0 / float(1 << 15) * 9.80665
 ICM42688_GYRO_SCALER_RAD_S = 2000.0 / float(1 << 15) * math.pi / 180.0
@@ -78,9 +78,8 @@ class RealImuFrame:
 
 @dataclass(frozen=True)
 class RawImuCapture:
-    imu_index: int
-    seq: int
     timestamp_us: int
+    poll_count: int
     packet_size: int
     fifo_byte_count: int
     payload: bytes
@@ -544,24 +543,17 @@ def parse_real_imu_bin(payload: bytes) -> ParsedRealImuBin:
 
             (
                 _magic_head,
-                total_size,
-                imu_index,
-                packet_size,
                 fifo_byte_count,
-                seq,
+                packet_size,
                 timestamp_us,
+                poll_count,
             ) = REAL_IMU_RAW_RECORD_HEADER.unpack_from(payload, offset)
 
-            if total_size < REAL_IMU_RAW_RECORD_HEADER.size + 2:
-                raise ValueError(f"invalid raw capture size {total_size} at offset {offset}")
+            total_size = REAL_IMU_RAW_RECORD_HEADER.size + fifo_byte_count + 2
+            if packet_size <= 0:
+                raise ValueError(f"invalid raw capture packet size {packet_size} at offset {offset}")
             if offset + total_size > len(payload):
                 raise ValueError(f"truncated raw capture payload at offset {offset}")
-
-            expected_fifo_bytes = total_size - REAL_IMU_RAW_RECORD_HEADER.size - 2
-            if fifo_byte_count != expected_fifo_bytes:
-                raise ValueError(
-                    f"raw capture size mismatch at offset {offset}: {fifo_byte_count} != {expected_fifo_bytes}"
-                )
 
             crc16 = struct.unpack_from("<H", payload, offset + total_size - 2)[0]
             calc_crc = _crc16_ccitt(payload[offset + 2 : offset + total_size - 2])
@@ -572,9 +564,8 @@ def parse_real_imu_bin(payload: bytes) -> ParsedRealImuBin:
 
             raw_captures.append(
                 RawImuCapture(
-                    imu_index=imu_index,
-                    seq=seq,
                     timestamp_us=timestamp_us,
+                    poll_count=poll_count,
                     packet_size=packet_size,
                     fifo_byte_count=fifo_byte_count,
                     payload=payload[
@@ -591,7 +582,8 @@ def parse_real_imu_bin(payload: bytes) -> ParsedRealImuBin:
 
 
 def iter_real_imu_frames(payload: bytes) -> list[RealImuFrame]:
-    return parse_real_imu_bin(payload).frames
+    parsed = parse_real_imu_bin(payload)
+    return parsed.frames if parsed.frames else _build_synthetic_frames_from_raw_captures(parsed.raw_captures)
 
 
 def iter_real_imu_raw_captures(payload: bytes) -> list[RawImuCapture]:
@@ -601,7 +593,7 @@ def iter_real_imu_raw_captures(payload: bytes) -> list[RawImuCapture]:
 def decode_real_imu_bin_to_csv(source: Path, destination: Path) -> int:
     payload = source.read_bytes()
     parsed = parse_real_imu_bin(payload)
-    frames = parsed.frames
+    frames = parsed.frames if parsed.frames else _build_synthetic_frames_from_raw_captures(parsed.raw_captures)
     destination.parent.mkdir(parents=True, exist_ok=True)
 
     with destination.open("w", newline="", encoding="utf-8") as handle:
@@ -683,13 +675,134 @@ def _packet_hex(packet: bytes) -> str:
     return packet.hex(" ").upper()
 
 
+def _packet_s16_be(packet: bytes, start: int) -> int:
+    if len(packet) < start + 2:
+        return 0
+    return int.from_bytes(packet[start : start + 2], byteorder="big", signed=True)
+
+
+def _packet_s8(packet: bytes, start: int) -> int:
+    if len(packet) < start + 1:
+        return 0
+    return int.from_bytes(packet[start : start + 1], byteorder="big", signed=True)
+
+
+def _div_round_s32(total: int, count: int) -> int:
+    if count <= 0:
+        return 0
+    if total >= 0:
+        return (total + count // 2) // count
+    return (total - count // 2) // count
+
+
+def _build_synthetic_frame_from_raw_capture(capture: RawImuCapture) -> RealImuFrame | None:
+    if capture.packet_size <= 0:
+        return None
+
+    packet_count = capture.fifo_byte_count // capture.packet_size
+    if packet_count <= 0:
+        return None
+
+    packets = [
+        capture.payload[index * capture.packet_size : (index + 1) * capture.packet_size]
+        for index in range(packet_count)
+        if len(capture.payload[index * capture.packet_size : (index + 1) * capture.packet_size]) == capture.packet_size
+    ]
+    if not packets:
+        return None
+
+    same_flag = 0
+    acc_sum = [0, 0, 0]
+    gyro_sum = [0, 0, 0]
+    temp_sum = 0
+    header_sum = 0
+    parsed_count = 0
+
+    for index, packet_i in enumerate(packets):
+        if len(packet_i) < 14:
+            break
+
+        acc_i = [_packet_s16_be(packet_i, 0x01), _packet_s16_be(packet_i, 0x03), _packet_s16_be(packet_i, 0x05)]
+        gyro_i = [_packet_s16_be(packet_i, 0x07), _packet_s16_be(packet_i, 0x09), _packet_s16_be(packet_i, 0x0B)]
+        acc_sum = [acc_sum[axis] + acc_i[axis] for axis in range(3)]
+        gyro_sum = [gyro_sum[axis] + gyro_i[axis] for axis in range(3)]
+        temp_sum += _packet_s8(packet_i, 0x0D)
+        header_sum += packet_i[0]
+        parsed_count += 1
+
+        for packet_j in packets[index + 1 :]:
+            acc_j = [_packet_s16_be(packet_j, 0x01), _packet_s16_be(packet_j, 0x03), _packet_s16_be(packet_j, 0x05)]
+            gyro_j = [_packet_s16_be(packet_j, 0x07), _packet_s16_be(packet_j, 0x09), _packet_s16_be(packet_j, 0x0B)]
+            ts_i = _packet_timestamp_u16(packet_i)
+            ts_j = _packet_timestamp_u16(packet_j)
+
+            if acc_i[0] == acc_j[0]:
+                same_flag |= 1 << 5
+            if acc_i[1] == acc_j[1]:
+                same_flag |= 1 << 4
+            if acc_i[2] == acc_j[2]:
+                same_flag |= 1 << 3
+            if gyro_i[0] == gyro_j[0]:
+                same_flag |= 1 << 2
+            if gyro_i[1] == gyro_j[1]:
+                same_flag |= 1 << 1
+            if gyro_i[2] == gyro_j[2]:
+                same_flag |= 1 << 0
+            if packet_i[0] == packet_j[0]:
+                same_flag |= 1 << 7
+            if ts_i == ts_j:
+                same_flag |= 1 << 6
+
+    if parsed_count <= 0:
+        return None
+
+    last_packet = packets[parsed_count - 1]
+    fifo_timestamp = _packet_timestamp_u16(last_packet) if capture.packet_size >= 16 else 0
+    avg_accel = [_div_round_s32(value, parsed_count) for value in acc_sum]
+    avg_gyro = [_div_round_s32(value, parsed_count) for value in gyro_sum]
+    avg_temp = _div_round_s32(temp_sum, parsed_count)
+    fifo_header = _div_round_s32(header_sum, parsed_count) & 0xFF
+
+    return RealImuFrame(
+        some_flag=same_flag,
+        fifo_packet_count=parsed_count,
+        timestamp_us=capture.timestamp_us,
+        fifo_header=fifo_header,
+        fifo_timestamp=fifo_timestamp,
+        accel_x=avg_accel[0],
+        accel_y=avg_accel[1],
+        accel_z=avg_accel[2],
+        gyro_x=avg_gyro[0],
+        gyro_y=avg_gyro[1],
+        gyro_z=avg_gyro[2],
+        temp_raw=avg_temp,
+        same_header=1 if (same_flag & (1 << 7)) else 0,
+        same_fifo_timestamp=1 if (same_flag & (1 << 6)) else 0,
+        same_acc_x=1 if (same_flag & (1 << 5)) else 0,
+        same_acc_y=1 if (same_flag & (1 << 4)) else 0,
+        same_acc_z=1 if (same_flag & (1 << 3)) else 0,
+        same_gyro_x=1 if (same_flag & (1 << 2)) else 0,
+        same_gyro_y=1 if (same_flag & (1 << 1)) else 0,
+        same_gyro_z=1 if (same_flag & (1 << 0)) else 0,
+    )
+
+
+def _build_synthetic_frames_from_raw_captures(raw_captures: list[RawImuCapture]) -> list[RealImuFrame]:
+    frames: list[RealImuFrame] = []
+    for capture in raw_captures:
+        frame = _build_synthetic_frame_from_raw_capture(capture)
+        if frame is not None:
+            frames.append(frame)
+    return frames
+
+
 def decode_real_imu_raw_packets_to_csv(source: Path, destination: Path) -> int:
     payload = source.read_bytes()
     captures = iter_real_imu_raw_captures(payload)
     destination.parent.mkdir(parents=True, exist_ok=True)
 
-    wrap_count_by_imu: dict[int, int] = {}
-    last_timestamp_by_imu: dict[int, int] = {}
+    wrap_count = 0
+    last_timestamp: int | None = None
     global_packet_index = 0
 
     with destination.open("w", newline="", encoding="utf-8") as handle:
@@ -697,23 +810,27 @@ def decode_real_imu_raw_packets_to_csv(source: Path, destination: Path) -> int:
         writer.writerow(
             [
                 "packet_index",
-                "capture_index",
-                "frame_seq",
-                "imu_index",
-                "read_timestamp_us",
-                "packet_index_in_capture",
-                "packet_size",
-                "packet_timestamp_u16",
-                "packet_timestamp_continuous",
-                "fifo_header",
-                "raw_accel_x",
-                "raw_accel_y",
-                "raw_accel_z",
-                "raw_gyro_x",
-                "raw_gyro_y",
-                "raw_gyro_z",
-                "temp_raw",
-                "packet_hex",
+                "poll_count",
+                "42688A_poll_timestamp_us",
+                "42688A_packet_index_in_capture",
+                "42688A_packet_size",
+                "42688A_packet_timestamp_u16",
+                "42688A_packet_timestamp_continuous",
+                "42688A_fifo_header",
+                "42688A_raw_accel_x",
+                "42688A_raw_accel_y",
+                "42688A_raw_accel_z",
+                "42688A_raw_gyro_x",
+                "42688A_raw_gyro_y",
+                "42688A_raw_gyro_z",
+                "42688A_temp_raw",
+                "42688A_accel_x_mps2",
+                "42688A_accel_y_mps2",
+                "42688A_accel_z_mps2",
+                "42688A_gyro_x_deg_s",
+                "42688A_gyro_y_deg_s",
+                "42688A_gyro_z_deg_s",
+                "42688A_temp_c",
             ]
         )
 
@@ -731,15 +848,10 @@ def decode_real_imu_raw_packets_to_csv(source: Path, destination: Path) -> int:
 
                 global_packet_index += 1
                 packet_timestamp = _packet_timestamp_u16(packet)
-                last_timestamp = last_timestamp_by_imu.get(capture.imu_index)
-                wrap_count = wrap_count_by_imu.get(capture.imu_index, 0)
                 if last_timestamp is not None and packet_timestamp < last_timestamp:
                     wrap_count += 1
-                    wrap_count_by_imu[capture.imu_index] = wrap_count
-                else:
-                    wrap_count_by_imu.setdefault(capture.imu_index, wrap_count)
-                last_timestamp_by_imu[capture.imu_index] = packet_timestamp
-                packet_timestamp_continuous = wrap_count_by_imu[capture.imu_index] * 65536 + packet_timestamp
+                last_timestamp = packet_timestamp
+                packet_timestamp_continuous = wrap_count * 65536 + packet_timestamp
 
                 fifo_header = packet[0] if packet else 0
                 accel_x = int.from_bytes(packet[1:3], byteorder="big", signed=True) if len(packet) >= 3 else 0
@@ -749,13 +861,18 @@ def decode_real_imu_raw_packets_to_csv(source: Path, destination: Path) -> int:
                 gyro_y = int.from_bytes(packet[9:11], byteorder="big", signed=True) if len(packet) >= 11 else 0
                 gyro_z = int.from_bytes(packet[11:13], byteorder="big", signed=True) if len(packet) >= 13 else 0
                 temp_raw = int.from_bytes(packet[13:14], byteorder="big", signed=True) if len(packet) >= 14 else 0
+                accel_x_mps2 = _raw_accel_to_mps2(accel_x)
+                accel_y_mps2 = _raw_accel_to_mps2(accel_y)
+                accel_z_mps2 = _raw_accel_to_mps2(accel_z)
+                gyro_x_rad_s = _raw_gyro_to_rad_s(gyro_x)
+                gyro_y_rad_s = _raw_gyro_to_rad_s(gyro_y)
+                gyro_z_rad_s = _raw_gyro_to_rad_s(gyro_z)
+                temp_c = _raw_temp_to_celsius(temp_raw)
 
                 writer.writerow(
                     [
                         global_packet_index,
-                        capture_index,
-                        capture.seq,
-                        capture.imu_index,
+                        capture.poll_count,
                         capture.timestamp_us,
                         packet_index + 1,
                         capture.packet_size,
@@ -769,7 +886,13 @@ def decode_real_imu_raw_packets_to_csv(source: Path, destination: Path) -> int:
                         gyro_y,
                         gyro_z,
                         temp_raw,
-                        _packet_hex(packet),
+                        _format_float(accel_x_mps2),
+                        _format_float(accel_y_mps2),
+                        _format_float(accel_z_mps2),
+                        _format_float(math.degrees(gyro_x_rad_s)),
+                        _format_float(math.degrees(gyro_y_rad_s)),
+                        _format_float(math.degrees(gyro_z_rad_s)),
+                        _format_float(temp_c),
                     ]
                 )
 
@@ -793,7 +916,141 @@ def _rms(values: list[float]) -> float:
     return sqrt(sum(float(v) * float(v) for v in values) / float(len(values)))
 
 
-def analyze_real_imu_frames(test_key: str, frames: list[RealImuFrame]) -> dict[str, str]:
+def _remove_mean(values: list[float]) -> list[float]:
+    avg = _mean(values)
+    return [float(value) - avg for value in values]
+
+
+def _estimate_sample_period_s(timestamps_us: list[int]) -> float:
+    if len(timestamps_us) < 2:
+        return 0.0
+    steps = [timestamps_us[index] - timestamps_us[index - 1] for index in range(1, len(timestamps_us))]
+    valid_steps = [step for step in steps if step > 0]
+    if not valid_steps:
+        return 0.0
+    return _mean(valid_steps) / 1_000_000.0
+
+
+def _build_allan_cluster_sizes(sample_count: int) -> list[int]:
+    max_cluster = sample_count // 4
+    if max_cluster < 1:
+        return []
+
+    clusters: list[int] = []
+    cluster = 1
+    while cluster <= max_cluster:
+        if not clusters or cluster != clusters[-1]:
+            clusters.append(cluster)
+        next_cluster = max(cluster + 1, int(round(cluster * 1.6)))
+        if next_cluster == cluster:
+            next_cluster += 1
+        cluster = next_cluster
+    return clusters
+
+
+def _allan_deviation_from_rate(rate_values: list[float], sample_period_s: float) -> list[tuple[float, float]]:
+    if len(rate_values) < 4 or sample_period_s <= 0.0:
+        return []
+
+    centered = _remove_mean(rate_values)
+    result: list[tuple[float, float]] = []
+    for cluster_size in _build_allan_cluster_sizes(len(centered)):
+        cluster_count = len(centered) // cluster_size
+        if cluster_count < 2:
+            continue
+
+        cluster_averages = [
+            _mean(centered[index * cluster_size : (index + 1) * cluster_size]) for index in range(cluster_count)
+        ]
+        diffs = [
+            cluster_averages[index + 1] - cluster_averages[index] for index in range(len(cluster_averages) - 1)
+        ]
+        if not diffs:
+            continue
+
+        allan_variance = 0.5 * _mean([diff * diff for diff in diffs])
+        if allan_variance < 0.0:
+            continue
+        result.append((cluster_size * sample_period_s, sqrt(allan_variance)))
+    return result
+
+
+def _estimate_arw_metrics(rate_values_rad_s: list[float], sample_period_s: float) -> dict[str, float]:
+    rate_values_deg_s = [math.degrees(value) for value in rate_values_rad_s]
+    centered_deg_s = _remove_mean(rate_values_deg_s)
+    centered_rad_s = _remove_mean(rate_values_rad_s)
+    allan_points = _allan_deviation_from_rate(rate_values_deg_s, sample_period_s)
+
+    best_tau_s = 0.0
+    best_slope = 0.0
+    best_arw_deg_sqrt_hr = 0.0
+    best_error = float("inf")
+    for index in range(len(allan_points) - 1):
+        tau0_s, adev0_deg_s = allan_points[index]
+        tau1_s, adev1_deg_s = allan_points[index + 1]
+        if tau0_s <= 0.0 or tau1_s <= 0.0 or adev0_deg_s <= 0.0 or adev1_deg_s <= 0.0:
+            continue
+        slope = math.log(adev1_deg_s / adev0_deg_s) / math.log(tau1_s / tau0_s)
+        error = abs(slope + 0.5)
+        if error < best_error:
+            best_error = error
+            best_tau_s = tau0_s
+            best_slope = slope
+            best_arw_deg_sqrt_hr = adev0_deg_s * math.sqrt(tau0_s) * 60.0
+
+    allan_min_tau_s = 0.0
+    allan_min_deg_s = 0.0
+    if allan_points:
+        allan_min_tau_s, allan_min_deg_s = min(allan_points, key=lambda item: item[1])
+
+    return {
+        "rms_rad_s": _rms(centered_rad_s),
+        "rms_deg_s": _rms(centered_deg_s),
+        "arw_deg_sqrt_hr": best_arw_deg_sqrt_hr,
+        "arw_fit_tau_s": best_tau_s,
+        "arw_fit_slope": best_slope,
+        "allan_min_tau_s": allan_min_tau_s,
+        "allan_min_deg_s": allan_min_deg_s,
+        "allan_point_count": float(len(allan_points)),
+    }
+
+
+def _extract_raw_capture_gyro_by_imu(raw_captures: list[RawImuCapture]) -> dict[int, dict[str, list[float]]]:
+    gyro_by_imu: dict[int, dict[str, list[float]]] = {0: {"x": [], "y": [], "z": []}}
+    for capture in raw_captures:
+        if capture.packet_size <= 0:
+            continue
+
+        axes = gyro_by_imu[0]
+        packet_count = capture.fifo_byte_count // capture.packet_size
+        for packet_index in range(packet_count):
+            start = packet_index * capture.packet_size
+            end = start + capture.packet_size
+            packet = capture.payload[start:end]
+            if len(packet) != capture.packet_size or len(packet) < 13:
+                continue
+
+            gyro_x = int.from_bytes(packet[7:9], byteorder="big", signed=True)
+            gyro_y = int.from_bytes(packet[9:11], byteorder="big", signed=True)
+            gyro_z = int.from_bytes(packet[11:13], byteorder="big", signed=True)
+            axes["x"].append(_raw_gyro_to_rad_s(gyro_x))
+            axes["y"].append(_raw_gyro_to_rad_s(gyro_y))
+            axes["z"].append(_raw_gyro_to_rad_s(gyro_z))
+    return gyro_by_imu
+
+
+def _coefficient_of_variation_pct(values: list[float]) -> float:
+    if len(values) < 2:
+        return 0.0
+    avg = _mean(values)
+    if abs(avg) < 1e-12:
+        return 0.0
+    return _std(values) / abs(avg) * 100.0
+
+
+def analyze_real_imu_frames(
+    test_key: str, frames: list[RealImuFrame], raw_captures: list[RawImuCapture] | None = None
+) -> dict[str, str]:
     if not frames:
         raise ValueError("no frames found")
 
@@ -856,16 +1113,68 @@ def analyze_real_imu_frames(test_key: str, frames: list[RealImuFrame]) -> dict[s
             }
         )
     elif test_key == "arw":
+        sample_period_s = _estimate_sample_period_s(timestamps)
+        duration_s = (timestamps[-1] - timestamps[0]) / 1_000_000.0 if len(timestamps) >= 2 else 0.0
+        sample_rate_hz = 1.0 / sample_period_s if sample_period_s > 0.0 else 0.0
+        axis_metrics = {
+            "x": _estimate_arw_metrics(gyro_x, sample_period_s),
+            "y": _estimate_arw_metrics(gyro_y, sample_period_s),
+            "z": _estimate_arw_metrics(gyro_z, sample_period_s),
+        }
         common.update(
             {
-                "gyro_rms_x_rad_s": f"{_rms(gyro_x):.3f}",
-                "gyro_rms_y_rad_s": f"{_rms(gyro_y):.3f}",
-                "gyro_rms_z_rad_s": f"{_rms(gyro_z):.3f}",
+                "duration_s": f"{duration_s:.3f}",
+                "sample_period_s": f"{sample_period_s:.6f}",
+                "sample_rate_hz": f"{sample_rate_hz:.3f}",
+                "gyro_rms_x_rad_s": f"{axis_metrics['x']['rms_rad_s']:.6f}",
+                "gyro_rms_y_rad_s": f"{axis_metrics['y']['rms_rad_s']:.6f}",
+                "gyro_rms_z_rad_s": f"{axis_metrics['z']['rms_rad_s']:.6f}",
+                "gyro_rms_x_deg_s": f"{axis_metrics['x']['rms_deg_s']:.6f}",
+                "gyro_rms_y_deg_s": f"{axis_metrics['y']['rms_deg_s']:.6f}",
+                "gyro_rms_z_deg_s": f"{axis_metrics['z']['rms_deg_s']:.6f}",
+                "gyro_arw_x_deg_sqrt_hr": f"{axis_metrics['x']['arw_deg_sqrt_hr']:.6f}",
+                "gyro_arw_y_deg_sqrt_hr": f"{axis_metrics['y']['arw_deg_sqrt_hr']:.6f}",
+                "gyro_arw_z_deg_sqrt_hr": f"{axis_metrics['z']['arw_deg_sqrt_hr']:.6f}",
+                "allan_min_x_deg_s": f"{axis_metrics['x']['allan_min_deg_s']:.6f}",
+                "allan_min_y_deg_s": f"{axis_metrics['y']['allan_min_deg_s']:.6f}",
+                "allan_min_z_deg_s": f"{axis_metrics['z']['allan_min_deg_s']:.6f}",
+                "allan_min_tau_x_s": f"{axis_metrics['x']['allan_min_tau_s']:.6f}",
+                "allan_min_tau_y_s": f"{axis_metrics['y']['allan_min_tau_s']:.6f}",
+                "allan_min_tau_z_s": f"{axis_metrics['z']['allan_min_tau_s']:.6f}",
+                "arw_fit_tau_x_s": f"{axis_metrics['x']['arw_fit_tau_s']:.6f}",
+                "arw_fit_tau_y_s": f"{axis_metrics['y']['arw_fit_tau_s']:.6f}",
+                "arw_fit_tau_z_s": f"{axis_metrics['z']['arw_fit_tau_s']:.6f}",
+                "arw_fit_slope_x": f"{axis_metrics['x']['arw_fit_slope']:.6f}",
+                "arw_fit_slope_y": f"{axis_metrics['y']['arw_fit_slope']:.6f}",
+                "arw_fit_slope_z": f"{axis_metrics['z']['arw_fit_slope']:.6f}",
+                "allan_point_count_x": str(int(axis_metrics["x"]["allan_point_count"])),
+                "allan_point_count_y": str(int(axis_metrics["y"]["allan_point_count"])),
+                "allan_point_count_z": str(int(axis_metrics["z"]["allan_point_count"])),
                 "acc_rms_x_mps2": f"{_rms(acc_x):.3f}",
                 "acc_rms_y_mps2": f"{_rms(acc_y):.3f}",
                 "acc_rms_z_mps2": f"{_rms(acc_z):.3f}",
             }
         )
+        if raw_captures:
+            gyro_by_imu = _extract_raw_capture_gyro_by_imu(raw_captures)
+            imu_rms_values_deg_s: list[float] = []
+            for imu_index, axes in sorted(gyro_by_imu.items()):
+                axis_rms_values = [_estimate_arw_metrics(axes[axis], sample_period_s)["rms_deg_s"] for axis in ("x", "y", "z")]
+                axis_rms_values = [value for value in axis_rms_values if value > 0.0]
+                if not axis_rms_values:
+                    continue
+                imu_rms_values_deg_s.append(_mean(axis_rms_values))
+                common[f"imu_{imu_index}_gyro_rms_mean_deg_s"] = f"{_mean(axis_rms_values):.6f}"
+
+            if imu_rms_values_deg_s:
+                common.update(
+                    {
+                        "same_model_consistency_sample_count": str(len(imu_rms_values_deg_s)),
+                        "same_model_rms_mean_deg_s": f"{_mean(imu_rms_values_deg_s):.6f}",
+                        "same_model_rms_std_deg_s": f"{_std(imu_rms_values_deg_s):.6f}",
+                        "same_model_rms_cv_pct": f"{_coefficient_of_variation_pct(imu_rms_values_deg_s):.3f}",
+                    }
+                )
     elif test_key == "vibe":
         common.update(
             {
@@ -890,6 +1199,124 @@ def analyze_real_imu_frames(test_key: str, frames: list[RealImuFrame]) -> dict[s
 
 
 def _write_markdown_report(destination: Path, source: Path, summary: dict[str, str]) -> None:
+    if summary.get("test") == "arw":
+        primary_csv_name = f"{source.stem}_{summary.get('test', 'arw')}.csv"
+        lines = [
+            "# 数据分析报告",
+            "",
+            "## 1. 测试概况",
+            "",
+            f"- 源文件: `{source}`",
+            f"- 主 CSV: `{primary_csv_name}`",
+            "- 测试项目: `测试项目 3：角度随机游走 ARW / 噪声`",
+            f"- 样本点数: `{summary['frames']}`",
+            f"- 记录时长: `{summary.get('duration_s', '0')}` s",
+            f"- 平均采样周期: `{summary.get('sample_period_s', '0')}` s",
+            f"- 平均采样率: `{summary.get('sample_rate_hz', '0')}` Hz",
+            "",
+            "## 2. 核心指标",
+            "",
+            "| 轴向 | Gyro RMS (deg/s) | ARW (deg/sqrt(hr)) | Allan 最小值 (deg/s) | 特征 tau (s) |",
+            "| --- | ---: | ---: | ---: | ---: |",
+        ]
+        for axis in ("x", "y", "z"):
+            lines.append(
+                "| "
+                f"{axis.upper()} | "
+                f"{summary.get(f'gyro_rms_{axis}_deg_s', '0')} | "
+                f"{summary.get(f'gyro_arw_{axis}_deg_sqrt_hr', '0')} | "
+                f"{summary.get(f'allan_min_{axis}_deg_s', '0')} | "
+                f"{summary.get(f'allan_min_tau_{axis}_s', '0')} |"
+            )
+
+        lines.extend(
+            [
+                "",
+                "说明:",
+                f"- `Gyro RMS` 使用去均值后的陀螺序列计算，直接反映时域噪声大小。",
+                f"- `ARW` 取 Allan deviation 曲线中斜率最接近 `-1/2` 的区段估算。",
+                f"- `Allan 最小值` 用来观察噪声曲线的最低点以及对应时间尺度。",
+                "",
+                "## 3. 计算过程",
+                "",
+                "1. 去均值",
+                "",
+                "- 对每个轴的陀螺序列先去均值: `w_i' = w_i - mean(w)`",
+                "- 这样可以把固定零偏从噪声统计里剥离掉，让指标更接近纯噪声。",
+                "",
+                "2. Gyro RMS",
+                "",
+                "- 公式: `RMS = sqrt((1 / N) * sum((w_i')^2))`",
+                "- 报告中的 `Gyro RMS` 单位为 `deg/s`，来源于去均值后的时域序列。",
+                "",
+                "3. Allan variance / Allan deviation",
+                "",
+                "- 先按聚合时间 `tau = m * Ts` 把序列分段求均值，得到 `y_k`。",
+                "- Allan variance: `AVAR(tau) = (1 / 2) * mean((y_(k+1) - y_k)^2)`",
+                "- Allan deviation: `ADEV(tau) = sqrt(AVAR(tau))`",
+                "- 报告中的 `Allan 最小值` 即各个 `tau` 下 `ADEV(tau)` 的最小点。",
+                "",
+                "4. ARW 提取",
+                "",
+                "- 在 Allan deviation 曲线上计算相邻对数坐标点的斜率。",
+                "- 选取斜率最接近 `-1/2` 的区段，视为白噪声主导区域。",
+                "- 在该区段按 `ARW = ADEV(tau) * sqrt(tau) * 60` 估算，单位为 `deg/sqrt(hr)`。",
+            ]
+        )
+
+        consistency_sample_count = int(summary.get("same_model_consistency_sample_count", "0"))
+        lines.extend(["", "## 4. 同型号一致性", ""])
+        if consistency_sample_count >= 2:
+            lines.extend(
+                [
+                    f"- 参与一致性统计的样本数: `{consistency_sample_count}`",
+                    f"- 样本间三轴平均 RMS 均值: `{summary.get('same_model_rms_mean_deg_s', '0')}` deg/s",
+                    f"- 样本间三轴平均 RMS 标准差: `{summary.get('same_model_rms_std_deg_s', '0')}` deg/s",
+                    f"- 样本间三轴平均 RMS 变异系数: `{summary.get('same_model_rms_cv_pct', '0')}` %",
+                    "- 计算方式: 先按 `imu_index` 分开提取各自三轴陀螺序列，分别算去均值 `RMS`，再对每颗 IMU 的三轴 RMS 取平均后做离散度统计。",
+                ]
+            )
+        else:
+            lines.extend(
+                [
+                    "- 当前文件可用于单次噪声评估，但不足以稳定给出同型号样本一致性。",
+                    "- 若 BIN 中同时包含多颗 IMU 的原始包，或后续支持多文件联合分析，可继续扩展该项。",
+                ]
+            )
+
+        lines.extend(
+            [
+                "",
+                "## 5. CSV 字段说明",
+                "",
+                "当前主 CSV 采用逐包粒度，每一行对应 FIFO 中解析出的一个原始包。",
+                "",
+                "| 列名 | 含义 | 获取或计算方式 |",
+                "| --- | --- | --- |",
+                "| `packet_index` | 全文件内的全局包序号 | 按解析顺序从 1 递增 |",
+                "| `poll_count` | 全局 poll 轮次序号，也是后续多颗 IMU 对齐的统一横坐标 | 固件在每轮 `poll` 开始时自增一次，同一轮内写出的所有 IMU 记录共享同一个值 |",
+                "| `42688A_poll_timestamp_us` | `42688A` 这颗 IMU 对应 poll 轮次的 MCU 微秒时间戳 | 固件用 `TIM2 1MHz` 自由运行计数器在写 BIN 时记录 |",
+                "| `42688A_packet_index_in_capture` | 当前包在本次 FIFO 记录块中的位置 | 同一轮 poll 的 FIFO 数据内从 1 递增 |",
+                "| `42688A_packet_size` | 单个 FIFO 包字节数 | 固件从 IMU 原始读数结构里直接记录 |",
+                "| `42688A_packet_timestamp_u16` | FIFO 包尾部自带的 16 位时间戳 | 从包内 `0x0E~0x0F` 字节提取，若包长不足则记 0 |",
+                "| `42688A_packet_timestamp_continuous` | 展开的连续 FIFO 时间戳 | 在 PC 端基于 `42688A_packet_timestamp_u16` 做 16 位回绕展开 |",
+                "| `42688A_fifo_header` | FIFO 包头字节 | 原始包第 0 字节 |",
+                "| `42688A_raw_accel_x/y/z` | 加速度三轴原始 LSB | 分别从包内 `0x01~0x06` 按 big-endian 有符号 16 位解析 |",
+                "| `42688A_raw_gyro_x/y/z` | 角速度三轴原始 LSB | 分别从包内 `0x07~0x0C` 按 big-endian 有符号 16 位解析 |",
+                "| `42688A_temp_raw` | 温度原始值 | 包内 `0x0D` 的有符号 8 位值 |",
+                "| `42688A_accel_x/y/z_mps2` | 加速度物理值，单位 `m/s^2` | `42688A_raw_accel * (16 / 2^15) * 9.80665` |",
+                "| `42688A_gyro_x/y/z_deg_s` | 角速度物理值，单位 `deg/s` | `42688A_raw_gyro * (2000 / 2^15)` |",
+                "| `42688A_temp_c` | 温度物理值，单位 `°C` | `42688A_temp_raw / 2.07 + 25.0` |",
+                "",
+                "说明:",
+                "- 报告中的噪声、ARW 和 Allan 指标，都是基于这个主 CSV 中的陀螺物理量列进一步计算出来的。",
+                "- 当前只保留一个主 CSV 和一个 MD 报告，不再额外输出解析帧 CSV。",
+            ]
+        )
+
+        destination.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return
+
     lines = [
         "# 数据分析报告",
         "",
@@ -914,15 +1341,19 @@ def analyze_real_imu_bin_file(test_key: str, source: Path, output_dir: Path | No
     output_dir.mkdir(parents=True, exist_ok=True)
 
     csv_path = output_dir / f"{source.stem}_{test_key}.csv"
-    packet_csv_path = output_dir / f"{source.stem}_{test_key}_packets.csv"
     md_path = output_dir / f"{source.stem}_{test_key}_analysis.md"
+    legacy_packet_csv_path = output_dir / f"{source.stem}_{test_key}_packets.csv"
+    legacy_summary_csv_path = output_dir / f"{source.stem}_{test_key}_summary.csv"
 
-    decode_real_imu_bin_to_csv(source, csv_path)
-    decode_real_imu_raw_packets_to_csv(source, packet_csv_path)
-    frames = iter_real_imu_frames(source.read_bytes())
-    summary = analyze_real_imu_frames(test_key, frames)
+    decode_real_imu_raw_packets_to_csv(source, csv_path)
+    legacy_packet_csv_path.unlink(missing_ok=True)
+    legacy_summary_csv_path.unlink(missing_ok=True)
+    payload = source.read_bytes()
+    parsed = parse_real_imu_bin(payload)
+    frames = parsed.frames if parsed.frames else _build_synthetic_frames_from_raw_captures(parsed.raw_captures)
+    summary = analyze_real_imu_frames(test_key, frames, parsed.raw_captures)
     _write_markdown_report(md_path, source, summary)
-    return csv_path, packet_csv_path, md_path, summary
+    return csv_path, csv_path, md_path, summary
 
 
 def command_ports(_args: argparse.Namespace) -> int:
@@ -1039,7 +1470,11 @@ def command_noise_prepare(args: argparse.Namespace) -> int:
 
 
 def command_noise_start(args: argparse.Namespace) -> int:
-    port, response = send_cdc_command(args.port, "noise_test_start", timeout=args.timeout)
+    port, response = send_cdc_command(
+        args.port,
+        f"noise_test_start {args.minutes} {args.seconds}",
+        timeout=args.timeout,
+    )
     print(f"port: {port.device}")
     if response:
         print(response)
@@ -1068,16 +1503,13 @@ def command_decode_real_bin(args: argparse.Namespace) -> int:
         raise FileNotFoundError(source)
 
     if args.output:
-        summary_destination = Path(args.output).resolve()
+        csv_destination = Path(args.output).resolve()
     else:
-        summary_destination = source.with_suffix(".csv")
-    packet_destination = summary_destination.with_name(f"{summary_destination.stem}_packets.csv")
+        csv_destination = source.with_suffix(".csv")
 
-    frame_count = decode_real_imu_bin_to_csv(source, summary_destination)
-    packet_count = decode_real_imu_raw_packets_to_csv(source, packet_destination)
-    print(f"decoded csv: {summary_destination}")
-    print(f"decoded packet csv: {packet_destination}")
-    print(f"frames: {frame_count}")
+    packet_count = decode_real_imu_raw_packets_to_csv(source, csv_destination)
+    csv_destination.with_name(f"{csv_destination.stem}_packets.csv").unlink(missing_ok=True)
+    print(f"decoded csv: {csv_destination}")
     print(f"packets: {packet_count}")
     return 0
 
@@ -1132,8 +1564,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser_noise_prepare.add_argument("--timeout", type=float, default=2.0)
     parser_noise_prepare.set_defaults(func=command_noise_prepare)
 
-    parser_noise_start = subparsers.add_parser("noise-start", help="start 10s imu noise recording")
+    parser_noise_start = subparsers.add_parser("noise-start", help="start imu noise recording with custom duration")
     parser_noise_start.add_argument("--port", help="CDC serial port, e.g. COM78")
+    parser_noise_start.add_argument("--minutes", type=int, default=0, help="recording minutes, default 0")
+    parser_noise_start.add_argument("--seconds", type=int, default=10, help="recording seconds, default 10")
     parser_noise_start.add_argument("--timeout", type=float, default=2.0)
     parser_noise_start.set_defaults(func=command_noise_start)
 
