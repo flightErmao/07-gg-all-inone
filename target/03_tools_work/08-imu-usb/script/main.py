@@ -36,6 +36,12 @@ ANALYSIS_OUTPUT_DIRS = {
     "vibe": APP_DATA_DIR / "04_vibration",
     "shock": APP_DATA_DIR / "05_shock",
 }
+IMU_SLOT_LABELS = {
+    1: "42688_A",
+    2: "42688_B",
+    3: "45686_A",
+    4: "45686_B",
+}
 
 
 class App:
@@ -91,7 +97,7 @@ class App:
         for imu_index in range(1, 5):
             ttk.Button(
                 probe_panel,
-                text=f"IMU{imu_index} Probe",
+                text=f"{IMU_SLOT_LABELS[imu_index]} 探测",
                 command=lambda idx=imu_index: self._run_async(lambda: self._probe_imu(idx)),
             ).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Button(
@@ -164,10 +170,29 @@ class App:
         except Exception:
             preferred = None
 
-        if preferred is not None:
+        active_port = self._find_port_by_device(self.connected_port.device) if self.connected_port is not None else None
+        if active_port is not None:
+            self.connected_port = active_port
+            self.port_var.set(active_port.label)
+        elif self.connected_port is not None and not self.client.is_open:
+            self.connected_port = None
+
+        if self.connected_port is None and preferred is not None:
             self.port_var.set(preferred.label)
         elif labels and self.port_var.get() not in self.port_map:
             self.port_var.set(labels[0])
+
+        self._update_connection_ui()
+
+    def _find_port_by_device(self, device: str | None) -> PortInfo | None:
+        if not device:
+            return None
+
+        target = device.upper()
+        for port in self.port_map.values():
+            if port.device.upper() == target:
+                return port
+        return None
 
     def _toggle_connection(self) -> None:
         if self.client.is_open:
@@ -190,7 +215,7 @@ class App:
             self.client.open(port_info.device, DEFAULT_BAUDRATE)
             self.connected_port = port_info
             self._append_log(f"已连接 {port_info.device}")
-            self._run_async(self._query_status)
+            self._run_async(lambda: self._query_status(suppress_errors=True))
         except Exception as exc:  # noqa: BLE001
             self.client.close()
             self.connected_port = None
@@ -201,18 +226,21 @@ class App:
 
     def _auto_connect_preferred_port(self) -> None:
         selected = self.port_var.get().strip()
-        if not selected:
-            return
+        port_info = self._selected_port_info()
 
-        port_info = self.port_map.get(selected)
         if port_info is None:
-            return
+            try:
+                port_info = wait_for_any_target_port(timeout=0.3)
+            except Exception:
+                return
+
+        self.port_var.set(port_info.label)
 
         try:
             self.client.open(port_info.device, DEFAULT_BAUDRATE)
             self.connected_port = port_info
             self._append_log(f"串口自动连接成功: {port_info.device}")
-            self._run_async(self._query_status)
+            self._run_async(lambda: self._query_status(suppress_errors=True))
         except Exception as exc:  # noqa: BLE001
             self.client.close()
             self.connected_port = None
@@ -403,6 +431,7 @@ class App:
     ) -> str:
         active_client = None
         temp_client = DeviceClient()
+        last_open_error: Exception | None = None
 
         try:
             if (
@@ -424,7 +453,16 @@ class App:
                 active_client = self.client
 
             if active_client is None:
-                temp_client.open(port.device, DEFAULT_BAUDRATE)
+                for _ in range(3):
+                    try:
+                        temp_client.open(port.device, DEFAULT_BAUDRATE)
+                        last_open_error = None
+                        break
+                    except Exception as exc:  # noqa: BLE001
+                        last_open_error = exc
+                        threading.Event().wait(0.35)
+                if last_open_error is not None:
+                    raise last_open_error
                 active_client = temp_client
 
             return active_client.send_command(command, timeout=timeout, allow_disconnect=allow_disconnect)
@@ -433,7 +471,11 @@ class App:
 
     @staticmethod
     def _status_text_from_response(response: str) -> str:
-        status = parse_status_response(response)
+        try:
+            status = parse_status_response(response)
+        except Exception:
+            compact = response.strip().replace("0:/", "")
+            return compact if compact else "状态查询失败：未收到可解析响应"
         mode_map = {
             "cdc": "仅 CDC",
             "cdc+msc": "CDC + MSC",
@@ -459,12 +501,28 @@ class App:
         self.device_mode = status.mode
         self.message_queue.put(("refresh", "usb_mode"))
 
-    def _query_status(self) -> None:
-        port = self._ensure_connected_port()
-        response = self._send_shell_command(port, "status", timeout=2.0)
-        self._sync_mode_from_response(response)
-        message = self._status_text_from_response(response)
-        self.message_queue.put(("info", message))
+    def _query_status(self, suppress_errors: bool = False) -> None:
+        last_error: Exception | None = None
+
+        for _ in range(3):
+            try:
+                port = self._ensure_connected_port()
+                response = self._send_shell_command(port, "status", timeout=2.0, force_reopen=True)
+                self._sync_mode_from_response(response)
+                message = self._status_text_from_response(response)
+                self.message_queue.put(("info", message))
+                return
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+                threading.Event().wait(0.4)
+
+        if suppress_errors:
+            if last_error is not None:
+                self.message_queue.put(("info", f"状态查询暂不可用: {last_error}"))
+            return
+
+        if last_error is not None:
+            raise last_error
 
     def _toggle_usb_mode(self) -> None:
         if self.device_mode == "cdc+msc":
@@ -522,7 +580,8 @@ class App:
             "not_found": "未探测到",
             "unknown": "查询不到",
         }
-        self.message_queue.put(("info", f"IMU{imu_index}: {status_map.get(result.status, result.status)} ({result.name})"))
+        slot_label = IMU_SLOT_LABELS.get(imu_index, f"IMU{imu_index}")
+        self.message_queue.put(("info", f"{slot_label}: {status_map.get(result.status, result.status)} ({result.name})"))
 
     def _probe_all_imus(self) -> None:
         port = self._ensure_connected_port()
@@ -534,7 +593,7 @@ class App:
             "unknown": "查询不到",
         }
         summary = " | ".join(
-            f"IMU{item.imu}: {status_map.get(item.status, item.status)} ({item.name})"
+            f"{IMU_SLOT_LABELS.get(item.imu, f'IMU{item.imu}')}: {status_map.get(item.status, item.status)} ({item.name})"
             for item in probe_results
         )
         self.message_queue.put(("info", summary))

@@ -9,19 +9,20 @@
 /* Reserve names for future 2~4 IMU instances while keeping IMU1 bound to the
  * current real device registration. */
 #ifndef SENSOR_NAME_IMU1
-#define SENSOR_NAME_IMU1 SENSOR_NAME_ICM42688
+// #define SENSOR_NAME_IMU1 SENSOR_NAME_ICM42688
+#define SENSOR_NAME_IMU1 "ICM42688_A"
 #endif
 
 #ifndef SENSOR_NAME_IMU2
-#define SENSOR_NAME_IMU2 "ICM42688_2"
+#define SENSOR_NAME_IMU2 "42688_B"
 #endif
 
 #ifndef SENSOR_NAME_IMU3
-#define SENSOR_NAME_IMU3 "ICM42688_3"
+#define SENSOR_NAME_IMU3 SENSOR_NAME_ICM45686
 #endif
 
 #ifndef SENSOR_NAME_IMU4
-#define SENSOR_NAME_IMU4 "ICM42688_4"
+#define SENSOR_NAME_IMU4 "45686_B"
 #endif
 
 static const char *cmd_imu_probe_device_name(int imu_index)

@@ -1,0 +1,42 @@
+config BSP_USING_ICM45686
+    bool "Enable ICM45686 IMU Sensor"
+    default n
+    select BSP_USING_SPI
+    select RT_USING_ULOG
+    help
+        Enable probe-first support for the TDK InvenSense ICM45686 IMU.
+
+    if BSP_USING_ICM45686
+        config SENSOR_NAME_ICM45686
+            string "ICM45686 device name"
+            default "45686_A"
+
+        config SENSOR_SPI_NAME_ICM45686
+            string "ICM45686 SPI bus name"
+            default "spi2"
+
+        config SENSOR_SPI_SLAVE_NAME_ICM45686
+            string "ICM45686 SPI slave name"
+            default "spi21"
+
+        config SENSOR_ICM45686_SPI_MAX_HZ
+            int "ICM45686 SPI max clock (Hz)"
+            default 10000000
+            range 100000 24000000
+
+        config SENSOR_ICM45686_SPI_CS_PIN
+            string "ICM45686 SPI CS pin"
+            default "PB11"
+
+        config SENSOR_ICM45686_WHOAMI_REG
+            hex "ICM45686 WHO_AM_I register"
+            default 0x72
+
+        config SENSOR_ICM45686_WHOAMI_EXPECTED
+            hex "ICM45686 expected WHO_AM_I value"
+            default 0xE9
+
+        config SENSOR_ICM45686_DEBUGPIN_EN
+            bool "Enable ICM45686 debug pin hooks"
+            default n
+    endif

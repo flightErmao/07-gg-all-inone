@@ -1,0 +1,21 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+path = []
+src = []
+
+src = Glob("./src/*.c")
+src += Glob("./src/*.cpp")
+src += Glob("./ref/imu/*.c")
+
+path = [
+    cwd,
+    os.path.join(cwd, "inc"),
+    os.path.join(cwd, "ref"),
+    os.path.join(Dir("#").abspath, "driverframework", "L3_peripheral", "13_spiConfig"),
+]
+
+group = DefineGroup("BSP_USING_ICM45686", src, depend=["BSP_USING_ICM45686"], CPPPATH=path)
+
+Return("group")

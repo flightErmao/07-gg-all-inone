@@ -28,19 +28,20 @@ extern "C" {
 #define APP_IMU_OUTPUT_PATH_MAX_LEN   64U
 
 #ifndef SENSOR_NAME_IMU1
-#define SENSOR_NAME_IMU1 SENSOR_NAME_ICM42688
+// #define SENSOR_NAME_IMU1 SENSOR_NAME_ICM42688
+#define SENSOR_NAME_IMU1 "ICM42688_A"
 #endif
 
 #ifndef SENSOR_NAME_IMU2
-#define SENSOR_NAME_IMU2 "ICM42688_2"
+#define SENSOR_NAME_IMU2 "42688_B"
 #endif
 
 #ifndef SENSOR_NAME_IMU3
-#define SENSOR_NAME_IMU3 "ICM42688_3"
+#define SENSOR_NAME_IMU3 SENSOR_NAME_ICM45686
 #endif
 
 #ifndef SENSOR_NAME_IMU4
-#define SENSOR_NAME_IMU4 "ICM42688_4"
+#define SENSOR_NAME_IMU4 "45686_B"
 #endif
 
 typedef struct imu_file_writer
@@ -99,7 +100,7 @@ static imu_poll_ctx_t g_imu_poll_ctx;
 
 enum
 {
-    APP_IMU_RAW_RECORD_HEADER_SIZE = 18,
+    APP_IMU_RAW_RECORD_HEADER_SIZE = 20,
     APP_IMU_RAW_RECORD_MAX_SIZE = APP_IMU_RAW_RECORD_HEADER_SIZE + (drvf::kImuMaxPacketSize * drvf::kImuMaxPacketCount) + 2
 };
 
@@ -413,7 +414,9 @@ static void imu_poll_resolve_packet_layout(const drvf::IMURawData *raw_data,
     }
 }
 
-static int imu_poll_writer_push_raw_fifo(rt_uint32_t poll_count, const drvf::IMURawData *raw_data)
+static int imu_poll_writer_push_raw_fifo(rt_uint8_t imu_id,
+                                         rt_uint32_t poll_count,
+                                         const drvf::IMURawData *raw_data)
 {
     rt_uint8_t record[APP_IMU_RAW_RECORD_MAX_SIZE];
     rt_uint16_t packet_size = 0U;
@@ -429,7 +432,7 @@ static int imu_poll_writer_push_raw_fifo(rt_uint32_t poll_count, const drvf::IMU
     }
 
     imu_poll_resolve_packet_layout(raw_data, &packet_size, &packet_count);
-    if ((packet_count >= 4U) || (packet_count == 0U))
+    if ((packet_count > 6U) || (packet_count == 0U))
     {
         return RT_EOK;
     }
@@ -443,6 +446,7 @@ static int imu_poll_writer_push_raw_fifo(rt_uint32_t poll_count, const drvf::IMU
     imu_poll_write_u16_le(&record[4], packet_size);
     imu_poll_write_u64_le(&record[6], app_timestamp_now_us());
     imu_poll_write_u32_le(&record[14], poll_count);
+    imu_poll_write_u16_le(&record[18], imu_id);
     rt_memcpy(&record[APP_IMU_RAW_RECORD_HEADER_SIZE], raw_data->fifo_data, fifo_byte_count);
     crc16 = imu_poll_crc16_ccitt(&record[2], total_size - 4U);
     imu_poll_write_u16_le(&record[total_size - 2U], crc16);
@@ -679,7 +683,7 @@ static int imu_poll_run_recording(void)
                 continue;
             }
 
-            if (imu_poll_writer_push_raw_fifo(poll_count, &raw_data) != RT_EOK)
+            if (imu_poll_writer_push_raw_fifo(slot->index, poll_count, &raw_data) != RT_EOK)
             {
                 result = -RT_EFULL;
                 goto __exit;

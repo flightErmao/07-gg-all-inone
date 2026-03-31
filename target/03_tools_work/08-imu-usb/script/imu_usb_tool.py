@@ -33,12 +33,22 @@ TEST_OPTIONS: list[tuple[str, str]] = [
 ]
 REAL_IMU_FRAME_STRUCT = struct.Struct("<HBQHBHhhhhhhhH")
 REAL_IMU_FRAME_MAGIC_HEAD = 0x55AA
-REAL_IMU_RAW_RECORD_HEADER = struct.Struct("<HHHQI")
+REAL_IMU_RAW_RECORD_HEADER = struct.Struct("<HHHQIH")
 REAL_IMU_RAW_MAGIC_HEAD = 0x55AB
 ICM42688_ACCEL_SCALER_MPS2 = 16.0 / float(1 << 15) * 9.80665
 ICM42688_GYRO_SCALER_RAD_S = 2000.0 / float(1 << 15) * math.pi / 180.0
 ICM42688_TEMP_SCALER_LSB_PER_C = 2.07
 ICM42688_TEMP_OFFSET_C = 25.0
+ICM45686_ACCEL_SCALER_MPS2 = 16.0 / float(1 << 15) * 9.80665
+ICM45686_GYRO_SCALER_RAD_S = 2000.0 / float(1 << 15) * math.pi / 180.0
+ICM45686_TEMP_SCALER_LSB_PER_C = 2.0
+ICM45686_TEMP_OFFSET_C = 25.0
+IMU_ID_TO_NAME = {
+    1: "42688_A",
+    2: "42688_B",
+    3: "45686_A",
+    4: "45686_B",
+}
 JLINK_CANDIDATES = [
     Path(r"C:\Program Files\SEGGER\JLink_V844a\JLink.exe"),
     Path(r"C:\Program Files\SEGGER\JLink\JLink.exe"),
@@ -80,6 +90,7 @@ class RealImuFrame:
 class RawImuCapture:
     timestamp_us: int
     poll_count: int
+    imu_id: int
     packet_size: int
     fifo_byte_count: int
     payload: bytes
@@ -91,15 +102,23 @@ class ParsedRealImuBin:
     raw_captures: list[RawImuCapture]
 
 
-def _raw_accel_to_mps2(raw_value: int) -> float:
-    return float(raw_value) * ICM42688_ACCEL_SCALER_MPS2
+def _imu_uses_little_endian_packets(imu_id: int) -> bool:
+    return imu_id in (3, 4)
 
 
-def _raw_gyro_to_rad_s(raw_value: int) -> float:
-    return float(raw_value) * ICM42688_GYRO_SCALER_RAD_S
+def _raw_accel_to_mps2(raw_value: int, imu_id: int) -> float:
+    scaler = ICM45686_ACCEL_SCALER_MPS2 if imu_id in (3, 4) else ICM42688_ACCEL_SCALER_MPS2
+    return float(raw_value) * scaler
 
 
-def _raw_temp_to_celsius(raw_value: int) -> float:
+def _raw_gyro_to_rad_s(raw_value: int, imu_id: int) -> float:
+    scaler = ICM45686_GYRO_SCALER_RAD_S if imu_id in (3, 4) else ICM42688_GYRO_SCALER_RAD_S
+    return float(raw_value) * scaler
+
+
+def _raw_temp_to_celsius(raw_value: int, imu_id: int) -> float:
+    if imu_id in (3, 4):
+        return float(raw_value) / ICM45686_TEMP_SCALER_LSB_PER_C + ICM45686_TEMP_OFFSET_C
     return float(raw_value) / ICM42688_TEMP_SCALER_LSB_PER_C + ICM42688_TEMP_OFFSET_C
 
 
@@ -547,6 +566,7 @@ def parse_real_imu_bin(payload: bytes) -> ParsedRealImuBin:
                 packet_size,
                 timestamp_us,
                 poll_count,
+                imu_id,
             ) = REAL_IMU_RAW_RECORD_HEADER.unpack_from(payload, offset)
 
             total_size = REAL_IMU_RAW_RECORD_HEADER.size + fifo_byte_count + 2
@@ -566,6 +586,7 @@ def parse_real_imu_bin(payload: bytes) -> ParsedRealImuBin:
                 RawImuCapture(
                     timestamp_us=timestamp_us,
                     poll_count=poll_count,
+                    imu_id=imu_id,
                     packet_size=packet_size,
                     fifo_byte_count=fifo_byte_count,
                     payload=payload[
@@ -643,13 +664,13 @@ def decode_real_imu_bin_to_csv(source: Path, destination: Path) -> int:
                     frame.gyro_y,
                     frame.gyro_z,
                     frame.temp_raw,
-                    _format_float(_raw_accel_to_mps2(frame.accel_x)),
-                    _format_float(_raw_accel_to_mps2(frame.accel_y)),
-                    _format_float(_raw_accel_to_mps2(frame.accel_z)),
-                    _format_float(_raw_gyro_to_rad_s(frame.gyro_x)),
-                    _format_float(_raw_gyro_to_rad_s(frame.gyro_y)),
-                    _format_float(_raw_gyro_to_rad_s(frame.gyro_z)),
-                    _format_float(_raw_temp_to_celsius(frame.temp_raw)),
+                    _format_float(_raw_accel_to_mps2(frame.accel_x, 1)),
+                    _format_float(_raw_accel_to_mps2(frame.accel_y, 1)),
+                    _format_float(_raw_accel_to_mps2(frame.accel_z, 1)),
+                    _format_float(_raw_gyro_to_rad_s(frame.gyro_x, 1)),
+                    _format_float(_raw_gyro_to_rad_s(frame.gyro_y, 1)),
+                    _format_float(_raw_gyro_to_rad_s(frame.gyro_z, 1)),
+                    _format_float(_raw_temp_to_celsius(frame.temp_raw, 1)),
                     frame.some_flag,
                     frame.same_header,
                     frame.same_fifo_timestamp,
@@ -665,20 +686,32 @@ def decode_real_imu_bin_to_csv(source: Path, destination: Path) -> int:
     return len(frames)
 
 
-def _packet_timestamp_u16(packet: bytes) -> int:
+def _packet_timestamp_u16(packet: bytes, imu_id: int) -> int:
     if len(packet) < 16:
         return 0
-    return (packet[14] << 8) | packet[15]
+    byteorder = "little" if _imu_uses_little_endian_packets(imu_id) else "big"
+    return int.from_bytes(packet[14:16], byteorder=byteorder, signed=False)
+
+
+def _packet_timestamp_tick_us(imu_id: int) -> int:
+    if imu_id in (3, 4):
+        return 16
+    return 1
 
 
 def _packet_hex(packet: bytes) -> str:
     return packet.hex(" ").upper()
 
 
-def _packet_s16_be(packet: bytes, start: int) -> int:
+def _imu_name_from_id(imu_id: int) -> str:
+    return IMU_ID_TO_NAME.get(imu_id, f"IMU{imu_id}")
+
+
+def _packet_s16(packet: bytes, start: int, imu_id: int) -> int:
     if len(packet) < start + 2:
         return 0
-    return int.from_bytes(packet[start : start + 2], byteorder="big", signed=True)
+    byteorder = "little" if _imu_uses_little_endian_packets(imu_id) else "big"
+    return int.from_bytes(packet[start : start + 2], byteorder=byteorder, signed=True)
 
 
 def _packet_s8(packet: bytes, start: int) -> int:
@@ -693,6 +726,85 @@ def _div_round_s32(total: int, count: int) -> int:
     if total >= 0:
         return (total + count // 2) // count
     return (total - count // 2) // count
+
+
+def _build_raw_packet_rows(captures: list[RawImuCapture]) -> list[dict[str, int | float | str]]:
+    rows: list[dict[str, int | float | str]] = []
+    wrap_count_by_imu: dict[int, int] = {}
+    last_timestamp_by_imu: dict[int, int] = {}
+    global_packet_index = 0
+
+    for capture in captures:
+        if capture.packet_size <= 0:
+            continue
+
+        packet_count = capture.fifo_byte_count // capture.packet_size
+        for packet_index in range(packet_count):
+            start = packet_index * capture.packet_size
+            end = start + capture.packet_size
+            packet = capture.payload[start:end]
+            if len(packet) != capture.packet_size:
+                continue
+
+            global_packet_index += 1
+            packet_timestamp = _packet_timestamp_u16(packet, capture.imu_id)
+            packet_timestamp_tick_us = _packet_timestamp_tick_us(capture.imu_id)
+            wrap_count = wrap_count_by_imu.get(capture.imu_id, 0)
+            last_timestamp = last_timestamp_by_imu.get(capture.imu_id)
+            if last_timestamp is not None and packet_timestamp < last_timestamp:
+                wrap_count += 1
+            wrap_count_by_imu[capture.imu_id] = wrap_count
+            last_timestamp_by_imu[capture.imu_id] = packet_timestamp
+            packet_timestamp_continuous = wrap_count * 65536 + packet_timestamp
+
+            fifo_header = packet[0] if packet else 0
+            accel_x = _packet_s16(packet, 1, capture.imu_id)
+            accel_y = _packet_s16(packet, 3, capture.imu_id)
+            accel_z = _packet_s16(packet, 5, capture.imu_id)
+            gyro_x = _packet_s16(packet, 7, capture.imu_id)
+            gyro_y = _packet_s16(packet, 9, capture.imu_id)
+            gyro_z = _packet_s16(packet, 11, capture.imu_id)
+            temp_raw = int.from_bytes(packet[13:14], byteorder="big", signed=True) if len(packet) >= 14 else 0
+            accel_x_mps2 = _raw_accel_to_mps2(accel_x, capture.imu_id)
+            accel_y_mps2 = _raw_accel_to_mps2(accel_y, capture.imu_id)
+            accel_z_mps2 = _raw_accel_to_mps2(accel_z, capture.imu_id)
+            gyro_x_deg_s = math.degrees(_raw_gyro_to_rad_s(gyro_x, capture.imu_id))
+            gyro_y_deg_s = math.degrees(_raw_gyro_to_rad_s(gyro_y, capture.imu_id))
+            gyro_z_deg_s = math.degrees(_raw_gyro_to_rad_s(gyro_z, capture.imu_id))
+            temp_c = _raw_temp_to_celsius(temp_raw, capture.imu_id)
+
+            rows.append(
+                {
+                    "packet_index": global_packet_index,
+                    "poll_count": capture.poll_count,
+                    "imu_id": capture.imu_id,
+                    "imu_name": _imu_name_from_id(capture.imu_id),
+                    "poll_timestamp_us": capture.timestamp_us,
+                    "packet_index_in_capture": packet_index + 1,
+                    "packet_size": capture.packet_size,
+                    "packet_timestamp_u16": packet_timestamp,
+                    "packet_timestamp_tick_us": packet_timestamp_tick_us,
+                    "packet_timestamp_us": packet_timestamp * packet_timestamp_tick_us,
+                    "packet_timestamp_continuous": packet_timestamp_continuous,
+                    "packet_timestamp_continuous_us": packet_timestamp_continuous * packet_timestamp_tick_us,
+                    "fifo_header": fifo_header,
+                    "raw_accel_x": accel_x,
+                    "raw_accel_y": accel_y,
+                    "raw_accel_z": accel_z,
+                    "raw_gyro_x": gyro_x,
+                    "raw_gyro_y": gyro_y,
+                    "raw_gyro_z": gyro_z,
+                    "temp_raw": temp_raw,
+                    "accel_x_mps2": accel_x_mps2,
+                    "accel_y_mps2": accel_y_mps2,
+                    "accel_z_mps2": accel_z_mps2,
+                    "gyro_x_deg_s": gyro_x_deg_s,
+                    "gyro_y_deg_s": gyro_y_deg_s,
+                    "gyro_z_deg_s": gyro_z_deg_s,
+                    "temp_c": temp_c,
+                }
+            )
+    return rows
 
 
 def _build_synthetic_frame_from_raw_capture(capture: RawImuCapture) -> RealImuFrame | None:
@@ -722,8 +834,8 @@ def _build_synthetic_frame_from_raw_capture(capture: RawImuCapture) -> RealImuFr
         if len(packet_i) < 14:
             break
 
-        acc_i = [_packet_s16_be(packet_i, 0x01), _packet_s16_be(packet_i, 0x03), _packet_s16_be(packet_i, 0x05)]
-        gyro_i = [_packet_s16_be(packet_i, 0x07), _packet_s16_be(packet_i, 0x09), _packet_s16_be(packet_i, 0x0B)]
+        acc_i = [_packet_s16(packet_i, 0x01, capture.imu_id), _packet_s16(packet_i, 0x03, capture.imu_id), _packet_s16(packet_i, 0x05, capture.imu_id)]
+        gyro_i = [_packet_s16(packet_i, 0x07, capture.imu_id), _packet_s16(packet_i, 0x09, capture.imu_id), _packet_s16(packet_i, 0x0B, capture.imu_id)]
         acc_sum = [acc_sum[axis] + acc_i[axis] for axis in range(3)]
         gyro_sum = [gyro_sum[axis] + gyro_i[axis] for axis in range(3)]
         temp_sum += _packet_s8(packet_i, 0x0D)
@@ -731,10 +843,10 @@ def _build_synthetic_frame_from_raw_capture(capture: RawImuCapture) -> RealImuFr
         parsed_count += 1
 
         for packet_j in packets[index + 1 :]:
-            acc_j = [_packet_s16_be(packet_j, 0x01), _packet_s16_be(packet_j, 0x03), _packet_s16_be(packet_j, 0x05)]
-            gyro_j = [_packet_s16_be(packet_j, 0x07), _packet_s16_be(packet_j, 0x09), _packet_s16_be(packet_j, 0x0B)]
-            ts_i = _packet_timestamp_u16(packet_i)
-            ts_j = _packet_timestamp_u16(packet_j)
+            acc_j = [_packet_s16(packet_j, 0x01, capture.imu_id), _packet_s16(packet_j, 0x03, capture.imu_id), _packet_s16(packet_j, 0x05, capture.imu_id)]
+            gyro_j = [_packet_s16(packet_j, 0x07, capture.imu_id), _packet_s16(packet_j, 0x09, capture.imu_id), _packet_s16(packet_j, 0x0B, capture.imu_id)]
+            ts_i = _packet_timestamp_u16(packet_i, capture.imu_id)
+            ts_j = _packet_timestamp_u16(packet_j, capture.imu_id)
 
             if acc_i[0] == acc_j[0]:
                 same_flag |= 1 << 5
@@ -757,7 +869,7 @@ def _build_synthetic_frame_from_raw_capture(capture: RawImuCapture) -> RealImuFr
         return None
 
     last_packet = packets[parsed_count - 1]
-    fifo_timestamp = _packet_timestamp_u16(last_packet) if capture.packet_size >= 16 else 0
+    fifo_timestamp = _packet_timestamp_u16(last_packet, capture.imu_id) if capture.packet_size >= 16 else 0
     avg_accel = [_div_round_s32(value, parsed_count) for value in acc_sum]
     avg_gyro = [_div_round_s32(value, parsed_count) for value in gyro_sum]
     avg_temp = _div_round_s32(temp_sum, parsed_count)
@@ -796,107 +908,202 @@ def _build_synthetic_frames_from_raw_captures(raw_captures: list[RawImuCapture])
     return frames
 
 
+def _write_per_imu_packet_csvs(raw_rows: list[dict[str, int | float | str]], source: Path, output_dir: Path) -> list[Path]:
+    output_paths: list[Path] = []
+    imu_ids = sorted({int(row["imu_id"]) for row in raw_rows})
+    for imu_id in imu_ids:
+        imu_name = _imu_name_from_id(imu_id)
+        destination = output_dir / f"{source.stem}_{imu_name}.csv"
+        output_paths.append(destination)
+        prefix = f"{imu_name}_"
+        imu_rows = [row for row in raw_rows if int(row["imu_id"]) == imu_id]
+        with destination.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(
+                [
+                    "packet_index",
+                    f"{prefix}poll_timestamp_us",
+                    f"{prefix}packet_index_in_capture",
+                    f"{prefix}packet_size",
+                    f"{prefix}packet_timestamp_u16",
+                    f"{prefix}packet_timestamp_tick_us",
+                    f"{prefix}packet_timestamp_us",
+                    f"{prefix}packet_timestamp_continuous",
+                    f"{prefix}packet_timestamp_continuous_us",
+                    f"{prefix}fifo_header",
+                    f"{prefix}raw_accel_x",
+                    f"{prefix}raw_accel_y",
+                    f"{prefix}raw_accel_z",
+                    f"{prefix}raw_gyro_x",
+                    f"{prefix}raw_gyro_y",
+                    f"{prefix}raw_gyro_z",
+                    f"{prefix}temp_raw",
+                    f"{prefix}accel_x_mps2",
+                    f"{prefix}accel_y_mps2",
+                    f"{prefix}accel_z_mps2",
+                    f"{prefix}gyro_x_deg_s",
+                    f"{prefix}gyro_y_deg_s",
+                    f"{prefix}gyro_z_deg_s",
+                    f"{prefix}temp_c",
+                ]
+            )
+            for row in imu_rows:
+                writer.writerow(
+                    [
+                        row["packet_index"],
+                        row["poll_timestamp_us"],
+                        row["packet_index_in_capture"],
+                        row["packet_size"],
+                        row["packet_timestamp_u16"],
+                        row["packet_timestamp_tick_us"],
+                        row["packet_timestamp_us"],
+                        row["packet_timestamp_continuous"],
+                        row["packet_timestamp_continuous_us"],
+                        row["fifo_header"],
+                        row["raw_accel_x"],
+                        row["raw_accel_y"],
+                        row["raw_accel_z"],
+                        row["raw_gyro_x"],
+                        row["raw_gyro_y"],
+                        row["raw_gyro_z"],
+                        row["temp_raw"],
+                        _format_float(float(row["accel_x_mps2"])),
+                        _format_float(float(row["accel_y_mps2"])),
+                        _format_float(float(row["accel_z_mps2"])),
+                        _format_float(float(row["gyro_x_deg_s"])),
+                        _format_float(float(row["gyro_y_deg_s"])),
+                        _format_float(float(row["gyro_z_deg_s"])),
+                        _format_float(float(row["temp_c"])),
+                    ]
+                )
+    return output_paths
+
+
+def _write_poll_comparison_csv(raw_rows: list[dict[str, int | float | str]], source: Path, output_dir: Path) -> Path:
+    destination = output_dir / f"{source.stem}_poll_compare.csv"
+    imu_ids = sorted({int(row["imu_id"]) for row in raw_rows})
+    rows_by_poll: dict[int, dict[int, list[dict[str, int | float | str]]]] = {}
+
+    for row in raw_rows:
+        poll_count = int(row["poll_count"])
+        imu_id = int(row["imu_id"])
+        rows_by_poll.setdefault(poll_count, {}).setdefault(imu_id, []).append(row)
+
+    header = ["poll_count"]
+    for imu_id in imu_ids:
+        imu_name = _imu_name_from_id(imu_id)
+        header.extend(
+            [
+                f"{imu_name}_accel_x_mps2",
+                f"{imu_name}_accel_y_mps2",
+                f"{imu_name}_accel_z_mps2",
+                f"{imu_name}_gyro_x_deg_s",
+                f"{imu_name}_gyro_y_deg_s",
+                f"{imu_name}_gyro_z_deg_s",
+                f"{imu_name}_temp_c",
+            ]
+        )
+
+    with destination.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(header)
+        for poll_count in sorted(rows_by_poll):
+            row_out: list[str | int] = [poll_count]
+            per_imu_rows = rows_by_poll[poll_count]
+            for imu_id in imu_ids:
+                imu_rows = per_imu_rows.get(imu_id, [])
+                if not imu_rows:
+                    row_out.extend([""] * 7)
+                    continue
+                row_out.extend(
+                    [
+                        _format_float(_mean([float(item["accel_x_mps2"]) for item in imu_rows])),
+                        _format_float(_mean([float(item["accel_y_mps2"]) for item in imu_rows])),
+                        _format_float(_mean([float(item["accel_z_mps2"]) for item in imu_rows])),
+                        _format_float(_mean([float(item["gyro_x_deg_s"]) for item in imu_rows])),
+                        _format_float(_mean([float(item["gyro_y_deg_s"]) for item in imu_rows])),
+                        _format_float(_mean([float(item["gyro_z_deg_s"]) for item in imu_rows])),
+                        _format_float(_mean([float(item["temp_c"]) for item in imu_rows])),
+                    ]
+                )
+            writer.writerow(row_out)
+
+    return destination
+
+
 def decode_real_imu_raw_packets_to_csv(source: Path, destination: Path) -> int:
     payload = source.read_bytes()
     captures = iter_real_imu_raw_captures(payload)
     destination.parent.mkdir(parents=True, exist_ok=True)
-
-    wrap_count = 0
-    last_timestamp: int | None = None
-    global_packet_index = 0
+    rows = _build_raw_packet_rows(captures)
 
     with destination.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
         writer.writerow(
             [
                 "packet_index",
+                "imu_id",
+                "imu_name",
                 "poll_count",
-                "42688A_poll_timestamp_us",
-                "42688A_packet_index_in_capture",
-                "42688A_packet_size",
-                "42688A_packet_timestamp_u16",
-                "42688A_packet_timestamp_continuous",
-                "42688A_fifo_header",
-                "42688A_raw_accel_x",
-                "42688A_raw_accel_y",
-                "42688A_raw_accel_z",
-                "42688A_raw_gyro_x",
-                "42688A_raw_gyro_y",
-                "42688A_raw_gyro_z",
-                "42688A_temp_raw",
-                "42688A_accel_x_mps2",
-                "42688A_accel_y_mps2",
-                "42688A_accel_z_mps2",
-                "42688A_gyro_x_deg_s",
-                "42688A_gyro_y_deg_s",
-                "42688A_gyro_z_deg_s",
-                "42688A_temp_c",
+                "poll_timestamp_us",
+                "packet_index_in_capture",
+                "packet_size",
+                "packet_timestamp_u16",
+                "packet_timestamp_tick_us",
+                "packet_timestamp_us",
+                "packet_timestamp_continuous",
+                "packet_timestamp_continuous_us",
+                "fifo_header",
+                "raw_accel_x",
+                "raw_accel_y",
+                "raw_accel_z",
+                "raw_gyro_x",
+                "raw_gyro_y",
+                "raw_gyro_z",
+                "temp_raw",
+                "accel_x_mps2",
+                "accel_y_mps2",
+                "accel_z_mps2",
+                "gyro_x_deg_s",
+                "gyro_y_deg_s",
+                "gyro_z_deg_s",
+                "temp_c",
             ]
         )
+        for row in rows:
+            writer.writerow(
+                [
+                    row["packet_index"],
+                    row["imu_id"],
+                    row["imu_name"],
+                    row["poll_count"],
+                    row["poll_timestamp_us"],
+                    row["packet_index_in_capture"],
+                    row["packet_size"],
+                    row["packet_timestamp_u16"],
+                    row["packet_timestamp_tick_us"],
+                    row["packet_timestamp_us"],
+                    row["packet_timestamp_continuous"],
+                    row["packet_timestamp_continuous_us"],
+                    row["fifo_header"],
+                    row["raw_accel_x"],
+                    row["raw_accel_y"],
+                    row["raw_accel_z"],
+                    row["raw_gyro_x"],
+                    row["raw_gyro_y"],
+                    row["raw_gyro_z"],
+                    row["temp_raw"],
+                    _format_float(float(row["accel_x_mps2"])),
+                    _format_float(float(row["accel_y_mps2"])),
+                    _format_float(float(row["accel_z_mps2"])),
+                    _format_float(float(row["gyro_x_deg_s"])),
+                    _format_float(float(row["gyro_y_deg_s"])),
+                    _format_float(float(row["gyro_z_deg_s"])),
+                    _format_float(float(row["temp_c"])),
+                ]
+            )
 
-        for capture_index, capture in enumerate(captures, start=1):
-            if capture.packet_size <= 0:
-                continue
-
-            packet_count = capture.fifo_byte_count // capture.packet_size
-            for packet_index in range(packet_count):
-                start = packet_index * capture.packet_size
-                end = start + capture.packet_size
-                packet = capture.payload[start:end]
-                if len(packet) != capture.packet_size:
-                    continue
-
-                global_packet_index += 1
-                packet_timestamp = _packet_timestamp_u16(packet)
-                if last_timestamp is not None and packet_timestamp < last_timestamp:
-                    wrap_count += 1
-                last_timestamp = packet_timestamp
-                packet_timestamp_continuous = wrap_count * 65536 + packet_timestamp
-
-                fifo_header = packet[0] if packet else 0
-                accel_x = int.from_bytes(packet[1:3], byteorder="big", signed=True) if len(packet) >= 3 else 0
-                accel_y = int.from_bytes(packet[3:5], byteorder="big", signed=True) if len(packet) >= 5 else 0
-                accel_z = int.from_bytes(packet[5:7], byteorder="big", signed=True) if len(packet) >= 7 else 0
-                gyro_x = int.from_bytes(packet[7:9], byteorder="big", signed=True) if len(packet) >= 9 else 0
-                gyro_y = int.from_bytes(packet[9:11], byteorder="big", signed=True) if len(packet) >= 11 else 0
-                gyro_z = int.from_bytes(packet[11:13], byteorder="big", signed=True) if len(packet) >= 13 else 0
-                temp_raw = int.from_bytes(packet[13:14], byteorder="big", signed=True) if len(packet) >= 14 else 0
-                accel_x_mps2 = _raw_accel_to_mps2(accel_x)
-                accel_y_mps2 = _raw_accel_to_mps2(accel_y)
-                accel_z_mps2 = _raw_accel_to_mps2(accel_z)
-                gyro_x_rad_s = _raw_gyro_to_rad_s(gyro_x)
-                gyro_y_rad_s = _raw_gyro_to_rad_s(gyro_y)
-                gyro_z_rad_s = _raw_gyro_to_rad_s(gyro_z)
-                temp_c = _raw_temp_to_celsius(temp_raw)
-
-                writer.writerow(
-                    [
-                        global_packet_index,
-                        capture.poll_count,
-                        capture.timestamp_us,
-                        packet_index + 1,
-                        capture.packet_size,
-                        packet_timestamp,
-                        packet_timestamp_continuous,
-                        fifo_header,
-                        accel_x,
-                        accel_y,
-                        accel_z,
-                        gyro_x,
-                        gyro_y,
-                        gyro_z,
-                        temp_raw,
-                        _format_float(accel_x_mps2),
-                        _format_float(accel_y_mps2),
-                        _format_float(accel_z_mps2),
-                        _format_float(math.degrees(gyro_x_rad_s)),
-                        _format_float(math.degrees(gyro_y_rad_s)),
-                        _format_float(math.degrees(gyro_z_rad_s)),
-                        _format_float(temp_c),
-                    ]
-                )
-
-    return global_packet_index
+    return len(rows)
 
 
 def _mean(values: list[float]) -> float:
@@ -1015,13 +1222,62 @@ def _estimate_arw_metrics(rate_values_rad_s: list[float], sample_period_s: float
     }
 
 
-def _extract_raw_capture_gyro_by_imu(raw_captures: list[RawImuCapture]) -> dict[int, dict[str, list[float]]]:
-    gyro_by_imu: dict[int, dict[str, list[float]]] = {0: {"x": [], "y": [], "z": []}}
+def _estimate_allan_white_noise_metrics(values: list[float], sample_period_s: float) -> dict[str, float]:
+    centered_values = _remove_mean(values)
+    allan_points = _allan_deviation_from_rate(values, sample_period_s)
+
+    best_tau_s = 0.0
+    best_slope = 0.0
+    best_random_walk = 0.0
+    best_error = float("inf")
+    for index in range(len(allan_points) - 1):
+        tau0_s, adev0 = allan_points[index]
+        tau1_s, adev1 = allan_points[index + 1]
+        if tau0_s <= 0.0 or tau1_s <= 0.0 or adev0 <= 0.0 or adev1 <= 0.0:
+            continue
+        slope = math.log(adev1 / adev0) / math.log(tau1_s / tau0_s)
+        error = abs(slope + 0.5)
+        if error < best_error:
+            best_error = error
+            best_tau_s = tau0_s
+            best_slope = slope
+            best_random_walk = adev0 * math.sqrt(tau0_s) * 60.0
+
+    allan_min_tau_s = 0.0
+    allan_min_value = 0.0
+    if allan_points:
+        allan_min_tau_s, allan_min_value = min(allan_points, key=lambda item: item[1])
+
+    return {
+        "rms": _rms(centered_values),
+        "random_walk": best_random_walk,
+        "fit_tau_s": best_tau_s,
+        "fit_slope": best_slope,
+        "allan_min_tau_s": allan_min_tau_s,
+        "allan_min_value": allan_min_value,
+        "allan_point_count": float(len(allan_points)),
+    }
+
+
+def _extract_raw_capture_axes_by_imu(raw_captures: list[RawImuCapture]) -> dict[int, dict[str, list[float]]]:
+    metrics_by_imu: dict[int, dict[str, list[float]]] = {}
     for capture in raw_captures:
         if capture.packet_size <= 0:
             continue
 
-        axes = gyro_by_imu[0]
+        imu_axes = metrics_by_imu.setdefault(
+            capture.imu_id,
+            {
+                "poll_timestamp_us": [],
+                "packet_timestamp_u16": [],
+                "gyro_x_rad_s": [],
+                "gyro_y_rad_s": [],
+                "gyro_z_rad_s": [],
+                "acc_x_mps2": [],
+                "acc_y_mps2": [],
+                "acc_z_mps2": [],
+            },
+        )
         packet_count = capture.fifo_byte_count // capture.packet_size
         for packet_index in range(packet_count):
             start = packet_index * capture.packet_size
@@ -1030,13 +1286,58 @@ def _extract_raw_capture_gyro_by_imu(raw_captures: list[RawImuCapture]) -> dict[
             if len(packet) != capture.packet_size or len(packet) < 13:
                 continue
 
-            gyro_x = int.from_bytes(packet[7:9], byteorder="big", signed=True)
-            gyro_y = int.from_bytes(packet[9:11], byteorder="big", signed=True)
-            gyro_z = int.from_bytes(packet[11:13], byteorder="big", signed=True)
-            axes["x"].append(_raw_gyro_to_rad_s(gyro_x))
-            axes["y"].append(_raw_gyro_to_rad_s(gyro_y))
-            axes["z"].append(_raw_gyro_to_rad_s(gyro_z))
-    return gyro_by_imu
+            gyro_x = _packet_s16(packet, 7, capture.imu_id)
+            gyro_y = _packet_s16(packet, 9, capture.imu_id)
+            gyro_z = _packet_s16(packet, 11, capture.imu_id)
+            acc_x = _packet_s16(packet, 1, capture.imu_id)
+            acc_y = _packet_s16(packet, 3, capture.imu_id)
+            acc_z = _packet_s16(packet, 5, capture.imu_id)
+            packet_timestamp = _packet_timestamp_u16(packet, capture.imu_id)
+
+            imu_axes["gyro_x_rad_s"].append(_raw_gyro_to_rad_s(gyro_x, capture.imu_id))
+            imu_axes["gyro_y_rad_s"].append(_raw_gyro_to_rad_s(gyro_y, capture.imu_id))
+            imu_axes["gyro_z_rad_s"].append(_raw_gyro_to_rad_s(gyro_z, capture.imu_id))
+            imu_axes["acc_x_mps2"].append(_raw_accel_to_mps2(acc_x, capture.imu_id))
+            imu_axes["acc_y_mps2"].append(_raw_accel_to_mps2(acc_y, capture.imu_id))
+            imu_axes["acc_z_mps2"].append(_raw_accel_to_mps2(acc_z, capture.imu_id))
+            imu_axes["poll_timestamp_us"].append(capture.timestamp_us + packet_index)
+            imu_axes["packet_timestamp_u16"].append(packet_timestamp)
+    return metrics_by_imu
+
+
+def _analyze_arw_per_imu(raw_captures: list[RawImuCapture]) -> dict[int, dict[str, object]]:
+    axes_by_imu = _extract_raw_capture_axes_by_imu(raw_captures)
+    report: dict[int, dict[str, object]] = {}
+
+    for imu_id, axes in sorted(axes_by_imu.items()):
+        timestamps = [int(value) for value in axes["poll_timestamp_us"]]
+        packet_timestamps = [int(value) for value in axes["packet_timestamp_u16"]]
+        sample_period_s = _estimate_sample_period_s(timestamps)
+        if sample_period_s <= 0.0:
+            sample_period_s = 1.0 / 1600.0 if imu_id in (3, 4) else 1.0 / 1000.0
+        duration_s = sample_period_s * max(len(timestamps) - 1, 0)
+        sample_rate_hz = 1.0 / sample_period_s if sample_period_s > 0.0 else 0.0
+
+        gyro_metrics = {
+            axis: _estimate_arw_metrics([float(value) for value in axes[f"gyro_{axis}_rad_s"]], sample_period_s)
+            for axis in ("x", "y", "z")
+        }
+        accel_metrics = {
+            axis: _estimate_allan_white_noise_metrics([float(value) for value in axes[f"acc_{axis}_mps2"]], sample_period_s)
+            for axis in ("x", "y", "z")
+        }
+        report[imu_id] = {
+            "imu_name": _imu_name_from_id(imu_id),
+            "sample_count": len(timestamps),
+            "duration_s": duration_s,
+            "sample_period_s": sample_period_s,
+            "sample_rate_hz": sample_rate_hz,
+            "packet_timestamp_nonzero_count": sum(1 for value in packet_timestamps if value > 0),
+            "gyro": gyro_metrics,
+            "accel": accel_metrics,
+        }
+
+    return report
 
 
 def _coefficient_of_variation_pct(values: list[float]) -> float:
@@ -1054,13 +1355,13 @@ def analyze_real_imu_frames(
     if not frames:
         raise ValueError("no frames found")
 
-    acc_x = [_raw_accel_to_mps2(frame.accel_x) for frame in frames]
-    acc_y = [_raw_accel_to_mps2(frame.accel_y) for frame in frames]
-    acc_z = [_raw_accel_to_mps2(frame.accel_z) for frame in frames]
-    gyro_x = [_raw_gyro_to_rad_s(frame.gyro_x) for frame in frames]
-    gyro_y = [_raw_gyro_to_rad_s(frame.gyro_y) for frame in frames]
-    gyro_z = [_raw_gyro_to_rad_s(frame.gyro_z) for frame in frames]
-    temp_c = [_raw_temp_to_celsius(frame.temp_raw) for frame in frames]
+    acc_x = [_raw_accel_to_mps2(frame.accel_x, 1) for frame in frames]
+    acc_y = [_raw_accel_to_mps2(frame.accel_y, 1) for frame in frames]
+    acc_z = [_raw_accel_to_mps2(frame.accel_z, 1) for frame in frames]
+    gyro_x = [_raw_gyro_to_rad_s(frame.gyro_x, 1) for frame in frames]
+    gyro_y = [_raw_gyro_to_rad_s(frame.gyro_y, 1) for frame in frames]
+    gyro_z = [_raw_gyro_to_rad_s(frame.gyro_z, 1) for frame in frames]
+    temp_c = [_raw_temp_to_celsius(frame.temp_raw, 1) for frame in frames]
     timestamps = [frame.timestamp_us for frame in frames]
     fifo_counts = [frame.fifo_packet_count for frame in frames]
     same_flag_count = sum(1 for frame in frames if frame.some_flag != 0)
@@ -1156,10 +1457,13 @@ def analyze_real_imu_frames(
             }
         )
         if raw_captures:
-            gyro_by_imu = _extract_raw_capture_gyro_by_imu(raw_captures)
+            gyro_by_imu = _extract_raw_capture_axes_by_imu(raw_captures)
             imu_rms_values_deg_s: list[float] = []
             for imu_index, axes in sorted(gyro_by_imu.items()):
-                axis_rms_values = [_estimate_arw_metrics(axes[axis], sample_period_s)["rms_deg_s"] for axis in ("x", "y", "z")]
+                axis_rms_values = [
+                    _estimate_arw_metrics([float(value) for value in axes[f"gyro_{axis}_rad_s"]], sample_period_s)["rms_deg_s"]
+                    for axis in ("x", "y", "z")
+                ]
                 axis_rms_values = [value for value in axis_rms_values if value > 0.0]
                 if not axis_rms_values:
                     continue
@@ -1200,19 +1504,26 @@ def analyze_real_imu_frames(
 
 def _write_markdown_report(destination: Path, source: Path, summary: dict[str, str]) -> None:
     if summary.get("test") == "arw":
-        primary_csv_name = f"{source.stem}_{summary.get('test', 'arw')}.csv"
+        primary_csv_name = summary.get("comparison_csv", f"{source.stem}_{summary.get('test', 'arw')}.csv")
+        per_imu_report = summary.get("per_imu_report", {})
+        detected_imu_ids = sorted(int(imu_id) for imu_id in per_imu_report)
+        missing_imu_names = [_imu_name_from_id(imu_id) for imu_id in sorted(IMU_ID_TO_NAME) if imu_id not in detected_imu_ids]
         lines = [
             "# 数据分析报告",
             "",
             "## 1. 测试概况",
             "",
             f"- 源文件: `{source}`",
-            f"- 主 CSV: `{primary_csv_name}`",
+            f"- 对比 CSV: `{primary_csv_name}`",
+            f"- 独立 IMU CSV: `{summary.get('per_imu_csvs', '')}`",
+            f"- 本页指标默认针对: `{summary.get('primary_imu_name', 'unknown')}`",
             "- 测试项目: `测试项目 3：角度随机游走 ARW / 噪声`",
             f"- 样本点数: `{summary['frames']}`",
             f"- 记录时长: `{summary.get('duration_s', '0')}` s",
             f"- 平均采样周期: `{summary.get('sample_period_s', '0')}` s",
             f"- 平均采样率: `{summary.get('sample_rate_hz', '0')}` Hz",
+            f"- 检测到数据的 IMU: `{', '.join(_imu_name_from_id(imu_id) for imu_id in detected_imu_ids) or '无'}`",
+            f"- 未检测到数据的 IMU: `{', '.join(missing_imu_names) or '无'}`",
             "",
             "## 2. 核心指标",
             "",
@@ -1273,7 +1584,7 @@ def _write_markdown_report(destination: Path, source: Path, summary: dict[str, s
                     f"- 样本间三轴平均 RMS 均值: `{summary.get('same_model_rms_mean_deg_s', '0')}` deg/s",
                     f"- 样本间三轴平均 RMS 标准差: `{summary.get('same_model_rms_std_deg_s', '0')}` deg/s",
                     f"- 样本间三轴平均 RMS 变异系数: `{summary.get('same_model_rms_cv_pct', '0')}` %",
-                    "- 计算方式: 先按 `imu_index` 分开提取各自三轴陀螺序列，分别算去均值 `RMS`，再对每颗 IMU 的三轴 RMS 取平均后做离散度统计。",
+                    "- 计算方式: 先按 `imu_id` 分开提取各自三轴陀螺序列，分别算去均值 `RMS`，再对每颗 IMU 的三轴 RMS 取平均后做离散度统计。",
                 ]
             )
         else:
@@ -1289,17 +1600,24 @@ def _write_markdown_report(destination: Path, source: Path, summary: dict[str, s
                 "",
                 "## 5. CSV 字段说明",
                 "",
-                "当前主 CSV 采用逐包粒度，每一行对应 FIFO 中解析出的一个原始包。",
+                "本次会输出两类 CSV:",
+                "",
+                f"- 对比 CSV `{primary_csv_name}`: 以 `poll_count` 为横坐标，每行代表一次 poll，各 IMU 的值为该轮次内多个 FIFO 包换算后的平均值。",
+                f"- 独立 IMU CSV: 每个文件只保留单颗 IMU 的逐包数据，字段名使用具体 IMU 名字前缀，且不再包含 `poll_count` 列。",
+                "",
+                "### 5.1 独立 IMU CSV 字段",
                 "",
                 "| 列名 | 含义 | 获取或计算方式 |",
                 "| --- | --- | --- |",
                 "| `packet_index` | 全文件内的全局包序号 | 按解析顺序从 1 递增 |",
-                "| `poll_count` | 全局 poll 轮次序号，也是后续多颗 IMU 对齐的统一横坐标 | 固件在每轮 `poll` 开始时自增一次，同一轮内写出的所有 IMU 记录共享同一个值 |",
                 "| `42688A_poll_timestamp_us` | `42688A` 这颗 IMU 对应 poll 轮次的 MCU 微秒时间戳 | 固件用 `TIM2 1MHz` 自由运行计数器在写 BIN 时记录 |",
                 "| `42688A_packet_index_in_capture` | 当前包在本次 FIFO 记录块中的位置 | 同一轮 poll 的 FIFO 数据内从 1 递增 |",
                 "| `42688A_packet_size` | 单个 FIFO 包字节数 | 固件从 IMU 原始读数结构里直接记录 |",
                 "| `42688A_packet_timestamp_u16` | FIFO 包尾部自带的 16 位时间戳 | 从包内 `0x0E~0x0F` 字节提取，若包长不足则记 0 |",
-                "| `42688A_packet_timestamp_continuous` | 展开的连续 FIFO 时间戳 | 在 PC 端基于 `42688A_packet_timestamp_u16` 做 16 位回绕展开 |",
+                "| `42688A_packet_timestamp_tick_us` | 每个时间戳 tick 对应的微秒数 | 当前脚本对 `45686` 按 `16 us/tick` 展开，其它型号默认按 `1 us/tick` 处理 |",
+                "| `42688A_packet_timestamp_us` | 当前包时间戳对应的微秒值 | `packet_timestamp_u16 * packet_timestamp_tick_us` |",
+                "| `42688A_packet_timestamp_continuous` | 展开的连续 FIFO 原始 tick 时间戳 | 在 PC 端基于 `42688A_packet_timestamp_u16` 做 16 位回绕展开 |",
+                "| `42688A_packet_timestamp_continuous_us` | 展开的连续 FIFO 微秒时间戳 | `packet_timestamp_continuous * packet_timestamp_tick_us` |",
                 "| `42688A_fifo_header` | FIFO 包头字节 | 原始包第 0 字节 |",
                 "| `42688A_raw_accel_x/y/z` | 加速度三轴原始 LSB | 分别从包内 `0x01~0x06` 按 big-endian 有符号 16 位解析 |",
                 "| `42688A_raw_gyro_x/y/z` | 角速度三轴原始 LSB | 分别从包内 `0x07~0x0C` 按 big-endian 有符号 16 位解析 |",
@@ -1308,11 +1626,74 @@ def _write_markdown_report(destination: Path, source: Path, summary: dict[str, s
                 "| `42688A_gyro_x/y/z_deg_s` | 角速度物理值，单位 `deg/s` | `42688A_raw_gyro * (2000 / 2^15)` |",
                 "| `42688A_temp_c` | 温度物理值，单位 `°C` | `42688A_temp_raw / 2.07 + 25.0` |",
                 "",
+                "### 5.2 对比 CSV 字段",
+                "",
+                "| 列名 | 含义 | 获取或计算方式 |",
+                "| --- | --- | --- |",
+                "| `poll_count` | 全局 poll 轮次序号，也是多颗 IMU 统一对齐的横坐标 | 固件在每轮 `poll` 开始时自增一次，同一轮内所有 IMU 共用该值 |",
+                "| `42688A_accel_x/y/z_mps2` | `42688A` 在该 poll 轮次下的加速度平均值 | 对该轮次内 `42688A` 的多个 FIFO 包先换算成物理单位，再按轴求平均 |",
+                "| `42688A_gyro_x/y/z_deg_s` | `42688A` 在该 poll 轮次下的角速度平均值 | 对该轮次内 `42688A` 的多个 FIFO 包先换算成 `deg/s`，再按轴求平均 |",
+                "| `42688A_temp_c` | `42688A` 在该 poll 轮次下的温度平均值 | 对该轮次内 `42688A` 的多个 FIFO 包先换算成 `°C` 后求平均 |",
+                "",
                 "说明:",
-                "- 报告中的噪声、ARW 和 Allan 指标，都是基于这个主 CSV 中的陀螺物理量列进一步计算出来的。",
-                "- 当前只保留一个主 CSV 和一个 MD 报告，不再额外输出解析帧 CSV。",
+                "- 其它 IMU 如 `42688B`、`45686A`、`45686B` 的字段命名方式与 `42688A` 完全相同，只是前缀替换为对应 IMU 名字。",
+                "- 报告中的噪声、ARW 和 Allan 指标，默认基于“本页指标默认针对”的那颗 IMU 的独立 CSV 数据计算。",
             ]
         )
+
+        lines.extend(["", "## 6. 分 IMU 噪声统计", ""])
+        for imu_id in sorted(IMU_ID_TO_NAME):
+            imu_name = _imu_name_from_id(imu_id)
+            imu_report = per_imu_report.get(str(imu_id)) or per_imu_report.get(imu_id)
+            lines.append(f"### {imu_name}")
+            lines.append("")
+            if not imu_report:
+                lines.append("- 本次 BIN 中未检测到该 IMU 的有效原始包。")
+                lines.append("")
+                continue
+
+            gyro_metrics = imu_report["gyro"]
+            accel_metrics = imu_report["accel"]
+            lines.extend(
+                [
+                    f"- 样本点数: `{imu_report['sample_count']}`",
+                    f"- 估计采样周期: `{imu_report['sample_period_s']:.6f}` s",
+                    f"- 估计采样率: `{imu_report['sample_rate_hz']:.3f}` Hz",
+                    f"- 记录时长: `{imu_report['duration_s']:.3f}` s",
+                    f"- 非零包时间戳点数: `{imu_report['packet_timestamp_nonzero_count']}`",
+                    "",
+                    "| 类型 | 轴向 | RMS | 随机游走指标 | Allan 最小值 | 特征 tau (s) |",
+                    "| --- | --- | ---: | ---: | ---: | ---: |",
+                ]
+            )
+            for axis in ("x", "y", "z"):
+                axis_gyro = gyro_metrics[axis]
+                lines.append(
+                    "| Gyro | "
+                    f"{axis.upper()} | "
+                    f"{axis_gyro['rms_deg_s']:.6f} deg/s | "
+                    f"{axis_gyro['arw_deg_sqrt_hr']:.6f} deg/sqrt(hr) | "
+                    f"{axis_gyro['allan_min_deg_s']:.6f} deg/s | "
+                    f"{axis_gyro['allan_min_tau_s']:.6f} |"
+                )
+            for axis in ("x", "y", "z"):
+                axis_acc = accel_metrics[axis]
+                lines.append(
+                    "| Acc | "
+                    f"{axis.upper()} | "
+                    f"{axis_acc['rms']:.6f} m/s^2 | "
+                    f"{axis_acc['random_walk']:.6f} m/s/sqrt(hr) | "
+                    f"{axis_acc['allan_min_value']:.6f} m/s^2 | "
+                    f"{axis_acc['allan_min_tau_s']:.6f} |"
+                )
+            lines.extend(
+                [
+                    "",
+                    "- `Gyro` 行延续原有 ARW 算法。",
+                    "- `Acc` 行采用同样的 Allan deviation 白噪声区段提取方式，对应速度随机游走 `VRW`，单位为 `m/s/sqrt(hr)`。",
+                    "",
+                ]
+            )
 
         destination.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return
@@ -1345,13 +1726,27 @@ def analyze_real_imu_bin_file(test_key: str, source: Path, output_dir: Path | No
     legacy_packet_csv_path = output_dir / f"{source.stem}_{test_key}_packets.csv"
     legacy_summary_csv_path = output_dir / f"{source.stem}_{test_key}_summary.csv"
 
-    decode_real_imu_raw_packets_to_csv(source, csv_path)
     legacy_packet_csv_path.unlink(missing_ok=True)
     legacy_summary_csv_path.unlink(missing_ok=True)
     payload = source.read_bytes()
     parsed = parse_real_imu_bin(payload)
-    frames = parsed.frames if parsed.frames else _build_synthetic_frames_from_raw_captures(parsed.raw_captures)
-    summary = analyze_real_imu_frames(test_key, frames, parsed.raw_captures)
+    raw_rows = _build_raw_packet_rows(parsed.raw_captures)
+    _write_per_imu_packet_csvs(raw_rows, source, output_dir)
+    csv_path = _write_poll_comparison_csv(raw_rows, source, output_dir)
+
+    raw_capture_by_imu: dict[int, list[RawImuCapture]] = {}
+    for capture in parsed.raw_captures:
+        raw_capture_by_imu.setdefault(capture.imu_id, []).append(capture)
+    primary_imu_id = min(raw_capture_by_imu) if raw_capture_by_imu else 0
+    primary_captures = raw_capture_by_imu.get(primary_imu_id, parsed.raw_captures)
+    frames = parsed.frames if parsed.frames else _build_synthetic_frames_from_raw_captures(primary_captures)
+    summary = analyze_real_imu_frames(test_key, frames, primary_captures)
+    summary["primary_imu_name"] = _imu_name_from_id(primary_imu_id) if primary_imu_id else "unknown"
+    summary["comparison_csv"] = csv_path.name
+    summary["per_imu_csvs"] = ", ".join(
+        f"{source.stem}_{_imu_name_from_id(imu_id)}.csv" for imu_id in sorted(raw_capture_by_imu)
+    )
+    summary["per_imu_report"] = _analyze_arw_per_imu(parsed.raw_captures) if test_key == "arw" else {}
     _write_markdown_report(md_path, source, summary)
     return csv_path, csv_path, md_path, summary
 

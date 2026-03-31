@@ -82,9 +82,11 @@ else:
     CXXFLAGS += ' -Wall' 
 
 import sys as _sys
+_gen_mem_report = 'script/build/gen_mem_report.py'
 POST_ACTION = (OBJCPY + ' -O binary $TARGET build/rtthread.bin\n'
-               + SIZE + ' $TARGET \n'
-               + '"' + _sys.executable.replace('\\', '/') + '" script/build/gen_mem_report.py\n')
+               + SIZE + ' $TARGET \n')
+if os.path.exists(_gen_mem_report):
+    POST_ACTION += '"' + _sys.executable.replace('\\', '/') + '" ' + _gen_mem_report + '\n'
 
 def dist_handle(BSP_ROOT, dist_dir):
     import sys
