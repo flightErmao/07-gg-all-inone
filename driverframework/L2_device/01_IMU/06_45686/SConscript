@@ -16,6 +16,6 @@ path = [
     os.path.join(Dir("#").abspath, "driverframework", "L3_peripheral", "13_spiConfig"),
 ]
 
-group = DefineGroup("BSP_USING_ICM45686", src, depend=["BSP_USING_ICM45686"], CPPPATH=path)
+group = DefineGroup("BSP_USING_ICM45686", src, depend=["BSP_USING_ICM45686_ANY"], CPPPATH=path)
 
 Return("group")

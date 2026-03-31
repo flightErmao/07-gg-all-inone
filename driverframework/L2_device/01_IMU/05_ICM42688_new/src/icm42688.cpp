@@ -36,7 +36,7 @@ static constexpr rt_uint16_t kSpiMode = (RT_SPI_MODE_0 | RT_SPI_MSB) & RT_SPI_MO
 }  // namespace
 
 
-ICM42688::ICM42688(int id,int cs) : id_(id),cs_(cs){
+ICM42688::ICM42688(int id, int cs, const ICM42688HwConfig &config) : id_(id), cs_(cs), config_(config) {
   spi_inited_ = false;
   use_hi_res_ = false;
   fifo_info_record_mode_ = false;
@@ -61,12 +61,11 @@ bool ICM42688::initSpi() {
     return true;
   }
 
-  if (!spi_.init(SENSOR_SPI_NAME_ICM42688, SENSOR_SPI_SLAVE_NAME_ICM42688,
-                 SENSOR_ICM42688_SPI_CS_PIN)) {
+  if (!spi_.init(config_.spi_bus_name, config_.spi_slave_name, config_.spi_cs_pin)) {
     return false;
   }
 
-  if (!spi_.configure(kSpiMode, SENSOR_ICM42688_SPI_MAX_HZ)) {
+  if (!spi_.configure(kSpiMode, config_.spi_max_hz)) {
     return false;
   }
 
@@ -144,7 +143,7 @@ bool ICM42688::verifyRegisterMaskedValueInBank(uint8_t bank, uint8_t reg, uint8_
 
 bool ICM42688::probe() {
   uint8_t who_am_i = 0;
-  if (!spi_.configure(kSpiMode, SENSOR_ICM42688_SPI_MAX_HZ)) {
+  if (!spi_.configure(kSpiMode, config_.spi_max_hz)) {
     return false;
   }
 

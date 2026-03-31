@@ -104,8 +104,8 @@ static inline void StoreLe16U(uint8_t *dst, uint16_t value) {
 
 }  // namespace
 
-ICM45686::ICM45686(int id, int cs)
-    : id_(id), cs_(cs), spi_inited_(false), configured_(false), last_whoami_(0), active_spi_mode_(kSpiMode) {
+ICM45686::ICM45686(int id, int cs, const ICM45686HwConfig &config)
+    : id_(id), cs_(cs), spi_inited_(false), configured_(false), last_whoami_(0), active_spi_mode_(kSpiMode), config_(config) {
   rt_memset(&ref_device_, 0, sizeof(ref_device_));
 }
 
@@ -116,14 +116,13 @@ bool ICM45686::initSpi() {
     return true;
   }
 
-  if (!spi_.init(SENSOR_SPI_NAME_ICM45686, SENSOR_SPI_SLAVE_NAME_ICM45686, SENSOR_ICM45686_SPI_CS_PIN)) {
-    LOG_E("id[%d]: spi init failed bus=%s slave=%s cs=%s", id_, SENSOR_SPI_NAME_ICM45686, SENSOR_SPI_SLAVE_NAME_ICM45686,
-          SENSOR_ICM45686_SPI_CS_PIN);
+  if (!spi_.init(config_.spi_bus_name, config_.spi_slave_name, config_.spi_cs_pin)) {
+    LOG_E("id[%d]: spi init failed bus=%s slave=%s cs=%s", id_, config_.spi_bus_name, config_.spi_slave_name, config_.spi_cs_pin);
     return false;
   }
 
-  if (!spi_.configure(kSpiMode, SENSOR_ICM45686_SPI_MAX_HZ)) {
-    LOG_E("id[%d]: spi configure failed hz=%d", id_, SENSOR_ICM45686_SPI_MAX_HZ);
+  if (!spi_.configure(kSpiMode, config_.spi_max_hz)) {
+    LOG_E("id[%d]: spi configure failed hz=%u", id_, static_cast<unsigned>(config_.spi_max_hz));
     return false;
   }
 
@@ -419,7 +418,7 @@ bool ICM45686::configureForPolling() {
    * 字段: RT-Thread SPI host config
    * 最终值: probe 成功时记录的 mode
    */
-  if (!spi_.configure(active_spi_mode_, SENSOR_ICM45686_SPI_MAX_HZ)) {
+  if (!spi_.configure(active_spi_mode_, config_.spi_max_hz)) {
     return false;
   }
 
@@ -633,7 +632,7 @@ bool ICM45686::configureForPolling() {
    * 字段: 整寄存器只读
    * 期望值: 0xE9
    */
-  if (!readRegister(SENSOR_ICM45686_WHOAMI_REG, &who_am_i) || who_am_i != SENSOR_ICM45686_WHOAMI_EXPECTED) {
+  if (!readRegister(config_.whoami_reg, &who_am_i) || who_am_i != config_.whoami_expected) {
     last_whoami_ = who_am_i;
     LOG_W("id[%d]: cfg verify whoami=0x%02X", id_, who_am_i);
     configured_ = false;
@@ -650,19 +649,19 @@ bool ICM45686::configureWithReferenceDriver() { return configureForPolling(); }
 
 bool ICM45686::probe() {
   uint8_t who_am_i = 0;
-  if (!spi_.configure(kSpiMode, SENSOR_ICM45686_SPI_MAX_HZ)) {
+  if (!spi_.configure(kSpiMode, config_.spi_max_hz)) {
     return false;
   }
 
   DelayMs(1);
   for (int attempt = 0; attempt < kProbeRetryCount; ++attempt) {
-    if (!readRegister(SENSOR_ICM45686_WHOAMI_REG, &who_am_i)) {
+    if (!readRegister(config_.whoami_reg, &who_am_i)) {
       DelayMs(2);
       continue;
     }
 
     last_whoami_ = who_am_i;
-    if (who_am_i == SENSOR_ICM45686_WHOAMI_EXPECTED) {
+    if (who_am_i == config_.whoami_expected) {
       active_spi_mode_ = kSpiMode;
       return true;
     }
@@ -684,7 +683,7 @@ int ICM45686::DebugInit() {
   DelayMs(3);
 
   if (!probe()) {
-    LOG_W("id[%d]: whoami mismatch read=0x%02X expected=0x%02X", id_, last_whoami_, SENSOR_ICM45686_WHOAMI_EXPECTED);
+    LOG_W("id[%d]: whoami mismatch read=0x%02X expected=0x%02X", id_, last_whoami_, config_.whoami_expected);
     return -2;
   }
 

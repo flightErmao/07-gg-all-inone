@@ -194,6 +194,14 @@ typedef enum {
 
 namespace drvf {
 
+struct ICM42688HwConfig {
+  const char *device_name;
+  const char *spi_bus_name;
+  const char *spi_slave_name;
+  const char *spi_cs_pin;
+  uint32_t spi_max_hz;
+};
+
 struct RegAddrNew {
   /* USER BANK 0 REGISTER MAP */
   static constexpr uint8_t DEVICE_CONFIG = 0x11;
@@ -880,7 +888,7 @@ typedef enum icm4x6xx_fifo_format {
 
 class ICM42688 : public IMURaw {
  public:
-  ICM42688(int id,int cs);
+  ICM42688(int id, int cs, const ICM42688HwConfig &config);
   ~ICM42688();
   int DebugInit(bool clkin_enable = true);
   bool ReadRaw(IMURawData &data);
@@ -1065,5 +1073,6 @@ class ICM42688 : public IMURaw {
   // uint32_t odr_time_offset_before;
   bool has_inited_;
   bool clkin_enable_;
+  ICM42688HwConfig config_;
 };
 }  // namespace drvf

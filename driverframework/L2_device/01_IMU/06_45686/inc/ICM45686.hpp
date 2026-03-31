@@ -18,9 +18,19 @@ extern "C" {
 
 namespace drvf {
 
+struct ICM45686HwConfig {
+  const char *device_name;
+  const char *spi_bus_name;
+  const char *spi_slave_name;
+  const char *spi_cs_pin;
+  uint32_t spi_max_hz;
+  uint8_t whoami_reg;
+  uint8_t whoami_expected;
+};
+
 class ICM45686 {
  public:
-  ICM45686(int id, int cs);
+  ICM45686(int id, int cs, const ICM45686HwConfig &config);
   ~ICM45686();
 
   int DebugInit();
@@ -61,6 +71,7 @@ class ICM45686 {
   uint16_t active_spi_mode_;
   SpiInterface spi_;
   inv_imu_device_t ref_device_;
+  ICM45686HwConfig config_;
 };
 
 }  // namespace drvf

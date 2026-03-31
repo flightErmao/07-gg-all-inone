@@ -10,6 +10,6 @@ src += Glob("./src/*.cpp")
 
 path = [cwd, os.path.join(cwd, 'inc')]
 
-group = DefineGroup("BSP_USING_ICM42688_NEW", src, depend=["BSP_USING_ICM42688_NEW"], CPPPATH=path)
+group = DefineGroup("BSP_USING_ICM42688_NEW", src, depend=["BSP_USING_ICM42688_NEW_ANY"], CPPPATH=path)
 
 Return("group")
