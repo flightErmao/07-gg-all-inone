@@ -69,9 +69,13 @@ bool SpiInterface::configure(rt_uint16_t mode, rt_uint32_t max_hz) {
   cfg.data_width = 8;
   cfg.mode = mode;
   cfg.max_hz = max_hz;
-  if (rt_spi_configure(spi_device_, &cfg) != RT_EOK) {
-    LOG_E("spi configure failed, mode=0x%X hz=%u", mode, max_hz);
+  rt_err_t result = rt_spi_configure(spi_device_, &cfg);
+  if (result != RT_EOK && result != -RT_EBUSY) {
+    LOG_E("spi configure failed, mode=0x%X hz=%u err=%d", mode, max_hz, result);
     return false;
+  }
+  if (result == -RT_EBUSY) {
+    LOG_D("spi configure deferred until bus ownership switches, mode=0x%X hz=%u", mode, max_hz);
   }
 
   // On STM32H7, HAL_SPI_Init re-runs MSP and may switch the NSS pin back to AF mode.

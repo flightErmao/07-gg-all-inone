@@ -29,7 +29,7 @@ extern "C" {
 
 #ifndef SENSOR_NAME_IMU1
 // #define SENSOR_NAME_IMU1 SENSOR_NAME_ICM42688
-#define SENSOR_NAME_IMU1 "ICM42688_A"
+#define SENSOR_NAME_IMU1 "42688_A"
 #endif
 
 #ifndef SENSOR_NAME_IMU2
@@ -37,7 +37,7 @@ extern "C" {
 #endif
 
 #ifndef SENSOR_NAME_IMU3
-#define SENSOR_NAME_IMU3 SENSOR_NAME_ICM45686
+#define SENSOR_NAME_IMU3 "45686_A"
 #endif
 
 #ifndef SENSOR_NAME_IMU4

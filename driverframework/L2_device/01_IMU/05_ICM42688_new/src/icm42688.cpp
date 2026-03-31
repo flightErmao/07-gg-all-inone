@@ -31,9 +31,7 @@ static void DelayUs(rt_uint32_t us) { rt_thread_mdelay((us + 999U) / 1000U); }
 static constexpr int kProbeRetryCount = 5;
 static volatile uint32_t g_icm42688_packet_parse_mismatch_count = 0;
 // static constexpr rt_uint32_t SENSOR_ICM42688_SPI_MAX_HZ = 1000000;
-// static constexpr rt_uint16_t kProbeMode3 = (RT_SPI_MODE_3 | RT_SPI_MSB) & RT_SPI_MODE_MASK;
-static constexpr rt_uint16_t kProbeMode3 = (RT_SPI_MODE_0 | RT_SPI_MSB) & RT_SPI_MODE_MASK;
-static constexpr rt_uint16_t kProbeMode0 = (RT_SPI_MODE_0 | RT_SPI_MSB) & RT_SPI_MODE_MASK;
+static constexpr rt_uint16_t kSpiMode = (RT_SPI_MODE_0 | RT_SPI_MSB) & RT_SPI_MODE_MASK;
 
 }  // namespace
 
@@ -68,7 +66,7 @@ bool ICM42688::initSpi() {
     return false;
   }
 
-  if (!spi_.configure(kProbeMode0, SENSOR_ICM42688_SPI_MAX_HZ)) {
+  if (!spi_.configure(kSpiMode, SENSOR_ICM42688_SPI_MAX_HZ)) {
     return false;
   }
 
@@ -146,38 +144,34 @@ bool ICM42688::verifyRegisterMaskedValueInBank(uint8_t bank, uint8_t reg, uint8_
 
 bool ICM42688::probe() {
   uint8_t who_am_i = 0;
-  const rt_uint16_t probe_modes[] = {kProbeMode3, kProbeMode0};
+  if (!spi_.configure(kSpiMode, SENSOR_ICM42688_SPI_MAX_HZ)) {
+    return false;
+  }
 
-  for (rt_size_t mode_index = 0; mode_index < sizeof(probe_modes) / sizeof(probe_modes[0]); ++mode_index) {
-    if (!spi_.configure(probe_modes[mode_index], SENSOR_ICM42688_SPI_MAX_HZ)) {
+  DelayMs(1);
+
+  for (int attempt = 1; attempt <= kProbeRetryCount; ++attempt) {
+    uint8_t tx_buf[2] = {static_cast<uint8_t>(RegAddrNew::WHO_AM_I | 0x80u), 0xFFu};
+    uint8_t rx_buf[2] = {0};
+
+    g_icm42688_probe_last_attempt = static_cast<uint32_t>(attempt);
+    who_am_i = 0;
+
+    if (spi_.transfer(tx_buf, rx_buf, sizeof(tx_buf)) != RT_EOK) {
+      g_icm42688_probe_last_whoami = 0xFFFFFFFFu;
+      DelayMs(2);
       continue;
     }
 
-    DelayMs(1);
+    who_am_i = rx_buf[1];
+    g_icm42688_probe_last_whoami = who_am_i;
 
-    for (int attempt = 1; attempt <= kProbeRetryCount; ++attempt) {
-      uint8_t tx_buf[2] = {static_cast<uint8_t>(RegAddrNew::WHO_AM_I | 0x80u), 0xFFu};
-      uint8_t rx_buf[2] = {0};
-
-      g_icm42688_probe_last_attempt = static_cast<uint32_t>(attempt);
-      who_am_i = 0;
-
-      if (spi_.transfer(tx_buf, rx_buf, sizeof(tx_buf)) != RT_EOK) {
-        g_icm42688_probe_last_whoami = 0xFFFFFFFFu;
-        DelayMs(2);
-        continue;
-      }
-
-      who_am_i = rx_buf[1];
-      g_icm42688_probe_last_whoami = who_am_i;
-
-      if (who_am_i == WHO_AM_I_ID) {
-        ++g_icm42688_probe_ok_count;
-        return true;
-      }
-
-      DelayMs(2);
+    if (who_am_i == WHO_AM_I_ID) {
+      ++g_icm42688_probe_ok_count;
+      return true;
     }
+
+    DelayMs(2);
   }
 
   ++g_icm42688_probe_fail_count;
@@ -186,6 +180,7 @@ bool ICM42688::probe() {
 
 int ICM42688::DebugInit(bool clkin_enable) {
   if (!initSpi()) {
+    has_inited_ = false;
     return -1;
   }
 
@@ -207,6 +202,7 @@ int ICM42688::DebugInit(bool clkin_enable) {
 
   if (!icm4x6xx_odr_to_reg_val(target_odr, &target_odr_reg) || target_odr_reg == ODR_NOT_SUPPORTED) {
     LOG_E("id[%d]: odr %.1f cannot map to register value", id_, target_odr);
+    has_inited_ = false;
     return -21;
   }
 
@@ -217,6 +213,7 @@ int ICM42688::DebugInit(bool clkin_enable) {
   //     Logic analyzer should see one 2-byte read transaction on register 0x75.
   DelayBeforeStep();
   if (!probe()) {
+    has_inited_ = false;
     return -1;
   }
 
@@ -227,9 +224,11 @@ int ICM42688::DebugInit(bool clkin_enable) {
   //     Expected final write on 0x4C: low 2 bits become 0x03.
   DelayBeforeStep();
   if (!icm4x6xx_config_ui_intf(SPI_INTF)) {
+      has_inited_ = false;
       return -2;
   }
   if (!verifyRegisterMaskedValue(REG_INTF_CONFIG0, UI_INTF_MASK, SPI_INTF, "ui_intf")) {
+    has_inited_ = false;
     return -22;
   }
 
@@ -239,6 +238,7 @@ int ICM42688::DebugInit(bool clkin_enable) {
     DelayBeforeStep();
   }
   if (!icm4x6xx_enable_rtc_mode(clkin_enable)) {
+      has_inited_ = false;
       return -3;
   }
   if (clkin_enable) {
@@ -278,6 +278,7 @@ int ICM42688::DebugInit(bool clkin_enable) {
   //     Target value: 0x30
   DelayBeforeStep();
   if (!icm4x6xx_en_big_endian_mode(true)) {
+    has_inited_ = false;
     return -5;
   }
   if (!verifyRegisterMaskedValue(REG_INTF_CONFIG0,
@@ -295,6 +296,7 @@ int ICM42688::DebugInit(bool clkin_enable) {
   //     Expected final masked bits on 0x50[7:5] = 000b.
   DelayBeforeStep();
   if (!icm4x6xx_set_accel_fsr(accel_fsr_)) {
+    has_inited_ = false;
     return -7;
   }
   if (!verifyRegisterMaskedValue(REG_ACCEL_CONFIG0,
@@ -312,6 +314,7 @@ int ICM42688::DebugInit(bool clkin_enable) {
   //     Expected final masked bits on 0x4F[7:5] = 000b.
   DelayBeforeStep();
   if (!icm4x6xx_set_gyro_fsr(gyro_fsr_)) {
+    has_inited_ = false;
     return -8;
   }
   if (!verifyRegisterMaskedValue(REG_GYRO_CONFIG0,
@@ -329,6 +332,7 @@ int ICM42688::DebugInit(bool clkin_enable) {
   //      Target field value: 0x40
   DelayBeforeStep();
   if (!icm4x6xx_set_fifo_mode(fifo_mode_)) {
+    has_inited_ = false;
     return -11;
   }
   if (!verifyRegisterMaskedValue(REG_FIFO_CONFIG,
@@ -347,6 +351,7 @@ int ICM42688::DebugInit(bool clkin_enable) {
   //      Expected masked bits on 0x50[3:0] = 0x06 or 0x03.
   DelayBeforeStep();
   if (!icm4x6xx_set_accel_odr(target_odr)) {
+    has_inited_ = false;
     return -14;
   }
   if (!verifyRegisterMaskedValue(REG_ACCEL_CONFIG0,
@@ -365,6 +370,7 @@ int ICM42688::DebugInit(bool clkin_enable) {
   //      Expected masked bits on 0x4F[3:0] = 0x06 or 0x03.
   DelayBeforeStep();
   if (!icm4x6xx_set_gyro_odr(target_odr)) {
+    has_inited_ = false;
     return -15;
   }
   if (!verifyRegisterMaskedValue(REG_GYRO_CONFIG0,
@@ -383,15 +389,18 @@ int ICM42688::DebugInit(bool clkin_enable) {
   //      Helper additionally waits 20ms after successful write.
   DelayBeforeStep();
   if (!icm4x6xx_accel_gyro_powerup(ACCEL_GYRO_POWERUP)) {
+    has_inited_ = false;
     return -19;
   }
   if (!verifyRegisterMaskedValue(REG_PWR_MGMT_0, ACCEL_LNM_MASK | GYRO_LNM_MASK, ACCEL_GYRO_POWERUP, "powerup")) {
+    has_inited_ = false;
     return -43;
   }
 
   // [12] Flush FIFO once after power-up so the first count starts from a clean state.
   DelayBeforeStep();
   if (!WriteMask(REG_SIGNAL_PATH_RESET_REG, BIT_FIFO_FLUSH, BIT_FIFO_FLUSH)) {
+    has_inited_ = false;
     return -20;
   }
   DelayMs(2);
@@ -399,6 +408,7 @@ int ICM42688::DebugInit(bool clkin_enable) {
   // [13] Enable FIFO accel + gyro + temperature after power-up and flush.
   DelayBeforeStep();
   if (!icm4x6xx_en_fifo(en_a_fifo_, en_g_fifo_)) {
+    has_inited_ = false;
     return -18;
   }
   const uint8_t expected_fifo_config1 =
@@ -414,6 +424,7 @@ int ICM42688::DebugInit(bool clkin_enable) {
     return -42;
   }
 
+  has_inited_ = true;
   return 0;
 }
 
@@ -1180,6 +1191,10 @@ bool ICM42688::ReadRaw(IMURawData& data) {
   data.packet_size = 20;
   data.fifo_count = 0;
   rt_memset(data.fifo_data, 0, sizeof(data.fifo_data));
+
+  if (!has_inited_ && DebugInit(false) != 0) {
+    return false;
+  }
 
   if (!icm4x6xx_get_packet_size(&packet_size)) {
     LOG_E("id[%d]: icm4x6xx_get_packet_size fail\n", id_);

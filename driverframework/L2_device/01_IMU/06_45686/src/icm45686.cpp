@@ -20,8 +20,7 @@ namespace {
 
 static ICM45686 *g_ref_owner = nullptr;
 
-static constexpr rt_uint16_t kProbeMode3 = (RT_SPI_MODE_3 | RT_SPI_MSB) & RT_SPI_MODE_MASK;
-static constexpr rt_uint16_t kProbeMode0 = (RT_SPI_MODE_0 | RT_SPI_MSB) & RT_SPI_MODE_MASK;
+static constexpr rt_uint16_t kSpiMode = (RT_SPI_MODE_0 | RT_SPI_MSB) & RT_SPI_MODE_MASK;
 static constexpr uint8_t kRegPwrMgmt0 = 0x10;
 static constexpr uint8_t kRegAccelDataX1Ui = 0x00;
 static constexpr uint8_t kRegFifoCount0 = 0x12;
@@ -106,7 +105,7 @@ static inline void StoreLe16U(uint8_t *dst, uint16_t value) {
 }  // namespace
 
 ICM45686::ICM45686(int id, int cs)
-    : id_(id), cs_(cs), spi_inited_(false), configured_(false), last_whoami_(0), active_spi_mode_(kProbeMode3) {
+    : id_(id), cs_(cs), spi_inited_(false), configured_(false), last_whoami_(0), active_spi_mode_(kSpiMode) {
   rt_memset(&ref_device_, 0, sizeof(ref_device_));
 }
 
@@ -123,13 +122,13 @@ bool ICM45686::initSpi() {
     return false;
   }
 
-  if (!spi_.configure(kProbeMode3, SENSOR_ICM45686_SPI_MAX_HZ)) {
+  if (!spi_.configure(kSpiMode, SENSOR_ICM45686_SPI_MAX_HZ)) {
     LOG_E("id[%d]: spi configure failed hz=%d", id_, SENSOR_ICM45686_SPI_MAX_HZ);
     return false;
   }
 
   spi_inited_ = true;
-  active_spi_mode_ = kProbeMode3;
+  active_spi_mode_ = kSpiMode;
   g_ref_owner = this;
   ref_device_.transport.read_reg = RefReadReg;
   ref_device_.transport.write_reg = RefWriteReg;
@@ -420,7 +419,7 @@ bool ICM45686::configureForPolling() {
    * 字段: RT-Thread SPI host config
    * 最终值: probe 成功时记录的 mode
    */
-  if (!spi_.configure(kProbeMode3, SENSOR_ICM45686_SPI_MAX_HZ)) {
+  if (!spi_.configure(active_spi_mode_, SENSOR_ICM45686_SPI_MAX_HZ)) {
     return false;
   }
 
@@ -651,27 +650,24 @@ bool ICM45686::configureWithReferenceDriver() { return configureForPolling(); }
 
 bool ICM45686::probe() {
   uint8_t who_am_i = 0;
-  const rt_uint16_t probe_modes[] = {kProbeMode0, kProbeMode3};
+  if (!spi_.configure(kSpiMode, SENSOR_ICM45686_SPI_MAX_HZ)) {
+    return false;
+  }
 
-  for (rt_size_t mode_index = 0; mode_index < sizeof(probe_modes) / sizeof(probe_modes[0]); ++mode_index) {
-    if (!spi_.configure(probe_modes[mode_index], SENSOR_ICM45686_SPI_MAX_HZ)) {
+  DelayMs(1);
+  for (int attempt = 0; attempt < kProbeRetryCount; ++attempt) {
+    if (!readRegister(SENSOR_ICM45686_WHOAMI_REG, &who_am_i)) {
+      DelayMs(2);
       continue;
     }
-    DelayMs(1);
-    for (int attempt = 0; attempt < kProbeRetryCount; ++attempt) {
-      if (!readRegister(SENSOR_ICM45686_WHOAMI_REG, &who_am_i)) {
-        DelayMs(2);
-        continue;
-      }
 
-      last_whoami_ = who_am_i;
-      if (who_am_i == SENSOR_ICM45686_WHOAMI_EXPECTED) {
-        active_spi_mode_ = probe_modes[mode_index];
-        return true;
-      }
-
-      DelayMs(2);
+    last_whoami_ = who_am_i;
+    if (who_am_i == SENSOR_ICM45686_WHOAMI_EXPECTED) {
+      active_spi_mode_ = kSpiMode;
+      return true;
     }
+
+    DelayMs(2);
   }
 
   last_whoami_ = who_am_i;
@@ -709,7 +705,7 @@ bool ICM45686::ReadUiSnapshot(uint8_t *buf, uint16_t len) {
     return false;
   }
 
-  if (!configured_ && !configureForPolling()) {
+  if (!configured_ && DebugInit() != 0) {
     return false;
   }
 
@@ -726,7 +722,7 @@ bool ICM45686::ReadRaw(IMURawData &data) {
   data.fifo_count = 0;
   rt_memset(data.fifo_data, 0, sizeof(data.fifo_data));
 
-  if (!configured_ && !configureForPolling()) {
+  if (!configured_ && DebugInit() != 0) {
     return false;
   }
 

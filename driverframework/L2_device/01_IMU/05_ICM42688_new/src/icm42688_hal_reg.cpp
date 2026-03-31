@@ -28,6 +28,7 @@ static int8_t icm42688_read_data(imu_dev_t imu, rt_off_t pos, void *data, rt_siz
 
   drvf::IMURawData raw_data{};
   if (!g_icm42688.ReadRaw(raw_data)) {
+    LOG_W("device %s read failed", SENSOR_NAME_ICM42688);
     return -1;
   }
 
@@ -66,14 +67,14 @@ static struct imu_device icm42688_dev = {
 static rt_err_t icm42688_hal_init(const char *imu_name) {
   const int ret = g_icm42688.DebugInit(false);
   if (ret != 0) {
-    return -RT_ERROR;
+    LOG_W("device %s registered, deferred init ret=%d", imu_name, ret);
+    return RT_ERROR;
   }
 
   rt_err_t err = hal_imu_register(&icm42688_dev, imu_name, RT_DEVICE_FLAG_RDWR, RT_NULL);
   if (err != RT_EOK) {
     return err;
   }
-
   return RT_EOK;
 }
 

@@ -49,6 +49,45 @@ IMU_ID_TO_NAME = {
     3: "45686_A",
     4: "45686_B",
 }
+IMU_CONFIGS = {
+    1: {"odr_hz": 1000.0, "accel_range_g": 16.0, "gyro_range_dps": 2000.0},
+    2: {"odr_hz": 1000.0, "accel_range_g": 16.0, "gyro_range_dps": 2000.0},
+    3: {"odr_hz": 1600.0, "accel_range_g": 16.0, "gyro_range_dps": 2000.0},
+    4: {"odr_hz": 1600.0, "accel_range_g": 16.0, "gyro_range_dps": 2000.0},
+}
+IMU_PAPER_METRICS = {
+    1: {
+        "accel_zero_bias_mg": 20.0,
+        "gyro_zero_bias_dps": 0.5,
+        "accel_bias_tc_mg_c": 0.15,
+        "gyro_bias_tc_dps_c": 0.005,
+        "gyro_arw_deg_sqrt_hr": 0.0028,
+    },
+    2: {
+        "accel_zero_bias_mg": 20.0,
+        "gyro_zero_bias_dps": 0.5,
+        "accel_bias_tc_mg_c": 0.15,
+        "gyro_bias_tc_dps_c": 0.005,
+        "gyro_arw_deg_sqrt_hr": 0.0028,
+    },
+    3: {
+        "accel_zero_bias_mg": 20.0,
+        "gyro_zero_bias_dps": 0.4,
+        "accel_bias_tc_mg_c": 0.15,
+        "gyro_bias_tc_dps_c": 0.005,
+        "gyro_arw_deg_sqrt_hr": 0.0038,
+    },
+    4: {
+        "accel_zero_bias_mg": 20.0,
+        "gyro_zero_bias_dps": 0.4,
+        "accel_bias_tc_mg_c": 0.15,
+        "gyro_bias_tc_dps_c": 0.005,
+        "gyro_arw_deg_sqrt_hr": 0.0038,
+    },
+}
+PAPER_TARGETS = {
+    "gyro_arw_deg_sqrt_hr_max": 0.0050,
+}
 JLINK_CANDIDATES = [
     Path(r"C:\Program Files\SEGGER\JLink_V844a\JLink.exe"),
     Path(r"C:\Program Files\SEGGER\JLink\JLink.exe"),
@@ -693,18 +732,22 @@ def _packet_timestamp_u16(packet: bytes, imu_id: int) -> int:
     return int.from_bytes(packet[14:16], byteorder=byteorder, signed=False)
 
 
-def _packet_timestamp_tick_us(imu_id: int) -> int:
-    if imu_id in (3, 4):
-        return 16
-    return 1
-
-
 def _packet_hex(packet: bytes) -> str:
     return packet.hex(" ").upper()
 
 
 def _imu_name_from_id(imu_id: int) -> str:
     return IMU_ID_TO_NAME.get(imu_id, f"IMU{imu_id}")
+
+
+def _imu_config(imu_id: int) -> dict[str, float]:
+    return IMU_CONFIGS.get(imu_id, {"odr_hz": 0.0, "accel_range_g": 0.0, "gyro_range_dps": 0.0})
+
+
+def _positive_steps(values: list[int]) -> list[int]:
+    if len(values) < 2:
+        return []
+    return [values[index] - values[index - 1] for index in range(1, len(values)) if values[index] - values[index - 1] > 0]
 
 
 def _packet_s16(packet: bytes, start: int, imu_id: int) -> int:
@@ -748,7 +791,6 @@ def _build_raw_packet_rows(captures: list[RawImuCapture]) -> list[dict[str, int 
 
             global_packet_index += 1
             packet_timestamp = _packet_timestamp_u16(packet, capture.imu_id)
-            packet_timestamp_tick_us = _packet_timestamp_tick_us(capture.imu_id)
             wrap_count = wrap_count_by_imu.get(capture.imu_id, 0)
             last_timestamp = last_timestamp_by_imu.get(capture.imu_id)
             if last_timestamp is not None and packet_timestamp < last_timestamp:
@@ -783,10 +825,7 @@ def _build_raw_packet_rows(captures: list[RawImuCapture]) -> list[dict[str, int 
                     "packet_index_in_capture": packet_index + 1,
                     "packet_size": capture.packet_size,
                     "packet_timestamp_u16": packet_timestamp,
-                    "packet_timestamp_tick_us": packet_timestamp_tick_us,
-                    "packet_timestamp_us": packet_timestamp * packet_timestamp_tick_us,
                     "packet_timestamp_continuous": packet_timestamp_continuous,
-                    "packet_timestamp_continuous_us": packet_timestamp_continuous * packet_timestamp_tick_us,
                     "fifo_header": fifo_header,
                     "raw_accel_x": accel_x,
                     "raw_accel_y": accel_y,
@@ -926,10 +965,7 @@ def _write_per_imu_packet_csvs(raw_rows: list[dict[str, int | float | str]], sou
                     f"{prefix}packet_index_in_capture",
                     f"{prefix}packet_size",
                     f"{prefix}packet_timestamp_u16",
-                    f"{prefix}packet_timestamp_tick_us",
-                    f"{prefix}packet_timestamp_us",
                     f"{prefix}packet_timestamp_continuous",
-                    f"{prefix}packet_timestamp_continuous_us",
                     f"{prefix}fifo_header",
                     f"{prefix}raw_accel_x",
                     f"{prefix}raw_accel_y",
@@ -955,10 +991,7 @@ def _write_per_imu_packet_csvs(raw_rows: list[dict[str, int | float | str]], sou
                         row["packet_index_in_capture"],
                         row["packet_size"],
                         row["packet_timestamp_u16"],
-                        row["packet_timestamp_tick_us"],
-                        row["packet_timestamp_us"],
                         row["packet_timestamp_continuous"],
-                        row["packet_timestamp_continuous_us"],
                         row["fifo_header"],
                         row["raw_accel_x"],
                         row["raw_accel_y"],
@@ -1049,10 +1082,7 @@ def decode_real_imu_raw_packets_to_csv(source: Path, destination: Path) -> int:
                 "packet_index_in_capture",
                 "packet_size",
                 "packet_timestamp_u16",
-                "packet_timestamp_tick_us",
-                "packet_timestamp_us",
                 "packet_timestamp_continuous",
-                "packet_timestamp_continuous_us",
                 "fifo_header",
                 "raw_accel_x",
                 "raw_accel_y",
@@ -1081,10 +1111,7 @@ def decode_real_imu_raw_packets_to_csv(source: Path, destination: Path) -> int:
                     row["packet_index_in_capture"],
                     row["packet_size"],
                     row["packet_timestamp_u16"],
-                    row["packet_timestamp_tick_us"],
-                    row["packet_timestamp_us"],
                     row["packet_timestamp_continuous"],
-                    row["packet_timestamp_continuous_us"],
                     row["fifo_header"],
                     row["raw_accel_x"],
                     row["raw_accel_y"],
@@ -1261,6 +1288,8 @@ def _estimate_allan_white_noise_metrics(values: list[float], sample_period_s: fl
 
 def _extract_raw_capture_axes_by_imu(raw_captures: list[RawImuCapture]) -> dict[int, dict[str, list[float]]]:
     metrics_by_imu: dict[int, dict[str, list[float]]] = {}
+    wrap_count_by_imu: dict[int, int] = {}
+    last_timestamp_by_imu: dict[int, int] = {}
     for capture in raw_captures:
         if capture.packet_size <= 0:
             continue
@@ -1270,6 +1299,8 @@ def _extract_raw_capture_axes_by_imu(raw_captures: list[RawImuCapture]) -> dict[
             {
                 "poll_timestamp_us": [],
                 "packet_timestamp_u16": [],
+                "packet_timestamp_continuous": [],
+                "temp_c": [],
                 "gyro_x_rad_s": [],
                 "gyro_y_rad_s": [],
                 "gyro_z_rad_s": [],
@@ -1293,6 +1324,13 @@ def _extract_raw_capture_axes_by_imu(raw_captures: list[RawImuCapture]) -> dict[
             acc_y = _packet_s16(packet, 3, capture.imu_id)
             acc_z = _packet_s16(packet, 5, capture.imu_id)
             packet_timestamp = _packet_timestamp_u16(packet, capture.imu_id)
+            wrap_count = wrap_count_by_imu.get(capture.imu_id, 0)
+            last_timestamp = last_timestamp_by_imu.get(capture.imu_id)
+            if last_timestamp is not None and packet_timestamp < last_timestamp:
+                wrap_count += 1
+            wrap_count_by_imu[capture.imu_id] = wrap_count
+            last_timestamp_by_imu[capture.imu_id] = packet_timestamp
+            packet_timestamp_continuous = wrap_count * 65536 + packet_timestamp
 
             imu_axes["gyro_x_rad_s"].append(_raw_gyro_to_rad_s(gyro_x, capture.imu_id))
             imu_axes["gyro_y_rad_s"].append(_raw_gyro_to_rad_s(gyro_y, capture.imu_id))
@@ -1300,8 +1338,10 @@ def _extract_raw_capture_axes_by_imu(raw_captures: list[RawImuCapture]) -> dict[
             imu_axes["acc_x_mps2"].append(_raw_accel_to_mps2(acc_x, capture.imu_id))
             imu_axes["acc_y_mps2"].append(_raw_accel_to_mps2(acc_y, capture.imu_id))
             imu_axes["acc_z_mps2"].append(_raw_accel_to_mps2(acc_z, capture.imu_id))
+            imu_axes["temp_c"].append(_raw_temp_to_celsius(_packet_s8(packet, 0x0D), capture.imu_id))
             imu_axes["poll_timestamp_us"].append(capture.timestamp_us + packet_index)
             imu_axes["packet_timestamp_u16"].append(packet_timestamp)
+            imu_axes["packet_timestamp_continuous"].append(packet_timestamp_continuous)
     return metrics_by_imu
 
 
@@ -1312,27 +1352,64 @@ def _analyze_arw_per_imu(raw_captures: list[RawImuCapture]) -> dict[int, dict[st
     for imu_id, axes in sorted(axes_by_imu.items()):
         timestamps = [int(value) for value in axes["poll_timestamp_us"]]
         packet_timestamps = [int(value) for value in axes["packet_timestamp_u16"]]
-        sample_period_s = _estimate_sample_period_s(timestamps)
-        if sample_period_s <= 0.0:
-            sample_period_s = 1.0 / 1600.0 if imu_id in (3, 4) else 1.0 / 1000.0
-        duration_s = sample_period_s * max(len(timestamps) - 1, 0)
-        sample_rate_hz = 1.0 / sample_period_s if sample_period_s > 0.0 else 0.0
+        packet_timestamps_continuous = [int(value) for value in axes["packet_timestamp_continuous"]]
+        cfg = _imu_config(imu_id)
+        poll_period_s = _estimate_sample_period_s(timestamps)
+        packet_steps = _positive_steps(packet_timestamps_continuous)
+        packet_period_s = _mean(packet_steps) / 1_000_000.0 if packet_steps else 0.0
+        if packet_period_s <= 0.0:
+            packet_period_s = 1.0 / cfg["odr_hz"] if cfg["odr_hz"] > 0.0 else 0.0
+        if poll_period_s <= 0.0:
+            poll_period_s = packet_period_s
+        duration_s = packet_period_s * max(len(packet_timestamps_continuous) - 1, 0)
+        packet_rate_hz = 1.0 / packet_period_s if packet_period_s > 0.0 else 0.0
+        poll_rate_hz = 1.0 / poll_period_s if poll_period_s > 0.0 else 0.0
 
         gyro_metrics = {
-            axis: _estimate_arw_metrics([float(value) for value in axes[f"gyro_{axis}_rad_s"]], sample_period_s)
+            axis: _estimate_arw_metrics([float(value) for value in axes[f"gyro_{axis}_rad_s"]], packet_period_s)
             for axis in ("x", "y", "z")
         }
         accel_metrics = {
-            axis: _estimate_allan_white_noise_metrics([float(value) for value in axes[f"acc_{axis}_mps2"]], sample_period_s)
+            axis: _estimate_allan_white_noise_metrics([float(value) for value in axes[f"acc_{axis}_mps2"]], packet_period_s)
             for axis in ("x", "y", "z")
         }
+        gyro_arw_values = [float(gyro_metrics[axis]["arw_deg_sqrt_hr"]) for axis in ("x", "y", "z") if float(gyro_metrics[axis]["arw_deg_sqrt_hr"]) > 0.0]
+        accel_rw_values = [float(accel_metrics[axis]["random_walk"]) for axis in ("x", "y", "z") if float(accel_metrics[axis]["random_walk"]) > 0.0]
+        paper_metrics = IMU_PAPER_METRICS.get(imu_id, {})
+        paper_gyro_arw = float(paper_metrics.get("gyro_arw_deg_sqrt_hr", 0.0))
+        measured_gyro_arw_mean = _mean(gyro_arw_values)
+        temp_values = [float(value) for value in axes["temp_c"]]
+        paper_accel_zero_bias_mps2 = float(paper_metrics.get("accel_zero_bias_mg", 0.0)) / 1000.0 * 9.80665
+        paper_gyro_zero_bias_rad_s = math.radians(float(paper_metrics.get("gyro_zero_bias_dps", 0.0)))
+        paper_accel_bias_tc_mps2_c = float(paper_metrics.get("accel_bias_tc_mg_c", 0.0)) / 1000.0 * 9.80665
+        paper_gyro_bias_tc_rad_s_c = math.radians(float(paper_metrics.get("gyro_bias_tc_dps_c", 0.0)))
         report[imu_id] = {
             "imu_name": _imu_name_from_id(imu_id),
             "sample_count": len(timestamps),
             "duration_s": duration_s,
-            "sample_period_s": sample_period_s,
-            "sample_rate_hz": sample_rate_hz,
+            "packet_period_s": packet_period_s,
+            "packet_rate_hz": packet_rate_hz,
+            "packet_period_mean_us": packet_period_s * 1_000_000.0,
+            "packet_period_std_us": float(_std(packet_steps)) if packet_steps else 0.0,
             "packet_timestamp_nonzero_count": sum(1 for value in packet_timestamps if value > 0),
+            "configured_odr_hz": cfg["odr_hz"],
+            "accel_range_g": cfg["accel_range_g"],
+            "gyro_range_dps": cfg["gyro_range_dps"],
+            "accel_resolution_mg_lsb": (cfg["accel_range_g"] * 1000.0 / float(1 << 15)) if cfg["accel_range_g"] > 0.0 else 0.0,
+            "gyro_resolution_mdps_lsb": (cfg["gyro_range_dps"] * 1000.0 / float(1 << 15)) if cfg["gyro_range_dps"] > 0.0 else 0.0,
+            "temp_mean_c": _mean(temp_values),
+            "temp_min_c": min(temp_values) if temp_values else 0.0,
+            "temp_max_c": max(temp_values) if temp_values else 0.0,
+            "temp_range_c": (max(temp_values) - min(temp_values)) if temp_values else 0.0,
+            "paper_accel_zero_bias_mps2": paper_accel_zero_bias_mps2,
+            "paper_gyro_zero_bias_rad_s": paper_gyro_zero_bias_rad_s,
+            "paper_accel_bias_tc_mps2_c": paper_accel_bias_tc_mps2_c,
+            "paper_gyro_bias_tc_rad_s_c": paper_gyro_bias_tc_rad_s_c,
+            "paper_gyro_arw_deg_sqrt_hr": paper_gyro_arw,
+            "paper_gyro_arw_target_deg_sqrt_hr": PAPER_TARGETS["gyro_arw_deg_sqrt_hr_max"],
+            "measured_gyro_arw_mean_deg_sqrt_hr": measured_gyro_arw_mean,
+            "measured_acc_rw_mean_mps_sqrt_hr": _mean(accel_rw_values),
+            "gyro_arw_change_pct": ((measured_gyro_arw_mean - paper_gyro_arw) / paper_gyro_arw * 100.0) if paper_gyro_arw > 0.0 else 0.0,
             "gyro": gyro_metrics,
             "accel": accel_metrics,
         }
@@ -1508,6 +1585,8 @@ def _write_markdown_report(destination: Path, source: Path, summary: dict[str, s
         per_imu_report = summary.get("per_imu_report", {})
         detected_imu_ids = sorted(int(imu_id) for imu_id in per_imu_report)
         missing_imu_names = [_imu_name_from_id(imu_id) for imu_id in sorted(IMU_ID_TO_NAME) if imu_id not in detected_imu_ids]
+        primary_imu_id = next((imu_id for imu_id in detected_imu_ids if _imu_name_from_id(imu_id) == summary.get("primary_imu_name", "")), 0)
+        primary_imu_report = per_imu_report.get(primary_imu_id, {}) if primary_imu_id else {}
         lines = [
             "# 数据分析报告",
             "",
@@ -1520,128 +1599,20 @@ def _write_markdown_report(destination: Path, source: Path, summary: dict[str, s
             "- 测试项目: `测试项目 3：角度随机游走 ARW / 噪声`",
             f"- 样本点数: `{summary['frames']}`",
             f"- 记录时长: `{summary.get('duration_s', '0')}` s",
-            f"- 平均采样周期: `{summary.get('sample_period_s', '0')}` s",
-            f"- 平均采样率: `{summary.get('sample_rate_hz', '0')}` Hz",
+            (
+                f"- 主 IMU FIFO 包平均周期: `{primary_imu_report['packet_period_s']:.6f}` s (`{primary_imu_report['packet_period_mean_us']:.3f} us`)"
+                if primary_imu_report
+                else "- 主 IMU FIFO 包平均周期: `无`"
+            ),
+            (
+                f"- 主 IMU FIFO 包平均刷新率: `{primary_imu_report['packet_rate_hz']:.3f}` Hz"
+                if primary_imu_report
+                else "- 主 IMU FIFO 包平均刷新率: `无`"
+            ),
             f"- 检测到数据的 IMU: `{', '.join(_imu_name_from_id(imu_id) for imu_id in detected_imu_ids) or '无'}`",
             f"- 未检测到数据的 IMU: `{', '.join(missing_imu_names) or '无'}`",
-            "",
-            "## 2. 核心指标",
-            "",
-            "| 轴向 | Gyro RMS (deg/s) | ARW (deg/sqrt(hr)) | Allan 最小值 (deg/s) | 特征 tau (s) |",
-            "| --- | ---: | ---: | ---: | ---: |",
         ]
-        for axis in ("x", "y", "z"):
-            lines.append(
-                "| "
-                f"{axis.upper()} | "
-                f"{summary.get(f'gyro_rms_{axis}_deg_s', '0')} | "
-                f"{summary.get(f'gyro_arw_{axis}_deg_sqrt_hr', '0')} | "
-                f"{summary.get(f'allan_min_{axis}_deg_s', '0')} | "
-                f"{summary.get(f'allan_min_tau_{axis}_s', '0')} |"
-            )
-
-        lines.extend(
-            [
-                "",
-                "说明:",
-                f"- `Gyro RMS` 使用去均值后的陀螺序列计算，直接反映时域噪声大小。",
-                f"- `ARW` 取 Allan deviation 曲线中斜率最接近 `-1/2` 的区段估算。",
-                f"- `Allan 最小值` 用来观察噪声曲线的最低点以及对应时间尺度。",
-                "",
-                "## 3. 计算过程",
-                "",
-                "1. 去均值",
-                "",
-                "- 对每个轴的陀螺序列先去均值: `w_i' = w_i - mean(w)`",
-                "- 这样可以把固定零偏从噪声统计里剥离掉，让指标更接近纯噪声。",
-                "",
-                "2. Gyro RMS",
-                "",
-                "- 公式: `RMS = sqrt((1 / N) * sum((w_i')^2))`",
-                "- 报告中的 `Gyro RMS` 单位为 `deg/s`，来源于去均值后的时域序列。",
-                "",
-                "3. Allan variance / Allan deviation",
-                "",
-                "- 先按聚合时间 `tau = m * Ts` 把序列分段求均值，得到 `y_k`。",
-                "- Allan variance: `AVAR(tau) = (1 / 2) * mean((y_(k+1) - y_k)^2)`",
-                "- Allan deviation: `ADEV(tau) = sqrt(AVAR(tau))`",
-                "- 报告中的 `Allan 最小值` 即各个 `tau` 下 `ADEV(tau)` 的最小点。",
-                "",
-                "4. ARW 提取",
-                "",
-                "- 在 Allan deviation 曲线上计算相邻对数坐标点的斜率。",
-                "- 选取斜率最接近 `-1/2` 的区段，视为白噪声主导区域。",
-                "- 在该区段按 `ARW = ADEV(tau) * sqrt(tau) * 60` 估算，单位为 `deg/sqrt(hr)`。",
-            ]
-        )
-
-        consistency_sample_count = int(summary.get("same_model_consistency_sample_count", "0"))
-        lines.extend(["", "## 4. 同型号一致性", ""])
-        if consistency_sample_count >= 2:
-            lines.extend(
-                [
-                    f"- 参与一致性统计的样本数: `{consistency_sample_count}`",
-                    f"- 样本间三轴平均 RMS 均值: `{summary.get('same_model_rms_mean_deg_s', '0')}` deg/s",
-                    f"- 样本间三轴平均 RMS 标准差: `{summary.get('same_model_rms_std_deg_s', '0')}` deg/s",
-                    f"- 样本间三轴平均 RMS 变异系数: `{summary.get('same_model_rms_cv_pct', '0')}` %",
-                    "- 计算方式: 先按 `imu_id` 分开提取各自三轴陀螺序列，分别算去均值 `RMS`，再对每颗 IMU 的三轴 RMS 取平均后做离散度统计。",
-                ]
-            )
-        else:
-            lines.extend(
-                [
-                    "- 当前文件可用于单次噪声评估，但不足以稳定给出同型号样本一致性。",
-                    "- 若 BIN 中同时包含多颗 IMU 的原始包，或后续支持多文件联合分析，可继续扩展该项。",
-                ]
-            )
-
-        lines.extend(
-            [
-                "",
-                "## 5. CSV 字段说明",
-                "",
-                "本次会输出两类 CSV:",
-                "",
-                f"- 对比 CSV `{primary_csv_name}`: 以 `poll_count` 为横坐标，每行代表一次 poll，各 IMU 的值为该轮次内多个 FIFO 包换算后的平均值。",
-                f"- 独立 IMU CSV: 每个文件只保留单颗 IMU 的逐包数据，字段名使用具体 IMU 名字前缀，且不再包含 `poll_count` 列。",
-                "",
-                "### 5.1 独立 IMU CSV 字段",
-                "",
-                "| 列名 | 含义 | 获取或计算方式 |",
-                "| --- | --- | --- |",
-                "| `packet_index` | 全文件内的全局包序号 | 按解析顺序从 1 递增 |",
-                "| `42688A_poll_timestamp_us` | `42688A` 这颗 IMU 对应 poll 轮次的 MCU 微秒时间戳 | 固件用 `TIM2 1MHz` 自由运行计数器在写 BIN 时记录 |",
-                "| `42688A_packet_index_in_capture` | 当前包在本次 FIFO 记录块中的位置 | 同一轮 poll 的 FIFO 数据内从 1 递增 |",
-                "| `42688A_packet_size` | 单个 FIFO 包字节数 | 固件从 IMU 原始读数结构里直接记录 |",
-                "| `42688A_packet_timestamp_u16` | FIFO 包尾部自带的 16 位时间戳 | 从包内 `0x0E~0x0F` 字节提取，若包长不足则记 0 |",
-                "| `42688A_packet_timestamp_tick_us` | 每个时间戳 tick 对应的微秒数 | 当前脚本对 `45686` 按 `16 us/tick` 展开，其它型号默认按 `1 us/tick` 处理 |",
-                "| `42688A_packet_timestamp_us` | 当前包时间戳对应的微秒值 | `packet_timestamp_u16 * packet_timestamp_tick_us` |",
-                "| `42688A_packet_timestamp_continuous` | 展开的连续 FIFO 原始 tick 时间戳 | 在 PC 端基于 `42688A_packet_timestamp_u16` 做 16 位回绕展开 |",
-                "| `42688A_packet_timestamp_continuous_us` | 展开的连续 FIFO 微秒时间戳 | `packet_timestamp_continuous * packet_timestamp_tick_us` |",
-                "| `42688A_fifo_header` | FIFO 包头字节 | 原始包第 0 字节 |",
-                "| `42688A_raw_accel_x/y/z` | 加速度三轴原始 LSB | 分别从包内 `0x01~0x06` 按 big-endian 有符号 16 位解析 |",
-                "| `42688A_raw_gyro_x/y/z` | 角速度三轴原始 LSB | 分别从包内 `0x07~0x0C` 按 big-endian 有符号 16 位解析 |",
-                "| `42688A_temp_raw` | 温度原始值 | 包内 `0x0D` 的有符号 8 位值 |",
-                "| `42688A_accel_x/y/z_mps2` | 加速度物理值，单位 `m/s^2` | `42688A_raw_accel * (16 / 2^15) * 9.80665` |",
-                "| `42688A_gyro_x/y/z_deg_s` | 角速度物理值，单位 `deg/s` | `42688A_raw_gyro * (2000 / 2^15)` |",
-                "| `42688A_temp_c` | 温度物理值，单位 `°C` | `42688A_temp_raw / 2.07 + 25.0` |",
-                "",
-                "### 5.2 对比 CSV 字段",
-                "",
-                "| 列名 | 含义 | 获取或计算方式 |",
-                "| --- | --- | --- |",
-                "| `poll_count` | 全局 poll 轮次序号，也是多颗 IMU 统一对齐的横坐标 | 固件在每轮 `poll` 开始时自增一次，同一轮内所有 IMU 共用该值 |",
-                "| `42688A_accel_x/y/z_mps2` | `42688A` 在该 poll 轮次下的加速度平均值 | 对该轮次内 `42688A` 的多个 FIFO 包先换算成物理单位，再按轴求平均 |",
-                "| `42688A_gyro_x/y/z_deg_s` | `42688A` 在该 poll 轮次下的角速度平均值 | 对该轮次内 `42688A` 的多个 FIFO 包先换算成 `deg/s`，再按轴求平均 |",
-                "| `42688A_temp_c` | `42688A` 在该 poll 轮次下的温度平均值 | 对该轮次内 `42688A` 的多个 FIFO 包先换算成 `°C` 后求平均 |",
-                "",
-                "说明:",
-                "- 其它 IMU 如 `42688B`、`45686A`、`45686B` 的字段命名方式与 `42688A` 完全相同，只是前缀替换为对应 IMU 名字。",
-                "- 报告中的噪声、ARW 和 Allan 指标，默认基于“本页指标默认针对”的那颗 IMU 的独立 CSV 数据计算。",
-            ]
-        )
-
-        lines.extend(["", "## 6. 分 IMU 噪声统计", ""])
+        lines.extend(["", "## 2. 分 IMU 噪声统计", ""])
         for imu_id in sorted(IMU_ID_TO_NAME):
             imu_name = _imu_name_from_id(imu_id)
             imu_report = per_imu_report.get(str(imu_id)) or per_imu_report.get(imu_id)
@@ -1657,10 +1628,17 @@ def _write_markdown_report(destination: Path, source: Path, summary: dict[str, s
             lines.extend(
                 [
                     f"- 样本点数: `{imu_report['sample_count']}`",
-                    f"- 估计采样周期: `{imu_report['sample_period_s']:.6f}` s",
-                    f"- 估计采样率: `{imu_report['sample_rate_hz']:.3f}` Hz",
+                    f"- FIFO 包平均周期: `{imu_report['packet_period_s']:.6f}` s (`{imu_report['packet_period_mean_us']:.3f} us`)",
+                    f"- FIFO 包平均刷新率: `{imu_report['packet_rate_hz']:.3f}` Hz",
+                    f"- FIFO 包周期标准差: `{imu_report['packet_period_std_us']:.3f} us`",
                     f"- 记录时长: `{imu_report['duration_s']:.3f}` s",
+                    f"- 平均温度: `{imu_report['temp_mean_c']:.3f} °C`",
+                    f"- 温度范围: `{imu_report['temp_min_c']:.3f} ~ {imu_report['temp_max_c']:.3f} °C`",
+                    f"- 温度变化范围: `{imu_report['temp_range_c']:.3f} °C`",
                     f"- 非零包时间戳点数: `{imu_report['packet_timestamp_nonzero_count']}`",
+                    f"- 配置 ODR: `{imu_report['configured_odr_hz']:.1f} Hz`",
+                    f"- Acc 量程/分辨率: `±{imu_report['accel_range_g']:.0f} g`, `{imu_report['accel_resolution_mg_lsb']:.6f} mg/LSB`",
+                    f"- Gyro 量程/分辨率: `±{imu_report['gyro_range_dps']:.0f} dps`, `{imu_report['gyro_resolution_mdps_lsb']:.6f} mdps/LSB`",
                     "",
                     "| 类型 | 轴向 | RMS | 随机游走指标 | Allan 最小值 | 特征 tau (s) |",
                     "| --- | --- | ---: | ---: | ---: | ---: |",
@@ -1690,10 +1668,139 @@ def _write_markdown_report(destination: Path, source: Path, summary: dict[str, s
                 [
                     "",
                     "- `Gyro` 行延续原有 ARW 算法。",
-                    "- `Acc` 行采用同样的 Allan deviation 白噪声区段提取方式，对应速度随机游走 `VRW`，单位为 `m/s/sqrt(hr)`。",
+                    "- `Acc` 行采用 Allan deviation 白噪声区段提取的加速度随机游走指标，单位为 `m/s/sqrt(hr)`。",
+                    "- `FIFO 包平均周期/刷新率` 直接基于逐包 `packet_timestamp_continuous` 差分统计。",
+                    "",
+                    "#### 纸面对比",
+                    "",
+                    f"- 实测 Gyro ARW 三轴均值: `{imu_report['measured_gyro_arw_mean_deg_sqrt_hr']:.6f}` deg/sqrt(hr)",
+                    f"- 文档纸面 Gyro ARW: `{imu_report['paper_gyro_arw_deg_sqrt_hr']:.6f}` deg/sqrt(hr)" if float(imu_report["paper_gyro_arw_deg_sqrt_hr"]) > 0.0 else "- 文档纸面 Gyro ARW: `未给出`",
+                    f"- Gyro ARW 相对纸面变化: `{imu_report['gyro_arw_change_pct']:+.2f} %`" if float(imu_report["paper_gyro_arw_deg_sqrt_hr"]) > 0.0 else "- Gyro ARW 相对纸面变化: `无法计算`",
+                    f"- 纸面 Accel Zero Bias: `{imu_report['paper_accel_zero_bias_mps2']:.6f} m/s^2`",
+                    f"- 纸面 Gyro Zero Bias: `{imu_report['paper_gyro_zero_bias_rad_s']:.6f} rad/s`",
+                    f"- 纸面 Accel Bias TC: `{imu_report['paper_accel_bias_tc_mps2_c']:.6f} m/s^2/°C`",
+                    f"- 纸面 Gyro Bias TC: `{imu_report['paper_gyro_bias_tc_rad_s_c']:.6f} rad/s/°C`",
+                    "- 上面四项由 `01-测试过程和结果.md` 中的 `mg` / `°/s` / `mg/°C` / `°/s/°C` 转换得到。",
+                    "- Acc 随机游走纸面对比: `01-测试过程和结果.md` 当前未给出对应纸面值，只展示实测结果。",
                     "",
                 ]
             )
+
+        lines.extend(
+            [
+                "## 3. 核心指标",
+                "",
+                "| 轴向 | Gyro RMS (deg/s) | ARW (deg/sqrt(hr)) | Allan 最小值 (deg/s) | 特征 tau (s) |",
+                "| --- | ---: | ---: | ---: | ---: |",
+            ]
+        )
+        for axis in ("x", "y", "z"):
+            lines.append(
+                "| "
+                f"{axis.upper()} | "
+                f"{summary.get(f'gyro_rms_{axis}_deg_s', '0')} | "
+                f"{summary.get(f'gyro_arw_{axis}_deg_sqrt_hr', '0')} | "
+                f"{summary.get(f'allan_min_{axis}_deg_s', '0')} | "
+                f"{summary.get(f'allan_min_tau_{axis}_s', '0')} |"
+            )
+
+        lines.extend(
+            [
+                "",
+                "说明:",
+                    f"- `Gyro RMS` 使用去均值后的陀螺序列计算，直接反映时域噪声大小。",
+                    f"- `ARW` 取 Allan deviation 曲线中斜率最接近 `-1/2` 的区段估算。",
+                    f"- `Allan 最小值` 用来观察噪声曲线的最低点以及对应时间尺度。",
+                "",
+                "## 4. 计算过程",
+                "",
+                "1. 去均值",
+                "",
+                "- 对每个轴的陀螺序列先去均值: `w_i' = w_i - mean(w)`",
+                "- 这样可以把固定零偏从噪声统计里剥离掉，让指标更接近纯噪声。",
+                "",
+                "2. Gyro RMS",
+                "",
+                "- 公式: `RMS = sqrt((1 / N) * sum((w_i')^2))`",
+                "- 报告中的 `Gyro RMS` 单位为 `deg/s`，来源于去均值后的时域序列。",
+                "",
+                "3. Allan variance / Allan deviation",
+                "",
+                "- 先按聚合时间 `tau = m * Ts` 把序列分段求均值，得到 `y_k`。",
+                "- Allan variance: `AVAR(tau) = (1 / 2) * mean((y_(k+1) - y_k)^2)`",
+                "- Allan deviation: `ADEV(tau) = sqrt(AVAR(tau))`",
+                "- 报告中的 `Allan 最小值` 即各个 `tau` 下 `ADEV(tau)` 的最小点。",
+                "",
+                "4. ARW 提取",
+                "",
+                "- 在 Allan deviation 曲线上计算相邻对数坐标点的斜率。",
+                "- 选取斜率最接近 `-1/2` 的区段，视为白噪声主导区域。",
+                "- 在该区段按 `ARW = ADEV(tau) * sqrt(tau) * 60` 估算，单位为 `deg/sqrt(hr)`。",
+            ]
+        )
+
+        consistency_sample_count = int(summary.get("same_model_consistency_sample_count", "0"))
+        lines.extend(["", "## 5. 同型号一致性", ""])
+        if consistency_sample_count >= 2:
+            lines.extend(
+                [
+                    f"- 参与一致性统计的样本数: `{consistency_sample_count}`",
+                    f"- 样本间三轴平均 RMS 均值: `{summary.get('same_model_rms_mean_deg_s', '0')}` deg/s",
+                    f"- 样本间三轴平均 RMS 标准差: `{summary.get('same_model_rms_std_deg_s', '0')}` deg/s",
+                    f"- 样本间三轴平均 RMS 变异系数: `{summary.get('same_model_rms_cv_pct', '0')}` %",
+                    "- 计算方式: 先按 `imu_id` 分开提取各自三轴陀螺序列，分别算去均值 `RMS`，再对每颗 IMU 的三轴 RMS 取平均后做离散度统计。",
+                ]
+            )
+        else:
+            lines.extend(
+                [
+                    "- 当前文件可用于单次噪声评估，但不足以稳定给出同型号样本一致性。",
+                    "- 若 BIN 中同时包含多颗 IMU 的原始包，或后续支持多文件联合分析，可继续扩展该项。",
+                ]
+            )
+
+        lines.extend(
+            [
+                "",
+                "## 6. CSV 字段说明",
+                "",
+                "本次会输出两类 CSV:",
+                "",
+                f"- 对比 CSV `{primary_csv_name}`: 以 `poll_count` 为横坐标，每行代表一次 poll，各 IMU 的值为该轮次内多个 FIFO 包换算后的平均值。",
+                f"- 独立 IMU CSV: 每个文件只保留单颗 IMU 的逐包数据，字段名使用具体 IMU 名字前缀，且不再包含 `poll_count` 列。",
+                "",
+                "### 6.1 独立 IMU CSV 字段",
+                "",
+                "| 列名 | 含义 | 获取或计算方式 |",
+                "| --- | --- | --- |",
+                "| `packet_index` | 全文件内的全局包序号 | 按解析顺序从 1 递增 |",
+                "| `42688A_poll_timestamp_us` | `42688A` 这颗 IMU 对应 poll 轮次的 MCU 微秒时间戳 | 固件用 `TIM2 1MHz` 自由运行计数器在写 BIN 时记录 |",
+                "| `42688A_packet_index_in_capture` | 当前包在本次 FIFO 记录块中的位置 | 同一轮 poll 的 FIFO 数据内从 1 递增 |",
+                "| `42688A_packet_size` | 单个 FIFO 包字节数 | 固件从 IMU 原始读数结构里直接记录 |",
+                "| `42688A_packet_timestamp_u16` | FIFO 包尾部自带的 16 位时间戳 | 从包内 `0x0E~0x0F` 字节提取，若包长不足则记 0 |",
+                "| `42688A_packet_timestamp_continuous` | 展开的连续 FIFO 时间戳 | 在 PC 端基于 `42688A_packet_timestamp_u16` 做 16 位回绕展开 |",
+                "| `42688A_fifo_header` | FIFO 包头字节 | 原始包第 0 字节 |",
+                "| `42688A_raw_accel_x/y/z` | 加速度三轴原始 LSB | 分别从包内 `0x01~0x06` 按 big-endian 有符号 16 位解析 |",
+                "| `42688A_raw_gyro_x/y/z` | 角速度三轴原始 LSB | 分别从包内 `0x07~0x0C` 按 big-endian 有符号 16 位解析 |",
+                "| `42688A_temp_raw` | 温度原始值 | 包内 `0x0D` 的有符号 8 位值 |",
+                "| `42688A_accel_x/y/z_mps2` | 加速度物理值，单位 `m/s^2` | `42688A_raw_accel * (16 / 2^15) * 9.80665` |",
+                "| `42688A_gyro_x/y/z_deg_s` | 角速度物理值，单位 `deg/s` | `42688A_raw_gyro * (2000 / 2^15)` |",
+                "| `42688A_temp_c` | 温度物理值，单位 `°C` | `42688A_temp_raw / 2.07 + 25.0` |",
+                "",
+                "### 6.2 对比 CSV 字段",
+                "",
+                "| 列名 | 含义 | 获取或计算方式 |",
+                "| --- | --- | --- |",
+                "| `poll_count` | 全局 poll 轮次序号，也是多颗 IMU 统一对齐的横坐标 | 固件在每轮 `poll` 开始时自增一次，同一轮内所有 IMU 共用该值 |",
+                "| `42688A_accel_x/y/z_mps2` | `42688A` 在该 poll 轮次下的加速度平均值 | 对该轮次内 `42688A` 的多个 FIFO 包先换算成物理单位，再按轴求平均 |",
+                "| `42688A_gyro_x/y/z_deg_s` | `42688A` 在该 poll 轮次下的角速度平均值 | 对该轮次内 `42688A` 的多个 FIFO 包先换算成 `deg/s`，再按轴求平均 |",
+                "| `42688A_temp_c` | `42688A` 在该 poll 轮次下的温度平均值 | 对该轮次内 `42688A` 的多个 FIFO 包先换算成 `°C` 后求平均 |",
+                "",
+                "说明:",
+                "- 其它 IMU 如 `42688B`、`45686A`、`45686B` 的字段命名方式与 `42688A` 完全相同，只是前缀替换为对应 IMU 名字。",
+                "- 报告中的噪声、ARW 和 Allan 指标，默认基于“本页指标默认针对”的那颗 IMU 的独立 CSV 数据计算。",
+            ]
+        )
 
         destination.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return
