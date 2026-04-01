@@ -1027,6 +1027,7 @@ def _write_poll_comparison_csv(raw_rows: list[dict[str, int | float | str]], sou
         imu_name = _imu_name_from_id(imu_id)
         header.extend(
             [
+                f"{imu_name}_pkt_count",
                 f"{imu_name}_accel_x_mps2",
                 f"{imu_name}_accel_y_mps2",
                 f"{imu_name}_accel_z_mps2",
@@ -1046,10 +1047,11 @@ def _write_poll_comparison_csv(raw_rows: list[dict[str, int | float | str]], sou
             for imu_id in imu_ids:
                 imu_rows = per_imu_rows.get(imu_id, [])
                 if not imu_rows:
-                    row_out.extend([""] * 7)
+                    row_out.extend([0] + [""] * 7)
                     continue
                 row_out.extend(
                     [
+                        len(imu_rows),
                         _format_float(_mean([float(item["accel_x_mps2"]) for item in imu_rows])),
                         _format_float(_mean([float(item["accel_y_mps2"]) for item in imu_rows])),
                         _format_float(_mean([float(item["accel_z_mps2"]) for item in imu_rows])),
@@ -1376,7 +1378,10 @@ def _analyze_arw_per_imu(raw_captures: list[RawImuCapture]) -> dict[int, dict[st
         gyro_arw_values = [float(gyro_metrics[axis]["arw_deg_sqrt_hr"]) for axis in ("x", "y", "z") if float(gyro_metrics[axis]["arw_deg_sqrt_hr"]) > 0.0]
         accel_rw_values = [float(accel_metrics[axis]["random_walk"]) for axis in ("x", "y", "z") if float(accel_metrics[axis]["random_walk"]) > 0.0]
         paper_metrics = IMU_PAPER_METRICS.get(imu_id, {})
-        paper_gyro_arw = float(paper_metrics.get("gyro_arw_deg_sqrt_hr", 0.0))
+        # IMU_PAPER_METRICS 中的 gyro_arw_deg_sqrt_hr 实际为数据手册噪声密度, 单位 deg/s/sqrt(Hz)
+        # 对应 Allan deviation 白噪声斜率: ADEV(tau)=N/sqrt(tau), ARW=N*60 [deg/sqrt(hr)]
+        paper_gyro_noise_density = float(paper_metrics.get("gyro_arw_deg_sqrt_hr", 0.0))  # deg/s/sqrt(Hz)
+        paper_gyro_arw_deg_sqrt_hr = paper_gyro_noise_density * 60.0  # 换算为 deg/sqrt(hr)
         measured_gyro_arw_mean = _mean(gyro_arw_values)
         temp_values = [float(value) for value in axes["temp_c"]]
         paper_accel_zero_bias_mps2 = float(paper_metrics.get("accel_zero_bias_mg", 0.0)) / 1000.0 * 9.80665
@@ -1405,11 +1410,12 @@ def _analyze_arw_per_imu(raw_captures: list[RawImuCapture]) -> dict[int, dict[st
             "paper_gyro_zero_bias_rad_s": paper_gyro_zero_bias_rad_s,
             "paper_accel_bias_tc_mps2_c": paper_accel_bias_tc_mps2_c,
             "paper_gyro_bias_tc_rad_s_c": paper_gyro_bias_tc_rad_s_c,
-            "paper_gyro_arw_deg_sqrt_hr": paper_gyro_arw,
-            "paper_gyro_arw_target_deg_sqrt_hr": PAPER_TARGETS["gyro_arw_deg_sqrt_hr_max"],
+            "paper_gyro_noise_density_deg_s_sqhz": paper_gyro_noise_density,
+            "paper_gyro_arw_deg_sqrt_hr": paper_gyro_arw_deg_sqrt_hr,
+            "paper_gyro_arw_target_deg_sqrt_hr": PAPER_TARGETS["gyro_arw_deg_sqrt_hr_max"] * 60.0,
             "measured_gyro_arw_mean_deg_sqrt_hr": measured_gyro_arw_mean,
             "measured_acc_rw_mean_mps_sqrt_hr": _mean(accel_rw_values),
-            "gyro_arw_change_pct": ((measured_gyro_arw_mean - paper_gyro_arw) / paper_gyro_arw * 100.0) if paper_gyro_arw > 0.0 else 0.0,
+            "gyro_arw_change_pct": ((measured_gyro_arw_mean - paper_gyro_arw_deg_sqrt_hr) / paper_gyro_arw_deg_sqrt_hr * 100.0) if paper_gyro_arw_deg_sqrt_hr > 0.0 else 0.0,
             "gyro": gyro_metrics,
             "accel": accel_metrics,
         }
@@ -1587,8 +1593,44 @@ def _write_markdown_report(destination: Path, source: Path, summary: dict[str, s
         missing_imu_names = [_imu_name_from_id(imu_id) for imu_id in sorted(IMU_ID_TO_NAME) if imu_id not in detected_imu_ids]
         primary_imu_id = next((imu_id for imu_id in detected_imu_ids if _imu_name_from_id(imu_id) == summary.get("primary_imu_name", "")), 0)
         primary_imu_report = per_imu_report.get(primary_imu_id, {}) if primary_imu_id else {}
+        _all_imu_ids = sorted(IMU_ID_TO_NAME)
+        _col_hdr: list[str] = []
+        for _sid in _all_imu_ids:
+            _col_hdr.extend([_imu_name_from_id(_sid), "Δ%"])
+        _tbl_header = "| 轴向 | " + " | ".join(_col_hdr) + " |"
+        _tbl_sep = "| --- | " + " | ".join(["---:"] * len(_col_hdr)) + " |"
+        _tbl_rows: list[str] = [_tbl_header, _tbl_sep]
+        for _axis in ("x", "y", "z"):
+            _row = [f"Gyro {_axis.upper()}"]
+            for _sid in _all_imu_ids:
+                _sr = per_imu_report.get(_sid) or per_imu_report.get(str(_sid))
+                if not _sr:
+                    _row.extend(["-", "-"])
+                    continue
+                _arw = float(_sr["gyro"][_axis]["arw_deg_sqrt_hr"])
+                _paper = float(_sr.get("paper_gyro_arw_deg_sqrt_hr", 0.0))
+                _delta = f"{(_arw - _paper) / _paper * 100.0:+.1f}" if _paper > 0.0 else "-"
+                _row.extend([_format_float(_arw), _delta])
+            _tbl_rows.append("| " + " | ".join(_row) + " |")
+        for _axis in ("x", "y", "z"):
+            _row = [f"Acc {_axis.upper()}"]
+            for _sid in _all_imu_ids:
+                _sr = per_imu_report.get(_sid) or per_imu_report.get(str(_sid))
+                if not _sr:
+                    _row.extend(["-", "-"])
+                    continue
+                _rw = float(_sr["accel"][_axis]["random_walk"])
+                _row.extend([_format_float(_rw), "-"])
+            _tbl_rows.append("| " + " | ".join(_row) + " |")
+
         lines = [
             "# 数据分析报告",
+            "",
+            "## 随机游走指标汇总",
+            "",
+            "> Gyro ARW: deg/sqrt(hr)  |  Acc 随机游走: m/s/sqrt(hr)  |  Δ% = 实测相对纸面变化",
+            "",
+            *_tbl_rows,
             "",
             "## 1. 测试概况",
             "",
@@ -1674,13 +1716,11 @@ def _write_markdown_report(destination: Path, source: Path, summary: dict[str, s
                     "#### 纸面对比",
                     "",
                     f"- 实测 Gyro ARW 三轴均值: `{imu_report['measured_gyro_arw_mean_deg_sqrt_hr']:.6f}` deg/sqrt(hr)",
-                    f"- 文档纸面 Gyro ARW: `{imu_report['paper_gyro_arw_deg_sqrt_hr']:.6f}` deg/sqrt(hr)" if float(imu_report["paper_gyro_arw_deg_sqrt_hr"]) > 0.0 else "- 文档纸面 Gyro ARW: `未给出`",
+                    (
+                        f"- 文档纸面 Gyro ARW: `{imu_report['paper_gyro_noise_density_deg_s_sqhz']:.6f}` deg/s/sqrt(Hz)"
+                        f"  →  换算 `{imu_report['paper_gyro_arw_deg_sqrt_hr']:.6f}` deg/sqrt(hr)"
+                    ) if float(imu_report["paper_gyro_noise_density_deg_s_sqhz"]) > 0.0 else "- 文档纸面 Gyro ARW: `未给出`",
                     f"- Gyro ARW 相对纸面变化: `{imu_report['gyro_arw_change_pct']:+.2f} %`" if float(imu_report["paper_gyro_arw_deg_sqrt_hr"]) > 0.0 else "- Gyro ARW 相对纸面变化: `无法计算`",
-                    f"- 纸面 Accel Zero Bias: `{imu_report['paper_accel_zero_bias_mps2']:.6f} m/s^2`",
-                    f"- 纸面 Gyro Zero Bias: `{imu_report['paper_gyro_zero_bias_rad_s']:.6f} rad/s`",
-                    f"- 纸面 Accel Bias TC: `{imu_report['paper_accel_bias_tc_mps2_c']:.6f} m/s^2/°C`",
-                    f"- 纸面 Gyro Bias TC: `{imu_report['paper_gyro_bias_tc_rad_s_c']:.6f} rad/s/°C`",
-                    "- 上面四项由 `01-测试过程和结果.md` 中的 `mg` / `°/s` / `mg/°C` / `°/s/°C` 转换得到。",
                     "- Acc 随机游走纸面对比: `01-测试过程和结果.md` 当前未给出对应纸面值，只展示实测结果。",
                     "",
                 ]

@@ -321,10 +321,6 @@ bool ICM45686::readFifoByteCount(uint16_t *byte_count) {
     return false;
   }
 
-  if (!readRegisters(kRegFifoCount0, raw_count, sizeof(raw_count))) {
-    return false;
-  }
-
   /* AN-000364: use the second FIFO count sample. */
   if (!readRegisters(kRegFifoCount0, raw_count, sizeof(raw_count))) {
     return false;

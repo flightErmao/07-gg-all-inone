@@ -612,12 +612,19 @@ static void imu_poll_writer_thread_entry(void *parameter)
     }
 }
 
+static void imu_poll_timer_callback(void *parameter)
+{
+    rt_sem_release((rt_sem_t)parameter);
+}
+
 static int imu_poll_run_recording(void)
 {
     imu_writer_runtime_t *writer = &g_imu_poll_ctx.writer;
     rt_tick_t start_tick;
     rt_uint32_t poll_count = 0U;
     int result = RT_EOK;
+    rt_sem_t poll_sem = RT_NULL;
+    rt_timer_t poll_timer = RT_NULL;
 
     if (g_imu_poll_ctx.detected_count == 0U)
     {
@@ -643,12 +650,35 @@ static int imu_poll_run_recording(void)
     writer->last_poll_tick = 0U;
     imu_poll_unlock();
 
+    /* 用信号量 + 周期软件定时器替代 mdelay，使 poll 周期更精准 */
+    poll_sem = rt_sem_create("pollsem", 1, RT_IPC_FLAG_FIFO);
+    poll_timer = (poll_sem != RT_NULL)
+                     ? rt_timer_create("polltmr",
+                                       imu_poll_timer_callback,
+                                       poll_sem,
+                                       rt_tick_from_millisecond(APP_IMU_POLL_PERIOD_MS),
+                                       RT_TIMER_FLAG_PERIODIC)
+                     : RT_NULL;
+    if (poll_sem == RT_NULL || poll_timer == RT_NULL)
+    {
+        result = -RT_ENOMEM;
+        goto __exit;
+    }
+    rt_timer_start(poll_timer);
+
     start_tick = rt_tick_get();
 
     while (1)
     {
         int index;
-        rt_tick_t now = rt_tick_get();
+        rt_tick_t now;
+
+        if (rt_sem_take(poll_sem, RT_WAITING_FOREVER) != RT_EOK)
+        {
+            break;
+        }
+
+        now = rt_tick_get();
 
         imu_poll_lock();
         imu_poll_update_gap_locked(now);
@@ -689,11 +719,18 @@ static int imu_poll_run_recording(void)
                 goto __exit;
             }
         }
-
-        rt_thread_mdelay(APP_IMU_POLL_PERIOD_MS);
     }
 
 __exit:
+    if (poll_timer != RT_NULL)
+    {
+        rt_timer_stop(poll_timer);
+        rt_timer_delete(poll_timer);
+    }
+    if (poll_sem != RT_NULL)
+    {
+        rt_sem_delete(poll_sem);
+    }
     imu_poll_lock();
     if ((result == RT_EOK) || (writer->half_offset > 0U))
     {
