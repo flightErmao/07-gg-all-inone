@@ -16,13 +16,13 @@ extern "C" {
 #include "imu/IMU.hpp"
 #include "imu_reader_thread.h"
 
-#define APP_IMU_RINGBUF_SIZE          (96U * 1024U)
+#define APP_IMU_RINGBUF_SIZE          (256U * 1024U)
 #define APP_IMU_RINGBUF_HALF_SIZE     (APP_IMU_RINGBUF_SIZE / 2U)
 #define APP_IMU_RAW_MAGIC_HEAD        0x55ABU
 #define APP_IMU_MAX_COUNT             4
 #define APP_IMU_RECORD_DURATION_MS    (10U * 1000U)
 #define APP_IMU_RECORD_DURATION_MIN_MS 1000U
-#define APP_IMU_RECORD_DURATION_MAX_MS (60U * 60U * 1000U)
+#define APP_IMU_RECORD_DURATION_MAX_MS (2U * 60U * 60U * 1000U)
 #define APP_IMU_POLL_PERIOD_MS        2U
 #define APP_IMU_OUTPUT_DIR_MAX_LEN    32U
 #define APP_IMU_OUTPUT_PATH_MAX_LEN   64U
@@ -55,6 +55,7 @@ typedef struct imu_writer_runtime
 {
     rt_thread_t thread;
     rt_sem_t sem;
+    rt_sem_t space_sem;
     rt_uint8_t active_half;
     rt_uint32_t half_offset;
     rt_uint32_t half_bytes[2];
@@ -192,6 +193,15 @@ static int imu_poll_ensure_init(void)
     g_imu_poll_ctx.writer.sem = rt_sem_create("imuwsem", 0, RT_IPC_FLAG_PRIO);
     if (g_imu_poll_ctx.writer.sem == RT_NULL)
     {
+        rt_mutex_delete(g_imu_poll_ctx.lock);
+        g_imu_poll_ctx.lock = RT_NULL;
+        return -RT_ENOMEM;
+    }
+    g_imu_poll_ctx.writer.space_sem = rt_sem_create("imuwsp", 0, RT_IPC_FLAG_PRIO);
+    if (g_imu_poll_ctx.writer.space_sem == RT_NULL)
+    {
+        rt_sem_delete(g_imu_poll_ctx.writer.sem);
+        g_imu_poll_ctx.writer.sem = RT_NULL;
         rt_mutex_delete(g_imu_poll_ctx.lock);
         g_imu_poll_ctx.lock = RT_NULL;
         return -RT_ENOMEM;
@@ -336,7 +346,14 @@ static int imu_poll_queue_active_half_locked(void)
     }
 
     ready_bit = (rt_uint8_t)(1U << writer->active_half);
+    next_half = (rt_uint8_t)(writer->active_half ^ 1U);
+
     if ((writer->ready_mask & ready_bit) != 0U)
+    {
+        return -RT_EFULL;
+    }
+
+    if ((writer->ready_mask & (1U << next_half)) != 0U)
     {
         return -RT_EFULL;
     }
@@ -344,16 +361,49 @@ static int imu_poll_queue_active_half_locked(void)
     writer->half_bytes[writer->active_half] = writer->half_offset;
     writer->ready_mask = (rt_uint8_t)(writer->ready_mask | ready_bit);
     writer->half_offset = 0U;
-    next_half = (rt_uint8_t)(writer->active_half ^ 1U);
-
-    if ((writer->ready_mask & (1U << next_half)) != 0U)
-    {
-        return -RT_EFULL;
-    }
-
     writer->active_half = next_half;
     rt_sem_release(writer->sem);
     return RT_EOK;
+}
+
+static int imu_poll_wait_for_writer_space(void)
+{
+    imu_writer_runtime_t *writer = &g_imu_poll_ctx.writer;
+
+    while (1)
+    {
+        int last_error = RT_EOK;
+        rt_bool_t stop_requested = RT_FALSE;
+        rt_bool_t writer_running = RT_FALSE;
+        rt_bool_t has_space = RT_FALSE;
+
+        imu_poll_lock();
+        last_error = g_imu_poll_ctx.last_error;
+        stop_requested = g_imu_poll_ctx.stop_requested;
+        writer_running = writer->running;
+        has_space = (writer->ready_mask != 0x03U) ? RT_TRUE : RT_FALSE;
+        imu_poll_unlock();
+
+        if (has_space == RT_TRUE)
+        {
+            return RT_EOK;
+        }
+
+        if (stop_requested == RT_TRUE)
+        {
+            return RT_EOK;
+        }
+
+        if (writer_running != RT_TRUE)
+        {
+            return (last_error != RT_EOK) ? last_error : -RT_ERROR;
+        }
+
+        if (rt_sem_take(writer->space_sem, rt_tick_from_millisecond(20U)) != RT_EOK)
+        {
+            rt_thread_mdelay(1);
+        }
+    }
 }
 
 static int imu_poll_writer_push_bytes(const rt_uint8_t *data, rt_uint32_t length)
@@ -361,6 +411,7 @@ static int imu_poll_writer_push_bytes(const rt_uint8_t *data, rt_uint32_t length
     imu_writer_runtime_t *writer = &g_imu_poll_ctx.writer;
     rt_uint32_t remaining = length;
     const rt_uint8_t *src = data;
+    int wait_result = RT_EOK;
 
     if ((data == RT_NULL) || (length == 0U))
     {
@@ -385,7 +436,12 @@ static int imu_poll_writer_push_bytes(const rt_uint8_t *data, rt_uint32_t length
             if (imu_poll_queue_active_half_locked() != RT_EOK)
             {
                 imu_poll_unlock();
-                return -RT_EFULL;
+                wait_result = imu_poll_wait_for_writer_space();
+                if (wait_result != RT_EOK)
+                {
+                    return wait_result;
+                }
+                continue;
             }
             space = APP_IMU_RINGBUF_HALF_SIZE - writer->half_offset;
         }
@@ -402,7 +458,12 @@ static int imu_poll_writer_push_bytes(const rt_uint8_t *data, rt_uint32_t length
             if (imu_poll_queue_active_half_locked() != RT_EOK)
             {
                 imu_poll_unlock();
-                return -RT_EFULL;
+                wait_result = imu_poll_wait_for_writer_space();
+                if (wait_result != RT_EOK)
+                {
+                    return wait_result;
+                }
+                continue;
             }
         }
     }
@@ -575,6 +636,10 @@ static int imu_poll_writer_fetch_half(rt_uint8_t *half_index, rt_uint32_t *bytes
     }
 
     imu_poll_unlock();
+    if ((*done == RT_FALSE) && (writer->space_sem != RT_NULL))
+    {
+        rt_sem_release(writer->space_sem);
+    }
     return RT_EOK;
 }
 
@@ -678,6 +743,9 @@ static int imu_poll_run_recording(void)
     writer->file_writer.flush_count = 0U;
     writer->max_gap_ms = 0U;
     writer->last_poll_tick = 0U;
+    while (rt_sem_trytake(writer->space_sem) == RT_EOK)
+    {
+    }
     imu_poll_unlock();
 
     /* 用信号量 + 周期软件定时器替代 mdelay，使 poll 周期更精准 */
@@ -986,6 +1054,36 @@ extern "C" rt_uint32_t imu_reader_thread_recorded_frames(void)
 extern "C" rt_uint32_t imu_reader_thread_duration_ms(void)
 {
     return g_imu_poll_ctx.duration_ms;
+}
+
+extern "C" int imu_reader_thread_last_error(void)
+{
+    int last_error;
+
+    if (imu_poll_ensure_init() != RT_EOK)
+    {
+        return -RT_ENOMEM;
+    }
+
+    imu_poll_lock();
+    last_error = g_imu_poll_ctx.last_error;
+    imu_poll_unlock();
+    return last_error;
+}
+
+extern "C" int imu_reader_thread_last_run_ok(void)
+{
+    int last_run_ok;
+
+    if (imu_poll_ensure_init() != RT_EOK)
+    {
+        return 0;
+    }
+
+    imu_poll_lock();
+    last_run_ok = (g_imu_poll_ctx.last_run_ok == RT_TRUE) ? 1 : 0;
+    imu_poll_unlock();
+    return last_run_ok;
 }
 
 extern "C" const char *imu_reader_thread_output_path(void)

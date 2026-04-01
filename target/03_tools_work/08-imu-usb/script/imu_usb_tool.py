@@ -4,6 +4,7 @@ import argparse
 import ctypes
 import csv
 import math
+import re
 import shutil
 import string
 import struct
@@ -197,7 +198,40 @@ class NoiseStatusResult:
     frames: int
     duration_s: int
     file: str
+    flushes: int
+    max_gap_ms: int
+    last_error: int
+    last_run_ok: int
     status: str
+
+
+_INT_PREFIX_RE = re.compile(r"[-+]?\d+")
+
+
+def _sanitize_shell_response(response: str) -> str:
+    return response.replace("\x00", "\n").replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _parse_response_parts(payload: str) -> dict[str, str]:
+    parts: dict[str, str] = {}
+    for token in payload.split():
+        if "=" not in token:
+            continue
+        key, value = token.split("=", 1)
+        parts[key] = value
+    return parts
+
+
+def _parse_int_field(parts: dict[str, str], key: str, default: int = 0) -> int:
+    raw_value = parts.get(key)
+    if raw_value is None:
+        return default
+
+    match = _INT_PREFIX_RE.search(raw_value)
+    if match is None:
+        return default
+
+    return int(match.group(0))
 
 
 def list_ports() -> list[PortInfo]:
@@ -370,17 +404,12 @@ def send_cdc_command(
 
 
 def parse_status_response(response: str) -> DeviceStatus:
-    for line in response.splitlines():
+    for line in _sanitize_shell_response(response).splitlines():
         stripped = line.strip()
         if not stripped.startswith("STATUS "):
             continue
 
-        parts: dict[str, str] = {}
-        for token in stripped[7:].split():
-            if "=" not in token:
-                continue
-            key, value = token.split("=", 1)
-            parts[key] = value
+        parts = _parse_response_parts(stripped[7:])
 
         return DeviceStatus(
             mode=parts.get("mode", "unknown"),
@@ -394,17 +423,12 @@ def parse_status_response(response: str) -> DeviceStatus:
 def parse_imu_probe_response(response: str) -> list[ImuProbeResult]:
     results: list[ImuProbeResult] = []
 
-    for line in response.splitlines():
+    for line in _sanitize_shell_response(response).splitlines():
         stripped = line.strip()
         if not stripped.startswith("IMU_PROBE "):
             continue
 
-        parts: dict[str, str] = {}
-        for token in stripped[10:].split():
-            if "=" not in token:
-                continue
-            key, value = token.split("=", 1)
-            parts[key] = value
+        parts = _parse_response_parts(stripped[10:])
 
         imu_text = parts.get("imu")
         if imu_text is None:
@@ -412,7 +436,7 @@ def parse_imu_probe_response(response: str) -> list[ImuProbeResult]:
 
         results.append(
             ImuProbeResult(
-                imu=int(imu_text),
+                imu=_parse_int_field(parts, "imu"),
                 name=parts.get("name", "unknown"),
                 status=parts.get("status", "unknown"),
             )
@@ -426,30 +450,26 @@ def parse_imu_probe_response(response: str) -> list[ImuProbeResult]:
 
 def parse_noise_prepare_response(response: str) -> NoisePrepareResult:
     status_text = "unknown"
+    sanitized = _sanitize_shell_response(response)
 
-    for line in response.splitlines():
+    for line in sanitized.splitlines():
         stripped = line.strip()
         if stripped.startswith("RESULT cmd=noise_test_prepare "):
             for token in stripped.split():
                 if token.startswith("status="):
                     status_text = token.split("=", 1)[1]
 
-    for line in response.splitlines():
+    for line in sanitized.splitlines():
         stripped = line.strip()
         if not stripped.startswith("NOISE_TEST "):
             continue
 
-        parts: dict[str, str] = {}
-        for token in stripped[11:].split():
-            if "=" not in token:
-                continue
-            key, value = token.split("=", 1)
-            parts[key] = value
+        parts = _parse_response_parts(stripped[11:])
 
         return NoisePrepareResult(
-            detected=int(parts.get("detected", "0")),
-            duration_s=int(parts.get("duration_s", "0")),
-            recording=int(parts.get("recording", "0")),
+            detected=_parse_int_field(parts, "detected"),
+            duration_s=_parse_int_field(parts, "duration_s"),
+            recording=_parse_int_field(parts, "recording"),
             status=status_text,
         )
 
@@ -458,31 +478,31 @@ def parse_noise_prepare_response(response: str) -> NoisePrepareResult:
 
 def parse_noise_status_response(response: str) -> NoiseStatusResult:
     status_text = "unknown"
+    sanitized = _sanitize_shell_response(response)
 
-    for line in response.splitlines():
+    for line in sanitized.splitlines():
         stripped = line.strip()
         if stripped.startswith("RESULT cmd=noise_test_status "):
             for token in stripped.split():
                 if token.startswith("status="):
                     status_text = token.split("=", 1)[1]
 
-    for line in response.splitlines():
+    for line in sanitized.splitlines():
         stripped = line.strip()
         if not stripped.startswith("NOISE_TEST_STATUS "):
             continue
 
-        parts: dict[str, str] = {}
-        for token in stripped[18:].split():
-            if "=" not in token:
-                continue
-            key, value = token.split("=", 1)
-            parts[key] = value
+        parts = _parse_response_parts(stripped[18:])
 
         return NoiseStatusResult(
-            recording=int(parts.get("recording", "0")),
-            frames=int(parts.get("frames", "0")),
-            duration_s=int(parts.get("duration_s", "0")),
+            recording=_parse_int_field(parts, "recording"),
+            frames=_parse_int_field(parts, "frames"),
+            duration_s=_parse_int_field(parts, "duration_s"),
             file=parts.get("file", ""),
+            flushes=_parse_int_field(parts, "flushes", 0),
+            max_gap_ms=_parse_int_field(parts, "max_gap_ms", 0),
+            last_error=_parse_int_field(parts, "last_error", 0),
+            last_run_ok=_parse_int_field(parts, "last_run_ok", 0),
             status=status_text,
         )
 

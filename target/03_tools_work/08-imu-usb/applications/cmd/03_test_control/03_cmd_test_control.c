@@ -62,17 +62,18 @@ int cmd_test_control_noise_start(rt_uint32_t duration_ms)
 
 int cmd_test_control_noise_status(void)
 {
+    int recording = imu_reader_thread_is_recording();
+    int last_error = imu_reader_thread_last_error();
+
     rt_kprintf("ACK cmd=noise_test_status received\r\n");
-    rt_kprintf("NOISE_TEST_STATUS recording=%d frames=%lu duration_s=%lu dir=%s file=%s index=%lu flushes=%lu max_gap_ms=%lu\r\n",
-               imu_reader_thread_is_recording(),
+    rt_kprintf("NOISE_TEST_STATUS recording=%d frames=%lu duration_s=%lu file=%s last_error=%d\r\n",
+               recording,
                (unsigned long)imu_reader_thread_recorded_frames(),
                (unsigned long)(imu_reader_thread_duration_ms() / 1000U),
-               imu_reader_thread_output_dir(),
                imu_reader_thread_output_path(),
-               (unsigned long)imu_reader_thread_output_index(),
-               (unsigned long)imu_reader_thread_flush_count(),
-               (unsigned long)imu_reader_thread_max_gap_ms());
-    rt_kprintf("RESULT cmd=noise_test_status status=ok\r\n");
+               last_error);
+    rt_kprintf("RESULT cmd=noise_test_status status=%s\r\n",
+               ((recording == 0) && (last_error != RT_EOK)) ? "error" : "ok");
     return RT_EOK;
 }
 

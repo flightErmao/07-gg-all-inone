@@ -28,6 +28,7 @@ APP_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = APP_ROOT.parent
 APP_LOG_DIR = APP_ROOT / "logs"
 APP_DATA_DIR = PROJECT_ROOT / "data"
+NOISE_DURATION_MAX_MINUTES = 120
 TEST_LABELS = {key: label for key, label in TEST_OPTIONS}
 ANALYSIS_OUTPUT_DIRS = {
     "bias": APP_DATA_DIR / "01_bias",
@@ -363,7 +364,13 @@ class App:
                         row=0, column=0, columnspan=2, sticky="w", padx=6, pady=(6, 10)
                     )
                     ttk.Label(master, text="分钟").grid(row=1, column=0, sticky="w", padx=6, pady=4)
-                    minute_box = tk.Spinbox(master, from_=0, to=60, textvariable=self.minutes_var, width=8)
+                    minute_box = tk.Spinbox(
+                        master,
+                        from_=0,
+                        to=NOISE_DURATION_MAX_MINUTES,
+                        textvariable=self.minutes_var,
+                        width=8,
+                    )
                     minute_box.grid(row=1, column=1, sticky="ew", padx=6, pady=4)
                     ttk.Label(master, text="秒钟").grid(row=2, column=0, sticky="w", padx=6, pady=4)
                     second_box = tk.Spinbox(master, from_=0, to=59, textvariable=self.seconds_var, width=8)
@@ -379,11 +386,17 @@ class App:
                         messagebox.showwarning("提示", "请输入有效的分钟和秒钟")
                         return False
 
-                    if minutes < 0 or minutes > 60:
-                        messagebox.showwarning("提示", "分钟范围应为 0 到 60")
+                    if minutes < 0 or minutes > NOISE_DURATION_MAX_MINUTES:
+                        messagebox.showwarning("提示", f"分钟范围应为 0 到 {NOISE_DURATION_MAX_MINUTES}")
                         return False
                     if seconds < 0 or seconds > 59:
                         messagebox.showwarning("提示", "秒钟范围应为 0 到 59")
+                        return False
+                    if minutes == NOISE_DURATION_MAX_MINUTES and seconds > 0:
+                        messagebox.showwarning(
+                            "提示",
+                            f"当前版本单次最长支持 {NOISE_DURATION_MAX_MINUTES} 分钟，请将秒钟设为 0",
+                        )
                         return False
                     if (minutes == 0) and (seconds == 0):
                         messagebox.showwarning("提示", "测试时长不能为 0 秒")
@@ -651,11 +664,19 @@ class App:
         self._monitor_noise_test(port, duration_s)
 
     def _monitor_noise_test(self, port: PortInfo, duration_s: int) -> None:
+        if duration_s >= 1800:
+            update_interval = 60.0
+        elif duration_s >= 300:
+            update_interval = 15.0
+        else:
+            update_interval = 3.0
+
         elapsed = 0
         while elapsed < duration_s:
-            if self.test_stop_event.wait(timeout=3.0):
+            wait_seconds = min(update_interval, float(duration_s - elapsed))
+            if self.test_stop_event.wait(timeout=wait_seconds):
                 return
-            elapsed = min(elapsed + 3, duration_s)
+            elapsed = min(elapsed + int(wait_seconds), duration_s)
             self.message_queue.put(("info", f"噪声测试进度: {elapsed}/{duration_s}s"))
 
         self._finalize_noise_test(port)
@@ -675,7 +696,7 @@ class App:
                 self.active_test_key = None
                 self.message_queue.put((
                     "info",
-                    f"噪声测试完成: frames={status.frames} duration={status.duration_s}s",
+                    f"噪声测试完成: frames={status.frames} duration={status.duration_s}s last_error={status.last_error}",
                 ))
                 self.message_queue.put(("info", f"bin 文件路径: {self._format_device_path(status.file)}"))
                 self._reconnect_preferred_port(3.0, "测试结束后已恢复串口连接", preferred_port=port)

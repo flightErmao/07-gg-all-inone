@@ -181,7 +181,7 @@ class DeviceClient:
     @staticmethod
     def _strip_shell_artifacts(text: str, sent_command: str) -> str:
         """Remove shell echo of the sent command and trailing prompt lines."""
-        text = text.replace("\r\n", "\n").replace("\r", "\n")
+        text = text.replace("\x00", "\n").replace("\r\n", "\n").replace("\r", "\n")
         result_lines: list[str] = []
         echo_removed = False
         for line in text.split("\n"):

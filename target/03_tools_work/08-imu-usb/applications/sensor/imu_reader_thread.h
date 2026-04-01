@@ -15,6 +15,8 @@ int imu_reader_thread_stop(void);
 int imu_reader_thread_is_recording(void);
 rt_uint32_t imu_reader_thread_recorded_frames(void);
 rt_uint32_t imu_reader_thread_duration_ms(void);
+int imu_reader_thread_last_error(void);
+int imu_reader_thread_last_run_ok(void);
 const char *imu_reader_thread_output_path(void);
 const char *imu_reader_thread_output_dir(void);
 rt_uint32_t imu_reader_thread_output_index(void);

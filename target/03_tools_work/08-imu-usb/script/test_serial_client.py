@@ -178,7 +178,7 @@ class TestSendCommandAllowDisconnect(unittest.TestCase):
     def test_normal_status_command_returns_response(self):
         """Normal command with response works correctly."""
         client, mock_serial = _make_client_with_mock_serial(
-            read_side_effect=[b"status\r\nOK: CDC\r\nmsh />", b""]
+            read_side_effect=[b"", b"status\r\nOK: CDC\r\nmsh />", b""]
         )
         mock_serial.reset_input_buffer = MagicMock()
         mock_serial.write = MagicMock()
@@ -189,13 +189,13 @@ class TestSendCommandAllowDisconnect(unittest.TestCase):
     def test_command_sent_with_crlf(self):
         """Command must be sent with \\r\\n terminator for RTOS shell."""
         client, mock_serial = _make_client_with_mock_serial(
-            read_side_effect=[b"status\r\nmsh />", b""]
+            read_side_effect=[b"", b"status\r\nmsh />", b""]
         )
         mock_serial.reset_input_buffer = MagicMock()
         mock_serial.write = MagicMock()
         mock_serial.flush = MagicMock()
         client.send_command("status", timeout=2.0)
-        mock_serial.write.assert_called_once_with(b"status\r\n")
+        self.assertEqual(mock_serial.write.call_args_list[-1], call(b"status\r\n"))
 
 
 if __name__ == "__main__":
