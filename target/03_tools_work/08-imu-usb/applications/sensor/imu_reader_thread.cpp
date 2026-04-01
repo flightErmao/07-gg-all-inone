@@ -95,7 +95,20 @@ typedef struct imu_poll_ctx
     imu_writer_runtime_t writer;
 } imu_poll_ctx_t;
 
+/* DTCM is only used for the hottest CPU-only scratch object below.
+ * Keep file-recording buffers in normal RAM so the SD write path stays robust. */
+#define DTCM_BSS __attribute__((section(".dtcm")))
+
+/* Writer-visible ring buffer must stay in normal RAM. */
 static rt_uint8_t g_imu_ringbuf[APP_IMU_RINGBUF_SIZE];
+
+/* Hot scratch buffer for one IMU read per poll tick. */
+static drvf::IMURawData g_imu_raw_scratch DTCM_BSS;
+
+/* CRC table is read often but does not need DTCM. */
+static rt_uint16_t g_crc16_table[256];
+static rt_bool_t g_crc16_table_ready;
+
 static imu_poll_ctx_t g_imu_poll_ctx;
 
 enum
@@ -131,11 +144,41 @@ static void imu_poll_unlock(void)
     rt_mutex_release(g_imu_poll_ctx.lock);
 }
 
+static void imu_poll_crc16_build_table(void)
+{
+    rt_uint32_t i;
+
+    for (i = 0U; i < 256U; ++i)
+    {
+        rt_uint16_t crc = (rt_uint16_t)(i << 8);
+        int bit;
+
+        for (bit = 0; bit < 8; ++bit)
+        {
+            if ((crc & 0x8000U) != 0U)
+            {
+                crc = (rt_uint16_t)((crc << 1) ^ 0x1021U);
+            }
+            else
+            {
+                crc <<= 1;
+            }
+        }
+        g_crc16_table[i] = crc;
+    }
+    g_crc16_table_ready = RT_TRUE;
+}
+
 static int imu_poll_ensure_init(void)
 {
     if (g_imu_poll_ctx.started == RT_TRUE)
     {
         return RT_EOK;
+    }
+
+    if (g_crc16_table_ready == RT_FALSE)
+    {
+        imu_poll_crc16_build_table();
     }
 
     g_imu_poll_ctx.lock = rt_mutex_create("imupoll", RT_IPC_FLAG_PRIO);
@@ -170,22 +213,9 @@ static rt_uint16_t imu_poll_crc16_ccitt(const void *data, rt_uint32_t length)
     rt_uint16_t crc = 0U;
     rt_uint32_t i;
 
-    for (i = 0; i < length; ++i)
+    for (i = 0U; i < length; ++i)
     {
-        int bit;
-
-        crc ^= (rt_uint16_t)p[i] << 8;
-        for (bit = 0; bit < 8; ++bit)
-        {
-            if ((crc & 0x8000U) != 0U)
-            {
-                crc = (rt_uint16_t)((crc << 1) ^ 0x1021U);
-            }
-            else
-            {
-                crc <<= 1;
-            }
-        }
+        crc = (rt_uint16_t)((crc << 8) ^ g_crc16_table[(crc >> 8) ^ p[i]]);
     }
 
     return crc;
@@ -418,7 +448,8 @@ static int imu_poll_writer_push_raw_fifo(rt_uint8_t imu_id,
                                          rt_uint32_t poll_count,
                                          const drvf::IMURawData *raw_data)
 {
-    rt_uint8_t record[APP_IMU_RAW_RECORD_MAX_SIZE];
+    /* Called only from the single poll thread, so one shared staging buffer is enough. */
+    static rt_uint8_t record[APP_IMU_RAW_RECORD_MAX_SIZE];
     rt_uint16_t packet_size = 0U;
     rt_uint16_t packet_count = 0U;
     rt_uint16_t fifo_byte_count = 0U;
@@ -440,7 +471,6 @@ static int imu_poll_writer_push_raw_fifo(rt_uint8_t imu_id,
     fifo_byte_count = (rt_uint16_t)(packet_size * packet_count);
     total_size = (rt_uint16_t)(APP_IMU_RAW_RECORD_HEADER_SIZE + fifo_byte_count + 2U);
 
-    rt_memset(record, 0, total_size);
     imu_poll_write_u16_le(&record[0], APP_IMU_RAW_MAGIC_HEAD);
     imu_poll_write_u16_le(&record[2], fifo_byte_count);
     imu_poll_write_u16_le(&record[4], packet_size);
@@ -705,15 +735,16 @@ static int imu_poll_run_recording(void)
                 continue;
             }
 
-            drvf::IMURawData raw_data{};
-            rt_ssize_t read_count = rt_device_read(slot->device, IMU_POS_ACC_GYRO, &raw_data, sizeof(raw_data));
+            /* Keep only the single-read scratch in DTCM; the file buffers stay in RAM. */
+            rt_ssize_t read_count = rt_device_read(slot->device, IMU_POS_ACC_GYRO,
+                                                   &g_imu_raw_scratch, sizeof(g_imu_raw_scratch));
 
             if (read_count <= 0)
             {
                 continue;
             }
 
-            if (imu_poll_writer_push_raw_fifo(slot->index, poll_count, &raw_data) != RT_EOK)
+            if (imu_poll_writer_push_raw_fifo(slot->index, poll_count, &g_imu_raw_scratch) != RT_EOK)
             {
                 result = -RT_EFULL;
                 goto __exit;

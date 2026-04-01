@@ -1,4 +1,4 @@
-device STM32H750VB
+device STM32H743VI
 if SWD
 speed 4000
 si 1

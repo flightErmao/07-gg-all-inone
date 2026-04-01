@@ -6,8 +6,9 @@
 /* Program Entry, set to mark it as "used" and avoid gc */
 MEMORY
 {
-    ROM (rx) : ORIGIN = 0x08000000, LENGTH = 2048k /* 2MB internal flash */
-    RAM (rw) : ORIGIN = 0x24000000, LENGTH = 512k /* 512KB AXI SRAM       */
+    ROM  (rx)  : ORIGIN = 0x08000000, LENGTH = 2048k /* 2MB internal flash        */
+    RAM  (rw)  : ORIGIN = 0x24000000, LENGTH = 512k  /* 512KB AXI SRAM (D-cache)  */
+    DTCM (rwx) : ORIGIN = 0x20000000, LENGTH = 128k  /* 128KB DTCM, 0 wait state  */
 }
 ENTRY(Reset_Handler)
 _system_stack_size = 0x400;
@@ -129,6 +130,18 @@ SECTIONS
         *(.bss.init)
     } > RAM
     __bss_end = .;
+
+    /* DTCM: core-coupled zero-wait-state RAM, NOLOAD (zeroed by hardware on power-on).
+     * Place only performance-critical buffers here via __attribute__((section(".dtcm"))). */
+    .dtcm (NOLOAD) :
+    {
+        . = ALIGN(4);
+        _sdtcm = .;
+        *(.dtcm)
+        *(.dtcm.*)
+        . = ALIGN(4);
+        _edtcm = .;
+    } > DTCM
 
     _end = .;
 

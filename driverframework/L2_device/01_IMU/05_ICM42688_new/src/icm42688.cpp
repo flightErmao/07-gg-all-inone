@@ -89,7 +89,7 @@ bool ICM42688::readRegisters(uint8_t reg, uint8_t *buf, uint16_t len) {
   uint16_t offset = 0;
   while (offset < len) {
     const uint16_t chunk = (len - offset) > 255 ? 255 : (len - offset);
-    if (spi_.readMultiReg8(reg, buf + offset, static_cast<uint8_t>(chunk)) != RT_EOK) {
+    if (spi_.readMultiReg8Continuous(static_cast<uint8_t>(reg + offset), buf + offset, chunk) != RT_EOK) {
       return false;
     }
     offset += chunk;
@@ -1189,7 +1189,6 @@ bool ICM42688::ReadRaw(IMURawData& data) {
   data.timestamp_us = dsp_time;
   data.packet_size = 20;
   data.fifo_count = 0;
-  rt_memset(data.fifo_data, 0, sizeof(data.fifo_data));
 
   if (!has_inited_ && DebugInit(false) != 0) {
     return false;
@@ -1214,13 +1213,12 @@ bool ICM42688::ReadRaw(IMURawData& data) {
     bytes_to_read = (packet_size * MAX_SCP_SAMPLES);
   }
 
-  uint8_t buf[bytes_to_read];
-  if (!icm4x6xx_read_fifo_buf(buf, bytes_to_read)) {
+  if (!icm4x6xx_read_fifo_buf(data.fifo_data, bytes_to_read)) {
     LOG_E("id[%d]: icm4x6xx_read_fifo_buf(buf, bytes_to_read) fail, fifo_count = %d", id_, fifo_count);
     return false;
   }
 
-  valid_buf_len = icm4x6xx_cal_valid_fifo_len(buf, bytes_to_read, &packet_cnt);
+  valid_buf_len = icm4x6xx_cal_valid_fifo_len(data.fifo_data, bytes_to_read, &packet_cnt);
   if (valid_buf_len == 0 || packet_cnt == 0) {
     LOG_E("id[%d]: (valid_buf_len == 0 || packet_cnt == 0) fail, fifo_count = %d", id_, fifo_count);
     return false;
@@ -1242,7 +1240,6 @@ bool ICM42688::ReadRaw(IMURawData& data) {
   data.timestamp_us = dsp_time;
   data.packet_size = packet_size;
   data.fifo_count = (uint16_t)valid_buf_len;
-  memcpy(data.fifo_data, buf, data.fifo_count);
 
   return true;
 }
@@ -1256,7 +1253,11 @@ bool ICM42688::WriteByte(uint8_t reg, uint8_t val) {
 }
 
 bool ICM42688::ReadBlock(uint8_t first_reg, uint8_t buf[], int len) {
-  if (!readRegisters(static_cast<uint8_t>(first_reg), buf, len)) {
+  if (buf == nullptr || len <= 0) {
+    return false;
+  }
+
+  if (spi_.readMultiReg8Continuous(static_cast<uint8_t>(first_reg), buf, static_cast<uint16_t>(len)) != RT_EOK) {
     return false;
   }
 

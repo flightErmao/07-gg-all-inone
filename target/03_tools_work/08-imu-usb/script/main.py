@@ -712,7 +712,7 @@ class App:
 
     def _start_analysis(self, source: Path) -> None:
         test_key = self._selected_test_key(self.analysis_option_var.get())
-        output_dir = ANALYSIS_OUTPUT_DIRS[test_key]
+        output_dir = ANALYSIS_OUTPUT_DIRS[test_key] / source.stem
         output_dir.mkdir(parents=True, exist_ok=True)
 
         source = source.resolve()

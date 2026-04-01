@@ -61,7 +61,8 @@ IMU_PAPER_METRICS = {
         "gyro_zero_bias_dps": 0.5,
         "accel_bias_tc_mg_c": 0.15,
         "gyro_bias_tc_dps_c": 0.005,
-        "gyro_arw_deg_sqrt_hr": 0.0028,
+        "gyro_arw_deg_sqrt_hr": 0.0028,   # deg/s/sqrt(Hz) noise density
+        "accel_noise_ug_sqhz": 70.0,       # µg/sqrt(Hz) noise density
     },
     2: {
         "accel_zero_bias_mg": 20.0,
@@ -69,6 +70,7 @@ IMU_PAPER_METRICS = {
         "accel_bias_tc_mg_c": 0.15,
         "gyro_bias_tc_dps_c": 0.005,
         "gyro_arw_deg_sqrt_hr": 0.0028,
+        "accel_noise_ug_sqhz": 70.0,
     },
     3: {
         "accel_zero_bias_mg": 20.0,
@@ -76,6 +78,7 @@ IMU_PAPER_METRICS = {
         "accel_bias_tc_mg_c": 0.15,
         "gyro_bias_tc_dps_c": 0.005,
         "gyro_arw_deg_sqrt_hr": 0.0038,
+        "accel_noise_ug_sqhz": 70.0,
     },
     4: {
         "accel_zero_bias_mg": 20.0,
@@ -83,6 +86,7 @@ IMU_PAPER_METRICS = {
         "accel_bias_tc_mg_c": 0.15,
         "gyro_bias_tc_dps_c": 0.005,
         "gyro_arw_deg_sqrt_hr": 0.0038,
+        "accel_noise_ug_sqhz": 70.0,
     },
 }
 PAPER_TARGETS = {
@@ -1378,10 +1382,16 @@ def _analyze_arw_per_imu(raw_captures: list[RawImuCapture]) -> dict[int, dict[st
         gyro_arw_values = [float(gyro_metrics[axis]["arw_deg_sqrt_hr"]) for axis in ("x", "y", "z") if float(gyro_metrics[axis]["arw_deg_sqrt_hr"]) > 0.0]
         accel_rw_values = [float(accel_metrics[axis]["random_walk"]) for axis in ("x", "y", "z") if float(accel_metrics[axis]["random_walk"]) > 0.0]
         paper_metrics = IMU_PAPER_METRICS.get(imu_id, {})
-        # IMU_PAPER_METRICS 中的 gyro_arw_deg_sqrt_hr 实际为数据手册噪声密度, 单位 deg/s/sqrt(Hz)
-        # 对应 Allan deviation 白噪声斜率: ADEV(tau)=N/sqrt(tau), ARW=N*60 [deg/sqrt(hr)]
+        # gyro_arw_deg_sqrt_hr 是数据手册噪声密度 [deg/s/sqrt(Hz)]
+        # ARW [deg/sqrt(hr)] = N [deg/s/sqrt(Hz)] * 60
         paper_gyro_noise_density = float(paper_metrics.get("gyro_arw_deg_sqrt_hr", 0.0))  # deg/s/sqrt(Hz)
-        paper_gyro_arw_deg_sqrt_hr = paper_gyro_noise_density * 60.0  # 换算为 deg/sqrt(hr)
+        paper_gyro_arw_deg_sqrt_hr = paper_gyro_noise_density * 60.0  # deg/sqrt(hr)
+
+        # accel_noise_ug_sqhz 是数据手册加速度计噪声密度 [µg/sqrt(Hz)]
+        # Accel RW [m/s/sqrt(hr)] = N [m/s²/sqrt(Hz)] * 60
+        paper_accel_noise_ug_sqhz = float(paper_metrics.get("accel_noise_ug_sqhz", 0.0))
+        paper_accel_noise_mps2_sqhz = paper_accel_noise_ug_sqhz * 1e-6 * 9.80665  # m/s²/sqrt(Hz)
+        paper_accel_rw_mps_sqrthr = paper_accel_noise_mps2_sqhz * 60.0            # m/s/sqrt(hr)
         measured_gyro_arw_mean = _mean(gyro_arw_values)
         temp_values = [float(value) for value in axes["temp_c"]]
         paper_accel_zero_bias_mps2 = float(paper_metrics.get("accel_zero_bias_mg", 0.0)) / 1000.0 * 9.80665
@@ -1413,9 +1423,19 @@ def _analyze_arw_per_imu(raw_captures: list[RawImuCapture]) -> dict[int, dict[st
             "paper_gyro_noise_density_deg_s_sqhz": paper_gyro_noise_density,
             "paper_gyro_arw_deg_sqrt_hr": paper_gyro_arw_deg_sqrt_hr,
             "paper_gyro_arw_target_deg_sqrt_hr": PAPER_TARGETS["gyro_arw_deg_sqrt_hr_max"] * 60.0,
+            "paper_accel_noise_ug_sqhz": paper_accel_noise_ug_sqhz,
+            "paper_accel_noise_mps2_sqhz": paper_accel_noise_mps2_sqhz,
+            "paper_accel_rw_mps_sqrthr": paper_accel_rw_mps_sqrthr,
             "measured_gyro_arw_mean_deg_sqrt_hr": measured_gyro_arw_mean,
             "measured_acc_rw_mean_mps_sqrt_hr": _mean(accel_rw_values),
             "gyro_arw_change_pct": ((measured_gyro_arw_mean - paper_gyro_arw_deg_sqrt_hr) / paper_gyro_arw_deg_sqrt_hr * 100.0) if paper_gyro_arw_deg_sqrt_hr > 0.0 else 0.0,
+            "accel_rw_axis_change_pct": {
+                axis: (
+                    (float(accel_metrics[axis]["random_walk"]) - paper_accel_rw_mps_sqrthr)
+                    / paper_accel_rw_mps_sqrthr * 100.0
+                ) if paper_accel_rw_mps_sqrthr > 0.0 else 0.0
+                for axis in ("x", "y", "z")
+            },
             "gyro": gyro_metrics,
             "accel": accel_metrics,
         }
@@ -1585,6 +1605,313 @@ def analyze_real_imu_frames(
     return common
 
 
+def _build_arw_metric_rankings(per_imu_report: dict) -> list[dict[str, object]]:
+    metric_specs = [
+        ("gyro", "x", "Gyro X", "ARW", "deg/sqrt(hr)", "arw_deg_sqrt_hr"),
+        ("gyro", "y", "Gyro Y", "ARW", "deg/sqrt(hr)", "arw_deg_sqrt_hr"),
+        ("gyro", "z", "Gyro Z", "ARW", "deg/sqrt(hr)", "arw_deg_sqrt_hr"),
+        ("accel", "x", "Acc X", "RW", "m/s/sqrt(hr)", "random_walk"),
+        ("accel", "y", "Acc Y", "RW", "m/s/sqrt(hr)", "random_walk"),
+        ("accel", "z", "Acc Z", "RW", "m/s/sqrt(hr)", "random_walk"),
+    ]
+
+    def _sr(imu_id: int) -> dict:
+        return per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id)) or {}  # type: ignore
+
+    rankings: list[dict[str, object]] = []
+    for metric_type, axis, axis_label, metric_label, unit, value_key in metric_specs:
+        ranked_items: list[dict[str, object]] = []
+        for imu_id in sorted(int(k) for k in per_imu_report):
+            sr = _sr(imu_id)
+            if not sr:
+                continue
+            imu_name = str(sr.get("imu_name", _imu_name_from_id(imu_id)))
+            family = "42688" if "42688" in imu_name else "45686"
+            value = float(sr[metric_type][axis][value_key])
+            ranked_items.append(
+                {
+                    "imu_id": imu_id,
+                    "imu_name": imu_name,
+                    "family": family,
+                    "value": value,
+                }
+            )
+        ranked_items.sort(key=lambda item: float(item["value"]))
+        family_best = {
+            family: next((item for item in ranked_items if item["family"] == family), None)
+            for family in ("42688", "45686")
+        }
+        family_winner = "tie"
+        red_item = family_best["42688"]
+        green_item = family_best["45686"]
+        if red_item and green_item:
+            red_value = float(red_item["value"])
+            green_value = float(green_item["value"])
+            if red_value < green_value:
+                family_winner = "42688"
+            elif green_value < red_value:
+                family_winner = "45686"
+        elif red_item:
+            family_winner = "42688"
+        elif green_item:
+            family_winner = "45686"
+
+        rankings.append(
+            {
+                "metric_type": metric_type,
+                "axis": axis,
+                "axis_label": axis_label,
+                "metric_label": metric_label,
+                "title": f"{axis_label} {metric_label}",
+                "unit": unit,
+                "ranked_items": ranked_items,
+                "family_best": family_best,
+                "family_winner": family_winner,
+            }
+        )
+    return rankings
+
+
+def _generate_arw_charts(per_imu_report: dict, destination: Path) -> list[str]:
+    """Generate ARW/RW markdown sections and charts for the report."""
+    rankings = _build_arw_metric_rankings(per_imu_report)
+    if not rankings:
+        return []
+
+    stem = destination.stem
+    out_dir = destination.parent
+
+    def _imu_color_from_family(family: str) -> str:
+        return "#D64B45" if family == "42688" else "#2E9F5B"
+
+    family_win_count = {"42688": 0, "45686": 0, "tie": 0}
+    for ranking in rankings:
+        family_win_count[str(ranking["family_winner"])] += 1
+
+    markdown_lines: list[str] = [
+        "",
+        "## 噪声指标可视化",
+        "",
+        "> 红色代表 ICM42688，绿色代表 ICM45686。",
+        "> 所有排序都按“数值越小越好”处理，这样可以直接看出每个轴到底是红色更强还是绿色更强。",
+        "",
+        "### 2.1 红绿胜负速览",
+        "",
+        f"- ICM42688 胜出轴数: `{family_win_count['42688']}` / `{len(rankings)}`",
+        f"- ICM45686 胜出轴数: `{family_win_count['45686']}` / `{len(rankings)}`",
+    ]
+    if family_win_count["tie"] > 0:
+        markdown_lines.append(f"- 平局轴数: `{family_win_count['tie']}`")
+    markdown_lines.extend(
+        [
+            "",
+            "| 指标 | 42688 最优 | 45686 最优 | 谁更好 | 差值 |",
+            "| --- | ---: | ---: | --- | ---: |",
+        ]
+    )
+    for ranking in rankings:
+        red_item = ranking["family_best"]["42688"]
+        green_item = ranking["family_best"]["45686"]
+        red_value = float(red_item["value"]) if red_item else 0.0
+        green_value = float(green_item["value"]) if green_item else 0.0
+        red_label = f" ({red_item['imu_name']})" if red_item else ""
+        green_label = f" ({green_item['imu_name']})" if green_item else ""
+        winner = ranking["family_winner"]
+        if winner == "42688":
+            winner_text = "红色更好"
+        elif winner == "45686":
+            winner_text = "绿色更好"
+        else:
+            winner_text = "平局"
+        diff_text = _format_float(abs(red_value - green_value)) if red_item and green_item else "-"
+        markdown_lines.append(
+            f"| {ranking['title']} | "
+            f"`{_format_float(red_value)}`{red_label} | "
+            f"`{_format_float(green_value)}`{green_label} | "
+            f"{winner_text} | {diff_text} |"
+        )
+
+    markdown_lines.extend(
+        [
+            "",
+            "### 2.2 每轴完整排序",
+            "",
+            "| 指标 | 第1名 | 第2名 | 第3名 | 第4名 |",
+            "| --- | --- | --- | --- | --- |",
+        ]
+    )
+    for ranking in rankings:
+        cells = []
+        for index, item in enumerate(ranking["ranked_items"], start=1):
+            family_text = "红" if item["family"] == "42688" else "绿"
+            cells.append(f"`#{index}` {item['imu_name']} {family_text} `{_format_float(float(item['value']))}`")
+        while len(cells) < 4:
+            cells.append("-")
+        markdown_lines.append(f"| {ranking['title']} | " + " | ".join(cells[:4]) + " |")
+    markdown_lines.append("")
+
+    try:
+        import matplotlib  # type: ignore
+        matplotlib.use("Agg")
+        import matplotlib.font_manager as _fm  # type: ignore
+        import matplotlib.pyplot as plt  # type: ignore
+        import numpy as np  # type: ignore
+    except Exception as exc:  # noqa: BLE001
+        markdown_lines.extend([f"> 图表生成失败，仅保留排序表: `{exc}`", ""])
+        return markdown_lines
+
+    cjk_candidates = ["SimHei", "Microsoft YaHei", "SimSun", "Arial Unicode MS", "Noto Sans JP"]
+    cjk_font = next(
+        (font.name for candidate in cjk_candidates for font in _fm.fontManager.ttflist if font.name == candidate),
+        None,
+    )
+    if cjk_font:
+        plt.rcParams["font.family"] = cjk_font
+    plt.rcParams["axes.unicode_minus"] = False
+
+    imu_ids = sorted(int(k) for k in per_imu_report)
+
+    def _sr(imu_id: int) -> dict:
+        return per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id)) or {}  # type: ignore
+
+    def _imu_label(imu_id: int) -> str:
+        return str(_sr(imu_id).get("imu_name", f"IMU{imu_id}"))
+
+    def _imu_color(imu_id: int) -> str:
+        return _imu_color_from_family("42688" if imu_id in (1, 2) else "45686")
+
+    def _get_vals(imu_id: int) -> tuple[list[float], list[float]]:
+        sr = _sr(imu_id)
+        gyro_vals = [float(sr["gyro"][axis]["arw_deg_sqrt_hr"]) if sr else 0.0 for axis in ("x", "y", "z")]
+        accel_vals = [float(sr["accel"][axis]["random_walk"]) if sr else 0.0 for axis in ("x", "y", "z")]
+        return gyro_vals, accel_vals
+
+    all_gyro = {imu_id: _get_vals(imu_id)[0] for imu_id in imu_ids}
+    all_accel = {imu_id: _get_vals(imu_id)[1] for imu_id in imu_ids}
+
+    def _axis_min(values: dict[int, list[float]], index: int) -> float:
+        valid = [values[imu_id][index] for imu_id in imu_ids if values[imu_id][index] > 0.0]
+        return min(valid) if valid else 1.0
+
+    gyro_ref = [_axis_min(all_gyro, index) for index in range(3)]
+    accel_ref = [_axis_min(all_accel, index) for index in range(3)]
+
+    def _radar_scores(imu_id: int) -> list[float]:
+        gyro_vals, accel_vals = _get_vals(imu_id)
+        return [gyro_ref[i] / gyro_vals[i] if gyro_vals[i] > 0.0 else 0.0 for i in range(3)] + [
+            accel_ref[i] / accel_vals[i] if accel_vals[i] > 0.0 else 0.0 for i in range(3)
+        ]
+
+    radar_labels = ["Gyro X", "Gyro Y", "Gyro Z", "Acc X", "Acc Y", "Acc Z"]
+    angles = np.linspace(0, 2 * np.pi, len(radar_labels), endpoint=False).tolist()
+    angles_closed = angles + angles[:1]
+
+    fig_radar, ax_radar = plt.subplots(figsize=(7.4, 7.2), subplot_kw=dict(polar=True))
+    ax_radar.set_theta_offset(np.pi / 2)
+    ax_radar.set_theta_direction(-1)
+    ax_radar.set_xticks(angles)
+    ax_radar.set_xticklabels(radar_labels, fontsize=10)
+    ax_radar.set_ylim(0, 1.35)
+    ax_radar.set_yticks([0.5, 0.75, 1.0, 1.25])
+    ax_radar.set_yticklabels(["0.50", "0.75", "1.00", "1.25"], fontsize=8, color="gray")
+    ax_radar.axhline(1.0, color="#95A5A6", linewidth=0.9, linestyle="--", alpha=0.7)
+    for imu_id in imu_ids:
+        scores = _radar_scores(imu_id)
+        closed_scores = scores + [scores[0]]
+        ax_radar.plot(angles_closed, closed_scores, color=_imu_color(imu_id), linewidth=2.2, label=_imu_label(imu_id))
+        ax_radar.fill(angles_closed, closed_scores, color=_imu_color(imu_id), alpha=0.10)
+    ax_radar.legend(loc="upper right", bbox_to_anchor=(1.36, 1.18), fontsize=9)
+    ax_radar.set_title("六轴噪声雷达图\n归一化后越大越好", fontsize=12, pad=22)
+    fig_radar.patch.set_facecolor("white")
+    radar_path = out_dir / f"{stem}_radar.png"
+    fig_radar.savefig(radar_path, dpi=130, bbox_inches="tight", facecolor="white")
+    plt.close(fig_radar)
+
+    fig_rank, axes_grid = plt.subplots(3, 2, figsize=(14.8, 10.8))
+    fig_rank.suptitle(
+        "每个轴从优到劣排序\n红色 = ICM42688  绿色 = ICM45686  灰虚线 = 纸面值",
+        fontsize=13,
+    )
+    for idx, ranking in enumerate(rankings):
+        row, col = divmod(idx, 2)
+        sub_ax = axes_grid[row][col]
+        ranked_items = list(ranking["ranked_items"])
+        labels = [str(item["imu_name"]) for item in ranked_items]
+        values = [float(item["value"]) for item in ranked_items]
+        colors = [_imu_color_from_family(str(item["family"])) for item in ranked_items]
+        y_pos = list(range(len(ranked_items)))
+        bars = sub_ax.barh(y_pos, values, color=colors, edgecolor="white", linewidth=0.8, zorder=3)
+        sub_ax.set_yticks(y_pos)
+        sub_ax.set_yticklabels(labels, fontsize=9)
+        sub_ax.invert_yaxis()
+        sub_ax.grid(axis="x", linestyle=":", linewidth=0.7, alpha=0.6)
+        sub_ax.set_axisbelow(True)
+        for order, (bar, value) in enumerate(zip(bars, values), start=1):
+            sub_ax.text(
+                value * 1.01 if value > 0.0 else 0.001,
+                bar.get_y() + bar.get_height() / 2.0,
+                f"#{order}  {value:.6f}",
+                va="center",
+                fontsize=8,
+            )
+        paper_values = []
+        for item in ranked_items:
+            sr = _sr(int(item["imu_id"]))
+            if ranking["metric_type"] == "gyro":
+                paper_values.append(float(sr.get("paper_gyro_arw_deg_sqrt_hr", 0.0)))
+            else:
+                paper_values.append(float(sr.get("paper_accel_rw_mps_sqrthr", 0.0)))
+        paper_ref = next((value for value in paper_values if value > 0.0), 0.0)
+        if paper_ref > 0.0:
+            sub_ax.axvline(paper_ref, color="#7F8C8D", linestyle="--", linewidth=1.2, zorder=4)
+        winner = str(ranking["family_winner"])
+        winner_text = "红色领先" if winner == "42688" else "绿色领先" if winner == "45686" else "平局"
+        sub_ax.set_title(f"{ranking['title']} ({ranking['unit']})\n{winner_text}", fontsize=10)
+    fig_rank.tight_layout(rect=(0, 0, 1, 0.95))
+    bars_path = out_dir / f"{stem}_ranked_bars.png"
+    fig_rank.savefig(bars_path, dpi=130, bbox_inches="tight", facecolor="white")
+    plt.close(fig_rank)
+
+    fig_duel, ax_duel = plt.subplots(figsize=(12.5, 5.8))
+    y_pos = np.arange(len(rankings))
+    for idx, ranking in enumerate(rankings):
+        red_item = ranking["family_best"]["42688"]
+        green_item = ranking["family_best"]["45686"]
+        if not red_item or not green_item:
+            continue
+        red_value = float(red_item["value"])
+        green_value = float(green_item["value"])
+        ax_duel.plot([red_value, green_value], [idx, idx], color="#BDC3C7", linewidth=2.0, zorder=1)
+        ax_duel.scatter(red_value, idx, s=90, color=_imu_color_from_family("42688"), zorder=3)
+        ax_duel.scatter(green_value, idx, s=90, color=_imu_color_from_family("45686"), zorder=3)
+        winner_text = "红胜" if ranking["family_winner"] == "42688" else "绿胜" if ranking["family_winner"] == "45686" else "平"
+        anchor_x = max(red_value, green_value) * 1.03 if max(red_value, green_value) > 0.0 else 0.01
+        ax_duel.text(anchor_x, idx, winner_text, va="center", fontsize=9)
+    ax_duel.set_yticks(y_pos)
+    ax_duel.set_yticklabels([str(ranking["title"]) for ranking in rankings], fontsize=9)
+    ax_duel.invert_yaxis()
+    ax_duel.grid(axis="x", linestyle=":", linewidth=0.7, alpha=0.6)
+    ax_duel.set_axisbelow(True)
+    ax_duel.set_xlabel("数值越靠左越好", fontsize=10)
+    ax_duel.set_title("红绿对决图\n每个轴只比较各自型号里的最优一颗 IMU", fontsize=12)
+    fig_duel.tight_layout()
+    duel_path = out_dir / f"{stem}_family_duel.png"
+    fig_duel.savefig(duel_path, dpi=130, bbox_inches="tight", facecolor="white")
+    plt.close(fig_duel)
+
+    markdown_lines.extend(
+        [
+            f"![六轴噪声雷达图](./{radar_path.name})",
+            "",
+            f"![每轴从优到劣排序图](./{bars_path.name})",
+            "",
+            f"![红绿对决图](./{duel_path.name})",
+            "",
+        ]
+    )
+    return markdown_lines
+
+
 def _write_markdown_report(destination: Path, source: Path, summary: dict[str, str]) -> None:
     if summary.get("test") == "arw":
         primary_csv_name = summary.get("comparison_csv", f"{source.stem}_{summary.get('test', 'arw')}.csv")
@@ -1620,7 +1947,9 @@ def _write_markdown_report(destination: Path, source: Path, summary: dict[str, s
                     _row.extend(["-", "-"])
                     continue
                 _rw = float(_sr["accel"][_axis]["random_walk"])
-                _row.extend([_format_float(_rw), "-"])
+                _paper_arw = float(_sr.get("paper_accel_rw_mps_sqrthr", 0.0))
+                _delta = f"{(_rw - _paper_arw) / _paper_arw * 100.0:+.1f}" if _paper_arw > 0.0 else "-"
+                _row.extend([_format_float(_rw), _delta])
             _tbl_rows.append("| " + " | ".join(_row) + " |")
 
         lines = [
@@ -1717,14 +2046,30 @@ def _write_markdown_report(destination: Path, source: Path, summary: dict[str, s
                     "",
                     f"- 实测 Gyro ARW 三轴均值: `{imu_report['measured_gyro_arw_mean_deg_sqrt_hr']:.6f}` deg/sqrt(hr)",
                     (
-                        f"- 文档纸面 Gyro ARW: `{imu_report['paper_gyro_noise_density_deg_s_sqhz']:.6f}` deg/s/sqrt(Hz)"
-                        f"  →  换算 `{imu_report['paper_gyro_arw_deg_sqrt_hr']:.6f}` deg/sqrt(hr)"
-                    ) if float(imu_report["paper_gyro_noise_density_deg_s_sqhz"]) > 0.0 else "- 文档纸面 Gyro ARW: `未给出`",
+                        f"- 文档纸面 Gyro Noise Density: `{imu_report['paper_gyro_noise_density_deg_s_sqhz']:.6f}` deg/s/sqrt(Hz)"
+                        f"  →  换算 Gyro ARW: `{imu_report['paper_gyro_arw_deg_sqrt_hr']:.6f}` deg/sqrt(hr)"
+                    ) if float(imu_report["paper_gyro_noise_density_deg_s_sqhz"]) > 0.0 else "- 文档纸面 Gyro Noise Density: `未给出`",
                     f"- Gyro ARW 相对纸面变化: `{imu_report['gyro_arw_change_pct']:+.2f} %`" if float(imu_report["paper_gyro_arw_deg_sqrt_hr"]) > 0.0 else "- Gyro ARW 相对纸面变化: `无法计算`",
-                    "- Acc 随机游走纸面对比: `01-测试过程和结果.md` 当前未给出对应纸面值，只展示实测结果。",
                     "",
                 ]
             )
+            if float(imu_report.get("paper_accel_noise_ug_sqhz", 0.0)) > 0.0:
+                lines.extend(
+                    [
+                        f"- 文档纸面 Accel Noise Density: `{imu_report['paper_accel_noise_ug_sqhz']:.1f}` µg/sqrt(Hz)"
+                        f"  →  换算 Accel RW: `{imu_report['paper_accel_rw_mps_sqrthr']:.6f}` m/s/sqrt(hr)",
+                    ] + [
+                        f"- Acc {_ax.upper()} 随机游走相对纸面变化: `{imu_report['accel_rw_axis_change_pct'][_ax]:+.2f} %`"
+                        for _ax in ("x", "y", "z")
+                    ] + [""]
+                )
+            else:
+                lines.extend(["- Acc 随机游走纸面对比: `01-测试过程和结果.md` 当前未给出对应纸面值，只展示实测结果。", ""])
+
+        try:
+            lines.extend(_generate_arw_charts(per_imu_report, destination))
+        except Exception as _chart_err:  # noqa: BLE001
+            lines.extend(["", f"> ⚠️ 图表生成失败: {_chart_err}", ""])
 
         lines.extend(
             [

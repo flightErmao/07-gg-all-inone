@@ -92,80 +92,90 @@ bool SpiInterface::configure(rt_uint16_t mode, rt_uint32_t max_hz) {
   return true;
 }
 
-int SpiInterface::spi_read_reg_wrapper(uint8_t *cmd, uint8_t cmd_length, uint8_t *data, uint16_t data_len) {
+int SpiInterface::spi_read_reg_wrapper(const uint8_t *cmd, uint8_t cmd_length, uint8_t *data, uint16_t data_len) {
   if (spi_device_ == RT_NULL) return -RT_ERROR;
   if (cmd == RT_NULL || cmd_length == 0 || data == RT_NULL || data_len == 0) return -RT_ERROR;
 
-  uint8_t dummy_stack[BSP_SPI_READ_DUMMY_STACK_SIZE];
-  uint8_t *dummy_tx = dummy_stack;
+  const uint16_t total_len = static_cast<uint16_t>(cmd_length + data_len);
+  uint8_t *tx_buf = tx_scratch_;
+  uint8_t *rx_buf = rx_scratch_;
   rt_bool_t use_heap = RT_FALSE;
 
-  if (data_len > sizeof(dummy_stack)) {
-    dummy_tx = static_cast<uint8_t *>(rt_malloc(data_len));
-    if (dummy_tx == RT_NULL) {
-      LOG_E("alloc dummy tx failed, len=%d", data_len);
+  if (total_len > sizeof(tx_scratch_)) {
+    tx_buf = static_cast<uint8_t *>(rt_malloc(total_len));
+    rx_buf = static_cast<uint8_t *>(rt_malloc(total_len));
+    if (tx_buf == RT_NULL || rx_buf == RT_NULL) {
+      LOG_E("alloc spi read scratch failed, total_len=%d", total_len);
+      if (tx_buf != RT_NULL) {
+        rt_free(tx_buf);
+      }
+      if (rx_buf != RT_NULL) {
+        rt_free(rx_buf);
+      }
       return -RT_ENOMEM;
     }
     use_heap = RT_TRUE;
   }
 
-  memset(dummy_tx, 0xFF, data_len);
+  memcpy(tx_buf, cmd, cmd_length);
+  memset(tx_buf + cmd_length, 0xFF, data_len);
 
-  struct rt_spi_message msg1, msg2;
-  msg1.send_buf = cmd;
-  msg1.recv_buf = RT_NULL;
-  msg1.length = cmd_length;
-  msg1.cs_take = 1;
-  msg1.cs_release = 0;
-  msg1.next = &msg2;
-
-  msg2.send_buf = dummy_tx;
-  msg2.recv_buf = data;
-  msg2.length = data_len;
-  msg2.cs_take = 0;
-  msg2.cs_release = 1;
-  msg2.next = RT_NULL;
-
-  if (rt_spi_transfer_message(spi_device_, &msg1) != RT_NULL) {
-    LOG_E("spi read transfer failed, cmd_len=%d data_len=%d", cmd_length, data_len);
+  rt_size_t transferred = rt_spi_transfer(spi_device_, tx_buf, rx_buf, total_len);
+  if (transferred != total_len) {
+    LOG_E("spi read transfer failed, cmd_len=%d data_len=%d xfer=%d", cmd_length, data_len, transferred);
     if (use_heap) {
-      rt_free(dummy_tx);
+      rt_free(rx_buf);
+      rt_free(tx_buf);
     }
     return -RT_ERROR;
   }
 
+  memcpy(data, rx_buf + cmd_length, data_len);
+
   if (use_heap) {
-    rt_free(dummy_tx);
+    rt_free(rx_buf);
+    rt_free(tx_buf);
   }
 
   return RT_EOK;
 }
 
-int SpiInterface::spi_write_reg_wrapper(uint8_t *cmd, uint8_t cmd_length, uint8_t *data, uint16_t data_len) {
+int SpiInterface::spi_write_reg_wrapper(const uint8_t *cmd, uint8_t cmd_length, const uint8_t *data, uint16_t data_len) {
   if (spi_device_ == RT_NULL) return -RT_ERROR;
 
-  struct rt_spi_message msg1, msg2;
-  msg1.send_buf = cmd;
-  msg1.recv_buf = RT_NULL;
-  msg1.length = cmd_length;
-  msg1.cs_take = 1;
-  msg1.cs_release = (data != RT_NULL && data_len > 0) ? 0 : 1;
+  const uint16_t total_len = static_cast<uint16_t>(cmd_length + data_len);
+  uint8_t *tx_buf = tx_scratch_;
+  rt_bool_t use_heap = RT_FALSE;
 
-  if (data != RT_NULL && data_len > 0) {
-    msg1.next = &msg2;
-    msg2.send_buf = data;
-    msg2.recv_buf = RT_NULL;
-    msg2.length = data_len;
-    msg2.cs_take = 0;
-    msg2.cs_release = 1;
-    msg2.next = RT_NULL;
-  } else {
-    msg1.next = RT_NULL;
+  if (cmd == RT_NULL || cmd_length == 0 || total_len == 0U) {
+    return -RT_ERROR;
   }
 
-  if (rt_spi_transfer_message(spi_device_, &msg1) != RT_NULL) {
-    LOG_E("spi write transfer failed, cmd_len=%d data_len=%d", cmd_length, data_len);
+  if (total_len > sizeof(tx_scratch_)) {
+    tx_buf = static_cast<uint8_t *>(rt_malloc(total_len));
+    if (tx_buf == RT_NULL) {
+      LOG_E("alloc spi write scratch failed, total_len=%d", total_len);
+      return -RT_ENOMEM;
+    }
+    use_heap = RT_TRUE;
+  }
+
+  memcpy(tx_buf, cmd, cmd_length);
+  if (data != RT_NULL && data_len > 0U) {
+    memcpy(tx_buf + cmd_length, data, data_len);
+  }
+
+  rt_size_t transferred = rt_spi_transfer(spi_device_, tx_buf, RT_NULL, total_len);
+  if (transferred != total_len) {
+    LOG_E("spi write transfer failed, cmd_len=%d data_len=%d xfer=%d", cmd_length, data_len, transferred);
+    if (use_heap) {
+      rt_free(tx_buf);
+    }
     return -RT_ERROR;
+  }
+
+  if (use_heap) {
+    rt_free(tx_buf);
   }
   return RT_EOK;
 }
@@ -176,6 +186,10 @@ int SpiInterface::write_reg(uint8_t reg, uint8_t val) {
 }
 
 int SpiInterface::readMultiReg8(uint8_t reg, uint8_t *buff, uint8_t len) {
+  return readMultiReg8Continuous(reg, buff, len);
+}
+
+int SpiInterface::readMultiReg8Continuous(uint8_t reg, uint8_t *buff, uint16_t len) {
   if (buff == RT_NULL || len == 0) return -1;
   uint8_t cmd = (uint8_t)(reg | 0x80u);
   return spi_read_reg_wrapper(&cmd, 1, buff, len);

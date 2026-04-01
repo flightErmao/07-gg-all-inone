@@ -173,7 +173,7 @@ bool ICM45686::readRegisters(uint8_t reg, uint8_t *buf, uint16_t len) {
   uint16_t offset = 0;
   while (offset < len) {
     const uint16_t chunk = (len - offset) > 255 ? 255 : (len - offset);
-    if (spi_.readMultiReg8(static_cast<uint8_t>(reg + offset), buf + offset, static_cast<uint8_t>(chunk)) != RT_EOK) {
+    if (spi_.readMultiReg8Continuous(static_cast<uint8_t>(reg + offset), buf + offset, chunk) != RT_EOK) {
       return false;
     }
     offset += chunk;
@@ -322,7 +322,7 @@ bool ICM45686::readFifoByteCount(uint16_t *byte_count) {
   }
 
   /* AN-000364: use the second FIFO count sample. */
-  if (!readRegisters(kRegFifoCount0, raw_count, sizeof(raw_count))) {
+  if (spi_.readMultiReg8Continuous(kRegFifoCount0, raw_count, sizeof(raw_count)) != RT_EOK) {
     return false;
   }
 
@@ -335,16 +335,7 @@ bool ICM45686::readFifoData(uint8_t *buf, uint16_t len) {
     return false;
   }
 
-  uint16_t offset = 0;
-  while (offset < len) {
-    const uint16_t chunk = (len - offset) > 255 ? 255 : (len - offset);
-    if (spi_.readMultiReg8(kRegFifoData, buf + offset, static_cast<uint8_t>(chunk)) != RT_EOK) {
-      return false;
-    }
-    offset += chunk;
-  }
-
-  return true;
+  return spi_.readMultiReg8Continuous(kRegFifoData, buf, len) == RT_EOK;
 }
 
 bool ICM45686::flushFifo() {
@@ -715,7 +706,6 @@ bool ICM45686::ReadRaw(IMURawData &data) {
   data.timestamp_us = GetTimeUs();
   data.packet_size = kPacketSize16;
   data.fifo_count = 0;
-  rt_memset(data.fifo_data, 0, sizeof(data.fifo_data));
 
   if (!configured_ && DebugInit() != 0) {
     return false;
