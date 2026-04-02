@@ -26,6 +26,8 @@ extern "C" {
 #define APP_IMU_POLL_PERIOD_MS        2U
 #define APP_IMU_OUTPUT_DIR_MAX_LEN    32U
 #define APP_IMU_OUTPUT_PATH_MAX_LEN   64U
+#define APP_IMU_WRITER_THREAD_PRIORITY 21
+#define APP_IMU_POLL_THREAD_PRIORITY   22
 
 #ifndef SENSOR_NAME_IMU1
 // #define SENSOR_NAME_IMU1 SENSOR_NAME_ICM42688
@@ -103,8 +105,9 @@ typedef struct imu_poll_ctx
 /* Writer-visible ring buffer must stay in normal RAM. */
 static rt_uint8_t g_imu_ringbuf[APP_IMU_RINGBUF_SIZE];
 
-/* Hot scratch buffer for one IMU read per poll tick. */
-static drvf::IMURawData g_imu_raw_scratch DTCM_BSS;
+/* Hot scratch buffers for one full poll round across all IMU slots. */
+static drvf::IMURawData g_imu_raw_batch[APP_IMU_MAX_COUNT] DTCM_BSS;
+static rt_ssize_t g_imu_raw_batch_read_count[APP_IMU_MAX_COUNT] DTCM_BSS;
 
 /* CRC table is read often but does not need DTCM. */
 static rt_uint16_t g_crc16_table[256];
@@ -507,6 +510,7 @@ static void imu_poll_resolve_packet_layout(const drvf::IMURawData *raw_data,
 
 static int imu_poll_writer_push_raw_fifo(rt_uint8_t imu_id,
                                          rt_uint32_t poll_count,
+                                         rt_uint64_t poll_timestamp_us,
                                          const drvf::IMURawData *raw_data)
 {
     /* Called only from the single poll thread, so one shared staging buffer is enough. */
@@ -535,7 +539,7 @@ static int imu_poll_writer_push_raw_fifo(rt_uint8_t imu_id,
     imu_poll_write_u16_le(&record[0], APP_IMU_RAW_MAGIC_HEAD);
     imu_poll_write_u16_le(&record[2], fifo_byte_count);
     imu_poll_write_u16_le(&record[4], packet_size);
-    imu_poll_write_u64_le(&record[6], app_timestamp_now_us());
+    imu_poll_write_u64_le(&record[6], poll_timestamp_us);
     imu_poll_write_u32_le(&record[14], poll_count);
     imu_poll_write_u16_le(&record[18], imu_id);
     rt_memcpy(&record[APP_IMU_RAW_RECORD_HEADER_SIZE], raw_data->fifo_data, fifo_byte_count);
@@ -770,6 +774,7 @@ static int imu_poll_run_recording(void)
     {
         int index;
         rt_tick_t now;
+        rt_uint64_t poll_timestamp_us;
 
         if (rt_sem_take(poll_sem, RT_WAITING_FOREVER) != RT_EOK)
         {
@@ -793,26 +798,36 @@ static int imu_poll_run_recording(void)
         }
 
         poll_count++;
+        poll_timestamp_us = app_timestamp_now_us();
 
         for (index = 0; index < APP_IMU_MAX_COUNT; ++index)
         {
             imu_slot_t *slot = &g_imu_poll_ctx.slots[index];
+            drvf::IMURawData *raw_data = &g_imu_raw_batch[index];
+
+            g_imu_raw_batch_read_count[index] = 0;
 
             if (slot->detected == RT_FALSE)
             {
                 continue;
             }
 
-            /* Keep only the single-read scratch in DTCM; the file buffers stay in RAM. */
-            rt_ssize_t read_count = rt_device_read(slot->device, IMU_POS_ACC_GYRO,
-                                                   &g_imu_raw_scratch, sizeof(g_imu_raw_scratch));
+            /* Read all IMUs first so one poll tick shares the same timestamp baseline. */
+            g_imu_raw_batch_read_count[index] =
+                rt_device_read(slot->device, IMU_POS_ACC_GYRO, raw_data, sizeof(*raw_data));
+        }
 
-            if (read_count <= 0)
+        for (index = 0; index < APP_IMU_MAX_COUNT; ++index)
+        {
+            imu_slot_t *slot = &g_imu_poll_ctx.slots[index];
+            drvf::IMURawData *raw_data = &g_imu_raw_batch[index];
+
+            if ((slot->detected == RT_FALSE) || (g_imu_raw_batch_read_count[index] <= 0))
             {
                 continue;
             }
 
-            if (imu_poll_writer_push_raw_fifo(slot->index, poll_count, &g_imu_raw_scratch) != RT_EOK)
+            if (imu_poll_writer_push_raw_fifo(slot->index, poll_count, poll_timestamp_us, raw_data) != RT_EOK)
             {
                 result = -RT_EFULL;
                 goto __exit;
@@ -979,7 +994,7 @@ extern "C" int imu_reader_thread_start_for_test(const char *test_name)
                                                     imu_poll_writer_thread_entry,
                                                     RT_NULL,
                                                     4096,
-                                                    15,
+                                                    APP_IMU_WRITER_THREAD_PRIORITY,
                                                     10);
     if (g_imu_poll_ctx.writer.thread == RT_NULL)
     {
@@ -992,7 +1007,7 @@ extern "C" int imu_reader_thread_start_for_test(const char *test_name)
                                                   imu_poll_thread_entry,
                                                   RT_NULL,
                                                   8192,
-                                                  14,
+                                                  APP_IMU_POLL_THREAD_PRIORITY,
                                                   10);
     if (g_imu_poll_ctx.poll_thread == RT_NULL)
     {

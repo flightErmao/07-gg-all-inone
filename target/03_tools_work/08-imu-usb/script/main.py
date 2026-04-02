@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import queue
+import subprocess
 import threading
 import tkinter as tk
 from datetime import datetime
@@ -28,6 +29,7 @@ APP_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = APP_ROOT.parent
 APP_LOG_DIR = APP_ROOT / "logs"
 APP_DATA_DIR = PROJECT_ROOT / "data"
+BUILD_FLASH_SCRIPT = APP_ROOT / "build_and_flash_h743vi.ps1"
 NOISE_DURATION_MAX_MINUTES = 120
 TEST_LABELS = {key: label for key, label in TEST_OPTIONS}
 ANALYSIS_OUTPUT_DIRS = {
@@ -42,6 +44,9 @@ IMU_SLOT_LABELS = {
     2: "42688_B",
     3: "45686_A",
     4: "45686_B",
+}
+NOISE_ERROR_TEXT = {
+    -46086: "检测到 45686 FIFO 尾包为整包 0x7F，可疑为 FIFO count/尾包边界异常",
 }
 
 
@@ -58,6 +63,7 @@ class App:
         self.session_log_path: Path | None = None
         self.active_test_key: str | None = None
         self.test_stop_event = threading.Event()
+        self.build_flash_running = threading.Event()
         self.device_mode: str = "unknown"
 
         APP_LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -79,8 +85,16 @@ class App:
         ttk.Button(top, text="刷新串口", command=self._refresh_ports).grid(row=0, column=2, padx=8)
         self.connect_button = ttk.Button(top, text="连接", command=self._toggle_connection)
         self.connect_button.grid(row=0, column=3, padx=8)
+        self.reboot_button = ttk.Button(top, text="设备重启", command=lambda: self._run_async(self._reboot_device))
+        self.reboot_button.grid(row=0, column=4, padx=8)
+        self.build_flash_button = ttk.Button(
+            top,
+            text="编译并烧录",
+            command=lambda: self._run_async(self._build_and_flash_h743vi),
+        )
+        self.build_flash_button.grid(row=0, column=5, padx=8)
         self.connection_var = tk.StringVar(value="未连接")
-        ttk.Label(top, textvariable=self.connection_var).grid(row=0, column=4, sticky=tk.W, padx=(8, 0))
+        ttk.Label(top, textvariable=self.connection_var).grid(row=0, column=6, sticky=tk.W, padx=(8, 0))
 
         action_panel = ttk.LabelFrame(self.root, text="设备操作", padding=12)
         action_panel.pack(fill=tk.X, padx=12, pady=(0, 8))
@@ -258,9 +272,11 @@ class App:
     def _update_connection_ui(self) -> None:
         if self.client.is_open and self.connected_port is not None:
             self.connect_button.configure(text="断开")
+            self.reboot_button.configure(state=tk.NORMAL)
             self.connection_var.set(f"连接成功: {self.connected_port.device}")
         else:
             self.connect_button.configure(text="连接")
+            self.reboot_button.configure(state=tk.DISABLED)
             self.connection_var.set("未连接")
             self.device_mode = "unknown"
         self._update_usb_mode_button()
@@ -270,6 +286,12 @@ class App:
             self.mode_toggle_button.configure(text="退出U盘模式")
         else:
             self.mode_toggle_button.configure(text="进入U盘模式")
+
+    def _set_build_flash_button_busy(self, busy: bool) -> None:
+        def _apply() -> None:
+            self.build_flash_button.configure(state=tk.DISABLED if busy else tk.NORMAL)
+
+        self.root.after(0, _apply)
 
     def _selected_port_info(self) -> PortInfo | None:
         selected = self.port_var.get().strip()
@@ -449,13 +471,13 @@ class App:
         try:
             if (
                 force_reopen
-                and self.client.is_open
                 and self.connected_port is not None
                 and self.connected_port.device == port.device
             ):
-                self.client.close()
-                self.connected_port = None
-                self.message_queue.put(("refresh", "disconnect"))
+                self.client.open(port.device, DEFAULT_BAUDRATE)
+                self.connected_port = port
+                active_client = self.client
+                self.message_queue.put(("refresh", "connect"))
 
             if (
                 not force_reopen
@@ -481,6 +503,28 @@ class App:
             return active_client.send_command(command, timeout=timeout, allow_disconnect=allow_disconnect)
         finally:
             temp_client.close()
+
+    def _query_noise_status_with_retry(self, port: PortInfo, timeouts: tuple[float, ...] = (4.0, 8.0)):
+        last_error: Exception | None = None
+        strategies = (False, True)
+
+        for attempt, timeout in enumerate(timeouts):
+            force_reopen = strategies[min(attempt, len(strategies) - 1)]
+            try:
+                status_response = self._send_shell_command(
+                    port,
+                    "noise_test_status",
+                    timeout=timeout,
+                    force_reopen=force_reopen,
+                )
+                return parse_noise_status_response(status_response)
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+                threading.Event().wait(0.2)
+
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("noise_test_status 查询失败")
 
     @staticmethod
     def _status_text_from_response(response: str) -> str:
@@ -536,6 +580,90 @@ class App:
 
         if last_error is not None:
             raise last_error
+
+    def _reboot_device(self) -> None:
+        port = self._ensure_connected_port()
+        self.message_queue.put(("info", f"正在向 {port.device} 发送 reboot"))
+        response = self._send_shell_command(port, "reboot", timeout=2.0, allow_disconnect=True)
+        if response.strip():
+            self.message_queue.put(("info", self._format_simple_response("reboot", response)))
+        else:
+            self.message_queue.put(("info", "reboot: 命令已发送，设备正在重启"))
+
+        if self.client.is_open and self.connected_port and self.connected_port.device == port.device:
+            self._drop_active_connection()
+        self.message_queue.put(("refresh", "disconnect"))
+
+        try:
+            self._reconnect_preferred_port(8.0, "设备重启完成后已恢复串口连接", preferred_port=port)
+            self._query_status(suppress_errors=True)
+        except Exception as exc:  # noqa: BLE001
+            self.message_queue.put(("info", f"设备重启后暂未自动重连成功: {exc}"))
+
+    def _build_and_flash_h743vi(self) -> None:
+        if self.build_flash_running.is_set():
+            self.message_queue.put(("info", "编译烧录正在进行中，请等待当前任务完成"))
+            return
+
+        if self.active_test_key is not None:
+            self.message_queue.put(("info", "当前有测试正在执行，请先停止测试后再编译烧录"))
+            return
+
+        if not BUILD_FLASH_SCRIPT.exists():
+            raise FileNotFoundError(f"未找到编译烧录脚本: {BUILD_FLASH_SCRIPT}")
+
+        self.build_flash_running.set()
+        self._set_build_flash_button_busy(True)
+
+        try:
+            self.message_queue.put(("info", "开始执行 H743VI 编译并烧录"))
+
+            if self.client.is_open or self.connected_port is not None:
+                self._drop_active_connection()
+                self.message_queue.put(("refresh", "disconnect"))
+                self.message_queue.put(("info", "烧录前已断开当前串口连接"))
+
+            process = subprocess.Popen(
+                [
+                    "powershell.exe",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(BUILD_FLASH_SCRIPT),
+                ],
+                cwd=str(PROJECT_ROOT),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+
+            if process.stdout is None:
+                raise RuntimeError("无法读取编译烧录输出")
+
+            for line in process.stdout:
+                text = line.strip()
+                if text:
+                    self.message_queue.put(("info", f"[编译烧录] {text}"))
+
+            return_code = process.wait()
+            if return_code != 0:
+                raise RuntimeError(f"编译烧录失败，退出码: {return_code}")
+
+            self.message_queue.put(("info", "编译并烧录完成"))
+            self.message_queue.put(("refresh", "ports"))
+
+            try:
+                port = wait_for_any_target_port(timeout=8.0)
+                self._reconnect_preferred_port(8.0, "烧录完成后已恢复串口连接", preferred_port=port)
+                self._query_status(suppress_errors=True)
+            except Exception as exc:  # noqa: BLE001
+                self.message_queue.put(("info", f"烧录完成，但暂未自动重连串口: {exc}"))
+        finally:
+            self.build_flash_running.clear()
+            self._set_build_flash_button_busy(False)
 
     def _toggle_usb_mode(self) -> None:
         if self.device_mode == "cdc+msc":
@@ -686,18 +814,15 @@ class App:
         threading.Event().wait(0.6)
         for _ in range(3):
             try:
-                status_response = self._send_shell_command(
-                    port,
-                    "noise_test_status",
-                    timeout=5.0,
-                    force_reopen=True,
-                )
-                status = parse_noise_status_response(status_response)
+                status = self._query_noise_status_with_retry(port, timeouts=(6.0, 10.0, 12.0))
                 self.active_test_key = None
-                self.message_queue.put((
-                    "info",
-                    f"噪声测试完成: frames={status.frames} duration={status.duration_s}s last_error={status.last_error}",
-                ))
+                if status.last_error != 0:
+                    self.message_queue.put(("error", self._format_noise_test_error(status)))
+                else:
+                    self.message_queue.put((
+                        "info",
+                        f"噪声测试完成: frames={status.frames} duration={status.duration_s}s last_error={status.last_error}",
+                    ))
                 self.message_queue.put(("info", f"bin 文件路径: {self._format_device_path(status.file)}"))
                 self._reconnect_preferred_port(3.0, "测试结束后已恢复串口连接", preferred_port=port)
                 return
@@ -723,6 +848,48 @@ class App:
         self.message_queue.put(("info", self._format_simple_response("noise_test_stop", response)))
         self.message_queue.put(("info", "测试已中止，bin 文件路径请以状态查询返回为准"))
 
+    def _query_noise_status_once(self, port: PortInfo):
+        try:
+            return self._query_noise_status_with_retry(port)
+        except Exception as exc:  # noqa: BLE001
+            self.message_queue.put(("info", f"测试中状态查询失败: {exc}"))
+            return None
+
+    @staticmethod
+    def _noise_error_text(error_code: int, reason: str) -> str:
+        if reason:
+            return reason
+        return NOISE_ERROR_TEXT.get(error_code, f"未知错误({error_code})")
+
+    @staticmethod
+    def _noise_test_completed_normally(status, elapsed: int, duration_s: int, update_interval: float) -> bool:
+        if status.last_error != 0:
+            return False
+        if status.last_run_ok == 1:
+            return True
+        return (duration_s - elapsed) <= max(1, int(update_interval))
+
+    def _format_noise_test_error(self, status) -> str:
+        imu_label = IMU_SLOT_LABELS.get(status.fault_imu, f"IMU{status.fault_imu}" if status.fault_imu else "未知IMU")
+        detail = self._noise_error_text(status.last_error, status.reason)
+        location = []
+        if status.fault_imu:
+            location.append(f"imu={imu_label}")
+        if status.fault_poll:
+            location.append(f"poll={status.fault_poll}")
+        if status.fault_packet:
+            location.append(f"packet={status.fault_packet}")
+        suffix = f" ({', '.join(location)})" if location else ""
+        return f"噪声测试异常停止: {detail}{suffix}，last_error={status.last_error}"
+
+    def _format_noise_test_stopped_early(self, status, elapsed: int, duration_s: int) -> str:
+        if status.last_error != 0:
+            return self._format_noise_test_error(status)
+        return (
+            f"噪声测试提前停止: recording=0, 已运行约 {elapsed}/{duration_s}s"
+            f"，frames={status.frames}，请检查固件日志与设备状态"
+        )
+
     def _choose_analysis_bin(self) -> None:
         chosen = filedialog.askopenfilename(
             title="选择 BIN 文件",
@@ -733,11 +900,19 @@ class App:
 
     def _start_analysis(self, source: Path) -> None:
         test_key = self._selected_test_key(self.analysis_option_var.get())
-        output_dir = ANALYSIS_OUTPUT_DIRS[test_key] / source.stem
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_dir = ANALYSIS_OUTPUT_DIRS[test_key] / f"{source.stem}_{timestamp}"
         output_dir.mkdir(parents=True, exist_ok=True)
 
         source = source.resolve()
-        csv_path, packet_csv_path, md_path, summary = analyze_real_imu_bin_file(test_key, source, output_dir=output_dir)
+        self.message_queue.put(("info", f"开始分析: {source}"))
+        self.message_queue.put(("info", f"输出目录: {output_dir}"))
+        csv_path, packet_csv_path, md_path, summary = analyze_real_imu_bin_file(
+            test_key,
+            source,
+            output_dir=output_dir,
+            progress_callback=lambda message: self.message_queue.put(("info", message)),
+        )
         self.message_queue.put(("info", f"{TEST_LABELS[test_key]} 分析完成"))
         self.message_queue.put(("info", f"源文件: {source}"))
         self.message_queue.put(("info", f"输出目录: {output_dir}"))

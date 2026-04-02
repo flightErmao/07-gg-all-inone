@@ -65,6 +65,8 @@ static constexpr uint8_t kPwrMgmt0AccelGyroLn = 0x0F;
 static constexpr uint16_t kPacketSize16 = 16;
 static constexpr int kProbeRetryCount = 5;
 static constexpr int kPowerUpDelayMs = 80;
+static constexpr uint8_t kFifoHeader16Value = 0x68U;
+static volatile uint32_t g_icm45686_packet_parse_mismatch_count = 0;
 
 static void DelayMs(rt_uint32_t ms) { rt_thread_mdelay(ms); }
 static void DelayUs(rt_uint32_t us) {
@@ -100,6 +102,36 @@ static inline void StoreLe16(uint8_t *dst, int16_t value) {
 static inline void StoreLe16U(uint8_t *dst, uint16_t value) {
   dst[0] = static_cast<uint8_t>(value & 0xFF);
   dst[1] = static_cast<uint8_t>((value >> 8) & 0xFF);
+}
+
+static bool IsValidFifoPacket16(const uint8_t *packet, uint16_t len) {
+  if (packet == nullptr || len < kPacketSize16) {
+    return false;
+  }
+
+  return packet[0] == kFifoHeader16Value;
+}
+
+static uint32_t CalculateValidFifoLen16(const uint8_t *buf, uint32_t buf_len, uint16_t *packet_count) {
+  uint32_t valid_buf_len = 0;
+
+  if (packet_count == nullptr) {
+    return 0U;
+  }
+
+  *packet_count = 0U;
+  while ((valid_buf_len + kPacketSize16) <= buf_len) {
+    const uint8_t *packet = &buf[valid_buf_len];
+
+    if (!IsValidFifoPacket16(packet, kPacketSize16)) {
+      break;
+    }
+
+    valid_buf_len += kPacketSize16;
+    (*packet_count)++;
+  }
+
+  return valid_buf_len;
 }
 
 }  // namespace
@@ -321,7 +353,6 @@ bool ICM45686::readFifoByteCount(uint16_t *byte_count) {
     return false;
   }
 
-  /* AN-000364: use the second FIFO count sample. */
   if (spi_.readMultiReg8Continuous(kRegFifoCount0, raw_count, sizeof(raw_count)) != RT_EOK) {
     return false;
   }
@@ -701,6 +732,8 @@ bool ICM45686::ReadUiSnapshot(uint8_t *buf, uint16_t len) {
 bool ICM45686::ReadRaw(IMURawData &data) {
   uint16_t fifo_frame_count = 0;
   uint16_t bytes_to_read = 0;
+  uint16_t packet_count = 0;
+  uint32_t valid_buf_len = 0;
   int count_retry = 0;
 
   data.timestamp_us = GetTimeUs();
@@ -747,7 +780,26 @@ bool ICM45686::ReadRaw(IMURawData &data) {
     return false;
   }
 
-  data.fifo_count = bytes_to_read;
+  valid_buf_len = CalculateValidFifoLen16(data.fifo_data, bytes_to_read, &packet_count);
+  if (valid_buf_len == 0U || packet_count == 0U) {
+    return false;
+  }
+
+  if (packet_count != static_cast<uint16_t>(valid_buf_len / kPacketSize16)) {
+    ++g_icm45686_packet_parse_mismatch_count;
+    LOG_E("id[%d]: parse_mismatch #%lu fifo_frames=%u fifo_bytes=%u packet_bytes=%u parsed_packets=%lu remain_bytes=%lu packet_cnt=%u",
+          id_,
+          (unsigned long)g_icm45686_packet_parse_mismatch_count,
+          fifo_frame_count,
+          bytes_to_read,
+          kPacketSize16,
+          (unsigned long)(valid_buf_len / kPacketSize16),
+          (unsigned long)(valid_buf_len % kPacketSize16),
+          packet_count);
+    return false;
+  }
+
+  data.fifo_count = static_cast<uint16_t>(valid_buf_len);
   return true;
 }
 

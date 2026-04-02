@@ -12,7 +12,9 @@ import subprocess
 import sys
 import tempfile
 import time
-from dataclasses import dataclass
+from array import array
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass, field
 from math import sqrt
 from pathlib import Path
 
@@ -25,6 +27,15 @@ DEFAULT_PID_COMPOSITE = 0x0003
 DEFAULT_LOG_FILE = "IMU_LOG.CSV"
 DEFAULT_BAUDRATE = 115200
 DEFAULT_WAIT_SECONDS = 25.0
+SCRIPT_ROOT = Path(__file__).resolve().parent
+TOOL_PROJECT_ROOT = SCRIPT_ROOT.parent
+ANALYSIS_OUTPUT_DIRS = {
+    "bias": TOOL_PROJECT_ROOT / "data" / "01_bias",
+    "temp": TOOL_PROJECT_ROOT / "data" / "02_temp",
+    "arw": TOOL_PROJECT_ROOT / "data" / "03_arw",
+    "vibe": TOOL_PROJECT_ROOT / "data" / "04_vibration",
+    "shock": TOOL_PROJECT_ROOT / "data" / "05_shock",
+}
 TEST_OPTIONS: list[tuple[str, str]] = [
     ("bias", "测试项目 1：零偏及零偏稳定性"),
     ("temp", "测试项目 2：温漂"),
@@ -93,6 +104,8 @@ IMU_PAPER_METRICS = {
 PAPER_TARGETS = {
     "gyro_arw_deg_sqrt_hr_max": 0.0050,
 }
+PROGRESS_REPORT_INTERVAL_S = 2.0
+MAX_ANALYSIS_SERIES_POINTS = 120_000
 JLINK_CANDIDATES = [
     Path(r"C:\Program Files\SEGGER\JLink_V844a\JLink.exe"),
     Path(r"C:\Program Files\SEGGER\JLink\JLink.exe"),
@@ -146,8 +159,121 @@ class ParsedRealImuBin:
     raw_captures: list[RawImuCapture]
 
 
+@dataclass
+class ParseProgressReporter:
+    total_bytes: int
+    callback: Callable[[str], None] | None = None
+    interval_s: float = PROGRESS_REPORT_INTERVAL_S
+    stage: str = "解析"
+    bytes_processed: int = 0
+    frame_count: int = 0
+    raw_capture_count: int = 0
+    packet_count: int = 0
+    started_at_s: float = 0.0
+    last_report_at_s: float = 0.0
+
+    def __post_init__(self) -> None:
+        now = time.monotonic()
+        self.started_at_s = now
+        self.last_report_at_s = now
+
+    def log(self, message: str) -> None:
+        if self.callback is not None:
+            self.callback(message)
+            return
+        print(message)
+
+    def maybe_report(self, *, force: bool = False, extra: str = "") -> None:
+        now = time.monotonic()
+        if not force and (now - self.last_report_at_s) < self.interval_s:
+            return
+
+        processed_mb = self.bytes_processed / (1024.0 * 1024.0)
+        total_mb = self.total_bytes / (1024.0 * 1024.0) if self.total_bytes > 0 else 0.0
+        ratio = (self.bytes_processed / self.total_bytes * 100.0) if self.total_bytes > 0 else 0.0
+        elapsed_s = max(now - self.started_at_s, 1e-6)
+        speed_mb_s = processed_mb / elapsed_s
+        extra_text = f"，{extra}" if extra else ""
+        self.log(
+            f"{self.stage}进度: {ratio:.1f}% ({processed_mb:.1f}/{total_mb:.1f} MB)"
+            f"，raw记录 {self.raw_capture_count}，frame {self.frame_count}，包 {self.packet_count}"
+            f"，速度 {speed_mb_s:.1f} MB/s{extra_text}"
+        )
+        self.last_report_at_s = now
+
+
+@dataclass
+class PacketRowBuilderState:
+    wrap_count_by_imu: dict[int, int]
+    last_timestamp_by_imu: dict[int, int]
+    global_packet_index: int = 0
+    skipped_packets_by_imu: dict[int, int] = field(default_factory=dict)
+
+
+@dataclass
+class DecimatedImuSeries:
+    max_points: int = MAX_ANALYSIS_SERIES_POINTS
+    raw_index: int = 0
+    decimation_factor: int = 1
+    timestamps_us: array = None  # type: ignore[assignment]
+    gyro_x_deg_s: array = None  # type: ignore[assignment]
+    gyro_y_deg_s: array = None  # type: ignore[assignment]
+    gyro_z_deg_s: array = None  # type: ignore[assignment]
+    acc_x_mps2: array = None  # type: ignore[assignment]
+    acc_y_mps2: array = None  # type: ignore[assignment]
+    acc_z_mps2: array = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        self.timestamps_us = array("Q")
+        self.gyro_x_deg_s = array("d")
+        self.gyro_y_deg_s = array("d")
+        self.gyro_z_deg_s = array("d")
+        self.acc_x_mps2 = array("d")
+        self.acc_y_mps2 = array("d")
+        self.acc_z_mps2 = array("d")
+
+    def add(
+        self,
+        timestamp_us: int,
+        gyro_x_deg_s: float,
+        gyro_y_deg_s: float,
+        gyro_z_deg_s: float,
+        acc_x_mps2: float,
+        acc_y_mps2: float,
+        acc_z_mps2: float,
+    ) -> None:
+        if self.raw_index % self.decimation_factor == 0:
+            self.timestamps_us.append(int(timestamp_us))
+            self.gyro_x_deg_s.append(float(gyro_x_deg_s))
+            self.gyro_y_deg_s.append(float(gyro_y_deg_s))
+            self.gyro_z_deg_s.append(float(gyro_z_deg_s))
+            self.acc_x_mps2.append(float(acc_x_mps2))
+            self.acc_y_mps2.append(float(acc_y_mps2))
+            self.acc_z_mps2.append(float(acc_z_mps2))
+            if len(self.timestamps_us) > self.max_points:
+                self._downsample()
+        self.raw_index += 1
+
+    def _downsample(self) -> None:
+        self.timestamps_us = array("Q", self.timestamps_us[::2])
+        self.gyro_x_deg_s = array("d", self.gyro_x_deg_s[::2])
+        self.gyro_y_deg_s = array("d", self.gyro_y_deg_s[::2])
+        self.gyro_z_deg_s = array("d", self.gyro_z_deg_s[::2])
+        self.acc_x_mps2 = array("d", self.acc_x_mps2[::2])
+        self.acc_y_mps2 = array("d", self.acc_y_mps2[::2])
+        self.acc_z_mps2 = array("d", self.acc_z_mps2[::2])
+        self.decimation_factor *= 2
+
 def _imu_uses_little_endian_packets(imu_id: int) -> bool:
     return imu_id in (3, 4)
+
+
+def _packet_all_byte_value(packet: bytes, value: int) -> bool:
+    return len(packet) > 0 and all(byte == value for byte in packet)
+
+
+def _should_skip_packet_for_analysis(packet: bytes, imu_id: int) -> bool:
+    return imu_id in (3, 4) and _packet_all_byte_value(packet, 0x7F)
 
 
 def _raw_accel_to_mps2(raw_value: int, imu_id: int) -> float:
@@ -202,6 +328,10 @@ class NoiseStatusResult:
     max_gap_ms: int
     last_error: int
     last_run_ok: int
+    reason: str
+    fault_imu: int
+    fault_poll: int
+    fault_packet: int
     status: str
 
 
@@ -503,6 +633,10 @@ def parse_noise_status_response(response: str) -> NoiseStatusResult:
             max_gap_ms=_parse_int_field(parts, "max_gap_ms", 0),
             last_error=_parse_int_field(parts, "last_error", 0),
             last_run_ok=_parse_int_field(parts, "last_run_ok", 0),
+            reason=parts.get("reason", ""),
+            fault_imu=_parse_int_field(parts, "fault_imu", 0),
+            fault_poll=_parse_int_field(parts, "fault_poll", 0),
+            fault_packet=_parse_int_field(parts, "fault_packet", 0),
             status=status_text,
         )
 
@@ -665,6 +799,139 @@ def parse_real_imu_bin(payload: bytes) -> ParsedRealImuBin:
     return ParsedRealImuBin(frames=frames, raw_captures=raw_captures)
 
 
+def _read_exact(handle, size: int, *, offset: int, context: str) -> bytes:
+    data = handle.read(size)
+    if len(data) != size:
+        raise ValueError(f"truncated {context} at offset {offset}")
+    return data
+
+
+def iter_real_imu_bin_file_records(
+    source: Path, progress: ParseProgressReporter | None = None
+) -> Iterator[tuple[str, RealImuFrame | RawImuCapture]]:
+    with source.open("rb") as handle:
+        offset = 0
+        while True:
+            magic_bytes = handle.read(2)
+            if not magic_bytes:
+                break
+            if len(magic_bytes) != 2:
+                raise ValueError(f"truncated record head at offset {offset}")
+
+            magic_head = struct.unpack("<H", magic_bytes)[0]
+            if magic_head == REAL_IMU_FRAME_MAGIC_HEAD:
+                rest = _read_exact(
+                    handle,
+                    REAL_IMU_FRAME_STRUCT.size - 2,
+                    offset=offset + 2,
+                    context="frame payload",
+                )
+                record = magic_bytes + rest
+                (
+                    _magic_head,
+                    some_flag,
+                    timestamp_us,
+                    fifo_packet_count,
+                    fifo_header,
+                    fifo_timestamp,
+                    accel_x,
+                    accel_y,
+                    accel_z,
+                    gyro_x,
+                    gyro_y,
+                    gyro_z,
+                    temp_raw,
+                    same_flags,
+                ) = REAL_IMU_FRAME_STRUCT.unpack(record)
+                frame = RealImuFrame(
+                    some_flag=some_flag,
+                    fifo_packet_count=fifo_packet_count,
+                    timestamp_us=timestamp_us,
+                    fifo_header=fifo_header,
+                    fifo_timestamp=fifo_timestamp,
+                    accel_x=accel_x,
+                    accel_y=accel_y,
+                    accel_z=accel_z,
+                    gyro_x=gyro_x,
+                    gyro_y=gyro_y,
+                    gyro_z=gyro_z,
+                    temp_raw=temp_raw,
+                    same_header=1 if (same_flags & (1 << 7)) else 0,
+                    same_fifo_timestamp=1 if (same_flags & (1 << 6)) else 0,
+                    same_acc_x=1 if (same_flags & (1 << 5)) else 0,
+                    same_acc_y=1 if (same_flags & (1 << 4)) else 0,
+                    same_acc_z=1 if (same_flags & (1 << 3)) else 0,
+                    same_gyro_x=1 if (same_flags & (1 << 2)) else 0,
+                    same_gyro_y=1 if (same_flags & (1 << 1)) else 0,
+                    same_gyro_z=1 if (same_flags & (1 << 0)) else 0,
+                )
+                offset += REAL_IMU_FRAME_STRUCT.size
+                if progress is not None:
+                    progress.bytes_processed = offset
+                    progress.frame_count += 1
+                    progress.maybe_report()
+                yield "frame", frame
+                continue
+
+            if magic_head == REAL_IMU_RAW_MAGIC_HEAD:
+                header_rest = _read_exact(
+                    handle,
+                    REAL_IMU_RAW_RECORD_HEADER.size - 2,
+                    offset=offset + 2,
+                    context="raw capture header",
+                )
+                header = magic_bytes + header_rest
+                (
+                    _magic_head,
+                    fifo_byte_count,
+                    packet_size,
+                    timestamp_us,
+                    poll_count,
+                    imu_id,
+                ) = REAL_IMU_RAW_RECORD_HEADER.unpack(header)
+                if packet_size <= 0:
+                    raise ValueError(f"invalid raw capture packet size {packet_size} at offset {offset}")
+                payload = _read_exact(
+                    handle,
+                    fifo_byte_count,
+                    offset=offset + REAL_IMU_RAW_RECORD_HEADER.size,
+                    context="raw capture payload",
+                )
+                crc_bytes = _read_exact(
+                    handle,
+                    2,
+                    offset=offset + REAL_IMU_RAW_RECORD_HEADER.size + fifo_byte_count,
+                    context="raw capture crc",
+                )
+                crc16 = struct.unpack("<H", crc_bytes)[0]
+                calc_crc = _crc16_ccitt(header[2:] + payload)
+                if crc16 != calc_crc:
+                    raise ValueError(
+                        f"invalid raw capture crc at offset {offset}: 0x{crc16:04X} != 0x{calc_crc:04X}"
+                    )
+                capture = RawImuCapture(
+                    timestamp_us=timestamp_us,
+                    poll_count=poll_count,
+                    imu_id=imu_id,
+                    packet_size=packet_size,
+                    fifo_byte_count=fifo_byte_count,
+                    payload=payload,
+                )
+                offset += REAL_IMU_RAW_RECORD_HEADER.size + fifo_byte_count + 2
+                if progress is not None:
+                    progress.bytes_processed = offset
+                    progress.raw_capture_count += 1
+                    progress.maybe_report()
+                yield "raw_capture", capture
+                continue
+
+            raise ValueError(f"unknown record head at offset {offset}: 0x{magic_head:04X}")
+
+    if progress is not None:
+        progress.bytes_processed = progress.total_bytes
+        progress.maybe_report(force=True, extra="文件扫描完成")
+
+
 def iter_real_imu_frames(payload: bytes) -> list[RealImuFrame]:
     parsed = parse_real_imu_bin(payload)
     return parsed.frames if parsed.frames else _build_synthetic_frames_from_raw_captures(parsed.raw_captures)
@@ -797,77 +1064,82 @@ def _div_round_s32(total: int, count: int) -> int:
 
 def _build_raw_packet_rows(captures: list[RawImuCapture]) -> list[dict[str, int | float | str]]:
     rows: list[dict[str, int | float | str]] = []
-    wrap_count_by_imu: dict[int, int] = {}
-    last_timestamp_by_imu: dict[int, int] = {}
-    global_packet_index = 0
+    state = PacketRowBuilderState(wrap_count_by_imu={}, last_timestamp_by_imu={})
 
     for capture in captures:
-        if capture.packet_size <= 0:
+        rows.extend(_iter_capture_packet_rows(capture, state))
+    return rows
+
+
+def _iter_capture_packet_rows(
+    capture: RawImuCapture, state: PacketRowBuilderState
+) -> Iterator[dict[str, int | float | str]]:
+    if capture.packet_size <= 0:
+        return
+
+    packet_count = capture.fifo_byte_count // capture.packet_size
+    for packet_index in range(packet_count):
+        start = packet_index * capture.packet_size
+        end = start + capture.packet_size
+        packet = capture.payload[start:end]
+        if len(packet) != capture.packet_size:
+            continue
+        if _should_skip_packet_for_analysis(packet, capture.imu_id):
+            state.skipped_packets_by_imu[capture.imu_id] = state.skipped_packets_by_imu.get(capture.imu_id, 0) + 1
             continue
 
-        packet_count = capture.fifo_byte_count // capture.packet_size
-        for packet_index in range(packet_count):
-            start = packet_index * capture.packet_size
-            end = start + capture.packet_size
-            packet = capture.payload[start:end]
-            if len(packet) != capture.packet_size:
-                continue
+        state.global_packet_index += 1
+        packet_timestamp = _packet_timestamp_u16(packet, capture.imu_id)
+        wrap_count = state.wrap_count_by_imu.get(capture.imu_id, 0)
+        last_timestamp = state.last_timestamp_by_imu.get(capture.imu_id)
+        if last_timestamp is not None and packet_timestamp < last_timestamp:
+            wrap_count += 1
+        state.wrap_count_by_imu[capture.imu_id] = wrap_count
+        state.last_timestamp_by_imu[capture.imu_id] = packet_timestamp
+        packet_timestamp_continuous = wrap_count * 65536 + packet_timestamp
 
-            global_packet_index += 1
-            packet_timestamp = _packet_timestamp_u16(packet, capture.imu_id)
-            wrap_count = wrap_count_by_imu.get(capture.imu_id, 0)
-            last_timestamp = last_timestamp_by_imu.get(capture.imu_id)
-            if last_timestamp is not None and packet_timestamp < last_timestamp:
-                wrap_count += 1
-            wrap_count_by_imu[capture.imu_id] = wrap_count
-            last_timestamp_by_imu[capture.imu_id] = packet_timestamp
-            packet_timestamp_continuous = wrap_count * 65536 + packet_timestamp
+        fifo_header = packet[0] if packet else 0
+        accel_x = _packet_s16(packet, 1, capture.imu_id)
+        accel_y = _packet_s16(packet, 3, capture.imu_id)
+        accel_z = _packet_s16(packet, 5, capture.imu_id)
+        gyro_x = _packet_s16(packet, 7, capture.imu_id)
+        gyro_y = _packet_s16(packet, 9, capture.imu_id)
+        gyro_z = _packet_s16(packet, 11, capture.imu_id)
+        temp_raw = int.from_bytes(packet[13:14], byteorder="big", signed=True) if len(packet) >= 14 else 0
+        accel_x_mps2 = _raw_accel_to_mps2(accel_x, capture.imu_id)
+        accel_y_mps2 = _raw_accel_to_mps2(accel_y, capture.imu_id)
+        accel_z_mps2 = _raw_accel_to_mps2(accel_z, capture.imu_id)
+        gyro_x_deg_s = math.degrees(_raw_gyro_to_rad_s(gyro_x, capture.imu_id))
+        gyro_y_deg_s = math.degrees(_raw_gyro_to_rad_s(gyro_y, capture.imu_id))
+        gyro_z_deg_s = math.degrees(_raw_gyro_to_rad_s(gyro_z, capture.imu_id))
+        temp_c = _raw_temp_to_celsius(temp_raw, capture.imu_id)
 
-            fifo_header = packet[0] if packet else 0
-            accel_x = _packet_s16(packet, 1, capture.imu_id)
-            accel_y = _packet_s16(packet, 3, capture.imu_id)
-            accel_z = _packet_s16(packet, 5, capture.imu_id)
-            gyro_x = _packet_s16(packet, 7, capture.imu_id)
-            gyro_y = _packet_s16(packet, 9, capture.imu_id)
-            gyro_z = _packet_s16(packet, 11, capture.imu_id)
-            temp_raw = int.from_bytes(packet[13:14], byteorder="big", signed=True) if len(packet) >= 14 else 0
-            accel_x_mps2 = _raw_accel_to_mps2(accel_x, capture.imu_id)
-            accel_y_mps2 = _raw_accel_to_mps2(accel_y, capture.imu_id)
-            accel_z_mps2 = _raw_accel_to_mps2(accel_z, capture.imu_id)
-            gyro_x_deg_s = math.degrees(_raw_gyro_to_rad_s(gyro_x, capture.imu_id))
-            gyro_y_deg_s = math.degrees(_raw_gyro_to_rad_s(gyro_y, capture.imu_id))
-            gyro_z_deg_s = math.degrees(_raw_gyro_to_rad_s(gyro_z, capture.imu_id))
-            temp_c = _raw_temp_to_celsius(temp_raw, capture.imu_id)
-
-            rows.append(
-                {
-                    "packet_index": global_packet_index,
-                    "poll_count": capture.poll_count,
-                    "imu_id": capture.imu_id,
-                    "imu_name": _imu_name_from_id(capture.imu_id),
-                    "poll_timestamp_us": capture.timestamp_us,
-                    "packet_index_in_capture": packet_index + 1,
-                    "packet_size": capture.packet_size,
-                    "packet_timestamp_u16": packet_timestamp,
-                    "packet_timestamp_continuous": packet_timestamp_continuous,
-                    "fifo_header": fifo_header,
-                    "raw_accel_x": accel_x,
-                    "raw_accel_y": accel_y,
-                    "raw_accel_z": accel_z,
-                    "raw_gyro_x": gyro_x,
-                    "raw_gyro_y": gyro_y,
-                    "raw_gyro_z": gyro_z,
-                    "temp_raw": temp_raw,
-                    "accel_x_mps2": accel_x_mps2,
-                    "accel_y_mps2": accel_y_mps2,
-                    "accel_z_mps2": accel_z_mps2,
-                    "gyro_x_deg_s": gyro_x_deg_s,
-                    "gyro_y_deg_s": gyro_y_deg_s,
-                    "gyro_z_deg_s": gyro_z_deg_s,
-                    "temp_c": temp_c,
-                }
-            )
-    return rows
+        yield {
+            "packet_index": state.global_packet_index,
+            "poll_count": capture.poll_count,
+            "imu_id": capture.imu_id,
+            "imu_name": _imu_name_from_id(capture.imu_id),
+            "poll_timestamp_us": capture.timestamp_us,
+            "packet_index_in_capture": packet_index + 1,
+            "packet_size": capture.packet_size,
+            "packet_timestamp_u16": packet_timestamp,
+            "packet_timestamp_continuous": packet_timestamp_continuous,
+            "fifo_header": fifo_header,
+            "raw_accel_x": accel_x,
+            "raw_accel_y": accel_y,
+            "raw_accel_z": accel_z,
+            "raw_gyro_x": gyro_x,
+            "raw_gyro_y": gyro_y,
+            "raw_gyro_z": gyro_z,
+            "temp_raw": temp_raw,
+            "accel_x_mps2": accel_x_mps2,
+            "accel_y_mps2": accel_y_mps2,
+            "accel_z_mps2": accel_z_mps2,
+            "gyro_x_deg_s": gyro_x_deg_s,
+            "gyro_y_deg_s": gyro_y_deg_s,
+            "gyro_z_deg_s": gyro_z_deg_s,
+            "temp_c": temp_c,
+        }
 
 
 def _build_synthetic_frame_from_raw_capture(capture: RawImuCapture) -> RealImuFrame | None:
@@ -882,6 +1154,10 @@ def _build_synthetic_frame_from_raw_capture(capture: RawImuCapture) -> RealImuFr
         capture.payload[index * capture.packet_size : (index + 1) * capture.packet_size]
         for index in range(packet_count)
         if len(capture.payload[index * capture.packet_size : (index + 1) * capture.packet_size]) == capture.packet_size
+        and not _should_skip_packet_for_analysis(
+            capture.payload[index * capture.packet_size : (index + 1) * capture.packet_size],
+            capture.imu_id,
+        )
     ]
     if not packets:
         return None
@@ -1090,11 +1366,187 @@ def _write_poll_comparison_csv(raw_rows: list[dict[str, int | float | str]], sou
     return destination
 
 
-def decode_real_imu_raw_packets_to_csv(source: Path, destination: Path) -> int:
-    payload = source.read_bytes()
-    captures = iter_real_imu_raw_captures(payload)
+@dataclass
+class _PollAggregate:
+    packet_count: int = 0
+    accel_x_sum: float = 0.0
+    accel_y_sum: float = 0.0
+    accel_z_sum: float = 0.0
+    gyro_x_sum: float = 0.0
+    gyro_y_sum: float = 0.0
+    gyro_z_sum: float = 0.0
+    temp_sum: float = 0.0
+
+    def add(self, row: dict[str, int | float | str]) -> None:
+        self.packet_count += 1
+        self.accel_x_sum += float(row["accel_x_mps2"])
+        self.accel_y_sum += float(row["accel_y_mps2"])
+        self.accel_z_sum += float(row["accel_z_mps2"])
+        self.gyro_x_sum += float(row["gyro_x_deg_s"])
+        self.gyro_y_sum += float(row["gyro_y_deg_s"])
+        self.gyro_z_sum += float(row["gyro_z_deg_s"])
+        self.temp_sum += float(row["temp_c"])
+
+
+class StreamingPerImuCsvWriter:
+    def __init__(self, source: Path, output_dir: Path) -> None:
+        self.source = source
+        self.output_dir = output_dir
+        self.handles: dict[int, object] = {}
+        self.writers: dict[int, csv.writer] = {}
+        self.paths: dict[int, Path] = {}
+
+    def _ensure_writer(self, imu_id: int) -> csv.writer:
+        writer = self.writers.get(imu_id)
+        if writer is not None:
+            return writer
+
+        imu_name = _imu_name_from_id(imu_id)
+        destination = self.output_dir / f"{self.source.stem}_{imu_name}.csv"
+        handle = destination.open("w", newline="", encoding="utf-8")
+        writer = csv.writer(handle)
+        prefix = f"{imu_name}_"
+        writer.writerow(
+            [
+                "packet_index",
+                f"{prefix}poll_timestamp_us",
+                f"{prefix}packet_index_in_capture",
+                f"{prefix}packet_size",
+                f"{prefix}packet_timestamp_u16",
+                f"{prefix}packet_timestamp_continuous",
+                f"{prefix}fifo_header",
+                f"{prefix}raw_accel_x",
+                f"{prefix}raw_accel_y",
+                f"{prefix}raw_accel_z",
+                f"{prefix}raw_gyro_x",
+                f"{prefix}raw_gyro_y",
+                f"{prefix}raw_gyro_z",
+                f"{prefix}temp_raw",
+                f"{prefix}accel_x_mps2",
+                f"{prefix}accel_y_mps2",
+                f"{prefix}accel_z_mps2",
+                f"{prefix}gyro_x_deg_s",
+                f"{prefix}gyro_y_deg_s",
+                f"{prefix}gyro_z_deg_s",
+                f"{prefix}temp_c",
+            ]
+        )
+        self.handles[imu_id] = handle
+        self.writers[imu_id] = writer
+        self.paths[imu_id] = destination
+        return writer
+
+    def write_row(self, row: dict[str, int | float | str]) -> None:
+        imu_id = int(row["imu_id"])
+        writer = self._ensure_writer(imu_id)
+        writer.writerow(
+            [
+                row["packet_index"],
+                row["poll_timestamp_us"],
+                row["packet_index_in_capture"],
+                row["packet_size"],
+                row["packet_timestamp_u16"],
+                row["packet_timestamp_continuous"],
+                row["fifo_header"],
+                row["raw_accel_x"],
+                row["raw_accel_y"],
+                row["raw_accel_z"],
+                row["raw_gyro_x"],
+                row["raw_gyro_y"],
+                row["raw_gyro_z"],
+                row["temp_raw"],
+                _format_float(float(row["accel_x_mps2"])),
+                _format_float(float(row["accel_y_mps2"])),
+                _format_float(float(row["accel_z_mps2"])),
+                _format_float(float(row["gyro_x_deg_s"])),
+                _format_float(float(row["gyro_y_deg_s"])),
+                _format_float(float(row["gyro_z_deg_s"])),
+                _format_float(float(row["temp_c"])),
+            ]
+        )
+
+    def close(self) -> None:
+        for handle in self.handles.values():
+            handle.close()
+
+
+class StreamingPollComparisonWriter:
+    def __init__(self, source: Path, output_dir: Path) -> None:
+        self.destination = output_dir / f"{source.stem}_poll_compare.csv"
+        self.imu_ids = sorted(IMU_ID_TO_NAME)
+        self.handle = self.destination.open("w", newline="", encoding="utf-8")
+        self.writer = csv.writer(self.handle)
+        header = ["poll_count"]
+        for imu_id in self.imu_ids:
+            imu_name = _imu_name_from_id(imu_id)
+            header.extend(
+                [
+                    f"{imu_name}_pkt_count",
+                    f"{imu_name}_accel_x_mps2",
+                    f"{imu_name}_accel_y_mps2",
+                    f"{imu_name}_accel_z_mps2",
+                    f"{imu_name}_gyro_x_deg_s",
+                    f"{imu_name}_gyro_y_deg_s",
+                    f"{imu_name}_gyro_z_deg_s",
+                    f"{imu_name}_temp_c",
+                ]
+            )
+        self.writer.writerow(header)
+        self.current_poll_count: int | None = None
+        self.current_aggregates: dict[int, _PollAggregate] = {}
+
+    def write_row(self, row: dict[str, int | float | str]) -> None:
+        poll_count = int(row["poll_count"])
+        imu_id = int(row["imu_id"])
+        if self.current_poll_count is None:
+            self.current_poll_count = poll_count
+        if poll_count != self.current_poll_count:
+            self._flush_current()
+            self.current_poll_count = poll_count
+        self.current_aggregates.setdefault(imu_id, _PollAggregate()).add(row)
+
+    def _flush_current(self) -> None:
+        if self.current_poll_count is None:
+            return
+        row_out: list[str | int] = [self.current_poll_count]
+        for imu_id in self.imu_ids:
+            agg = self.current_aggregates.get(imu_id)
+            if agg is None or agg.packet_count <= 0:
+                row_out.extend([0] + [""] * 7)
+                continue
+            row_out.extend(
+                [
+                    agg.packet_count,
+                    _format_float(agg.accel_x_sum / agg.packet_count),
+                    _format_float(agg.accel_y_sum / agg.packet_count),
+                    _format_float(agg.accel_z_sum / agg.packet_count),
+                    _format_float(agg.gyro_x_sum / agg.packet_count),
+                    _format_float(agg.gyro_y_sum / agg.packet_count),
+                    _format_float(agg.gyro_z_sum / agg.packet_count),
+                    _format_float(agg.temp_sum / agg.packet_count),
+                ]
+            )
+        self.writer.writerow(row_out)
+        self.current_aggregates = {}
+        self.current_poll_count = None
+
+    def close(self) -> None:
+        self._flush_current()
+        self.handle.close()
+
+
+def decode_real_imu_raw_packets_to_csv(
+    source: Path, destination: Path, progress_callback: Callable[[str], None] | None = None
+) -> int:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    rows = _build_raw_packet_rows(captures)
+    progress = ParseProgressReporter(
+        total_bytes=source.stat().st_size,
+        callback=progress_callback,
+        stage="逐包CSV导出",
+    )
+    progress.log(f"开始导出逐包 CSV: `{source}`")
+    state = PacketRowBuilderState(wrap_count_by_imu={}, last_timestamp_by_imu={})
+    row_count = 0
 
     with destination.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
@@ -1126,37 +1578,45 @@ def decode_real_imu_raw_packets_to_csv(source: Path, destination: Path) -> int:
                 "temp_c",
             ]
         )
-        for row in rows:
-            writer.writerow(
-                [
-                    row["packet_index"],
-                    row["imu_id"],
-                    row["imu_name"],
-                    row["poll_count"],
-                    row["poll_timestamp_us"],
-                    row["packet_index_in_capture"],
-                    row["packet_size"],
-                    row["packet_timestamp_u16"],
-                    row["packet_timestamp_continuous"],
-                    row["fifo_header"],
-                    row["raw_accel_x"],
-                    row["raw_accel_y"],
-                    row["raw_accel_z"],
-                    row["raw_gyro_x"],
-                    row["raw_gyro_y"],
-                    row["raw_gyro_z"],
-                    row["temp_raw"],
-                    _format_float(float(row["accel_x_mps2"])),
-                    _format_float(float(row["accel_y_mps2"])),
-                    _format_float(float(row["accel_z_mps2"])),
-                    _format_float(float(row["gyro_x_deg_s"])),
-                    _format_float(float(row["gyro_y_deg_s"])),
-                    _format_float(float(row["gyro_z_deg_s"])),
-                    _format_float(float(row["temp_c"])),
-                ]
-            )
+        for record_type, record in iter_real_imu_bin_file_records(source, progress):
+            if record_type != "raw_capture":
+                continue
+            for row in _iter_capture_packet_rows(record, state):
+                row_count += 1
+                progress.packet_count = row_count
+                writer.writerow(
+                    [
+                        row["packet_index"],
+                        row["imu_id"],
+                        row["imu_name"],
+                        row["poll_count"],
+                        row["poll_timestamp_us"],
+                        row["packet_index_in_capture"],
+                        row["packet_size"],
+                        row["packet_timestamp_u16"],
+                        row["packet_timestamp_continuous"],
+                        row["fifo_header"],
+                        row["raw_accel_x"],
+                        row["raw_accel_y"],
+                        row["raw_accel_z"],
+                        row["raw_gyro_x"],
+                        row["raw_gyro_y"],
+                        row["raw_gyro_z"],
+                        row["temp_raw"],
+                        _format_float(float(row["accel_x_mps2"])),
+                        _format_float(float(row["accel_y_mps2"])),
+                        _format_float(float(row["accel_z_mps2"])),
+                        _format_float(float(row["gyro_x_deg_s"])),
+                        _format_float(float(row["gyro_y_deg_s"])),
+                        _format_float(float(row["gyro_z_deg_s"])),
+                        _format_float(float(row["temp_c"])),
+                    ]
+                )
+                progress.maybe_report()
 
-    return len(rows)
+    progress.bytes_processed = progress.total_bytes
+    progress.maybe_report(force=True, extra="导出完成")
+    return row_count
 
 
 def _mean(values: list[float]) -> float:
@@ -1301,9 +1761,14 @@ def _estimate_allan_white_noise_metrics(values: list[float], sample_period_s: fl
     if allan_points:
         allan_min_tau_s, allan_min_value = min(allan_points, key=lambda item: item[1])
 
+    noise_density_mps2_sqhz = best_random_walk / 60.0 if best_random_walk > 0.0 else 0.0
+    noise_density_ug_sqhz = noise_density_mps2_sqhz / 9.80665 * 1_000_000.0 if noise_density_mps2_sqhz > 0.0 else 0.0
+
     return {
         "rms": _rms(centered_values),
         "random_walk": best_random_walk,
+        "noise_density_mps2_sqhz": noise_density_mps2_sqhz,
+        "noise_density_ug_sqhz": noise_density_ug_sqhz,
         "fit_tau_s": best_tau_s,
         "fit_slope": best_slope,
         "allan_min_tau_s": allan_min_tau_s,
@@ -1341,6 +1806,8 @@ def _extract_raw_capture_axes_by_imu(raw_captures: list[RawImuCapture]) -> dict[
             end = start + capture.packet_size
             packet = capture.payload[start:end]
             if len(packet) != capture.packet_size or len(packet) < 13:
+                continue
+            if _should_skip_packet_for_analysis(packet, capture.imu_id):
                 continue
 
             gyro_x = _packet_s16(packet, 7, capture.imu_id)
@@ -1460,6 +1927,232 @@ def _analyze_arw_per_imu(raw_captures: list[RawImuCapture]) -> dict[int, dict[st
             "accel": accel_metrics,
         }
 
+    return report
+
+
+def _estimate_std_from_sums(count: int, total: float, total_sq: float) -> float:
+    if count <= 0:
+        return 0.0
+    mean_value = total / count
+    variance = max(total_sq / count - mean_value * mean_value, 0.0)
+    return sqrt(variance)
+
+
+def _count_csv_data_rows(csv_path: Path) -> int:
+    newline_count = 0
+    with csv_path.open("rb") as handle:
+        while True:
+            chunk = handle.read(1024 * 1024)
+            if not chunk:
+                break
+            newline_count += chunk.count(b"\n")
+    return max(newline_count - 1, 0)
+
+
+def _choose_common_decimation_factor(per_imu_csv_paths: dict[int, Path]) -> tuple[int, dict[int, int]]:
+    sample_counts = {imu_id: _count_csv_data_rows(path) for imu_id, path in per_imu_csv_paths.items()}
+    max_sample_count = max(sample_counts.values(), default=0)
+    decimation_factor = 1
+    while max_sample_count > 0 and (max_sample_count / decimation_factor) > MAX_ANALYSIS_SERIES_POINTS:
+        decimation_factor *= 2
+    return decimation_factor, sample_counts
+
+
+def _format_file_size(byte_count: int) -> str:
+    value = float(byte_count)
+    units = ["B", "KB", "MB", "GB"]
+    unit_index = 0
+    while value >= 1024.0 and unit_index < len(units) - 1:
+        value /= 1024.0
+        unit_index += 1
+    return f"{value:.2f} {units[unit_index]}"
+
+
+def _analyze_single_imu_csv(
+    imu_id: int,
+    csv_path: Path,
+    progress: ParseProgressReporter | None = None,
+    decimation_factor: int = 1,
+) -> dict[str, object]:
+    imu_name = _imu_name_from_id(imu_id)
+    prefix = f"{imu_name}_"
+    ts_field = f"{prefix}packet_timestamp_continuous"
+    poll_ts_field = f"{prefix}poll_timestamp_us"
+    temp_field = f"{prefix}temp_c"
+    gyro_fields = {axis: f"{prefix}gyro_{axis}_deg_s" for axis in ("x", "y", "z")}
+    accel_fields = {axis: f"{prefix}accel_{axis}_mps2" for axis in ("x", "y", "z")}
+
+    series = DecimatedImuSeries(decimation_factor=max(decimation_factor, 1))
+    sample_count = 0
+    nonzero_timestamp_count = 0
+    first_timestamp_us = 0
+    last_timestamp_us = 0
+    last_poll_timestamp_us = 0
+    step_count = 0
+    step_sum_us = 0.0
+    step_sum_sq_us = 0.0
+    prev_timestamp_us: int | None = None
+    temp_sum_c = 0.0
+    temp_min_c = float("inf")
+    temp_max_c = float("-inf")
+
+    with csv_path.open("r", newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        for row_index, row in enumerate(reader, start=1):
+            timestamp_us = int(float(row.get(ts_field, "0") or 0))
+            poll_timestamp_us = int(float(row.get(poll_ts_field, "0") or 0))
+            gyro_x_deg_s = float(row.get(gyro_fields["x"], "0") or 0.0)
+            gyro_y_deg_s = float(row.get(gyro_fields["y"], "0") or 0.0)
+            gyro_z_deg_s = float(row.get(gyro_fields["z"], "0") or 0.0)
+            acc_x_mps2 = float(row.get(accel_fields["x"], "0") or 0.0)
+            acc_y_mps2 = float(row.get(accel_fields["y"], "0") or 0.0)
+            acc_z_mps2 = float(row.get(accel_fields["z"], "0") or 0.0)
+            temp_c = float(row.get(temp_field, "0") or 0.0)
+
+            if sample_count == 0:
+                first_timestamp_us = timestamp_us
+            last_timestamp_us = timestamp_us
+            last_poll_timestamp_us = poll_timestamp_us
+            sample_count += 1
+            temp_sum_c += temp_c
+            temp_min_c = min(temp_min_c, temp_c)
+            temp_max_c = max(temp_max_c, temp_c)
+            if timestamp_us > 0:
+                nonzero_timestamp_count += 1
+            if prev_timestamp_us is not None:
+                step_us = timestamp_us - prev_timestamp_us
+                if step_us > 0:
+                    step_count += 1
+                    step_sum_us += step_us
+                    step_sum_sq_us += float(step_us) * float(step_us)
+            prev_timestamp_us = timestamp_us
+
+            series.add(
+                timestamp_us=timestamp_us,
+                gyro_x_deg_s=gyro_x_deg_s,
+                gyro_y_deg_s=gyro_y_deg_s,
+                gyro_z_deg_s=gyro_z_deg_s,
+                acc_x_mps2=acc_x_mps2,
+                acc_y_mps2=acc_y_mps2,
+                acc_z_mps2=acc_z_mps2,
+            )
+            if progress is not None and row_index % 2048 == 0:
+                progress.bytes_processed = handle.buffer.tell()
+                progress.packet_count = row_index
+                progress.maybe_report()
+
+    if sample_count <= 0:
+        return {}
+
+    if progress is not None:
+        progress.bytes_processed = progress.total_bytes
+        progress.packet_count = sample_count
+
+    cfg = _imu_config(imu_id)
+    packet_period_mean_us = step_sum_us / step_count if step_count > 0 else 0.0
+    packet_period_std_us = _estimate_std_from_sums(step_count, step_sum_us, step_sum_sq_us)
+    packet_period_s = packet_period_mean_us / 1_000_000.0 if packet_period_mean_us > 0.0 else 0.0
+    if packet_period_s <= 0.0 and cfg["odr_hz"] > 0.0:
+        packet_period_s = 1.0 / cfg["odr_hz"]
+
+    decimated_timestamps = [int(value) for value in series.timestamps_us]
+    analysis_packet_period_s = _estimate_sample_period_s(decimated_timestamps)
+    if analysis_packet_period_s <= 0.0 and packet_period_s > 0.0:
+        analysis_packet_period_s = packet_period_s * series.decimation_factor
+
+    gyro_metrics = {
+        "x": _estimate_arw_metrics([math.radians(value) for value in series.gyro_x_deg_s], analysis_packet_period_s),
+        "y": _estimate_arw_metrics([math.radians(value) for value in series.gyro_y_deg_s], analysis_packet_period_s),
+        "z": _estimate_arw_metrics([math.radians(value) for value in series.gyro_z_deg_s], analysis_packet_period_s),
+    }
+    accel_metrics = {
+        "x": _estimate_allan_white_noise_metrics(list(series.acc_x_mps2), analysis_packet_period_s),
+        "y": _estimate_allan_white_noise_metrics(list(series.acc_y_mps2), analysis_packet_period_s),
+        "z": _estimate_allan_white_noise_metrics(list(series.acc_z_mps2), analysis_packet_period_s),
+    }
+
+    gyro_arw_values = [
+        float(gyro_metrics[axis]["arw_deg_sqrt_hr"])
+        for axis in ("x", "y", "z")
+        if float(gyro_metrics[axis]["arw_deg_sqrt_hr"]) > 0.0
+    ]
+    accel_noise_values = [
+        float(accel_metrics[axis]["noise_density_ug_sqhz"])
+        for axis in ("x", "y", "z")
+        if float(accel_metrics[axis]["noise_density_ug_sqhz"]) > 0.0
+    ]
+    paper_metrics = IMU_PAPER_METRICS.get(imu_id, {})
+    paper_gyro_noise_density = float(paper_metrics.get("gyro_arw_deg_sqrt_hr", 0.0))
+    paper_gyro_arw_deg_sqrt_hr = paper_gyro_noise_density * 60.0
+    paper_accel_noise_ug_sqhz = float(paper_metrics.get("accel_noise_ug_sqhz", 0.0))
+    paper_accel_noise_mps2_sqhz = paper_accel_noise_ug_sqhz * 1e-6 * 9.80665
+    paper_accel_rw_mps_sqrthr = paper_accel_noise_mps2_sqhz * 60.0
+
+    return {
+        "imu_name": imu_name,
+        "csv_path": str(csv_path),
+        "sample_count": sample_count,
+        "analysis_sample_count": len(series.timestamps_us),
+        "analysis_decimation_factor": series.decimation_factor,
+        "duration_s": (last_timestamp_us - first_timestamp_us) / 1_000_000.0 if sample_count >= 2 else 0.0,
+        "packet_period_s": packet_period_s,
+        "packet_rate_hz": 1.0 / packet_period_s if packet_period_s > 0.0 else 0.0,
+        "packet_period_mean_us": packet_period_mean_us,
+        "packet_period_std_us": packet_period_std_us,
+        "packet_timestamp_nonzero_count": nonzero_timestamp_count,
+        "configured_odr_hz": cfg["odr_hz"],
+        "actual_odr_ratio": (1.0 / packet_period_s / cfg["odr_hz"]) if packet_period_s > 0.0 and cfg["odr_hz"] > 0.0 else 0.0,
+        "accel_range_g": cfg["accel_range_g"],
+        "gyro_range_dps": cfg["gyro_range_dps"],
+        "accel_resolution_mg_lsb": (cfg["accel_range_g"] * 1000.0 / float(1 << 15)) if cfg["accel_range_g"] > 0.0 else 0.0,
+        "gyro_resolution_mdps_lsb": (cfg["gyro_range_dps"] * 1000.0 / float(1 << 15)) if cfg["gyro_range_dps"] > 0.0 else 0.0,
+        "temp_mean_c": temp_sum_c / sample_count,
+        "temp_min_c": temp_min_c if temp_min_c != float("inf") else 0.0,
+        "temp_max_c": temp_max_c if temp_max_c != float("-inf") else 0.0,
+        "temp_range_c": (temp_max_c - temp_min_c) if temp_max_c != float("-inf") and temp_min_c != float("inf") else 0.0,
+        "last_poll_timestamp_us": last_poll_timestamp_us,
+        "paper_gyro_noise_density_deg_s_sqhz": paper_gyro_noise_density,
+        "paper_gyro_arw_deg_sqrt_hr": paper_gyro_arw_deg_sqrt_hr,
+        "paper_gyro_arw_target_deg_sqrt_hr": PAPER_TARGETS["gyro_arw_deg_sqrt_hr_max"] * 60.0,
+        "paper_accel_noise_ug_sqhz": paper_accel_noise_ug_sqhz,
+        "paper_accel_noise_mps2_sqhz": paper_accel_noise_mps2_sqhz,
+        "paper_accel_rw_mps_sqrthr": paper_accel_rw_mps_sqrthr,
+        "measured_gyro_arw_mean_deg_sqrt_hr": _mean(gyro_arw_values),
+        "measured_acc_noise_mean_ug_sqhz": _mean(accel_noise_values),
+        "gyro": gyro_metrics,
+        "accel": accel_metrics,
+    }
+
+
+def _analyze_arw_per_imu_from_csvs(
+    per_imu_csv_paths: dict[int, Path], progress_callback: Callable[[str], None] | None = None
+) -> dict[int, dict[str, object]]:
+    report: dict[int, dict[str, object]] = {}
+    common_decimation_factor, sample_counts = _choose_common_decimation_factor(per_imu_csv_paths)
+    if progress_callback is not None:
+        progress_callback(
+            "统计阶段使用统一降采样倍率: "
+            f"`x{common_decimation_factor}`，用于控制 Allan/ARW 内存占用；"
+            "各 IMU 统一使用同倍率，不影响横向排序，实际点数/包周期统计仍基于全量数据。"
+        )
+    for imu_id in sorted(per_imu_csv_paths):
+        csv_path = per_imu_csv_paths[imu_id]
+        progress = ParseProgressReporter(
+            total_bytes=csv_path.stat().st_size,
+            callback=progress_callback,
+            stage=f"{_imu_name_from_id(imu_id)} 统计",
+        )
+        progress.log(f"{_imu_name_from_id(imu_id)}: 开始基于 CSV 统计实际采样率和噪声指标")
+        report[imu_id] = _analyze_single_imu_csv(
+            imu_id,
+            csv_path,
+            progress,
+            decimation_factor=common_decimation_factor,
+        )
+        report[imu_id]["full_sample_count"] = sample_counts.get(imu_id, int(report[imu_id].get("sample_count", 0)))
+        report[imu_id]["analysis_common_decimation_factor"] = common_decimation_factor
+        progress.bytes_processed = progress.total_bytes
+        progress.maybe_report(force=True, extra="统计完成")
     return report
 
 
@@ -1627,19 +2320,19 @@ def analyze_real_imu_frames(
 
 def _build_arw_metric_rankings(per_imu_report: dict) -> list[dict[str, object]]:
     metric_specs = [
-        ("gyro", "x", "Gyro X", "ARW", "deg/sqrt(hr)", "arw_deg_sqrt_hr"),
-        ("gyro", "y", "Gyro Y", "ARW", "deg/sqrt(hr)", "arw_deg_sqrt_hr"),
-        ("gyro", "z", "Gyro Z", "ARW", "deg/sqrt(hr)", "arw_deg_sqrt_hr"),
-        ("accel", "x", "Acc X", "RW", "m/s/sqrt(hr)", "random_walk"),
-        ("accel", "y", "Acc Y", "RW", "m/s/sqrt(hr)", "random_walk"),
-        ("accel", "z", "Acc Z", "RW", "m/s/sqrt(hr)", "random_walk"),
+        ("gyro", "x", "Gyro X", "ARW", "°/√hr", "arw_deg_sqrt_hr", "paper_gyro_arw_deg_sqrt_hr"),
+        ("gyro", "y", "Gyro Y", "ARW", "°/√hr", "arw_deg_sqrt_hr", "paper_gyro_arw_deg_sqrt_hr"),
+        ("gyro", "z", "Gyro Z", "ARW", "°/√hr", "arw_deg_sqrt_hr", "paper_gyro_arw_deg_sqrt_hr"),
+        ("accel", "x", "Acc X", "Noise", "ug/sqrt(Hz)", "noise_density_ug_sqhz", "paper_accel_noise_ug_sqhz"),
+        ("accel", "y", "Acc Y", "Noise", "ug/sqrt(Hz)", "noise_density_ug_sqhz", "paper_accel_noise_ug_sqhz"),
+        ("accel", "z", "Acc Z", "Noise", "ug/sqrt(Hz)", "noise_density_ug_sqhz", "paper_accel_noise_ug_sqhz"),
     ]
 
     def _sr(imu_id: int) -> dict:
         return per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id)) or {}  # type: ignore
 
     rankings: list[dict[str, object]] = []
-    for metric_type, axis, axis_label, metric_label, unit, value_key in metric_specs:
+    for metric_type, axis, axis_label, metric_label, unit, value_key, paper_key in metric_specs:
         ranked_items: list[dict[str, object]] = []
         for imu_id in sorted(int(k) for k in per_imu_report):
             sr = _sr(imu_id)
@@ -1676,6 +2369,25 @@ def _build_arw_metric_rankings(per_imu_report: dict) -> list[dict[str, object]]:
         elif green_item:
             family_winner = "45686"
 
+        paper_values = {
+            "42688": next(
+                (
+                    float((_sr(int(item["imu_id"])) or {}).get(paper_key, 0.0))
+                    for item in ranked_items
+                    if str(item["family"]) == "42688"
+                ),
+                0.0,
+            ),
+            "45686": next(
+                (
+                    float((_sr(int(item["imu_id"])) or {}).get(paper_key, 0.0))
+                    for item in ranked_items
+                    if str(item["family"]) == "45686"
+                ),
+                0.0,
+            ),
+        }
+
         rankings.append(
             {
                 "metric_type": metric_type,
@@ -1684,6 +2396,8 @@ def _build_arw_metric_rankings(per_imu_report: dict) -> list[dict[str, object]]:
                 "metric_label": metric_label,
                 "title": f"{axis_label} {metric_label}",
                 "unit": unit,
+                "paper_key": paper_key,
+                "paper_values": paper_values,
                 "ranked_items": ranked_items,
                 "family_best": family_best,
                 "family_winner": family_winner,
@@ -1692,8 +2406,45 @@ def _build_arw_metric_rankings(per_imu_report: dict) -> list[dict[str, object]]:
     return rankings
 
 
+def _format_axis_list(labels: list[str]) -> str:
+    if not labels:
+        return "无"
+    return " / ".join(labels)
+
+
+def _paper_rank_position_text(ranked_items: list[dict[str, object]], paper_value: float) -> str:
+    if paper_value <= 0.0 or not ranked_items:
+        return "未提供"
+
+    better_count = sum(1 for item in ranked_items if float(item["value"]) < paper_value)
+    equal_count = sum(1 for item in ranked_items if abs(float(item["value"]) - paper_value) < 1e-12)
+    if better_count <= 0:
+        return "位于 #1 前"
+    if better_count >= len(ranked_items):
+        return f"位于 #{len(ranked_items)} 后"
+    if equal_count > 0:
+        return f"约等于 #{better_count}"
+    return f"位于 #{better_count} 与 #{better_count + 1} 之间"
+
+
+def _build_family_competition_summary(rankings: list[dict[str, object]]) -> list[str]:
+    family_axes: dict[str, list[str]] = {"42688": [], "45686": [], "tie": []}
+    for ranking in rankings:
+        family_axes[str(ranking["family_winner"])].append(str(ranking["title"]))
+
+    lines = [
+        "- 45686 领先轴项: "
+        f"`{len(family_axes['45686'])}` 项，分别是 `{_format_axis_list(family_axes['45686'])}`。",
+        "- 42688 领先轴项: "
+        f"`{len(family_axes['42688'])}` 项，分别是 `{_format_axis_list(family_axes['42688'])}`。",
+    ]
+    if family_axes["tie"]:
+        lines.append(f"- 持平轴项: `{_format_axis_list(family_axes['tie'])}`。")
+    return lines
+
+
 def _generate_arw_charts(per_imu_report: dict, destination: Path) -> list[str]:
-    """Generate ARW/RW markdown sections and charts for the report."""
+    """Generate compact duel charts for the report."""
     rankings = _build_arw_metric_rankings(per_imu_report)
     if not rankings:
         return []
@@ -1704,71 +2455,7 @@ def _generate_arw_charts(per_imu_report: dict, destination: Path) -> list[str]:
     def _imu_color_from_family(family: str) -> str:
         return "#D64B45" if family == "42688" else "#2E9F5B"
 
-    family_win_count = {"42688": 0, "45686": 0, "tie": 0}
-    for ranking in rankings:
-        family_win_count[str(ranking["family_winner"])] += 1
-
-    markdown_lines: list[str] = [
-        "",
-        "## 噪声指标可视化",
-        "",
-        "> 红色代表 ICM42688，绿色代表 ICM45686。",
-        "> 所有排序都按“数值越小越好”处理，这样可以直接看出每个轴到底是红色更强还是绿色更强。",
-        "",
-        "### 2.1 红绿胜负速览",
-        "",
-        f"- ICM42688 胜出轴数: `{family_win_count['42688']}` / `{len(rankings)}`",
-        f"- ICM45686 胜出轴数: `{family_win_count['45686']}` / `{len(rankings)}`",
-    ]
-    if family_win_count["tie"] > 0:
-        markdown_lines.append(f"- 平局轴数: `{family_win_count['tie']}`")
-    markdown_lines.extend(
-        [
-            "",
-            "| 指标 | 42688 最优 | 45686 最优 | 谁更好 | 差值 |",
-            "| --- | ---: | ---: | --- | ---: |",
-        ]
-    )
-    for ranking in rankings:
-        red_item = ranking["family_best"]["42688"]
-        green_item = ranking["family_best"]["45686"]
-        red_value = float(red_item["value"]) if red_item else 0.0
-        green_value = float(green_item["value"]) if green_item else 0.0
-        red_label = f" ({red_item['imu_name']})" if red_item else ""
-        green_label = f" ({green_item['imu_name']})" if green_item else ""
-        winner = ranking["family_winner"]
-        if winner == "42688":
-            winner_text = "红色更好"
-        elif winner == "45686":
-            winner_text = "绿色更好"
-        else:
-            winner_text = "平局"
-        diff_text = _format_float(abs(red_value - green_value)) if red_item and green_item else "-"
-        markdown_lines.append(
-            f"| {ranking['title']} | "
-            f"`{_format_float(red_value)}`{red_label} | "
-            f"`{_format_float(green_value)}`{green_label} | "
-            f"{winner_text} | {diff_text} |"
-        )
-
-    markdown_lines.extend(
-        [
-            "",
-            "### 2.2 每轴完整排序",
-            "",
-            "| 指标 | 第1名 | 第2名 | 第3名 | 第4名 |",
-            "| --- | --- | --- | --- | --- |",
-        ]
-    )
-    for ranking in rankings:
-        cells = []
-        for index, item in enumerate(ranking["ranked_items"], start=1):
-            family_text = "红" if item["family"] == "42688" else "绿"
-            cells.append(f"`#{index}` {item['imu_name']} {family_text} `{_format_float(float(item['value']))}`")
-        while len(cells) < 4:
-            cells.append("-")
-        markdown_lines.append(f"| {ranking['title']} | " + " | ".join(cells[:4]) + " |")
-    markdown_lines.append("")
+    markdown_lines: list[str] = ["", "## 对比图", ""]
 
     try:
         import matplotlib  # type: ignore
@@ -1789,447 +2476,217 @@ def _generate_arw_charts(per_imu_report: dict, destination: Path) -> list[str]:
         plt.rcParams["font.family"] = cjk_font
     plt.rcParams["axes.unicode_minus"] = False
 
-    imu_ids = sorted(int(k) for k in per_imu_report)
+    def _render_duel_chart(metric_type: str, title: str, filename_suffix: str) -> Path:
+        chart_rankings = [ranking for ranking in rankings if str(ranking["metric_type"]) == metric_type]
+        fig, ax = plt.subplots(figsize=(11.8, 4.6))
+        y_pos = np.arange(len(chart_rankings))
+        for idx, ranking in enumerate(chart_rankings):
+            red_item = ranking["family_best"]["42688"]
+            green_item = ranking["family_best"]["45686"]
+            if not red_item or not green_item:
+                continue
+            red_value = float(red_item["value"])
+            green_value = float(green_item["value"])
+            ax.plot([red_value, green_value], [idx, idx], color="#BDC3C7", linewidth=2.0, zorder=1)
+            ax.scatter(red_value, idx, s=95, color=_imu_color_from_family("42688"), zorder=3)
+            ax.scatter(green_value, idx, s=95, color=_imu_color_from_family("45686"), zorder=3)
+            ax.text(red_value, idx + 0.12, str(red_item["imu_name"]), fontsize=8, color=_imu_color_from_family("42688"))
+            ax.text(green_value, idx - 0.18, str(green_item["imu_name"]), fontsize=8, color=_imu_color_from_family("45686"))
+            for family in ("42688", "45686"):
+                paper_value = float(ranking["paper_values"].get(family, 0.0))
+                if paper_value > 0.0:
+                    ax.scatter(
+                        paper_value,
+                        idx,
+                        marker="|",
+                        s=220,
+                        color=_imu_color_from_family(family),
+                        linewidths=2.2,
+                        zorder=2,
+                    )
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels([str(ranking["axis_label"]) for ranking in chart_rankings], fontsize=10)
+        ax.invert_yaxis()
+        ax.grid(axis="x", linestyle=":", linewidth=0.7, alpha=0.6)
+        ax.set_axisbelow(True)
+        ax.set_xlabel("越靠左越好，圆点=实测最优样本，竖线=纸面值", fontsize=10)
+        ax.set_title(title, fontsize=12)
+        fig.tight_layout()
+        chart_path = out_dir / f"{stem}_{filename_suffix}.png"
+        fig.savefig(chart_path, dpi=130, bbox_inches="tight", facecolor="white")
+        plt.close(fig)
+        return chart_path
 
-    def _sr(imu_id: int) -> dict:
-        return per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id)) or {}  # type: ignore
-
-    def _imu_label(imu_id: int) -> str:
-        return str(_sr(imu_id).get("imu_name", f"IMU{imu_id}"))
-
-    def _imu_color(imu_id: int) -> str:
-        return _imu_color_from_family("42688" if imu_id in (1, 2) else "45686")
-
-    def _get_vals(imu_id: int) -> tuple[list[float], list[float]]:
-        sr = _sr(imu_id)
-        gyro_vals = [float(sr["gyro"][axis]["arw_deg_sqrt_hr"]) if sr else 0.0 for axis in ("x", "y", "z")]
-        accel_vals = [float(sr["accel"][axis]["random_walk"]) if sr else 0.0 for axis in ("x", "y", "z")]
-        return gyro_vals, accel_vals
-
-    all_gyro = {imu_id: _get_vals(imu_id)[0] for imu_id in imu_ids}
-    all_accel = {imu_id: _get_vals(imu_id)[1] for imu_id in imu_ids}
-
-    def _axis_min(values: dict[int, list[float]], index: int) -> float:
-        valid = [values[imu_id][index] for imu_id in imu_ids if values[imu_id][index] > 0.0]
-        return min(valid) if valid else 1.0
-
-    gyro_ref = [_axis_min(all_gyro, index) for index in range(3)]
-    accel_ref = [_axis_min(all_accel, index) for index in range(3)]
-
-    def _radar_scores(imu_id: int) -> list[float]:
-        gyro_vals, accel_vals = _get_vals(imu_id)
-        return [gyro_ref[i] / gyro_vals[i] if gyro_vals[i] > 0.0 else 0.0 for i in range(3)] + [
-            accel_ref[i] / accel_vals[i] if accel_vals[i] > 0.0 else 0.0 for i in range(3)
-        ]
-
-    radar_labels = ["Gyro X", "Gyro Y", "Gyro Z", "Acc X", "Acc Y", "Acc Z"]
-    angles = np.linspace(0, 2 * np.pi, len(radar_labels), endpoint=False).tolist()
-    angles_closed = angles + angles[:1]
-
-    fig_radar, ax_radar = plt.subplots(figsize=(7.4, 7.2), subplot_kw=dict(polar=True))
-    ax_radar.set_theta_offset(np.pi / 2)
-    ax_radar.set_theta_direction(-1)
-    ax_radar.set_xticks(angles)
-    ax_radar.set_xticklabels(radar_labels, fontsize=10)
-    ax_radar.set_ylim(0, 1.35)
-    ax_radar.set_yticks([0.5, 0.75, 1.0, 1.25])
-    ax_radar.set_yticklabels(["0.50", "0.75", "1.00", "1.25"], fontsize=8, color="gray")
-    ax_radar.axhline(1.0, color="#95A5A6", linewidth=0.9, linestyle="--", alpha=0.7)
-    for imu_id in imu_ids:
-        scores = _radar_scores(imu_id)
-        closed_scores = scores + [scores[0]]
-        ax_radar.plot(angles_closed, closed_scores, color=_imu_color(imu_id), linewidth=2.2, label=_imu_label(imu_id))
-        ax_radar.fill(angles_closed, closed_scores, color=_imu_color(imu_id), alpha=0.10)
-    ax_radar.legend(loc="upper right", bbox_to_anchor=(1.36, 1.18), fontsize=9)
-    ax_radar.set_title("六轴噪声雷达图\n归一化后越大越好", fontsize=12, pad=22)
-    fig_radar.patch.set_facecolor("white")
-    radar_path = out_dir / f"{stem}_radar.png"
-    fig_radar.savefig(radar_path, dpi=130, bbox_inches="tight", facecolor="white")
-    plt.close(fig_radar)
-
-    fig_rank, axes_grid = plt.subplots(3, 2, figsize=(14.8, 10.8))
-    fig_rank.suptitle(
-        "每个轴从优到劣排序\n红色 = ICM42688  绿色 = ICM45686  灰虚线 = 纸面值",
-        fontsize=13,
-    )
-    for idx, ranking in enumerate(rankings):
-        row, col = divmod(idx, 2)
-        sub_ax = axes_grid[row][col]
-        ranked_items = list(ranking["ranked_items"])
-        labels = [str(item["imu_name"]) for item in ranked_items]
-        values = [float(item["value"]) for item in ranked_items]
-        colors = [_imu_color_from_family(str(item["family"])) for item in ranked_items]
-        y_pos = list(range(len(ranked_items)))
-        bars = sub_ax.barh(y_pos, values, color=colors, edgecolor="white", linewidth=0.8, zorder=3)
-        sub_ax.set_yticks(y_pos)
-        sub_ax.set_yticklabels(labels, fontsize=9)
-        sub_ax.invert_yaxis()
-        sub_ax.grid(axis="x", linestyle=":", linewidth=0.7, alpha=0.6)
-        sub_ax.set_axisbelow(True)
-        for order, (bar, value) in enumerate(zip(bars, values), start=1):
-            sub_ax.text(
-                value * 1.01 if value > 0.0 else 0.001,
-                bar.get_y() + bar.get_height() / 2.0,
-                f"#{order}  {value:.6f}",
-                va="center",
-                fontsize=8,
-            )
-        paper_values = []
-        for item in ranked_items:
-            sr = _sr(int(item["imu_id"]))
-            if ranking["metric_type"] == "gyro":
-                paper_values.append(float(sr.get("paper_gyro_arw_deg_sqrt_hr", 0.0)))
-            else:
-                paper_values.append(float(sr.get("paper_accel_rw_mps_sqrthr", 0.0)))
-        paper_ref = next((value for value in paper_values if value > 0.0), 0.0)
-        if paper_ref > 0.0:
-            sub_ax.axvline(paper_ref, color="#7F8C8D", linestyle="--", linewidth=1.2, zorder=4)
-        winner = str(ranking["family_winner"])
-        winner_text = "红色领先" if winner == "42688" else "绿色领先" if winner == "45686" else "平局"
-        sub_ax.set_title(f"{ranking['title']} ({ranking['unit']})\n{winner_text}", fontsize=10)
-    fig_rank.tight_layout(rect=(0, 0, 1, 0.95))
-    bars_path = out_dir / f"{stem}_ranked_bars.png"
-    fig_rank.savefig(bars_path, dpi=130, bbox_inches="tight", facecolor="white")
-    plt.close(fig_rank)
-
-    fig_duel, ax_duel = plt.subplots(figsize=(12.5, 5.8))
-    y_pos = np.arange(len(rankings))
-    for idx, ranking in enumerate(rankings):
-        red_item = ranking["family_best"]["42688"]
-        green_item = ranking["family_best"]["45686"]
-        if not red_item or not green_item:
-            continue
-        red_value = float(red_item["value"])
-        green_value = float(green_item["value"])
-        ax_duel.plot([red_value, green_value], [idx, idx], color="#BDC3C7", linewidth=2.0, zorder=1)
-        ax_duel.scatter(red_value, idx, s=90, color=_imu_color_from_family("42688"), zorder=3)
-        ax_duel.scatter(green_value, idx, s=90, color=_imu_color_from_family("45686"), zorder=3)
-        winner_text = "红胜" if ranking["family_winner"] == "42688" else "绿胜" if ranking["family_winner"] == "45686" else "平"
-        anchor_x = max(red_value, green_value) * 1.03 if max(red_value, green_value) > 0.0 else 0.01
-        ax_duel.text(anchor_x, idx, winner_text, va="center", fontsize=9)
-    ax_duel.set_yticks(y_pos)
-    ax_duel.set_yticklabels([str(ranking["title"]) for ranking in rankings], fontsize=9)
-    ax_duel.invert_yaxis()
-    ax_duel.grid(axis="x", linestyle=":", linewidth=0.7, alpha=0.6)
-    ax_duel.set_axisbelow(True)
-    ax_duel.set_xlabel("数值越靠左越好", fontsize=10)
-    ax_duel.set_title("红绿对决图\n每个轴只比较各自型号里的最优一颗 IMU", fontsize=12)
-    fig_duel.tight_layout()
-    duel_path = out_dir / f"{stem}_family_duel.png"
-    fig_duel.savefig(duel_path, dpi=130, bbox_inches="tight", facecolor="white")
-    plt.close(fig_duel)
+    gyro_duel_path = _render_duel_chart("gyro", "Gyro 红绿对决图", "gyro_family_duel")
+    accel_duel_path = _render_duel_chart("accel", "Accel 红绿对决图", "accel_family_duel")
 
     markdown_lines.extend(
         [
-            f"![六轴噪声雷达图](./{radar_path.name})",
+            f"![Gyro 红绿对决图](./{gyro_duel_path.name})",
             "",
-            f"![每轴从优到劣排序图](./{bars_path.name})",
-            "",
-            f"![红绿对决图](./{duel_path.name})",
+            f"![Accel 红绿对决图](./{accel_duel_path.name})",
             "",
         ]
     )
     return markdown_lines
 
 
-def _write_markdown_report(destination: Path, source: Path, summary: dict[str, str]) -> None:
-    if summary.get("test") == "arw":
-        primary_csv_name = summary.get("comparison_csv", f"{source.stem}_{summary.get('test', 'arw')}.csv")
-        per_imu_report = summary.get("per_imu_report", {})
-        detected_imu_ids = sorted(int(imu_id) for imu_id in per_imu_report)
-        missing_imu_names = [_imu_name_from_id(imu_id) for imu_id in sorted(IMU_ID_TO_NAME) if imu_id not in detected_imu_ids]
-        primary_imu_id = next((imu_id for imu_id in detected_imu_ids if _imu_name_from_id(imu_id) == summary.get("primary_imu_name", "")), 0)
-        primary_imu_report = per_imu_report.get(primary_imu_id, {}) if primary_imu_id else {}
-        _all_imu_ids = sorted(IMU_ID_TO_NAME)
-        _col_hdr: list[str] = []
-        for _sid in _all_imu_ids:
-            _col_hdr.extend([_imu_name_from_id(_sid), "Δ%"])
-        _tbl_header = "| 轴向 | " + " | ".join(_col_hdr) + " |"
-        _tbl_sep = "| --- | " + " | ".join(["---:"] * len(_col_hdr)) + " |"
-        _tbl_rows: list[str] = [_tbl_header, _tbl_sep]
-        for _axis in ("x", "y", "z"):
-            _row = [f"Gyro {_axis.upper()}"]
-            for _sid in _all_imu_ids:
-                _sr = per_imu_report.get(_sid) or per_imu_report.get(str(_sid))
-                if not _sr:
-                    _row.extend(["-", "-"])
-                    continue
-                _arw = float(_sr["gyro"][_axis]["arw_deg_sqrt_hr"])
-                _paper = float(_sr.get("paper_gyro_arw_deg_sqrt_hr", 0.0))
-                _delta = f"{(_arw - _paper) / _paper * 100.0:+.1f}" if _paper > 0.0 else "-"
-                _row.extend([_format_float(_arw), _delta])
-            _tbl_rows.append("| " + " | ".join(_row) + " |")
-        for _axis in ("x", "y", "z"):
-            _row = [f"Acc {_axis.upper()}"]
-            for _sid in _all_imu_ids:
-                _sr = per_imu_report.get(_sid) or per_imu_report.get(str(_sid))
-                if not _sr:
-                    _row.extend(["-", "-"])
-                    continue
-                _rw = float(_sr["accel"][_axis]["random_walk"])
-                _paper_arw = float(_sr.get("paper_accel_rw_mps_sqrthr", 0.0))
-                _delta = f"{(_rw - _paper_arw) / _paper_arw * 100.0:+.1f}" if _paper_arw > 0.0 else "-"
-                _row.extend([_format_float(_rw), _delta])
-            _tbl_rows.append("| " + " | ".join(_row) + " |")
+def _family_best_average(rankings: list[dict[str, object]], family: str, metric_type: str) -> float:
+    values = []
+    for ranking in rankings:
+        if str(ranking["metric_type"]) != metric_type:
+            continue
+        best_item = ranking["family_best"].get(family)
+        if best_item:
+            values.append(float(best_item["value"]))
+    return _mean(values)
 
-        lines = [
-            "# 数据分析报告",
-            "",
-            "## 随机游走指标汇总",
-            "",
-            "> Gyro ARW: deg/sqrt(hr)  |  Acc 随机游走: m/s/sqrt(hr)  |  Δ% = 实测相对纸面变化",
-            "",
-            *_tbl_rows,
-            "",
-            "## 1. 测试概况",
-            "",
-            f"- 源文件: `{source}`",
-            f"- 对比 CSV: `{primary_csv_name}`",
-            f"- 独立 IMU CSV: `{summary.get('per_imu_csvs', '')}`",
-            f"- 本页指标默认针对: `{summary.get('primary_imu_name', 'unknown')}`",
-            "- 测试项目: `测试项目 3：角度随机游走 ARW / 噪声`",
-            f"- 样本点数: `{summary['frames']}`",
-            f"- 记录时长: `{summary.get('duration_s', '0')}` s",
-            (
-                f"- 主 IMU FIFO 包平均周期: `{primary_imu_report['packet_period_s']:.6f}` s (`{primary_imu_report['packet_period_mean_us']:.3f} us`)"
-                if primary_imu_report
-                else "- 主 IMU FIFO 包平均周期: `无`"
-            ),
-            (
-                f"- 主 IMU FIFO 包平均刷新率: `{primary_imu_report['packet_rate_hz']:.3f}` Hz"
-                if primary_imu_report
-                else "- 主 IMU FIFO 包平均刷新率: `无`"
-            ),
-            f"- 检测到数据的 IMU: `{', '.join(_imu_name_from_id(imu_id) for imu_id in detected_imu_ids) or '无'}`",
-            f"- 未检测到数据的 IMU: `{', '.join(missing_imu_names) or '无'}`",
-        ]
-        lines.extend(["", "## 2. 分 IMU 噪声统计", ""])
-        for imu_id in sorted(IMU_ID_TO_NAME):
-            imu_name = _imu_name_from_id(imu_id)
-            imu_report = per_imu_report.get(str(imu_id)) or per_imu_report.get(imu_id)
-            lines.append(f"### {imu_name}")
-            lines.append("")
-            if not imu_report:
-                lines.append("- 本次 BIN 中未检测到该 IMU 的有效原始包。")
-                lines.append("")
-                continue
 
-            gyro_metrics = imu_report["gyro"]
-            accel_metrics = imu_report["accel"]
-            lines.extend(
-                [
-                    f"- 样本点数: `{imu_report['sample_count']}`",
-                    f"- FIFO 包平均周期: `{imu_report['packet_period_s']:.6f}` s (`{imu_report['packet_period_mean_us']:.3f} us`)",
-                    f"- FIFO 包平均刷新率: `{imu_report['packet_rate_hz']:.3f}` Hz",
-                    f"- FIFO 包周期标准差: `{imu_report['packet_period_std_us']:.3f} us`",
-                    f"- 记录时长: `{imu_report['duration_s']:.3f}` s",
-                    f"- 平均温度: `{imu_report['temp_mean_c']:.3f} °C`",
-                    f"- 温度范围: `{imu_report['temp_min_c']:.3f} ~ {imu_report['temp_max_c']:.3f} °C`",
-                    f"- 温度变化范围: `{imu_report['temp_range_c']:.3f} °C`",
-                    f"- 非零包时间戳点数: `{imu_report['packet_timestamp_nonzero_count']}`",
-                    f"- 配置 ODR: `{imu_report['configured_odr_hz']:.1f} Hz`",
-                    f"- Acc 量程/分辨率: `±{imu_report['accel_range_g']:.0f} g`, `{imu_report['accel_resolution_mg_lsb']:.6f} mg/LSB`",
-                    f"- Gyro 量程/分辨率: `±{imu_report['gyro_range_dps']:.0f} dps`, `{imu_report['gyro_resolution_mdps_lsb']:.6f} mdps/LSB`",
-                    "",
-                    "| 类型 | 轴向 | RMS | 随机游走指标 | Allan 最小值 | 特征 tau (s) |",
-                    "| --- | --- | ---: | ---: | ---: | ---: |",
-                ]
+def _build_arw_markdown_lines(source: Path, summary: dict[str, object], destination: Path) -> list[str]:
+    per_imu_report = summary.get("per_imu_report", {})
+    if not isinstance(per_imu_report, dict):
+        per_imu_report = {}
+    filtered_bad_packets = summary.get("filtered_bad_packets", {})
+    if not isinstance(filtered_bad_packets, dict):
+        filtered_bad_packets = {}
+    rankings = _build_arw_metric_rankings(per_imu_report)
+    all_imu_ids = [
+        imu_id
+        for imu_id in sorted(int(k) for k in per_imu_report)
+        if per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id))
+    ]
+    if not all_imu_ids:
+        return ["# 数据分析报告", "", f"- 源文件: `{source}`", "", "- 未解析到可用于噪声分析的 IMU 数据。"]
+
+    gyro_42688_best = _family_best_average(rankings, "42688", "gyro")
+    gyro_45686_best = _family_best_average(rankings, "45686", "gyro")
+    accel_42688_best = _family_best_average(rankings, "42688", "accel")
+    accel_45686_best = _family_best_average(rankings, "45686", "accel")
+    common_decimation_factor = max(
+        int(
+            next(
+                (
+                    float((per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id)) or {}).get("analysis_common_decimation_factor", 1))
+                    for imu_id in all_imu_ids
+                ),
+                1.0,
             )
-            for axis in ("x", "y", "z"):
-                axis_gyro = gyro_metrics[axis]
-                lines.append(
-                    "| Gyro | "
-                    f"{axis.upper()} | "
-                    f"{axis_gyro['rms_deg_s']:.6f} deg/s | "
-                    f"{axis_gyro['arw_deg_sqrt_hr']:.6f} deg/sqrt(hr) | "
-                    f"{axis_gyro['allan_min_deg_s']:.6f} deg/s | "
-                    f"{axis_gyro['allan_min_tau_s']:.6f} |"
-                )
-            for axis in ("x", "y", "z"):
-                axis_acc = accel_metrics[axis]
-                lines.append(
-                    "| Acc | "
-                    f"{axis.upper()} | "
-                    f"{axis_acc['rms']:.6f} m/s^2 | "
-                    f"{axis_acc['random_walk']:.6f} m/s/sqrt(hr) | "
-                    f"{axis_acc['allan_min_value']:.6f} m/s^2 | "
-                    f"{axis_acc['allan_min_tau_s']:.6f} |"
-                )
-            lines.extend(
-                [
-                    "",
-                    "- `Gyro` 行延续原有 ARW 算法。",
-                    "- `Acc` 行采用 Allan deviation 白噪声区段提取的加速度随机游走指标，单位为 `m/s/sqrt(hr)`。",
-                    "- `FIFO 包平均周期/刷新率` 直接基于逐包 `packet_timestamp_continuous` 差分统计。",
-                    "",
-                    "#### 纸面对比",
-                    "",
-                    f"- 实测 Gyro ARW 三轴均值: `{imu_report['measured_gyro_arw_mean_deg_sqrt_hr']:.6f}` deg/sqrt(hr)",
-                    (
-                        f"- 文档纸面 Gyro Noise Density: `{imu_report['paper_gyro_noise_density_deg_s_sqhz']:.6f}` deg/s/sqrt(Hz)"
-                        f"  →  换算 Gyro ARW: `{imu_report['paper_gyro_arw_deg_sqrt_hr']:.6f}` deg/sqrt(hr)"
-                    ) if float(imu_report["paper_gyro_noise_density_deg_s_sqhz"]) > 0.0 else "- 文档纸面 Gyro Noise Density: `未给出`",
-                    f"- Gyro ARW 相对纸面变化: `{imu_report['gyro_arw_change_pct']:+.2f} %`" if float(imu_report["paper_gyro_arw_deg_sqrt_hr"]) > 0.0 else "- Gyro ARW 相对纸面变化: `无法计算`",
-                    "",
-                ]
-            )
-            if float(imu_report.get("paper_accel_noise_ug_sqhz", 0.0)) > 0.0:
-                lines.extend(
-                    [
-                        f"- 文档纸面 Accel Noise Density: `{imu_report['paper_accel_noise_ug_sqhz']:.1f}` µg/sqrt(Hz)"
-                        f"  →  换算 Accel RW: `{imu_report['paper_accel_rw_mps_sqrthr']:.6f}` m/s/sqrt(hr)",
-                    ] + [
-                        f"- Acc {_ax.upper()} 随机游走相对纸面变化: `{imu_report['accel_rw_axis_change_pct'][_ax]:+.2f} %`"
-                        for _ax in ("x", "y", "z")
-                    ] + [""]
-                )
-            else:
-                lines.extend(["- Acc 随机游走纸面对比: `01-测试过程和结果.md` 当前未给出对应纸面值，只展示实测结果。", ""])
-
-        try:
-            lines.extend(_generate_arw_charts(per_imu_report, destination))
-        except Exception as _chart_err:  # noqa: BLE001
-            lines.extend(["", f"> ⚠️ 图表生成失败: {_chart_err}", ""])
-
-        lines.extend(
-            [
-                "## 3. 核心指标",
-                "",
-                "| 轴向 | Gyro RMS (deg/s) | ARW (deg/sqrt(hr)) | Allan 最小值 (deg/s) | 特征 tau (s) |",
-                "| --- | ---: | ---: | ---: | ---: |",
-            ]
-        )
-        for axis in ("x", "y", "z"):
-            lines.append(
-                "| "
-                f"{axis.upper()} | "
-                f"{summary.get(f'gyro_rms_{axis}_deg_s', '0')} | "
-                f"{summary.get(f'gyro_arw_{axis}_deg_sqrt_hr', '0')} | "
-                f"{summary.get(f'allan_min_{axis}_deg_s', '0')} | "
-                f"{summary.get(f'allan_min_tau_{axis}_s', '0')} |"
-            )
-
-        lines.extend(
-            [
-                "",
-                "说明:",
-                    f"- `Gyro RMS` 使用去均值后的陀螺序列计算，直接反映时域噪声大小。",
-                    f"- `ARW` 取 Allan deviation 曲线中斜率最接近 `-1/2` 的区段估算。",
-                    f"- `Allan 最小值` 用来观察噪声曲线的最低点以及对应时间尺度。",
-                "",
-                "## 4. 计算过程",
-                "",
-                "1. 去均值",
-                "",
-                "- 对每个轴的陀螺序列先去均值: `w_i' = w_i - mean(w)`",
-                "- 这样可以把固定零偏从噪声统计里剥离掉，让指标更接近纯噪声。",
-                "",
-                "2. Gyro RMS",
-                "",
-                "- 公式: `RMS = sqrt((1 / N) * sum((w_i')^2))`",
-                "- 报告中的 `Gyro RMS` 单位为 `deg/s`，来源于去均值后的时域序列。",
-                "",
-                "3. Allan variance / Allan deviation",
-                "",
-                "- 先按聚合时间 `tau = m * Ts` 把序列分段求均值，得到 `y_k`。",
-                "- Allan variance: `AVAR(tau) = (1 / 2) * mean((y_(k+1) - y_k)^2)`",
-                "- Allan deviation: `ADEV(tau) = sqrt(AVAR(tau))`",
-                "- 报告中的 `Allan 最小值` 即各个 `tau` 下 `ADEV(tau)` 的最小点。",
-                "",
-                "4. ARW 提取",
-                "",
-                "- 在 Allan deviation 曲线上计算相邻对数坐标点的斜率。",
-                "- 选取斜率最接近 `-1/2` 的区段，视为白噪声主导区域。",
-                "- 在该区段按 `ARW = ADEV(tau) * sqrt(tau) * 60` 估算，单位为 `deg/sqrt(hr)`。",
-            ]
-        )
-
-        consistency_sample_count = int(summary.get("same_model_consistency_sample_count", "0"))
-        lines.extend(["", "## 5. 同型号一致性", ""])
-        if consistency_sample_count >= 2:
-            lines.extend(
-                [
-                    f"- 参与一致性统计的样本数: `{consistency_sample_count}`",
-                    f"- 样本间三轴平均 RMS 均值: `{summary.get('same_model_rms_mean_deg_s', '0')}` deg/s",
-                    f"- 样本间三轴平均 RMS 标准差: `{summary.get('same_model_rms_std_deg_s', '0')}` deg/s",
-                    f"- 样本间三轴平均 RMS 变异系数: `{summary.get('same_model_rms_cv_pct', '0')}` %",
-                    "- 计算方式: 先按 `imu_id` 分开提取各自三轴陀螺序列，分别算去均值 `RMS`，再对每颗 IMU 的三轴 RMS 取平均后做离散度统计。",
-                ]
-            )
-        else:
-            lines.extend(
-                [
-                    "- 当前文件可用于单次噪声评估，但不足以稳定给出同型号样本一致性。",
-                    "- 若 BIN 中同时包含多颗 IMU 的原始包，或后续支持多文件联合分析，可继续扩展该项。",
-                ]
-            )
-
-        lines.extend(
-            [
-                "",
-                "## 6. CSV 字段说明",
-                "",
-                "本次会输出两类 CSV:",
-                "",
-                f"- 对比 CSV `{primary_csv_name}`: 以 `poll_count` 为横坐标，每行代表一次 poll，各 IMU 的值为该轮次内多个 FIFO 包换算后的平均值。",
-                f"- 独立 IMU CSV: 每个文件只保留单颗 IMU 的逐包数据，字段名使用具体 IMU 名字前缀，且不再包含 `poll_count` 列。",
-                "",
-                "### 6.1 独立 IMU CSV 字段",
-                "",
-                "| 列名 | 含义 | 获取或计算方式 |",
-                "| --- | --- | --- |",
-                "| `packet_index` | 全文件内的全局包序号 | 按解析顺序从 1 递增 |",
-                "| `42688A_poll_timestamp_us` | `42688A` 这颗 IMU 对应 poll 轮次的 MCU 微秒时间戳 | 固件用 `TIM2 1MHz` 自由运行计数器在写 BIN 时记录 |",
-                "| `42688A_packet_index_in_capture` | 当前包在本次 FIFO 记录块中的位置 | 同一轮 poll 的 FIFO 数据内从 1 递增 |",
-                "| `42688A_packet_size` | 单个 FIFO 包字节数 | 固件从 IMU 原始读数结构里直接记录 |",
-                "| `42688A_packet_timestamp_u16` | FIFO 包尾部自带的 16 位时间戳 | 从包内 `0x0E~0x0F` 字节提取，若包长不足则记 0 |",
-                "| `42688A_packet_timestamp_continuous` | 展开的连续 FIFO 时间戳 | 在 PC 端基于 `42688A_packet_timestamp_u16` 做 16 位回绕展开 |",
-                "| `42688A_fifo_header` | FIFO 包头字节 | 原始包第 0 字节 |",
-                "| `42688A_raw_accel_x/y/z` | 加速度三轴原始 LSB | 分别从包内 `0x01~0x06` 按 big-endian 有符号 16 位解析 |",
-                "| `42688A_raw_gyro_x/y/z` | 角速度三轴原始 LSB | 分别从包内 `0x07~0x0C` 按 big-endian 有符号 16 位解析 |",
-                "| `42688A_temp_raw` | 温度原始值 | 包内 `0x0D` 的有符号 8 位值 |",
-                "| `42688A_accel_x/y/z_mps2` | 加速度物理值，单位 `m/s^2` | `42688A_raw_accel * (16 / 2^15) * 9.80665` |",
-                "| `42688A_gyro_x/y/z_deg_s` | 角速度物理值，单位 `deg/s` | `42688A_raw_gyro * (2000 / 2^15)` |",
-                "| `42688A_temp_c` | 温度物理值，单位 `°C` | `42688A_temp_raw / 2.07 + 25.0` |",
-                "",
-                "### 6.2 对比 CSV 字段",
-                "",
-                "| 列名 | 含义 | 获取或计算方式 |",
-                "| --- | --- | --- |",
-                "| `poll_count` | 全局 poll 轮次序号，也是多颗 IMU 统一对齐的横坐标 | 固件在每轮 `poll` 开始时自增一次，同一轮内所有 IMU 共用该值 |",
-                "| `42688A_accel_x/y/z_mps2` | `42688A` 在该 poll 轮次下的加速度平均值 | 对该轮次内 `42688A` 的多个 FIFO 包先换算成物理单位，再按轴求平均 |",
-                "| `42688A_gyro_x/y/z_deg_s` | `42688A` 在该 poll 轮次下的角速度平均值 | 对该轮次内 `42688A` 的多个 FIFO 包先换算成 `deg/s`，再按轴求平均 |",
-                "| `42688A_temp_c` | `42688A` 在该 poll 轮次下的温度平均值 | 对该轮次内 `42688A` 的多个 FIFO 包先换算成 `°C` 后求平均 |",
-                "",
-                "说明:",
-                "- 其它 IMU 如 `42688B`、`45686A`、`45686B` 的字段命名方式与 `42688A` 完全相同，只是前缀替换为对应 IMU 名字。",
-                "- 报告中的噪声、ARW 和 Allan 指标，默认基于“本页指标默认针对”的那颗 IMU 的独立 CSV 数据计算。",
-            ]
-        )
-
-        destination.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        return
+        ),
+        1,
+    )
+    source_size_text = _format_file_size(source.stat().st_size)
 
     lines = [
         "# 数据分析报告",
         "",
-        f"- 源文件: `{source}`",
+        "## 结论先看",
         "",
-        "## 摘要",
+        f"- BIN 文件: `{source.name}`，序号 `{source.stem}`，文件大小 `{source_size_text}`。",
+        (
+            "- 解析阶段已自动剔除整包 `0x7F` 的异常 FIFO 包，不参与 CSV 导出、采样率统计和噪声计算；"
+            + "本次共剔除 "
+            + "，".join(f"`{imu_name}` {int(count)} 包" for imu_name, count in filtered_bad_packets.items())
+            + "。"
+        ) if filtered_bad_packets else "- 解析阶段未检测到需要剔除的整包 `0x7F` 异常 FIFO 包。",
+        *_build_family_competition_summary(rankings),
+        (
+            f"- 按各型号最优样本求 Gyro ARW 三轴均值，42688 为 `{gyro_42688_best:.6f} °/√hr`，"
+            f"45686 为 `{gyro_45686_best:.6f} °/√hr`，"
+            f"{'42688 更好' if 0.0 < gyro_42688_best < gyro_45686_best else '45686 更好' if 0.0 < gyro_45686_best < gyro_42688_best else '两者接近'}。"
+        ),
+        (
+            f"- 按各型号最优样本求 Acc Noise 三轴均值，42688 为 `{accel_42688_best:.6f} µg/√Hz`，"
+            f"45686 为 `{accel_45686_best:.6f} µg/√Hz`，"
+            f"{'42688 更好' if 0.0 < accel_42688_best < accel_45686_best else '45686 更好' if 0.0 < accel_45686_best < accel_42688_best else '两者接近'}。"
+        ),
+        (
+            f"- Allan/ARW 统计阶段统一使用 `x{common_decimation_factor}` 时间序列降采样；"
+            "四颗 IMU 使用相同倍率，因此不会引入型号间比较偏置。"
+        ) if common_decimation_factor > 1 else "- Allan/ARW 统计阶段本次未触发降采样。",
+        "",
+        "### 基础配置与实测采样",
         "",
     ]
+
+    for imu_id in all_imu_ids:
+        sr = per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id))
+        if not sr:
+            continue
+        filtered_bad_packet_count = int(sr.get("filtered_bad_packet_count", 0))
+        lines.append(
+            "- "
+            f"`{sr['imu_name']}`: 配置 `ODR {float(sr['configured_odr_hz']):.1f} Hz / ±{float(sr['accel_range_g']):.0f} g / ±{float(sr['gyro_range_dps']):.0f} dps`，"
+            f"实测包间隔 `{float(sr['packet_period_mean_us']):.3f} us`，"
+            f"实测刷新率 `{float(sr['packet_rate_hz']):.3f} Hz`，"
+            f"采样点数 `{int(sr['sample_count'])}`"
+            f"{f'，已剔除异常包 `{filtered_bad_packet_count}` 个' if filtered_bad_packet_count > 0 else ''}。"
+        )
+
+    lines.extend(
+        [
+        "",
+        "## 噪声指标汇总",
+        "",
+        "| 指标 | 42688_A | 42688_B | 45686_A | 45686_B | 42688 纸面 | 45686 纸面 |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
+
+    for axis in ("x", "y", "z"):
+        row = [f"Gyro {axis.upper()} ARW (°/√hr)"]
+        for imu_id in (1, 2, 3, 4):
+            sr = per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id))
+            row.append(_format_float(float(sr["gyro"][axis]["arw_deg_sqrt_hr"])) if sr else "-")
+        row.append(_format_float(float((per_imu_report.get(1) or per_imu_report.get("1") or {}).get("paper_gyro_arw_deg_sqrt_hr", 0.0))))
+        row.append(_format_float(float((per_imu_report.get(3) or per_imu_report.get("3") or {}).get("paper_gyro_arw_deg_sqrt_hr", 0.0))))
+        lines.append("| " + " | ".join(row) + " |")
+
+    for axis in ("x", "y", "z"):
+        row = [f"Acc {axis.upper()} Noise (µg/√Hz)"]
+        for imu_id in (1, 2, 3, 4):
+            sr = per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id))
+            row.append(_format_float(float(sr["accel"][axis]["noise_density_ug_sqhz"])) if sr else "-")
+        row.append(_format_float(float((per_imu_report.get(1) or per_imu_report.get("1") or {}).get("paper_accel_noise_ug_sqhz", 0.0))))
+        row.append(_format_float(float((per_imu_report.get(3) or per_imu_report.get("3") or {}).get("paper_accel_noise_ug_sqhz", 0.0))))
+        lines.append("| " + " | ".join(row) + " |")
+
+    lines.extend(_generate_arw_charts(per_imu_report, destination))
+    lines.extend(
+        [
+            "## 说明",
+            "",
+            "- Gyro 指标显示为 `°/√hr`，按 Allan deviation 曲线上斜率最接近 `-1/2` 的区段提取。",
+            "- Acc 指标显示为 `µg/√Hz`，由 Allan 白噪声区段估计值换算得到，更贴近数据手册口径。",
+            "- 表中的采样点数、包间隔和刷新率都来自全量逐包数据，不受 Allan/ARW 降采样设置影响。",
+        ]
+    )
+    return lines
+
+
+def _write_markdown_report(destination: Path, source: Path, summary: dict[str, object]) -> None:
+    if summary.get("test") == "arw":
+        destination.write_text("\n".join(_build_arw_markdown_lines(source, summary, destination)) + "\n", encoding="utf-8")
+        return
+
+    lines = ["# 数据分析报告", "", f"- 源文件: `{source}`", "", "## 摘要", ""]
     for key, value in summary.items():
         lines.append(f"- {key}: `{value}`")
     destination.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def analyze_real_imu_bin_file(test_key: str, source: Path, output_dir: Path | None = None) -> tuple[Path, Path, Path, dict[str, str]]:
+def analyze_real_imu_bin_file(
+    test_key: str,
+    source: Path,
+    output_dir: Path | None = None,
+    progress_callback: Callable[[str], None] | None = None,
+) -> tuple[Path, Path, Path, dict[str, object]]:
     source = source.resolve()
     if not source.exists():
         raise FileNotFoundError(source)
 
     if output_dir is None:
-        output_dir = source.parent
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        output_dir = ANALYSIS_OUTPUT_DIRS.get(test_key, TOOL_PROJECT_ROOT / "data") / f"{source.stem}_{timestamp}"
     output_dir = output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -2240,27 +2697,94 @@ def analyze_real_imu_bin_file(test_key: str, source: Path, output_dir: Path | No
 
     legacy_packet_csv_path.unlink(missing_ok=True)
     legacy_summary_csv_path.unlink(missing_ok=True)
-    payload = source.read_bytes()
-    parsed = parse_real_imu_bin(payload)
-    raw_rows = _build_raw_packet_rows(parsed.raw_captures)
-    _write_per_imu_packet_csvs(raw_rows, source, output_dir)
-    csv_path = _write_poll_comparison_csv(raw_rows, source, output_dir)
 
-    raw_capture_by_imu: dict[int, list[RawImuCapture]] = {}
-    for capture in parsed.raw_captures:
-        raw_capture_by_imu.setdefault(capture.imu_id, []).append(capture)
-    primary_imu_id = min(raw_capture_by_imu) if raw_capture_by_imu else 0
-    primary_captures = raw_capture_by_imu.get(primary_imu_id, parsed.raw_captures)
-    frames = parsed.frames if parsed.frames else _build_synthetic_frames_from_raw_captures(primary_captures)
-    summary = analyze_real_imu_frames(test_key, frames, primary_captures)
-    summary["primary_imu_name"] = _imu_name_from_id(primary_imu_id) if primary_imu_id else "unknown"
-    summary["comparison_csv"] = csv_path.name
-    summary["per_imu_csvs"] = ", ".join(
-        f"{source.stem}_{_imu_name_from_id(imu_id)}.csv" for imu_id in sorted(raw_capture_by_imu)
+    progress = ParseProgressReporter(
+        total_bytes=source.stat().st_size,
+        callback=progress_callback,
+        stage="BIN解析",
     )
-    summary["per_imu_report"] = _analyze_arw_per_imu(parsed.raw_captures) if test_key == "arw" else {}
+    progress.log(f"开始解析 BIN: `{source}`")
+
+    per_imu_writer = StreamingPerImuCsvWriter(source, output_dir)
+    poll_writer = StreamingPollComparisonWriter(source, output_dir)
+    packet_state = PacketRowBuilderState(wrap_count_by_imu={}, last_timestamp_by_imu={})
+    raw_capture_imu_ids: set[int] = set()
+    primary_packet_csv_path = csv_path
+    legacy_frames: list[RealImuFrame] = []
+    legacy_raw_captures: list[RawImuCapture] = []
+
+    try:
+        for record_type, record in iter_real_imu_bin_file_records(source, progress):
+            if record_type == "frame":
+                if test_key != "arw":
+                    legacy_frames.append(record)  # type: ignore[arg-type]
+                continue
+
+            capture = record  # type: ignore[assignment]
+            raw_capture_imu_ids.add(capture.imu_id)
+            if test_key != "arw":
+                legacy_raw_captures.append(capture)
+            for row in _iter_capture_packet_rows(capture, packet_state):
+                progress.packet_count += 1
+                per_imu_writer.write_row(row)
+                poll_writer.write_row(row)
+                progress.maybe_report()
+        poll_writer.close()
+        per_imu_writer.close()
+    finally:
+        try:
+            poll_writer.close()
+        except Exception:
+            pass
+        try:
+            per_imu_writer.close()
+        except Exception:
+            pass
+
+    csv_path = poll_writer.destination
+    per_imu_csv_paths = dict(sorted(per_imu_writer.paths.items()))
+    primary_imu_id = min(per_imu_csv_paths) if per_imu_csv_paths else 0
+    if primary_imu_id in per_imu_csv_paths:
+        primary_packet_csv_path = per_imu_csv_paths[primary_imu_id]
+
+    summary: dict[str, object]
+    if test_key == "arw":
+        progress.log("逐包 CSV 已写出，开始基于每个 IMU 的 CSV 统计实际采样率和噪声指标")
+        per_imu_report = _analyze_arw_per_imu_from_csvs(per_imu_csv_paths, progress_callback=progress_callback)
+        filtered_bad_packets = dict(sorted(packet_state.skipped_packets_by_imu.items()))
+        for imu_id, skipped_count in filtered_bad_packets.items():
+            report_item = per_imu_report.get(imu_id)
+            if report_item is not None:
+                report_item["filtered_bad_packet_count"] = skipped_count
+        primary_report = per_imu_report.get(primary_imu_id, {}) if primary_imu_id else {}
+        summary = {
+            "test": test_key,
+            "source": str(source),
+            "comparison_csv": csv_path.name,
+            "per_imu_csvs": ", ".join(path.name for _, path in sorted(per_imu_csv_paths.items())),
+            "per_imu_report": per_imu_report,
+            "filtered_bad_packets": {
+                _imu_name_from_id(imu_id): skipped_count for imu_id, skipped_count in filtered_bad_packets.items()
+            },
+            "primary_imu_name": _imu_name_from_id(primary_imu_id) if primary_imu_id else "unknown",
+            "frames": str(primary_report.get("sample_count", 0)),
+            "duration_s": f"{float(primary_report.get('duration_s', 0.0)):.3f}",
+        }
+    else:
+        primary_captures = [capture for capture in legacy_raw_captures if capture.imu_id == primary_imu_id]
+        if not primary_captures:
+            primary_captures = legacy_raw_captures
+        frames = legacy_frames if legacy_frames else _build_synthetic_frames_from_raw_captures(primary_captures)
+        summary = analyze_real_imu_frames(test_key, frames, primary_captures)
+        summary["primary_imu_name"] = _imu_name_from_id(primary_imu_id) if primary_imu_id else "unknown"
+        summary["comparison_csv"] = csv_path.name
+        summary["per_imu_csvs"] = ", ".join(path.name for _, path in sorted(per_imu_csv_paths.items()))
+        summary["per_imu_report"] = {}
+
+    progress.log("开始生成 Markdown 报告")
     _write_markdown_report(md_path, source, summary)
-    return csv_path, csv_path, md_path, summary
+    progress.log(f"解析完成，输出目录: `{output_dir}`")
+    return csv_path, primary_packet_csv_path, md_path, summary
 
 
 def command_ports(_args: argparse.Namespace) -> int:
