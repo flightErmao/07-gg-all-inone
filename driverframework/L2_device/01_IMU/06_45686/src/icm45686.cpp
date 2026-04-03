@@ -497,27 +497,6 @@ bool ICM45686::configureForPolling() {
   }
 
   /*
-   * [07] FIFO_CONFIG3 (0x21)
-   * 目的: 先关闭 FIFO interface，确保 FIFO 参数修改过程不会在运行中生效。
-   * 字段: FIFO_IF_EN/FIFO_ACCEL_EN/FIFO_GYRO_EN
-   * 最终值: 0x00
-   * 写法: 统一采用 read-modify-write，并只校验当前 mask 覆盖的位段。
-   */
-  if (!updateRegisterBits(kRegFifoConfig3, kFifoConfig3Mask, 0x00U)) {
-    return false;
-  }
-
-  /*
-   * [08] FIFO_CONFIG0 (0x1D)
-   * 目的: 将 FIFO 置为 bypass，进入安全重配状态。
-   * 字段: FIFO_MODE/FIFO_DEPTH
-   * 最终值: 0x07
-   */
-  if (!updateRegisterBits(kRegFifoConfig0, kFifoConfig0Mask, kFifoConfig0Bypass)) {
-    return false;
-  }
-
-  /*
    * [09] ACCEL_CONFIG0 (0x1B)
    * 目的: 配置加速度量程和 ODR。
    * 字段: ACCEL_UI_FS_SEL=16G，ACCEL_ODR=1600Hz
@@ -534,16 +513,6 @@ bool ICM45686::configureForPolling() {
    * 最终值: 0x15
    */
   if (!updateRegisterBits(kRegGyroConfig0, kGyroConfig0Mask, kGyroConfig2000dps1600Hz)) {
-    return false;
-  }
-
-  /*
-   * [15] FIFO_CONFIG3 (0x21)
-   * 目的: 先声明 FIFO 中要装 accel+gyro 两类数据，但先不打开 FIFO_IF_EN。
-   * 字段: FIFO_ACCEL_EN=1，FIFO_GYRO_EN=1，FIFO_IF_EN=0
-   * 最终值: 0x06
-   */
-  if (!updateRegisterBits(kRegFifoConfig3, kFifoConfig3Mask, kFifoConfig3AccelGyroEnable)) {
     return false;
   }
 
