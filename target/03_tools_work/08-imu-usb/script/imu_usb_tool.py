@@ -106,6 +106,7 @@ PAPER_TARGETS = {
 }
 PROGRESS_REPORT_INTERVAL_S = 2.0
 MAX_ANALYSIS_SERIES_POINTS = 120_000
+ARW_REPORT_POLL_PERIOD_S = 0.002
 JLINK_CANDIDATES = [
     Path(r"C:\Program Files\SEGGER\JLink_V844a\JLink.exe"),
     Path(r"C:\Program Files\SEGGER\JLink\JLink.exe"),
@@ -1949,6 +1950,29 @@ def _count_csv_data_rows(csv_path: Path) -> int:
     return max(newline_count - 1, 0)
 
 
+def _collect_poll_comparison_stats(comparison_csv_path: Path) -> dict[str, object]:
+    poll_row_count = 0
+    packet_sum_by_imu = {imu_id: 0 for imu_id in IMU_ID_TO_NAME}
+
+    with comparison_csv_path.open("r", newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            poll_row_count += 1
+            for imu_id, imu_name in IMU_ID_TO_NAME.items():
+                pkt_count_field = f"{imu_name}_pkt_count"
+                packet_sum_by_imu[imu_id] += int(float(row.get(pkt_count_field, "0") or 0))
+
+    avg_packets_per_poll = {
+        imu_id: (packet_sum_by_imu[imu_id] / poll_row_count if poll_row_count > 0 else 0.0)
+        for imu_id in IMU_ID_TO_NAME
+    }
+    return {
+        "poll_row_count": poll_row_count,
+        "poll_total_duration_s": poll_row_count * ARW_REPORT_POLL_PERIOD_S,
+        "avg_packets_per_poll": avg_packets_per_poll,
+    }
+
+
 def _choose_common_decimation_factor(per_imu_csv_paths: dict[int, Path]) -> tuple[int, dict[int, int]]:
     sample_counts = {imu_id: _count_csv_data_rows(path) for imu_id, path in per_imu_csv_paths.items()}
     max_sample_count = max(sample_counts.values(), default=0)
@@ -2427,6 +2451,12 @@ def _paper_rank_position_text(ranked_items: list[dict[str, object]], paper_value
     return f"位于 #{better_count} 与 #{better_count + 1} 之间"
 
 
+def _format_duration_minutes_seconds(duration_s: float) -> str:
+    total_seconds = max(int(round(float(duration_s))), 0)
+    minutes, seconds = divmod(total_seconds, 60)
+    return f"{minutes} 分 {seconds} 秒"
+
+
 def _build_family_competition_summary(rankings: list[dict[str, object]]) -> list[str]:
     family_axes: dict[str, list[str]] = {"42688": [], "45686": [], "tie": []}
     for ranking in rankings:
@@ -2556,7 +2586,7 @@ def _build_arw_markdown_lines(source: Path, summary: dict[str, object], destinat
         if per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id))
     ]
     if not all_imu_ids:
-        return ["# 数据分析报告", "", f"- 源文件: `{source}`", "", "- 未解析到可用于噪声分析的 IMU 数据。"]
+        return ["# 角度随机游走ARW对比结果", "", f"- 源文件: `{source.name}`", "", "- 未解析到可用于噪声分析的 IMU 数据。"]
 
     gyro_42688_best = _family_best_average(rankings, "42688", "gyro")
     gyro_45686_best = _family_best_average(rankings, "45686", "gyro")
@@ -2574,14 +2604,28 @@ def _build_arw_markdown_lines(source: Path, summary: dict[str, object], destinat
         ),
         1,
     )
-    source_size_text = _format_file_size(source.stat().st_size)
+    if source.exists():
+        source_size_text = _format_file_size(source.stat().st_size)
+    else:
+        source_size_text = str(summary.get("source_size_text", "未知"))
+    poll_total_duration_s = float(summary.get("poll_total_duration_s", 0.0) or 0.0)
+    example_imu_id = all_imu_ids[0]
+    example_report = per_imu_report.get(example_imu_id) or per_imu_report.get(str(example_imu_id)) or {}
+    example_imu_name = str(example_report.get("imu_name", _imu_name_from_id(example_imu_id)))
+    example_dt_us = float(example_report.get("packet_period_mean_us", 0.0))
+    example_dt_s = example_dt_us / 1_000_000.0 if example_dt_us > 0.0 else 0.0
 
     lines = [
-        "# 数据分析报告",
+        "# 角度随机游走ARW对比结果",
         "",
         "## 结论先看",
         "",
         f"- BIN 文件: `{source.name}`，序号 `{source.stem}`，文件大小 `{source_size_text}`。",
+        (
+            f"- 本次记录的 poll 总时长: `{_format_duration_minutes_seconds(poll_total_duration_s)}`。"
+            if poll_total_duration_s > 0.0
+            else "- 本次记录的 poll 总时长: `0 分 0 秒`。"
+        ),
         (
             "- 解析阶段已自动剔除整包 `0x7F` 的异常 FIFO 包，不参与 CSV 导出、采样率统计和噪声计算；"
             + "本次共剔除 "
@@ -2618,7 +2662,8 @@ def _build_arw_markdown_lines(source: Path, summary: dict[str, object], destinat
             f"`{sr['imu_name']}`: 配置 `ODR {float(sr['configured_odr_hz']):.1f} Hz / ±{float(sr['accel_range_g']):.0f} g / ±{float(sr['gyro_range_dps']):.0f} dps`，"
             f"实测包间隔 `{float(sr['packet_period_mean_us']):.3f} us`，"
             f"实测刷新率 `{float(sr['packet_rate_hz']):.3f} Hz`，"
-            f"采样点数 `{int(sr['sample_count'])}`"
+            f"采样点数 `{int(sr['sample_count'])}`，"
+            f"平均每 poll 包数 `{float(sr.get('avg_packets_per_poll', 0.0)):.3f}` 包"
             f"{f'，已剔除异常包 `{filtered_bad_packet_count}` 个' if filtered_bad_packet_count > 0 else ''}。"
         )
 
@@ -2658,6 +2703,90 @@ def _build_arw_markdown_lines(source: Path, summary: dict[str, object], destinat
             "- Gyro 指标显示为 `°/√hr`，按 Allan deviation 曲线上斜率最接近 `-1/2` 的区段提取。",
             "- Acc 指标显示为 `µg/√Hz`，由 Allan 白噪声区段估计值换算得到，更贴近数据手册口径。",
             "- 表中的采样点数、包间隔和刷新率都来自全量逐包数据，不受 Allan/ARW 降采样设置影响。",
+            "",
+            "## 指标计算过程",
+            "",
+            f"- 以下以 `{example_imu_name}` 的 `X` 轴为例说明；`Y/Z` 轴和其他 IMU 的处理流程完全一致，只是替换对应 CSV 列名。",
+            f"- 数据来源来自该 IMU 独立 CSV 中的原始列：时间轴使用 `{example_imu_name}_packet_timestamp_continuous`，Gyro X 使用 `{example_imu_name}_gyro_x_deg_s`，Acc X 使用 `{example_imu_name}_accel_x_mps2`。",
+            "- 采样周期不再使用 poll 周期，而是直接对 `*_packet_timestamp_continuous` 做正向差分统计，取均值作为该 IMU 的实际包间隔。",
+            (
+                f"- 以本例为例，实际平均包间隔约为 `{example_dt_us:.3f} us`，即 `dt = {example_dt_s:.9f} s`。"
+                if example_dt_s > 0.0
+                else "- 实际平均包间隔由 `*_packet_timestamp_continuous` 差分均值给出。"
+            ),
+            f"- 若 Allan/ARW 阶段启用了统一降采样 `x{common_decimation_factor}`，则只对噪声计算序列按固定步长抽取；包间隔、刷新率、点数统计仍基于全量 CSV。",
+            "",
+            "### 1. 从 CSV 取原始单轴序列",
+            "",
+            "```text",
+            "timestamp_us[n] = *_packet_timestamp_continuous",
+            "gyro_x[n]      = *_gyro_x_deg_s",
+            "acc_x[n]       = *_accel_x_mps2",
+            "```",
+            "",
+            "- 其中 `timestamp_us[n]` 是解析后连续展开的包时间戳，单位 `us`，用于恢复该 IMU 自身的真实采样节拍。",
+            "- Gyro 序列在 Allan 计算前会按脚本实现转换到 `rad/s` 再参与统计，但提取 ARW 时又按 `deg/s` 口径输出，最终单位为 `°/√hr`。",
+            "",
+            "### 2. 去均值",
+            "",
+            "```text",
+            "x_centered[n] = x[n] - mean(x)",
+            "```",
+            "",
+            "- Allan deviation 关注随机项，因此先去掉直流均值，避免静态偏置把噪声结果抬高。",
+            "",
+            "### 3. 构造 Allan deviation 曲线",
+            "",
+            "对每个 cluster size `m`：",
+            "",
+            "```text",
+            "tau = m * dt",
+            "avg_k = mean(x_centered[k*m : (k+1)*m])",
+            "sigma(tau) = sqrt(0.5 * mean((avg_{k+1} - avg_k)^2))",
+            "```",
+            "",
+            "- 脚本会自动生成一组递增的 `m`，在每个 `tau` 上得到一个 Allan 点 `(tau, sigma)`。",
+            "- 这里的实现对应脚本中的 `_allan_deviation_from_rate(...)`。",
+            "",
+            "### 4. 选择白噪声区段",
+            "",
+            "对于相邻两个 Allan 点 `(tau0, sigma0)`、`(tau1, sigma1)`，计算局部斜率：",
+            "",
+            "```text",
+            "slope = log(sigma1 / sigma0) / log(tau1 / tau0)",
+            "```",
+            "",
+            "- 理想白噪声区在 Allan 图上斜率应接近 `-1/2`。",
+            "- 脚本会遍历所有相邻点，选取 `abs(slope + 0.5)` 最小的那一段作为指标提取点。",
+            "",
+            "### 5. Gyro X 的 ARW 计算",
+            "",
+            "在选中的白噪声点 `(tau0, sigma0_deg_s)` 上，脚本按下面公式计算：",
+            "",
+            "```text",
+            "ARW_deg_sqrt_hr = sigma0_deg_s * sqrt(tau0) * 60",
+            "```",
+            "",
+            "- 其中 `sigma0_deg_s` 的单位是 `deg/s`，乘 `sqrt(s)` 后得到 `deg/sqrt(s)`，再乘 `60` 换算为 `deg/sqrt(hr)`。",
+            "- 这正对应脚本 `_estimate_arw_metrics(...)` 中的 `adev0_deg_s * sqrt(tau0_s) * 60.0`。",
+            "",
+            "### 6. Acc X 的噪声密度计算",
+            "",
+            "脚本先在白噪声点上取随机游走量：",
+            "",
+            "```text",
+            "random_walk = sigma0_mps2 * sqrt(tau0) * 60",
+            "noise_density_mps2_sqrtHz = random_walk / 60",
+            "noise_density_ug_sqrtHz = noise_density_mps2_sqrtHz / 9.80665 * 1e6",
+            "```",
+            "",
+            "- 合并后可以理解为先得到 `m/s^2/sqrt(Hz)`，再按 `1 g = 9.80665 m/s^2` 转成 `µg/√Hz`。",
+            "- 这对应脚本 `_estimate_allan_white_noise_metrics(...)` 中的 `noise_density_ug_sqhz`。",
+            "",
+            "### 7. 为什么同一套流程可用于所有轴",
+            "",
+            "- 各轴唯一变化的只是输入列名，例如 `gyro_y_deg_s`、`gyro_z_deg_s`、`accel_y_mps2`、`accel_z_mps2`。",
+            "- 去均值、Allan deviation、白噪声区筛选和单位换算完全一致，因此说明一个轴即可覆盖全部轴的计算过程。",
         ]
     )
     return lines
@@ -2751,6 +2880,13 @@ def analyze_real_imu_bin_file(
     if test_key == "arw":
         progress.log("逐包 CSV 已写出，开始基于每个 IMU 的 CSV 统计实际采样率和噪声指标")
         per_imu_report = _analyze_arw_per_imu_from_csvs(per_imu_csv_paths, progress_callback=progress_callback)
+        poll_stats = _collect_poll_comparison_stats(csv_path)
+        avg_packets_per_poll = poll_stats.get("avg_packets_per_poll", {})
+        if isinstance(avg_packets_per_poll, dict):
+            for imu_id, average_value in avg_packets_per_poll.items():
+                report_item = per_imu_report.get(imu_id)
+                if report_item is not None:
+                    report_item["avg_packets_per_poll"] = float(average_value)
         filtered_bad_packets = dict(sorted(packet_state.skipped_packets_by_imu.items()))
         for imu_id, skipped_count in filtered_bad_packets.items():
             report_item = per_imu_report.get(imu_id)
@@ -2763,9 +2899,12 @@ def analyze_real_imu_bin_file(
             "comparison_csv": csv_path.name,
             "per_imu_csvs": ", ".join(path.name for _, path in sorted(per_imu_csv_paths.items())),
             "per_imu_report": per_imu_report,
+            "source_size_text": _format_file_size(source.stat().st_size),
             "filtered_bad_packets": {
                 _imu_name_from_id(imu_id): skipped_count for imu_id, skipped_count in filtered_bad_packets.items()
             },
+            "poll_row_count": int(poll_stats.get("poll_row_count", 0)),
+            "poll_total_duration_s": float(poll_stats.get("poll_total_duration_s", 0.0)),
             "primary_imu_name": _imu_name_from_id(primary_imu_id) if primary_imu_id else "unknown",
             "frames": str(primary_report.get("sample_count", 0)),
             "duration_s": f"{float(primary_report.get('duration_s', 0.0)):.3f}",

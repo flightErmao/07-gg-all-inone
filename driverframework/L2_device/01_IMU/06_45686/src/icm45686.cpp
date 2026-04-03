@@ -15,6 +15,20 @@ void rt_hw_us_delay(rt_uint32_t us);
 #endif
 #include <ulog.h>
 
+#ifndef ICM45686_ENABLE_LOG
+#define ICM45686_ENABLE_LOG 0
+#endif
+
+#if ICM45686_ENABLE_LOG
+#define ICM45686_LOG_E(...) LOG_E(__VA_ARGS__)
+#define ICM45686_LOG_W(...) LOG_W(__VA_ARGS__)
+#define ICM45686_LOG_I(...) LOG_I(__VA_ARGS__)
+#else
+#define ICM45686_LOG_E(...) ((void)0)
+#define ICM45686_LOG_W(...) ((void)0)
+#define ICM45686_LOG_I(...) ((void)0)
+#endif
+
 namespace drvf {
 namespace {
 
@@ -46,13 +60,21 @@ static constexpr uint8_t kAccelConfig16G1600Hz = 0x15U;
 static constexpr uint8_t kGyroConfig2000dps1600Hz = 0x15U;
 static constexpr uint8_t kFifoConfig0Stream = 0x47U;
 static constexpr uint8_t kFifoConfig0Bypass = 0x07U;
+static constexpr uint8_t kAccelConfig0Mask = 0xFFU;
+static constexpr uint8_t kGyroConfig0Mask = 0xFFU;
+static constexpr uint8_t kFifoConfig0Mask = 0x47U;
 static constexpr uint8_t kFifoWatermarkLow = 0x01U;
 static constexpr uint8_t kFifoWatermarkHigh = 0x00;
+static constexpr uint8_t kFifoConfig10Mask = 0xFFU;
+static constexpr uint8_t kFifoConfig11Mask = 0xFFU;
 static constexpr uint8_t kFifoConfig2WmEqOrGt = 0x08U;
 static constexpr uint8_t kFifoConfig2Flush = 0x88U;
+static constexpr uint8_t kFifoConfig2Mask = 0x88U;
 static constexpr uint8_t kFifoConfig3AccelGyroEnable = 0x06U;
 static constexpr uint8_t kFifoConfig3AccelGyroFifoIf = 0x07U;
+static constexpr uint8_t kFifoConfig3Mask = 0x07U;
 static constexpr uint8_t kFifoConfig4TimestampEnable = 0x02U;
+static constexpr uint8_t kFifoConfig4Mask = 0x02U;
 static constexpr uint8_t kTmstWomConfigResolutionMask = 0x20U;
 static constexpr uint8_t kTmstWomConfigDeltaMask = 0x40U;
 static constexpr uint8_t kTmstWomConfigTimestampMask = kTmstWomConfigResolutionMask | kTmstWomConfigDeltaMask;
@@ -62,11 +84,14 @@ static constexpr uint8_t kSmcControl0TimestampEnable = 0x03U;
 static constexpr uint8_t kSregCtrlEndianMask = 0x02U;
 static constexpr uint8_t kSregCtrlLittleEndian = 0x00U;
 static constexpr uint8_t kPwrMgmt0AccelGyroLn = 0x0F;
+static constexpr uint8_t kPwrMgmt0Mask = 0x0FU;
 static constexpr uint16_t kPacketSize16 = 16;
 static constexpr int kProbeRetryCount = 5;
 static constexpr int kPowerUpDelayMs = 80;
 static constexpr uint8_t kFifoHeader16Value = 0x68U;
 static volatile uint32_t g_icm45686_packet_parse_mismatch_count = 0;
+static volatile uint32_t g_icm45686_fatal_fifo_error_count = 0;
+static volatile int g_icm45686_fatal_fifo_error_id = 0;
 
 static void DelayMs(rt_uint32_t ms) { rt_thread_mdelay(ms); }
 static void DelayUs(rt_uint32_t us) {
@@ -104,6 +129,29 @@ static inline void StoreLe16U(uint8_t *dst, uint16_t value) {
   dst[1] = static_cast<uint8_t>((value >> 8) & 0xFF);
 }
 
+static void BuildHexPreview(const uint8_t *buf, uint16_t len, char *out, size_t out_len) {
+  uint16_t index = 0;
+  size_t used = 0;
+
+  if (out == nullptr || out_len == 0U) {
+    return;
+  }
+
+  out[0] = '\0';
+  if (buf == nullptr || len == 0U) {
+    return;
+  }
+
+  while (index < len && used + 4U < out_len) {
+    const int written = rt_snprintf(&out[used], out_len - used, "%02X%s", buf[index], (index + 1U < len) ? " " : "");
+    if (written <= 0) {
+      break;
+    }
+    used += static_cast<size_t>(written);
+    index++;
+  }
+}
+
 static bool IsValidFifoPacket16(const uint8_t *packet, uint16_t len) {
   if (packet == nullptr || len < kPacketSize16) {
     return false;
@@ -136,6 +184,12 @@ static uint32_t CalculateValidFifoLen16(const uint8_t *buf, uint32_t buf_len, ui
 
 }  // namespace
 
+extern "C" int icm45686_take_fatal_fifo_error_id(void) {
+  const int fatal_id = g_icm45686_fatal_fifo_error_id;
+  g_icm45686_fatal_fifo_error_id = 0;
+  return fatal_id;
+}
+
 ICM45686::ICM45686(int id, int cs, const ICM45686HwConfig &config)
     : id_(id), cs_(cs), spi_inited_(false), configured_(false), last_whoami_(0), active_spi_mode_(kSpiMode), config_(config) {
   rt_memset(&ref_device_, 0, sizeof(ref_device_));
@@ -149,12 +203,12 @@ bool ICM45686::initSpi() {
   }
 
   if (!spi_.init(config_.spi_bus_name, config_.spi_slave_name, config_.spi_cs_pin)) {
-    LOG_E("id[%d]: spi init failed bus=%s slave=%s cs=%s", id_, config_.spi_bus_name, config_.spi_slave_name, config_.spi_cs_pin);
+    ICM45686_LOG_E("id[%d]: spi init failed bus=%s slave=%s cs=%s", id_, config_.spi_bus_name, config_.spi_slave_name, config_.spi_cs_pin);
     return false;
   }
 
   if (!spi_.configure(kSpiMode, config_.spi_max_hz)) {
-    LOG_E("id[%d]: spi configure failed hz=%u", id_, static_cast<unsigned>(config_.spi_max_hz));
+    ICM45686_LOG_E("id[%d]: spi configure failed hz=%u", id_, static_cast<unsigned>(config_.spi_max_hz));
     return false;
   }
 
@@ -236,7 +290,7 @@ bool ICM45686::writeRegisterChecked(uint8_t reg, uint8_t value, uint8_t expected
   }
 
   if ((readback & expected_mask) != (value & expected_mask)) {
-    LOG_W("id[%d]: reg 0x%02X write 0x%02X verify 0x%02X mask 0x%02X", id_, reg, value, readback, expected_mask);
+    ICM45686_LOG_W("id[%d]: reg 0x%02X write 0x%02X verify 0x%02X mask 0x%02X", id_, reg, value, readback, expected_mask);
     return false;
   }
 
@@ -254,8 +308,12 @@ bool ICM45686::updateRegisterBits(uint8_t reg, uint8_t mask, uint8_t value) {
     return false;
   }
 
+  // DREG bit-field write path:
+  // 1) read current register value
+  // 2) only update masked bits
+  // 3) write back and verify the masked field by readback
   current = static_cast<uint8_t>((current & static_cast<uint8_t>(~mask)) | (value & mask));
-  return writeRegister(reg, current);
+  return writeRegisterChecked(reg, current, mask);
 }
 
 bool ICM45686::readMreg(uint16_t reg, uint8_t *buf, uint16_t len) {
@@ -324,7 +382,7 @@ bool ICM45686::writeMregByteChecked(uint16_t reg, uint8_t value, uint8_t expecte
   }
 
   if ((readback & expected_mask) != (value & expected_mask)) {
-    LOG_W("id[%d]: mreg 0x%04X write 0x%02X verify 0x%02X mask 0x%02X", id_, reg, value, readback, expected_mask);
+    ICM45686_LOG_W("id[%d]: mreg 0x%04X write 0x%02X verify 0x%02X mask 0x%02X", id_, reg, value, readback, expected_mask);
     return false;
   }
 
@@ -342,6 +400,7 @@ bool ICM45686::updateMregBits(uint16_t reg, uint8_t mask, uint8_t value) {
     return false;
   }
 
+  // MREG bit-field write path follows the same read-modify-write + masked verify rule.
   current = static_cast<uint8_t>((current & static_cast<uint8_t>(~mask)) | (value & mask));
   return writeMregByteChecked(reg, current, mask);
 }
@@ -349,11 +408,19 @@ bool ICM45686::updateMregBits(uint16_t reg, uint8_t mask, uint8_t value) {
 bool ICM45686::readFifoByteCount(uint16_t *byte_count) {
   uint8_t raw_count[2] = {0};
 
-  if (byte_count == nullptr) {
+  if (byte_count == nullptr || !initSpi()) {
     return false;
   }
 
-  if (spi_.readMultiReg8Continuous(kRegFifoCount0, raw_count, sizeof(raw_count)) != RT_EOK) {
+  /*
+   * Follow the official reference-driver sequence from inv_imu_get_frame_count():
+   * read FIFO_COUNT twice and use the second value per AN-000364 (2.2).
+   * Current FIFO/data path is little-endian, so decode as LE16 frame count.
+   */
+  if (!readRegisters(kRegFifoCount0, raw_count, sizeof(raw_count))) {
+    return false;
+  }
+  if (!readRegisters(kRegFifoCount0, raw_count, sizeof(raw_count))) {
     return false;
   }
 
@@ -370,11 +437,11 @@ bool ICM45686::readFifoData(uint8_t *buf, uint16_t len) {
 }
 
 bool ICM45686::flushFifo() {
-  if (!writeRegister(kRegFifoConfig2, kFifoConfig2Flush)) {
+  if (!updateRegisterBits(kRegFifoConfig2, kFifoConfig2Mask, kFifoConfig2Flush)) {
     return false;
   }
   DelayMs(2);
-  return writeRegister(kRegFifoConfig2, kFifoConfig2WmEqOrGt);
+  return updateRegisterBits(kRegFifoConfig2, kFifoConfig2Mask, kFifoConfig2WmEqOrGt);
 }
 
 void ICM45686::logKeyRegisters(const char *stage) {
@@ -394,11 +461,11 @@ void ICM45686::logKeyRegisters(const char *stage) {
       !readRegister(kRegAccelConfig0, &acc0) || !readRegister(kRegGyroConfig0, &gyr0) || !readRegister(kRegFifoConfig0, &fifo0) ||
       !readRegister(kRegFifoConfig10, &fifo1_l) || !readRegister(kRegFifoConfig11, &fifo1_h) ||
       !readRegisters(kRegFifoConfig2, fifo234, sizeof(fifo234)) || !readRegister(kRegTmstWomConfig, &tmst_wom)) {
-    LOG_W("id[%d]: %s readback failed", id_, stage ? stage : "regdump");
+    ICM45686_LOG_W("id[%d]: %s readback failed", id_, stage ? stage : "regdump");
     return;
   }
 
-  LOG_I(
+  ICM45686_LOG_I(
       "id[%d]: %s PWR=0x%02X FIFO_CNT=[0x%02X 0x%02X] ACC0=0x%02X GYR0=0x%02X FIFO0=0x%02X FIFO1L=0x%02X FIFO1H=0x%02X",
       id_,
       stage ? stage : "regdump",
@@ -411,7 +478,7 @@ void ICM45686::logKeyRegisters(const char *stage) {
       fifo1_l,
       fifo1_h);
 
-  LOG_I("id[%d]: %s FIFO2=0x%02X FIFO3=0x%02X FIFO4=0x%02X TMST_WOM=0x%02X",
+  ICM45686_LOG_I("id[%d]: %s FIFO2=0x%02X FIFO3=0x%02X FIFO4=0x%02X TMST_WOM=0x%02X",
         id_,
         stage ? stage : "regdump",
         fifo234[0],
@@ -419,101 +486,14 @@ void ICM45686::logKeyRegisters(const char *stage) {
         fifo234[2],
         tmst_wom);
   if (readMreg(kRegSmcControl0, &smc0, 1U) && readMreg(kRegSregCtrl, &sreg, 1U)) {
-    LOG_I("id[%d]: %s SMC0=0x%02X SREG=0x%02X", id_, stage ? stage : "regdump", smc0, sreg);
+    ICM45686_LOG_I("id[%d]: %s SMC0=0x%02X SREG=0x%02X", id_, stage ? stage : "regdump", smc0, sreg);
   }
 }
 
 bool ICM45686::configureForPolling() {
-  uint8_t who_am_i = 0;
 
   if (configured_) {
     return true;
-  }
-
-  /*
-   * [00] SPI Host Mode
-   * 目的: 在真正写配置前，先切回探测成功时使用的 SPI mode，避免 reset 后 host 侧仍停留在错误 CPOL/CPHA。
-   * 字段: RT-Thread SPI host config
-   * 最终值: probe 成功时记录的 mode
-   */
-  if (!spi_.configure(active_spi_mode_, config_.spi_max_hz)) {
-    return false;
-  }
-
-  LOG_I("id[%d]: cfg_path=v2_no_intf_ovrd spi_mode=0x%X", id_, active_spi_mode_);
-
-  /*
-   * [01] INTF_CONFIG1_OVRD (0x2D)
-   * 目的: 原本计划强制 4-wire SPI。
-   * 当前板上实测: 写 0x0C 后回读始终为 0x00，会导致初始化过早失败。
-   * 处理: 先沿用 probe 成功时的 SPI mode，不在主路径强制改该寄存器。
-   */
-
-  /*
-   * [02] REG_MISC2 (0x7F)
-   * 当前板上临时跳过 soft reset。
-   * 原因: 实测 soft reset 之后，后续 DREG 写入无法稳定生效。
-   * 处理: 直接从 probe 成功后的默认状态继续配置，先把 FIFO 主链路救通。
-   */
-  configured_ = false;
-  who_am_i = last_whoami_;
-
-  /*
-   * [03] INTF_CONFIG1_OVRD (0x2D)
-   * 同上，暂不在 reset 后重写该寄存器，避免把初始化卡死在 0x2D。
-   */
-
-  /*
-   * [04] SREG_CTRL (MREG 0xA267)
-   * 目的: 指定 Sensor Register/FIFO 数据采用 little-endian，和当前上位机及解析代码保持一致。
-   * 字段: SREG_DATA_ENDIAN_SEL
-   * 最终值: 保留其它位，仅将 bit[1] 配置为 0，对应 little-endian
-   */
-  /* 暂时跳过 MREG 端序配置，先保证基础 FIFO 链路稳定。 */
-
-  /*
-   * [05] SMC_CONTROL_0 (MREG 0xA258)
-   * 目的: 使能 timestamp 功能，让 16-byte FIFO 包尾部的 2 字节时间戳有效。
-   * 字段: TMST_EN
-   * 最终值: 保留其它位，仅将 bit[1:0] 配置为 0x03
-   */
-  /*
-   * [05] SMC_CONTROL_0 (MREG 0xA258)
-   * 目的: 只打开 TMST_EN，让 FIFO 16-byte 包尾部的 timestamp 有效。
-   * 字段: TMST_EN(bit0)
-   * 最终值: 保留其它位，仅将 bit0 置 1
-   */
-  if (!updateMregBits(kRegSmcControl0, 0x01U, 0x01U)) {
-    return false;
-  }
-
-  /*
-   * [06] TMST_WOM_CONFIG (0x23)
-   * 目的: 尝试将 FIFO timestamp 固定为“绝对时间戳 + 1 us 分辨率”。
-   * 字段: TMST_RESOL(bit5)=0, TMST_DELTA_EN(bit6)=0
-   * 当前板上实测: bit5 会稳定读回 1，芯片仍工作在约 16 us/tick。
-   * 处理: 这里改成 best-effort，不再因为 1 us 分辨率写不进去而让整条 FIFO 链路初始化失败。
-   */
-  {
-    uint8_t tmst_wom_config = 0;
-    uint8_t tmst_wom_readback = 0;
-
-    if (!readRegister(kRegTmstWomConfig, &tmst_wom_config)) {
-      return false;
-    }
-
-    tmst_wom_config = static_cast<uint8_t>(tmst_wom_config & static_cast<uint8_t>(~kTmstWomConfigTimestampMask));
-    tmst_wom_config = static_cast<uint8_t>(tmst_wom_config | kTmstWomConfig1usResolution);
-    if (!writeRegister(kRegTmstWomConfig, tmst_wom_config)) {
-      return false;
-    }
-    DelayUs(50U);
-    if (!readRegister(kRegTmstWomConfig, &tmst_wom_readback)) {
-      return false;
-    }
-    if ((tmst_wom_readback & kTmstWomConfigTimestampMask) != (tmst_wom_config & kTmstWomConfigTimestampMask)) {
-      LOG_W("id[%d]: TMST_WOM_CONFIG keeps 0x%02X, timestamp raw tick stays sensor-default", id_, tmst_wom_readback);
-    }
   }
 
   /*
@@ -521,8 +501,9 @@ bool ICM45686::configureForPolling() {
    * 目的: 先关闭 FIFO interface，确保 FIFO 参数修改过程不会在运行中生效。
    * 字段: FIFO_IF_EN/FIFO_ACCEL_EN/FIFO_GYRO_EN
    * 最终值: 0x00
+   * 写法: 统一采用 read-modify-write，并只校验当前 mask 覆盖的位段。
    */
-  if (!writeRegisterChecked(kRegFifoConfig3, 0x00, 0x07U)) {
+  if (!updateRegisterBits(kRegFifoConfig3, kFifoConfig3Mask, 0x00U)) {
     return false;
   }
 
@@ -532,7 +513,7 @@ bool ICM45686::configureForPolling() {
    * 字段: FIFO_MODE/FIFO_DEPTH
    * 最终值: 0x07
    */
-  if (!writeRegisterChecked(kRegFifoConfig0, kFifoConfig0Bypass)) {
+  if (!updateRegisterBits(kRegFifoConfig0, kFifoConfig0Mask, kFifoConfig0Bypass)) {
     return false;
   }
 
@@ -542,7 +523,7 @@ bool ICM45686::configureForPolling() {
    * 字段: ACCEL_UI_FS_SEL=16G，ACCEL_ODR=1600Hz
    * 最终值: 0x15
    */
-  if (!writeRegisterChecked(kRegAccelConfig0, kAccelConfig16G1600Hz)) {
+  if (!updateRegisterBits(kRegAccelConfig0, kAccelConfig0Mask, kAccelConfig16G1600Hz)) {
     return false;
   }
 
@@ -552,44 +533,7 @@ bool ICM45686::configureForPolling() {
    * 字段: GYRO_UI_FS_SEL=2000dps，GYRO_ODR=1600Hz
    * 最终值: 0x15
    */
-  if (!writeRegisterChecked(kRegGyroConfig0, kGyroConfig2000dps1600Hz)) {
-    return false;
-  }
-
-  /*
-   * [11] FIFO_CONFIG4 (0x22)
-   * 目的: 打开 FIFO 里的 timestamp/fsync 扩展尾字段，使双 sensor 包扩展成 16-byte。
-   * 字段: FIFO_TMST_FSYNC_EN
-   * 最终值: 0x02
-   */
-  if (!writeRegisterChecked(kRegFifoConfig4, kFifoConfig4TimestampEnable, 0x02U)) {
-    return false;
-  }
-
-  /*
-   * [12] FIFO_CONFIG1_0 (0x1E)
-   * 目的: 设置 FIFO watermark 低字节。
-   * 字段: FIFO_WM_TH[7:0]
-   * 最终值: 0x01
-   */
-  if (!writeRegisterChecked(kRegFifoConfig10, kFifoWatermarkLow) || !writeRegisterChecked(kRegFifoConfig11, kFifoWatermarkHigh)) {
-    return false;
-  }
-
-  /*
-   * [13] FIFO_CONFIG1_1 (0x1F)
-   * 目的: 设置 FIFO watermark 高字节；当前 watermark=1 frame。
-   * 字段: FIFO_WM_TH[15:8]
-   * 最终值: 0x00
-   */
-
-  /*
-   * [14] FIFO_CONFIG2 (0x20)
-   * 目的: 设定 watermark 触发条件为 >= threshold，并保持 flush 位清零。
-   * 字段: FIFO_WR_WM_GT_TH / FIFO_FLUSH
-   * 最终值: 0x08
-   */
-  if (!writeRegisterChecked(kRegFifoConfig2, kFifoConfig2WmEqOrGt, 0x88U)) {
+  if (!updateRegisterBits(kRegGyroConfig0, kGyroConfig0Mask, kGyroConfig2000dps1600Hz)) {
     return false;
   }
 
@@ -599,7 +543,7 @@ bool ICM45686::configureForPolling() {
    * 字段: FIFO_ACCEL_EN=1，FIFO_GYRO_EN=1，FIFO_IF_EN=0
    * 最终值: 0x06
    */
-  if (!writeRegisterChecked(kRegFifoConfig3, kFifoConfig3AccelGyroEnable, 0x07U)) {
+  if (!updateRegisterBits(kRegFifoConfig3, kFifoConfig3Mask, kFifoConfig3AccelGyroEnable)) {
     return false;
   }
 
@@ -609,7 +553,7 @@ bool ICM45686::configureForPolling() {
    * 字段: ACCEL_MODE=LN，GYRO_MODE=LN
    * 最终值: 0x0F
    */
-  if (!writeRegisterChecked(kRegPwrMgmt0, kPwrMgmt0AccelGyroLn, 0x0FU)) {
+  if (!updateRegisterBits(kRegPwrMgmt0, kPwrMgmt0Mask, kPwrMgmt0AccelGyroLn)) {
     return false;
   }
   DelayMs(kPowerUpDelayMs);
@@ -620,7 +564,7 @@ bool ICM45686::configureForPolling() {
    * 字段: FIFO_MODE=STREAM，FIFO_DEPTH 维持当前配置
    * 最终值: 0x47
    */
-  if (!writeRegisterChecked(kRegFifoConfig0, kFifoConfig0Stream)) {
+  if (!updateRegisterBits(kRegFifoConfig0, kFifoConfig0Mask, kFifoConfig0Stream)) {
     return false;
   }
 
@@ -630,36 +574,11 @@ bool ICM45686::configureForPolling() {
    * 字段: FIFO_ACCEL_EN=1，FIFO_GYRO_EN=1，FIFO_IF_EN=1
    * 最终值: 0x07
    */
-  if (!writeRegisterChecked(kRegFifoConfig3, kFifoConfig3AccelGyroFifoIf, 0x07U)) {
+  if (!updateRegisterBits(kRegFifoConfig3, kFifoConfig3Mask, kFifoConfig3AccelGyroFifoIf)) {
     return false;
   }
 
-  /*
-   * [19] FIFO_CONFIG2 (0x20)
-   * 目的: 触发一次 FIFO flush，清掉切换配置过程中的旧数据，再恢复 watermark 模式。
-   * 字段: FIFO_FLUSH
-   * 最终值: 先写 0x88，再写回 0x08
-   */
-  if (!flushFifo()) {
-    return false;
-  }
-
-  /*
-   * [20] WHO_AM_I (0x72)
-   * 目的: 配置完成后做回读校验，确认器件仍在线且 SPI 通信正常。
-   * 字段: 整寄存器只读
-   * 期望值: 0xE9
-   */
-  if (!readRegister(config_.whoami_reg, &who_am_i) || who_am_i != config_.whoami_expected) {
-    last_whoami_ = who_am_i;
-    LOG_W("id[%d]: cfg verify whoami=0x%02X", id_, who_am_i);
-    configured_ = false;
-    return false;
-  }
-
-  logKeyRegisters("cfg");
   configured_ = true;
-  last_whoami_ = who_am_i;
   return true;
 }
 
@@ -701,17 +620,17 @@ int ICM45686::DebugInit() {
   DelayMs(3);
 
   if (!probe()) {
-    LOG_W("id[%d]: whoami mismatch read=0x%02X expected=0x%02X", id_, last_whoami_, config_.whoami_expected);
+    ICM45686_LOG_W("id[%d]: whoami mismatch read=0x%02X expected=0x%02X", id_, last_whoami_, config_.whoami_expected);
     return -2;
   }
 
   if (!configureForPolling()) {
-    LOG_E("id[%d]: configure for polling failed", id_);
+    ICM45686_LOG_E("id[%d]: configure for polling failed", id_);
     return -3;
   }
 
   logKeyRegisters("debug_init");
-  LOG_I("id[%d]: probe ok whoami=0x%02X", id_, last_whoami_);
+  ICM45686_LOG_I("id[%d]: probe ok whoami=0x%02X", id_, last_whoami_);
   return 0;
 }
 
@@ -735,6 +654,8 @@ bool ICM45686::ReadRaw(IMURawData &data) {
   uint16_t packet_count = 0;
   uint32_t valid_buf_len = 0;
   int count_retry = 0;
+  char preview0[3 * 16] = {0};
+  char preview1[3 * 16] = {0};
 
   data.timestamp_us = GetTimeUs();
   data.packet_size = kPacketSize16;
@@ -782,6 +703,31 @@ bool ICM45686::ReadRaw(IMURawData &data) {
 
   valid_buf_len = CalculateValidFifoLen16(data.fifo_data, bytes_to_read, &packet_count);
   if (valid_buf_len == 0U || packet_count == 0U) {
+    const uint8_t invalid_header = (valid_buf_len < bytes_to_read) ? data.fifo_data[valid_buf_len] : 0xFFU;
+    const uint16_t preview_len0 = (bytes_to_read > 16U) ? 16U : bytes_to_read;
+    const uint16_t preview_len1 = (bytes_to_read > 16U) ? ((bytes_to_read - 16U) > 16U ? 16U : (bytes_to_read - 16U)) : 0U;
+
+    BuildHexPreview(data.fifo_data, preview_len0, preview0, sizeof(preview0));
+    if (preview_len1 > 0U) {
+      BuildHexPreview(&data.fifo_data[16], preview_len1, preview1, sizeof(preview1));
+    }
+
+    ++g_icm45686_fatal_fifo_error_count;
+    g_icm45686_fatal_fifo_error_id = id_;
+    LOG_E("id[%d]: fatal_fifo_parse #%lu fifo_frames=%u bytes_to_read=%u valid_buf_len=%lu packet_cnt=%u invalid_offset=%lu invalid_header=0x%02X expected_header=0x%02X",
+          id_,
+          (unsigned long)g_icm45686_fatal_fifo_error_count,
+          fifo_frame_count,
+          bytes_to_read,
+          (unsigned long)valid_buf_len,
+          packet_count,
+          (unsigned long)valid_buf_len,
+          invalid_header,
+          kFifoHeader16Value);
+    LOG_E("id[%d]: fifo_preview[0:16] %s", id_, preview0[0] != '\0' ? preview0 : "<empty>");
+    if (preview1[0] != '\0') {
+      LOG_E("id[%d]: fifo_preview[16:32] %s", id_, preview1);
+    }
     return false;
   }
 

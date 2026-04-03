@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="520" viewBox="0 0 1500 520">
+  <rect width="1500" height="520" fill="#171717"/>
+
+  <text x="34" y="42" fill="#f2f2f2" font-family="Consolas, 'Courier New', monospace" font-size="30">ICM45686 首包非 0x68 异常截图说明</text>
+  <text x="34" y="78" fill="#d0d0d0" font-family="Consolas, 'Courier New', monospace" font-size="20">根据实际逻辑分析截图内容整理：前导异常段中可见被截断包尾部时间戳，后续重新出现合法包头 0x68</text>
+
+  <g font-family="Consolas, 'Courier New', monospace" font-size="18" fill="#d8d8d8">
+    <text x="42" y="126">+289786254 us</text>
+    <text x="420" y="126">+289786260 us</text>
+    <text x="800" y="126">+289786266 us</text>
+    <text x="1180" y="126">+289786272 us</text>
+  </g>
+
+  <g stroke="#d8d8d8" stroke-width="2">
+    <line x1="34" y1="150" x2="1460" y2="150"/>
+    <line x1="34" y1="160" x2="34" y2="180"/>
+    <line x1="94" y1="160" x2="94" y2="180"/>
+    <line x1="154" y1="160" x2="154" y2="180"/>
+    <line x1="214" y1="160" x2="214" y2="180"/>
+    <line x1="274" y1="160" x2="274" y2="180"/>
+    <line x1="334" y1="160" x2="334" y2="180"/>
+    <line x1="394" y1="160" x2="394" y2="180"/>
+    <line x1="454" y1="160" x2="454" y2="180"/>
+    <line x1="514" y1="160" x2="514" y2="180"/>
+    <line x1="574" y1="160" x2="574" y2="180"/>
+    <line x1="634" y1="160" x2="634" y2="180"/>
+    <line x1="694" y1="160" x2="694" y2="180"/>
+    <line x1="754" y1="160" x2="754" y2="180"/>
+    <line x1="814" y1="160" x2="814" y2="180"/>
+    <line x1="874" y1="160" x2="874" y2="180"/>
+    <line x1="934" y1="160" x2="934" y2="180"/>
+    <line x1="994" y1="160" x2="994" y2="180"/>
+    <line x1="1054" y1="160" x2="1054" y2="180"/>
+    <line x1="1114" y1="160" x2="1114" y2="180"/>
+    <line x1="1174" y1="160" x2="1174" y2="180"/>
+    <line x1="1234" y1="160" x2="1234" y2="180"/>
+    <line x1="1294" y1="160" x2="1294" y2="180"/>
+    <line x1="1354" y1="160" x2="1354" y2="180"/>
+    <line x1="1414" y1="160" x2="1414" y2="180"/>
+  </g>
+
+  <text x="34" y="214" fill="#d8d8d8" font-family="Consolas, 'Courier New', monospace" font-size="20">SPI upper line</text>
+  <text x="34" y="262" fill="#d8d8d8" font-family="Consolas, 'Courier New', monospace" font-size="20">SPI lower line</text>
+
+  <g font-family="Consolas, 'Courier New', monospace" font-size="22" text-anchor="middle">
+    <rect x="136" y="184" width="52" height="34" rx="6" fill="#7fe35d"/><text x="162" y="207" fill="#111">94</text>
+    <rect x="196" y="184" width="52" height="34" rx="6" fill="#7fe35d"/><text x="222" y="207" fill="#111">FF</text>
+    <rect x="256" y="184" width="52" height="34" rx="6" fill="#7fe35d"/><text x="282" y="207" fill="#111">FF</text>
+    <rect x="316" y="184" width="52" height="34" rx="6" fill="#7fe35d"/><text x="342" y="207" fill="#111">FF</text>
+    <rect x="376" y="184" width="52" height="34" rx="6" fill="#7fe35d"/><text x="402" y="207" fill="#111">FF</text>
+    <rect x="436" y="184" width="52" height="34" rx="6" fill="#7fe35d"/><text x="462" y="207" fill="#111">FF</text>
+    <rect x="496" y="184" width="52" height="34" rx="6" fill="#7fe35d"/><text x="522" y="207" fill="#111">FF</text>
+    <rect x="556" y="184" width="52" height="34" rx="6" fill="#7fe35d"/><text x="582" y="207" fill="#111">FF</text>
+    <rect x="616" y="184" width="52" height="34" rx="6" fill="#7fe35d"/><text x="642" y="207" fill="#111">FF</text>
+    <rect x="676" y="184" width="52" height="34" rx="6" fill="#7fe35d"/><text x="702" y="207" fill="#111">FF</text>
+    <rect x="736" y="184" width="52" height="34" rx="6" fill="#7fe35d"/><text x="762" y="207" fill="#111">FF</text>
+    <rect x="796" y="184" width="52" height="34" rx="6" fill="#7fe35d"/><text x="822" y="207" fill="#111">FF</text>
+    <rect x="856" y="184" width="52" height="34" rx="6" fill="#7fe35d"/><text x="882" y="207" fill="#111">FF</text>
+    <rect x="916" y="184" width="52" height="34" rx="6" fill="#7fe35d"/><text x="942" y="207" fill="#111">FF</text>
+    <rect x="976" y="184" width="52" height="34" rx="6" fill="#7fe35d"/><text x="1002" y="207" fill="#111">FF</text>
+    <rect x="1036" y="184" width="52" height="34" rx="6" fill="#7fe35d"/><text x="1062" y="207" fill="#111">FF</text>
+    <rect x="1096" y="184" width="52" height="34" rx="6" fill="#7fe35d"/><text x="1122" y="207" fill="#111">FF</text>
+    <rect x="1156" y="184" width="52" height="34" rx="6" fill="#7fe35d"/><text x="1182" y="207" fill="#111">FF</text>
+    <rect x="1216" y="184" width="52" height="34" rx="6" fill="#7fe35d"/><text x="1242" y="207" fill="#111">FF</text>
+    <rect x="1276" y="184" width="52" height="34" rx="6" fill="#7fe35d"/><text x="1302" y="207" fill="#111">FF</text>
+  </g>
+
+  <g font-family="Consolas, 'Courier New', monospace" font-size="22" text-anchor="middle">
+    <rect x="136" y="232" width="52" height="34" rx="6" fill="#66e0d1"/><text x="162" y="255" fill="#111">00</text>
+    <rect x="196" y="232" width="52" height="34" rx="6" fill="#66e0d1"/><text x="222" y="255" fill="#111">FF</text>
+    <rect x="256" y="232" width="52" height="34" rx="6" fill="#66e0d1"/><text x="282" y="255" fill="#111">FD</text>
+    <rect x="316" y="232" width="52" height="34" rx="6" fill="#66e0d1"/><text x="342" y="255" fill="#111">07</text>
+    <rect x="376" y="232" width="52" height="34" rx="6" fill="#66e0d1"/><text x="402" y="255" fill="#111">04</text>
+    <rect x="436" y="232" width="52" height="34" rx="6" fill="#66e0d1"/><text x="462" y="255" fill="#111">00</text>
+    <rect x="496" y="232" width="52" height="34" rx="6" fill="#66e0d1"/><text x="522" y="255" fill="#111">03</text>
+    <rect x="556" y="232" width="52" height="34" rx="6" fill="#66e0d1"/><text x="582" y="255" fill="#111">00</text>
+    <rect x="616" y="232" width="52" height="34" rx="6" fill="#66e0d1"/><text x="642" y="255" fill="#111">FF</text>
+    <rect x="676" y="232" width="52" height="34" rx="6" fill="#66e0d1"/><text x="702" y="255" fill="#111">FF</text>
+    <rect x="736" y="232" width="52" height="34" rx="6" fill="#66e0d1"/><text x="762" y="255" fill="#111">03</text>
+    <rect x="796" y="232" width="52" height="34" rx="6" fill="#66e0d1"/><text x="822" y="255" fill="#111">4C</text>
+    <rect x="856" y="232" width="52" height="34" rx="6" fill="#66e0d1"/><text x="882" y="255" fill="#111">89</text>
+    <rect x="916" y="232" width="52" height="34" rx="6" fill="#66e0d1"/><text x="942" y="255" fill="#111">68</text>
+    <rect x="976" y="232" width="52" height="34" rx="6" fill="#66e0d1"/><text x="1002" y="255" fill="#111">DD</text>
+    <rect x="1036" y="232" width="52" height="34" rx="6" fill="#66e0d1"/><text x="1062" y="255" fill="#111">FF</text>
+    <rect x="1096" y="232" width="52" height="34" rx="6" fill="#66e0d1"/><text x="1122" y="255" fill="#111">7F</text>
+    <rect x="1156" y="232" width="52" height="34" rx="6" fill="#66e0d1"/><text x="1182" y="255" fill="#111">FF</text>
+    <rect x="1216" y="232" width="52" height="34" rx="6" fill="#66e0d1"/><text x="1242" y="255" fill="#111">F8</text>
+    <rect x="1276" y="232" width="52" height="34" rx="6" fill="#66e0d1"/><text x="1302" y="255" fill="#111">07</text>
+    <rect x="1336" y="232" width="52" height="34" rx="6" fill="#66e0d1"/><text x="1362" y="255" fill="#111">00</text>
+    <rect x="1396" y="232" width="52" height="34" rx="6" fill="#66e0d1"/><text x="1422" y="255" fill="#111">00</text>
+  </g>
+
+  <rect x="130" y="178" width="64" height="46" fill="none" stroke="#ff3b30" stroke-width="5"/>
+  <rect x="790" y="226" width="124" height="46" fill="none" stroke="#ff3b30" stroke-width="5"/>
+
+  <g stroke="#ff3b30" stroke-width="4" fill="none">
+    <line x1="250" y1="104" x2="182" y2="170"/>
+    <line x1="1000" y1="374" x2="850" y2="274"/>
+  </g>
+
+  <g fill="#ff3b30" font-family="'Microsoft YaHei', 'PingFang SC', sans-serif">
+    <text x="138" y="112" font-size="34">fifo 数据寄存器</text>
+    <text x="752" y="432" font-size="34">丢失包的时间戳</text>
+  </g>
+
+  <g stroke="#9b9b9b" stroke-width="2" opacity="0.9">
+    <line x1="120" y1="300" x2="1420" y2="300"/>
+    <line x1="120" y1="340" x2="1420" y2="340"/>
+    <line x1="120" y1="380" x2="1420" y2="380"/>
+  </g>
+
+  <g fill="#d8d8d8" font-family="Consolas, 'Courier New', monospace" font-size="20">
+    <text x="40" y="314">关键信息</text>
+    <text x="140" y="314">1. 在合法包头 0x68 出现之前，前面已经有一段非 0x68 的前导异常字节流。</text>
+    <text x="140" y="344">2. 红框中的 4C 89 是被截断异常包残留下来的 timestamp 尾字段。</text>
+    <text x="140" y="374">3. 该 timestamp 与前一个 2 ms poll 最后一包及后续合法包保持连续，说明包确实丢失而非采样停摆。</text>
+    <text x="140" y="404">4. 因而问题本质是 FIFO 读回/包边界对齐异常，而不是传感器没有继续产数。</text>
+  </g>
+</svg>

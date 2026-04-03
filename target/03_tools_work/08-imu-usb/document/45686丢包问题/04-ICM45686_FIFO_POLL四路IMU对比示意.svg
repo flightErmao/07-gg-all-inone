@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <rect width="1600" height="900" fill="#2f2f2f"/>
+  <text x="24" y="34" fill="#f0f0f0" font-size="22" font-family="Microsoft YaHei, SimHei, sans-serif">四路 IMU 对比：2 个 ICM42688 正常，2 个 ICM45686 出现数据丢包</text>
+
+  <rect x="16" y="42" width="82" height="32" rx="4" fill="#505050"/>
+  <text x="28" y="64" fill="#ffffff" font-size="18" font-family="Consolas, monospace">tab1</text>
+  <rect x="100" y="42" width="82" height="32" rx="4" fill="#6a6a6a"/>
+  <text x="112" y="64" fill="#ffffff" font-size="18" font-family="Consolas, monospace">tab2</text>
+
+  <g stroke="#9b9b9b" stroke-width="1" stroke-dasharray="2 6">
+    <line x1="60" y1="110" x2="1560" y2="110"/>
+    <line x1="60" y1="210" x2="1560" y2="210"/>
+    <line x1="60" y1="310" x2="1560" y2="310"/>
+    <line x1="60" y1="410" x2="1560" y2="410"/>
+    <line x1="60" y1="510" x2="1560" y2="510"/>
+    <line x1="60" y1="610" x2="1560" y2="610"/>
+    <line x1="60" y1="710" x2="1560" y2="710"/>
+    <line x1="60" y1="810" x2="1560" y2="810"/>
+    <line x1="140" y1="90" x2="140" y2="860"/>
+    <line x1="300" y1="90" x2="300" y2="860"/>
+    <line x1="460" y1="90" x2="460" y2="860"/>
+    <line x1="620" y1="90" x2="620" y2="860"/>
+    <line x1="780" y1="90" x2="780" y2="860"/>
+    <line x1="940" y1="90" x2="940" y2="860"/>
+    <line x1="1100" y1="90" x2="1100" y2="860"/>
+    <line x1="1260" y1="90" x2="1260" y2="860"/>
+    <line x1="1420" y1="90" x2="1420" y2="860"/>
+  </g>
+
+  <g fill="#d0d0d0" font-size="16" font-family="Consolas, monospace">
+    <text x="18" y="205">-0.1</text>
+    <text x="18" y="405">-0.2</text>
+    <text x="18" y="605">-0.3</text>
+    <text x="18" y="805">-0.4</text>
+    <text x="420" y="885">200000</text>
+    <text x="740" y="885">400000</text>
+    <text x="1060" y="885">600000</text>
+    <text x="1380" y="885">800000</text>
+  </g>
+
+  <path d="M70 165 L100 152 L130 178 L160 158 L190 173 L220 160 L250 170 L280 156 L310 168 L340 162 L370 175 L400 159 L430 171 L460 163 L490 176 L520 160 L550 170 L580 157 L610 168 L640 159 L670 172 L700 161 L730 170 L760 158 L790 171 L820 160 L850 169 L880 156 L910 171 L940 163 L970 176 L1000 159 L1030 171 L1060 160 L1090 173 L1120 158 L1150 170 L1180 161 L1210 171 L1240 159 L1270 174 L1300 161 L1330 171 L1360 158 L1390 169 L1420 161 L1450 172 L1480 158 L1510 171 L1540 162"
+        fill="none" stroke="#2e8ece" stroke-width="3"/>
+
+  <path d="M70 458 L100 470 L130 445 L160 466 L190 452 L220 463 L250 451 L280 464 L310 456 L340 468 L370 452 L400 462 L430 455 L460 469 L490 452 L520 463 L550 456 L580 468 L610 454 L640 465 L670 456 L700 462 L730 454 L760 466 L790 456 L820 463 L850 455 L880 468 L910 453 L940 462 L970 456 L1000 467 L1030 454 L1060 464 L1090 456 L1120 466 L1150 455 L1180 468 L1210 456 L1240 463 L1270 455 L1300 467 L1330 453 L1360 462 L1390 456 L1420 468 L1450 455 L1480 466 L1510 456 L1540 463"
+        fill="none" stroke="#d93a34" stroke-width="3"/>
+
+  <path d="M70 515 L100 532 L130 502 L160 540 L190 508 L220 548 L220 460 L245 460 L245 548 L270 548 L270 510 L295 510 L295 540 L320 540 L350 514 L380 544 L410 508 L440 546 L470 514 L500 540 L530 516 L560 550 L590 512 L620 544 L650 514 L680 542 L710 513 L740 548 L770 516 L800 540 L830 512 L860 548 L890 514 L920 542 L950 516 L980 548 L1010 512 L1040 540 L1070 514 L1100 546 L1130 515 L1160 540 L1190 513 L1220 548 L1250 514 L1280 542 L1310 516 L1340 548 L1370 512 L1400 540 L1430 514 L1460 546 L1490 514 L1520 540 L1540 516"
+        fill="none" stroke="#1fd138" stroke-width="3"/>
+
+  <path d="M70 720 L100 745 L130 710 L160 742 L190 716 L220 742 L220 660 L258 660 L258 742 L290 742 L320 718 L350 742 L380 715 L410 744 L440 718 L470 740 L500 717 L530 746 L560 718 L590 742 L620 716 L650 744 L680 718 L710 740 L740 717 L770 746 L800 716 L830 742 L860 718 L890 744 L920 716 L950 740 L980 717 L1010 746 L1040 716 L1070 742 L1100 718 L1130 744 L1160 716 L1190 740 L1220 717 L1250 746 L1280 716 L1310 742 L1340 718 L1370 744 L1400 716 L1430 740 L1460 717 L1490 746 L1520 716 L1540 740"
+        fill="none" stroke="#ff8a18" stroke-width="3"/>
+
+  <g fill="#ff3030" font-family="Microsoft YaHei, SimHei, sans-serif">
+    <text x="245" y="385" font-size="54">数据丢包</text>
+  </g>
+
+  <g stroke="#ff3030" stroke-width="6" fill="none" marker-end="url(#arrow)">
+    <path d="M300 405 C275 430, 255 455, 235 506"/>
+    <path d="M375 410 C360 455, 350 520, 336 560"/>
+    <path d="M420 410 C425 470, 430 545, 430 595"/>
+    <path d="M300 445 C270 520, 245 630, 238 705"/>
+  </g>
+
+  <g fill="#d0d0d0" font-size="18" font-family="Consolas, monospace">
+    <rect x="1350" y="120" width="180" height="114" fill="#4a4a4a" opacity="0.85"/>
+    <rect x="1362" y="132" width="10" height="10" fill="#2e8ece"/>
+    <text x="1378" y="142">42688_A_accel_x_mps2</text>
+    <rect x="1362" y="156" width="10" height="10" fill="#d93a34"/>
+    <text x="1378" y="166">42688_B_accel_x_mps2</text>
+    <rect x="1362" y="180" width="10" height="10" fill="#1fd138"/>
+    <text x="1378" y="190">45686_A_accel_x_mps2</text>
+    <rect x="1362" y="204" width="10" height="10" fill="#ff8a18"/>
+    <text x="1378" y="214">45686_B_accel_x_mps2</text>
+  </g>
+
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="9" refY="6" orient="auto">
+      <path d="M0 0 L12 6 L0 12 Z" fill="#ff3030"/>
+    </marker>
+  </defs>
+</svg>

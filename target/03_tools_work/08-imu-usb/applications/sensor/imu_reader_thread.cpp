@@ -26,8 +26,10 @@ extern "C" {
 #define APP_IMU_POLL_PERIOD_MS        2U
 #define APP_IMU_OUTPUT_DIR_MAX_LEN    32U
 #define APP_IMU_OUTPUT_PATH_MAX_LEN   64U
-#define APP_IMU_WRITER_THREAD_PRIORITY 21
-#define APP_IMU_POLL_THREAD_PRIORITY   22
+#define APP_IMU_WRITER_THREAD_PRIORITY 15
+#define APP_IMU_POLL_THREAD_PRIORITY   14
+#define APP_IMU_PRIMARY_45686_SLOT_INDEX 3U
+#define APP_IMU_SECONDARY_45686_SLOT_INDEX 4U
 
 #ifndef SENSOR_NAME_IMU1
 // #define SENSOR_NAME_IMU1 SENSOR_NAME_ICM42688
@@ -76,6 +78,7 @@ typedef struct imu_slot
     const char *name;
     rt_uint8_t index;
     rt_bool_t detected;
+    rt_bool_t enabled_for_poll;
 } imu_slot_t;
 
 typedef struct imu_poll_ctx
@@ -136,6 +139,49 @@ static const char *imu_poll_slot_name(rt_uint8_t index)
     default:
         return RT_NULL;
     }
+}
+
+static rt_bool_t imu_poll_is_45686_slot_index(rt_uint8_t index)
+{
+    return ((index == APP_IMU_PRIMARY_45686_SLOT_INDEX) ||
+            (index == APP_IMU_SECONDARY_45686_SLOT_INDEX))
+               ? RT_TRUE
+               : RT_FALSE;
+}
+
+static imu_slot_t *imu_poll_select_single_45686_slot(void)
+{
+    imu_slot_t *primary = RT_NULL;
+    imu_slot_t *secondary = RT_NULL;
+    int index;
+
+    for (index = 0; index < APP_IMU_MAX_COUNT; ++index)
+    {
+        imu_slot_t *slot = &g_imu_poll_ctx.slots[index];
+
+        if ((slot->detected != RT_TRUE) || (imu_poll_is_45686_slot_index(slot->index) != RT_TRUE))
+        {
+            continue;
+        }
+
+        if (slot->index == APP_IMU_PRIMARY_45686_SLOT_INDEX)
+        {
+            primary = slot;
+            break;
+        }
+
+        if ((slot->index == APP_IMU_SECONDARY_45686_SLOT_INDEX) && (secondary == RT_NULL))
+        {
+            secondary = slot;
+        }
+    }
+
+    if (primary != RT_NULL)
+    {
+        return primary;
+    }
+
+    return secondary;
 }
 
 static void imu_poll_lock(void)
@@ -561,6 +607,7 @@ static int imu_poll_writer_push_raw_fifo(rt_uint8_t imu_id,
 
 static void imu_poll_refresh_slots(void)
 {
+    imu_slot_t *selected_slot = RT_NULL;
     rt_uint32_t count = 0;
     int index;
 
@@ -572,15 +619,19 @@ static void imu_poll_refresh_slots(void)
         slot->name = imu_poll_slot_name(slot->index);
         slot->device = (slot->name != RT_NULL) ? rt_device_find(slot->name) : RT_NULL;
         slot->detected = (slot->device != RT_NULL) ? RT_TRUE : RT_FALSE;
-        if (slot->detected == RT_TRUE)
+        slot->enabled_for_poll = RT_FALSE;
+    }
+
+    selected_slot = imu_poll_select_single_45686_slot();
+    if (selected_slot != RT_NULL)
+    {
+        selected_slot->enabled_for_poll = RT_TRUE;
+        rt_device_init(selected_slot->device);
+        if (selected_slot->device->ref_count == 0)
         {
-            rt_device_init(slot->device);
-            if (slot->device->ref_count == 0)
-            {
-                (void)rt_device_open(slot->device, RT_DEVICE_OFLAG_RDONLY);
-            }
-            count++;
+            (void)rt_device_open(selected_slot->device, RT_DEVICE_OFLAG_RDONLY);
         }
+        count = 1U;
     }
 
     g_imu_poll_ctx.detected_count = count;
@@ -807,12 +858,11 @@ static int imu_poll_run_recording(void)
 
             g_imu_raw_batch_read_count[index] = 0;
 
-            if (slot->detected == RT_FALSE)
+            if ((slot->detected == RT_FALSE) || (slot->enabled_for_poll != RT_TRUE))
             {
                 continue;
             }
 
-            /* Read all IMUs first so one poll tick shares the same timestamp baseline. */
             g_imu_raw_batch_read_count[index] =
                 rt_device_read(slot->device, IMU_POS_ACC_GYRO, raw_data, sizeof(*raw_data));
         }
@@ -822,7 +872,9 @@ static int imu_poll_run_recording(void)
             imu_slot_t *slot = &g_imu_poll_ctx.slots[index];
             drvf::IMURawData *raw_data = &g_imu_raw_batch[index];
 
-            if ((slot->detected == RT_FALSE) || (g_imu_raw_batch_read_count[index] <= 0))
+            if ((slot->detected == RT_FALSE) ||
+                (slot->enabled_for_poll != RT_TRUE) ||
+                (g_imu_raw_batch_read_count[index] <= 0))
             {
                 continue;
             }
@@ -869,6 +921,7 @@ static void imu_poll_thread_entry(void *parameter)
     result = imu_poll_run_recording();
 
     imu_poll_lock();
+    g_imu_poll_ctx.recording = RT_FALSE;
     g_imu_poll_ctx.last_run_ok = (result == RT_EOK) ? RT_TRUE : RT_FALSE;
     g_imu_poll_ctx.last_error = result;
     g_imu_poll_ctx.stop_requested = RT_FALSE;

@@ -799,13 +799,36 @@ class App:
         else:
             update_interval = 3.0
 
-        elapsed = 0
+        elapsed = 0.0
         while elapsed < duration_s:
             wait_seconds = min(update_interval, float(duration_s - elapsed))
             if self.test_stop_event.wait(timeout=wait_seconds):
                 return
-            elapsed = min(elapsed + int(wait_seconds), duration_s)
-            self.message_queue.put(("info", f"噪声测试进度: {elapsed}/{duration_s}s"))
+
+            elapsed = min(elapsed + wait_seconds, float(duration_s))
+            status = self._query_noise_status_once(port)
+            if status is None:
+                self.message_queue.put(("info", f"噪声测试进度: {int(elapsed)}/{duration_s}s"))
+                continue
+
+            if status.recording == 0:
+                self.active_test_key = None
+                self.test_stop_event.set()
+                if self._noise_test_completed_normally(status, int(elapsed), duration_s, update_interval):
+                    if status.last_error != 0:
+                        self.message_queue.put(("error", self._format_noise_test_error(status)))
+                    else:
+                        self.message_queue.put((
+                            "info",
+                            f"噪声测试完成: frames={status.frames} duration={status.duration_s}s last_error={status.last_error}",
+                        ))
+                else:
+                    message_kind = "error" if status.last_error != 0 else "info"
+                    self.message_queue.put((message_kind, self._format_noise_test_stopped_early(status, int(elapsed), duration_s)))
+                self.message_queue.put(("info", f"bin 文件路径: {self._format_device_path(status.file)}"))
+                return
+
+            self.message_queue.put(("info", f"噪声测试进度: {int(elapsed)}/{duration_s}s"))
 
         self._finalize_noise_test(port)
 

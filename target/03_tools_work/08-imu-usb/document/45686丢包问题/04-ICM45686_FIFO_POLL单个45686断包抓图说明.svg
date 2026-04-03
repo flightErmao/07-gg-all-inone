@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <rect width="1600" height="900" fill="#171717"/>
+  <text x="70" y="70" fill="#d8d8d8" font-size="28" font-family="Microsoft YaHei, SimHei, sans-serif">单个 ICM45686 独立 poll 时仍出现断包</text>
+
+  <line x1="90" y1="120" x2="1530" y2="120" stroke="#8a8a8a" stroke-width="2"/>
+  <text x="110" y="105" fill="#d8d8d8" font-size="18" font-family="Consolas, monospace">+16637.46ms</text>
+  <text x="470" y="105" fill="#d8d8d8" font-size="18" font-family="Consolas, monospace">+16638.40ms</text>
+  <text x="1160" y="105" fill="#d8d8d8" font-size="18" font-family="Consolas, monospace">+16639.67ms</text>
+
+  <text x="100" y="170" fill="#d7c3a0" font-size="22" font-family="Consolas, monospace">0:SPI: MISO data</text>
+  <text x="100" y="210" fill="#d7c3a0" font-size="22" font-family="Consolas, monospace">0:SPI: MOSI data</text>
+  <line x1="90" y1="180" x2="1530" y2="180" stroke="#cfcfcf" stroke-width="2"/>
+  <line x1="90" y1="220" x2="1530" y2="220" stroke="#cfcfcf" stroke-width="2"/>
+
+  <rect x="85" y="265" width="26" height="26" rx="3" fill="#4f4f4f"/>
+  <text x="94" y="284" fill="#ffffff" font-size="16" font-family="Consolas, monospace">0</text>
+  <rect x="85" y="325" width="26" height="26" rx="3" fill="#7b5a13"/>
+  <text x="94" y="344" fill="#ffffff" font-size="16" font-family="Consolas, monospace">1</text>
+  <rect x="85" y="385" width="26" height="26" rx="3" fill="#7f1616"/>
+  <text x="94" y="404" fill="#ffffff" font-size="16" font-family="Consolas, monospace">2</text>
+  <rect x="85" y="445" width="26" height="26" rx="3" fill="#3e8d1b"/>
+  <text x="94" y="464" fill="#ffffff" font-size="16" font-family="Consolas, monospace">5</text>
+
+  <line x1="120" y1="280" x2="1530" y2="280" stroke="#d0d0d0" stroke-width="2"/>
+  <line x1="120" y1="340" x2="1530" y2="340" stroke="#d0d0d0" stroke-width="2" stroke-dasharray="3 6"/>
+  <line x1="120" y1="400" x2="1530" y2="400" stroke="#d0d0d0" stroke-width="2" stroke-dasharray="3 6"/>
+  <line x1="120" y1="460" x2="1530" y2="460" stroke="#d0d0d0" stroke-width="2" stroke-dasharray="3 6"/>
+
+  <g stroke="#ececec" stroke-width="3" fill="none">
+    <path d="M180 400 L180 360 L186 360 L186 400"/>
+    <path d="M188 400 L188 360 L194 360 L194 400"/>
+    <path d="M196 400 L196 360 L202 360 L202 400"/>
+    <rect x="204" y="372" width="32" height="28" fill="#d8d8d8" stroke="none"/>
+    <path d="M180 460 L180 420 L190 420 L190 460"/>
+    <path d="M194 460 L194 420 L204 420 L204 460"/>
+    <path d="M208 460 L208 420 L218 420 L218 460"/>
+  </g>
+
+  <g stroke="#ececec" stroke-width="3" fill="none">
+    <path d="M1280 400 L1280 360 L1286 360 L1286 400"/>
+    <path d="M1288 400 L1288 360 L1294 360 L1294 400"/>
+    <path d="M1296 400 L1296 360 L1302 360 L1302 400"/>
+    <rect x="1304" y="372" width="44" height="28" fill="#d8d8d8" stroke="none"/>
+    <path d="M1280 460 L1280 420 L1290 420 L1290 460"/>
+    <path d="M1294 460 L1294 420 L1304 420 L1304 460"/>
+    <path d="M1308 460 L1308 420 L1346 420 L1346 460"/>
+  </g>
+
+  <rect x="235" y="308" width="22" height="62" fill="none" stroke="#ff3030" stroke-width="4"/>
+  <text x="252" y="250" fill="#ff3030" font-size="42" font-family="Consolas, monospace">1</text>
+  <rect x="1316" y="308" width="22" height="62" fill="none" stroke="#ff3030" stroke-width="4"/>
+  <text x="1332" y="250" fill="#ff3030" font-size="42" font-family="Consolas, monospace">2</text>
+
+  <path d="M320 515 C300 470, 282 420, 246 374" stroke="#ff3030" stroke-width="5" fill="none" marker-end="url(#arrow)"/>
+  <path d="M945 515 C1030 470, 1160 430, 1326 374" stroke="#ff3030" stroke-width="5" fill="none" marker-end="url(#arrow)"/>
+  <path d="M1110 515 C1160 470, 1220 430, 1336 374" stroke="#ff3030" stroke-width="5" fill="none" marker-end="url(#arrow)"/>
+
+  <rect x="1275" y="330" width="210" height="48" rx="4" fill="#0c86b8"/>
+  <text x="1292" y="362" fill="#ffe36c" font-size="22" font-family="Consolas, monospace">2.00115ms / 40023</text>
+
+  <text x="270" y="585" fill="#ff3030" font-size="34" font-family="Microsoft YaHei, SimHei, sans-serif">1 处结尾这包正常，时间戳是 1</text>
+  <text x="270" y="645" fill="#ff3030" font-size="34" font-family="Microsoft YaHei, SimHei, sans-serif">2 处开头这包被截断，时间戳是 626</text>
+  <text x="270" y="705" fill="#ff3030" font-size="34" font-family="Microsoft YaHei, SimHei, sans-serif">2 处中间一包正常，时间戳是 626 + 625</text>
+  <text x="270" y="765" fill="#ff3030" font-size="30" font-family="Microsoft YaHei, SimHei, sans-serif">说明单个 45686 独立 poll 时，时间戳连续，但中间包仍发生截断</text>
+
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="9" refY="6" orient="auto">
+      <path d="M0 0 L12 6 L0 12 Z" fill="#ff3030"/>
+    </marker>
+  </defs>
+</svg>

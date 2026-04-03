@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420">
+  <rect width="1280" height="420" fill="#1f1f1f"/>
+  <text x="36" y="46" fill="#eaeaea" font-family="Consolas, 'Courier New', monospace" font-size="28">ICM45686 异常 poll 波形示意</text>
+  <text x="36" y="84" fill="#cfcfcf" font-family="Consolas, 'Courier New', monospace" font-size="20">依据逻辑分析截图整理：红框内可见合法包头 0x68 后，尾部大量填充 0x7F</text>
+
+  <text x="36" y="138" fill="#bdbdbd" font-family="Consolas, 'Courier New', monospace" font-size="22">解码字节（截图中红框区域）</text>
+
+  <g font-family="Consolas, 'Courier New', monospace" font-size="26" text-anchor="middle">
+    <rect x="252" y="180" width="56" height="42" rx="6" fill="#41d6a4"/><text x="280" y="209" fill="#111">68</text>
+    <rect x="316" y="180" width="56" height="42" rx="6" fill="#41d6a4"/><text x="344" y="209" fill="#111">ED</text>
+    <rect x="380" y="180" width="56" height="42" rx="6" fill="#41d6a4"/><text x="408" y="209" fill="#111">FF</text>
+    <rect x="444" y="180" width="56" height="42" rx="6" fill="#41d6a4"/><text x="472" y="209" fill="#111">CA</text>
+    <rect x="508" y="180" width="56" height="42" rx="6" fill="#41d6a4"/><text x="536" y="209" fill="#111">7F</text>
+    <rect x="572" y="180" width="56" height="42" rx="6" fill="#41d6a4"/><text x="600" y="209" fill="#111">7F</text>
+    <rect x="636" y="180" width="56" height="42" rx="6" fill="#41d6a4"/><text x="664" y="209" fill="#111">7F</text>
+    <rect x="700" y="180" width="56" height="42" rx="6" fill="#41d6a4"/><text x="728" y="209" fill="#111">7F</text>
+    <rect x="764" y="180" width="56" height="42" rx="6" fill="#41d6a4"/><text x="792" y="209" fill="#111">7F</text>
+    <rect x="828" y="180" width="56" height="42" rx="6" fill="#41d6a4"/><text x="856" y="209" fill="#111">7F</text>
+    <rect x="892" y="180" width="56" height="42" rx="6" fill="#41d6a4"/><text x="920" y="209" fill="#111">7F</text>
+    <rect x="956" y="180" width="56" height="42" rx="6" fill="#41d6a4"/><text x="984" y="209" fill="#111">7F</text>
+    <rect x="1020" y="180" width="56" height="42" rx="6" fill="#41d6a4"/><text x="1048" y="209" fill="#111">7F</text>
+    <rect x="1084" y="180" width="56" height="42" rx="6" fill="#41d6a4"/><text x="1112" y="209" fill="#111">7F</text>
+    <rect x="1148" y="180" width="56" height="42" rx="6" fill="#41d6a4"/><text x="1176" y="209" fill="#111">7F</text>
+  </g>
+
+  <rect x="240" y="168" width="974" height="66" fill="none" stroke="#ff3b30" stroke-width="5"/>
+
+  <g font-family="Consolas, 'Courier New', monospace" font-size="20" fill="#d8d8d8">
+    <text x="64" y="209">候选 16-byte 包：</text>
+    <text x="64" y="270">[Header]</text>
+    <text x="252" y="270">0x68</text>
+    <text x="64" y="304">[Payload]</text>
+    <text x="252" y="304">0xED 0xFF 0xCA 0x7F 0x7F 0x7F 0x7F 0x7F 0x7F 0x7F 0x7F 0x7F 0x7F 0x7F</text>
+    <text x="64" y="352">结论：</text>
+    <text x="140" y="352">出现了合法包头，但包体后半段被大量 0x7F 填充，不符合正常 accel/gyro/timestamp 分布。</text>
+  </g>
+</svg>
