@@ -28,9 +28,6 @@ extern "C" {
 #define APP_IMU_OUTPUT_PATH_MAX_LEN   64U
 #define APP_IMU_WRITER_THREAD_PRIORITY 15
 #define APP_IMU_POLL_THREAD_PRIORITY   14
-#define APP_IMU_PRIMARY_45686_SLOT_INDEX 3U
-#define APP_IMU_SECONDARY_45686_SLOT_INDEX 4U
-
 #ifndef SENSOR_NAME_IMU1
 // #define SENSOR_NAME_IMU1 SENSOR_NAME_ICM42688
 #define SENSOR_NAME_IMU1 "42688_A"
@@ -139,49 +136,6 @@ static const char *imu_poll_slot_name(rt_uint8_t index)
     default:
         return RT_NULL;
     }
-}
-
-static rt_bool_t imu_poll_is_45686_slot_index(rt_uint8_t index)
-{
-    return ((index == APP_IMU_PRIMARY_45686_SLOT_INDEX) ||
-            (index == APP_IMU_SECONDARY_45686_SLOT_INDEX))
-               ? RT_TRUE
-               : RT_FALSE;
-}
-
-static imu_slot_t *imu_poll_select_single_45686_slot(void)
-{
-    imu_slot_t *primary = RT_NULL;
-    imu_slot_t *secondary = RT_NULL;
-    int index;
-
-    for (index = 0; index < APP_IMU_MAX_COUNT; ++index)
-    {
-        imu_slot_t *slot = &g_imu_poll_ctx.slots[index];
-
-        if ((slot->detected != RT_TRUE) || (imu_poll_is_45686_slot_index(slot->index) != RT_TRUE))
-        {
-            continue;
-        }
-
-        if (slot->index == APP_IMU_PRIMARY_45686_SLOT_INDEX)
-        {
-            primary = slot;
-            break;
-        }
-
-        if ((slot->index == APP_IMU_SECONDARY_45686_SLOT_INDEX) && (secondary == RT_NULL))
-        {
-            secondary = slot;
-        }
-    }
-
-    if (primary != RT_NULL)
-    {
-        return primary;
-    }
-
-    return secondary;
 }
 
 static void imu_poll_lock(void)
@@ -607,7 +561,6 @@ static int imu_poll_writer_push_raw_fifo(rt_uint8_t imu_id,
 
 static void imu_poll_refresh_slots(void)
 {
-    imu_slot_t *selected_slot = RT_NULL;
     rt_uint32_t count = 0;
     int index;
 
@@ -620,18 +573,29 @@ static void imu_poll_refresh_slots(void)
         slot->device = (slot->name != RT_NULL) ? rt_device_find(slot->name) : RT_NULL;
         slot->detected = (slot->device != RT_NULL) ? RT_TRUE : RT_FALSE;
         slot->enabled_for_poll = RT_FALSE;
-    }
 
-    selected_slot = imu_poll_select_single_45686_slot();
-    if (selected_slot != RT_NULL)
-    {
-        selected_slot->enabled_for_poll = RT_TRUE;
-        rt_device_init(selected_slot->device);
-        if (selected_slot->device->ref_count == 0)
+        if (slot->detected != RT_TRUE)
         {
-            (void)rt_device_open(selected_slot->device, RT_DEVICE_OFLAG_RDONLY);
+            continue;
         }
-        count = 1U;
+
+        if (rt_device_init(slot->device) != RT_EOK)
+        {
+            slot->detected = RT_FALSE;
+            continue;
+        }
+
+        if (slot->device->ref_count == 0)
+        {
+            if (rt_device_open(slot->device, RT_DEVICE_OFLAG_RDONLY) != RT_EOK)
+            {
+                slot->detected = RT_FALSE;
+                continue;
+            }
+        }
+
+        slot->enabled_for_poll = RT_TRUE;
+        count++;
     }
 
     g_imu_poll_ctx.detected_count = count;
@@ -712,7 +676,7 @@ static void imu_poll_writer_thread_entry(void *parameter)
         rt_bool_t done = RT_FALSE;
         int fetch_result;
 
-        if (rt_sem_take(writer->sem, rt_tick_from_millisecond(100U)) != RT_EOK)
+        if (rt_sem_take(writer->sem, RT_WAITING_FOREVER) != RT_EOK)
         {
             continue;
         }

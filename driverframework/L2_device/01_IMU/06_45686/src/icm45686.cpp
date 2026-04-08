@@ -58,11 +58,11 @@ static constexpr uint8_t kSoftReset = 0x01;
 static constexpr uint8_t kIntfConfig1Ovrd4Wire = 0x0CU;
 static constexpr uint8_t kAccelConfig16G1600Hz = 0x15U;
 static constexpr uint8_t kGyroConfig2000dps1600Hz = 0x15U;
-static constexpr uint8_t kFifoConfig0Stream = 0x47U;
+static constexpr uint8_t kFifoConfig0Stream = 0x87U;
 static constexpr uint8_t kFifoConfig0Bypass = 0x07U;
 static constexpr uint8_t kAccelConfig0Mask = 0xFFU;
 static constexpr uint8_t kGyroConfig0Mask = 0xFFU;
-static constexpr uint8_t kFifoConfig0Mask = 0x47U;
+static constexpr uint8_t kFifoConfig0Mask = 0x87U;
 static constexpr uint8_t kFifoWatermarkLow = 0x01U;
 static constexpr uint8_t kFifoWatermarkHigh = 0x00;
 static constexpr uint8_t kFifoConfig10Mask = 0xFFU;
@@ -283,7 +283,7 @@ bool ICM45686::writeRegisterChecked(uint8_t reg, uint8_t value, uint8_t expected
     return false;
   }
 
-  DelayUs(50U);
+  // DelayUs(50U);
 
   if (!readRegister(reg, &readback)) {
     return false;
@@ -375,7 +375,7 @@ bool ICM45686::writeMregByteChecked(uint16_t reg, uint8_t value, uint8_t expecte
     return false;
   }
 
-  DelayUs(50U);
+  // DelayUs(50U);
 
   if (!readMreg(reg, &readback, 1U)) {
     return false;
@@ -496,6 +496,11 @@ bool ICM45686::configureForPolling() {
     return true;
   }
 
+  if (!writeRegister(kRegMisc2, 0x02)) {
+    return false;
+  }
+
+  DelayMs(10);
   /*
    * [09] ACCEL_CONFIG0 (0x1B)
    * 目的: 配置加速度量程和 ODR。
@@ -513,6 +518,14 @@ bool ICM45686::configureForPolling() {
    * 最终值: 0x15
    */
   if (!updateRegisterBits(kRegGyroConfig0, kGyroConfig0Mask, kGyroConfig2000dps1600Hz)) {
+    return false;
+  }
+
+  if (!updateRegisterBits(kRegFifoConfig4, kFifoConfig4Mask, kFifoConfig4TimestampEnable)) {
+    return false;
+  }
+
+  if (!updateMregBits(kRegSmcControl0, kSmcControl0TimestampMask, kSmcControl0TimestampEnable)) {
     return false;
   }
 
