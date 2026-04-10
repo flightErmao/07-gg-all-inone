@@ -67,6 +67,10 @@ IMU_CONFIGS = {
     3: {"odr_hz": 1600.0, "accel_range_g": 16.0, "gyro_range_dps": 2000.0},
     4: {"odr_hz": 1600.0, "accel_range_g": 16.0, "gyro_range_dps": 2000.0},
 }
+ACCEL_RAW_MAX = 32767
+ACCEL_RAW_MIN = -32768
+GYRO_RAW_MAX = 32767
+GYRO_RAW_MIN = -32768
 IMU_PAPER_METRICS = {
     1: {
         "accel_zero_bias_mg": 20.0,
@@ -278,8 +282,36 @@ def _should_skip_packet_for_analysis(packet: bytes, imu_id: int) -> bool:
 
 
 def _raw_accel_to_mps2(raw_value: int, imu_id: int) -> float:
-    scaler = ICM45686_ACCEL_SCALER_MPS2 if imu_id in (3, 4) else ICM42688_ACCEL_SCALER_MPS2
+    return _raw_accel_to_g(raw_value, imu_id) * 9.80665
+
+
+def _raw_accel_to_g(raw_value: int, imu_id: int) -> float:
+    scaler = (16.0 / float(1 << 15)) if imu_id in (3, 4) else (16.0 / float(1 << 15))
     return float(raw_value) * scaler
+
+
+def _accel_g_to_mps2(value_g: float) -> float:
+    return float(value_g) * 9.80665
+
+
+def _accel_mps2_to_g(value_mps2: float) -> float:
+    return float(value_mps2) / 9.80665
+
+
+def _read_accel_csv_value_g(row: dict[str, str], prefix: str, axis: str) -> float:
+    g_field = f"{prefix}accel_{axis}_g"
+    raw_g = row.get(g_field, "")
+    if str(raw_g or "").strip():
+        return float(raw_g)
+    legacy_field = f"{prefix}accel_{axis}_mps2"
+    legacy_value = row.get(legacy_field, "")
+    if str(legacy_value or "").strip():
+        return _accel_mps2_to_g(float(legacy_value))
+    return 0.0
+
+
+def _read_accel_csv_value_mps2(row: dict[str, str], prefix: str, axis: str) -> float:
+    return _accel_g_to_mps2(_read_accel_csv_value_g(row, prefix, axis))
 
 
 def _raw_gyro_to_rad_s(raw_value: int, imu_id: int) -> float:
@@ -994,9 +1026,9 @@ def decode_real_imu_bin_to_csv(source: Path, destination: Path) -> int:
                 "raw_gyro_y",
                 "raw_gyro_z",
                 "temp_raw",
-                "accel_x_mps2",
-                "accel_y_mps2",
-                "accel_z_mps2",
+                "accel_x_g",
+                "accel_y_g",
+                "accel_z_g",
                 "gyro_x_rad_s",
                 "gyro_y_rad_s",
                 "gyro_z_rad_s",
@@ -1026,9 +1058,9 @@ def decode_real_imu_bin_to_csv(source: Path, destination: Path) -> int:
                     frame.gyro_y,
                     frame.gyro_z,
                     frame.temp_raw,
-                    _format_float(_raw_accel_to_mps2(frame.accel_x, 1)),
-                    _format_float(_raw_accel_to_mps2(frame.accel_y, 1)),
-                    _format_float(_raw_accel_to_mps2(frame.accel_z, 1)),
+                    _format_float(_raw_accel_to_g(frame.accel_x, 1)),
+                    _format_float(_raw_accel_to_g(frame.accel_y, 1)),
+                    _format_float(_raw_accel_to_g(frame.accel_z, 1)),
                     _format_float(_raw_gyro_to_rad_s(frame.gyro_x, 1)),
                     _format_float(_raw_gyro_to_rad_s(frame.gyro_y, 1)),
                     _format_float(_raw_gyro_to_rad_s(frame.gyro_z, 1)),
@@ -1138,9 +1170,12 @@ def _iter_capture_packet_rows(
         gyro_y = _packet_s16(packet, 9, capture.imu_id)
         gyro_z = _packet_s16(packet, 11, capture.imu_id)
         temp_raw = int.from_bytes(packet[13:14], byteorder="big", signed=True) if len(packet) >= 14 else 0
-        accel_x_mps2 = _raw_accel_to_mps2(accel_x, capture.imu_id)
-        accel_y_mps2 = _raw_accel_to_mps2(accel_y, capture.imu_id)
-        accel_z_mps2 = _raw_accel_to_mps2(accel_z, capture.imu_id)
+        accel_x_g = _raw_accel_to_g(accel_x, capture.imu_id)
+        accel_y_g = _raw_accel_to_g(accel_y, capture.imu_id)
+        accel_z_g = _raw_accel_to_g(accel_z, capture.imu_id)
+        accel_x_mps2 = _accel_g_to_mps2(accel_x_g)
+        accel_y_mps2 = _accel_g_to_mps2(accel_y_g)
+        accel_z_mps2 = _accel_g_to_mps2(accel_z_g)
         gyro_x_deg_s = math.degrees(_raw_gyro_to_rad_s(gyro_x, capture.imu_id))
         gyro_y_deg_s = math.degrees(_raw_gyro_to_rad_s(gyro_y, capture.imu_id))
         gyro_z_deg_s = math.degrees(_raw_gyro_to_rad_s(gyro_z, capture.imu_id))
@@ -1164,6 +1199,9 @@ def _iter_capture_packet_rows(
             "raw_gyro_y": gyro_y,
             "raw_gyro_z": gyro_z,
             "temp_raw": temp_raw,
+            "accel_x_g": accel_x_g,
+            "accel_y_g": accel_y_g,
+            "accel_z_g": accel_z_g,
             "accel_x_mps2": accel_x_mps2,
             "accel_y_mps2": accel_y_mps2,
             "accel_z_mps2": accel_z_mps2,
@@ -1306,9 +1344,9 @@ def _write_per_imu_packet_csvs(raw_rows: list[dict[str, int | float | str]], sou
                     f"{prefix}raw_gyro_y",
                     f"{prefix}raw_gyro_z",
                     f"{prefix}temp_raw",
-                    f"{prefix}accel_x_mps2",
-                    f"{prefix}accel_y_mps2",
-                    f"{prefix}accel_z_mps2",
+                    f"{prefix}accel_x_g",
+                    f"{prefix}accel_y_g",
+                    f"{prefix}accel_z_g",
                     f"{prefix}gyro_x_deg_s",
                     f"{prefix}gyro_y_deg_s",
                     f"{prefix}gyro_z_deg_s",
@@ -1332,9 +1370,9 @@ def _write_per_imu_packet_csvs(raw_rows: list[dict[str, int | float | str]], sou
                         row["raw_gyro_y"],
                         row["raw_gyro_z"],
                         row["temp_raw"],
-                        _format_float(float(row["accel_x_mps2"])),
-                        _format_float(float(row["accel_y_mps2"])),
-                        _format_float(float(row["accel_z_mps2"])),
+                        _format_float(float(row["accel_x_g"])),
+                        _format_float(float(row["accel_y_g"])),
+                        _format_float(float(row["accel_z_g"])),
                         _format_float(float(row["gyro_x_deg_s"])),
                         _format_float(float(row["gyro_y_deg_s"])),
                         _format_float(float(row["gyro_z_deg_s"])),
@@ -1360,9 +1398,9 @@ def _write_poll_comparison_csv(raw_rows: list[dict[str, int | float | str]], sou
         header.extend(
             [
                 f"{imu_name}_pkt_count",
-                f"{imu_name}_accel_x_mps2",
-                f"{imu_name}_accel_y_mps2",
-                f"{imu_name}_accel_z_mps2",
+                f"{imu_name}_accel_x_g",
+                f"{imu_name}_accel_y_g",
+                f"{imu_name}_accel_z_g",
                 f"{imu_name}_gyro_x_deg_s",
                 f"{imu_name}_gyro_y_deg_s",
                 f"{imu_name}_gyro_z_deg_s",
@@ -1384,9 +1422,9 @@ def _write_poll_comparison_csv(raw_rows: list[dict[str, int | float | str]], sou
                 row_out.extend(
                     [
                         len(imu_rows),
-                        _format_float(_mean([float(item["accel_x_mps2"]) for item in imu_rows])),
-                        _format_float(_mean([float(item["accel_y_mps2"]) for item in imu_rows])),
-                        _format_float(_mean([float(item["accel_z_mps2"]) for item in imu_rows])),
+                        _format_float(_mean([float(item["accel_x_g"]) for item in imu_rows])),
+                        _format_float(_mean([float(item["accel_y_g"]) for item in imu_rows])),
+                        _format_float(_mean([float(item["accel_z_g"]) for item in imu_rows])),
                         _format_float(_mean([float(item["gyro_x_deg_s"]) for item in imu_rows])),
                         _format_float(_mean([float(item["gyro_y_deg_s"]) for item in imu_rows])),
                         _format_float(_mean([float(item["gyro_z_deg_s"]) for item in imu_rows])),
@@ -1401,9 +1439,9 @@ def _write_poll_comparison_csv(raw_rows: list[dict[str, int | float | str]], sou
 @dataclass
 class _PollAggregate:
     packet_count: int = 0
-    accel_x_sum: float = 0.0
-    accel_y_sum: float = 0.0
-    accel_z_sum: float = 0.0
+    accel_x_sum_g: float = 0.0
+    accel_y_sum_g: float = 0.0
+    accel_z_sum_g: float = 0.0
     gyro_x_sum: float = 0.0
     gyro_y_sum: float = 0.0
     gyro_z_sum: float = 0.0
@@ -1411,9 +1449,9 @@ class _PollAggregate:
 
     def add(self, row: dict[str, int | float | str]) -> None:
         self.packet_count += 1
-        self.accel_x_sum += float(row["accel_x_mps2"])
-        self.accel_y_sum += float(row["accel_y_mps2"])
-        self.accel_z_sum += float(row["accel_z_mps2"])
+        self.accel_x_sum_g += float(row["accel_x_g"])
+        self.accel_y_sum_g += float(row["accel_y_g"])
+        self.accel_z_sum_g += float(row["accel_z_g"])
         self.gyro_x_sum += float(row["gyro_x_deg_s"])
         self.gyro_y_sum += float(row["gyro_y_deg_s"])
         self.gyro_z_sum += float(row["gyro_z_deg_s"])
@@ -1454,9 +1492,9 @@ class StreamingPerImuCsvWriter:
                 f"{prefix}raw_gyro_y",
                 f"{prefix}raw_gyro_z",
                 f"{prefix}temp_raw",
-                f"{prefix}accel_x_mps2",
-                f"{prefix}accel_y_mps2",
-                f"{prefix}accel_z_mps2",
+                f"{prefix}accel_x_g",
+                f"{prefix}accel_y_g",
+                f"{prefix}accel_z_g",
                 f"{prefix}gyro_x_deg_s",
                 f"{prefix}gyro_y_deg_s",
                 f"{prefix}gyro_z_deg_s",
@@ -1487,9 +1525,9 @@ class StreamingPerImuCsvWriter:
                 row["raw_gyro_y"],
                 row["raw_gyro_z"],
                 row["temp_raw"],
-                _format_float(float(row["accel_x_mps2"])),
-                _format_float(float(row["accel_y_mps2"])),
-                _format_float(float(row["accel_z_mps2"])),
+                _format_float(float(row["accel_x_g"])),
+                _format_float(float(row["accel_y_g"])),
+                _format_float(float(row["accel_z_g"])),
                 _format_float(float(row["gyro_x_deg_s"])),
                 _format_float(float(row["gyro_y_deg_s"])),
                 _format_float(float(row["gyro_z_deg_s"])),
@@ -1514,9 +1552,9 @@ class StreamingPollComparisonWriter:
             header.extend(
                 [
                     f"{imu_name}_pkt_count",
-                    f"{imu_name}_accel_x_mps2",
-                    f"{imu_name}_accel_y_mps2",
-                    f"{imu_name}_accel_z_mps2",
+                    f"{imu_name}_accel_x_g",
+                    f"{imu_name}_accel_y_g",
+                    f"{imu_name}_accel_z_g",
                     f"{imu_name}_gyro_x_deg_s",
                     f"{imu_name}_gyro_y_deg_s",
                     f"{imu_name}_gyro_z_deg_s",
@@ -1549,9 +1587,9 @@ class StreamingPollComparisonWriter:
             row_out.extend(
                 [
                     agg.packet_count,
-                    _format_float(agg.accel_x_sum / agg.packet_count),
-                    _format_float(agg.accel_y_sum / agg.packet_count),
-                    _format_float(agg.accel_z_sum / agg.packet_count),
+                    _format_float(agg.accel_x_sum_g / agg.packet_count),
+                    _format_float(agg.accel_y_sum_g / agg.packet_count),
+                    _format_float(agg.accel_z_sum_g / agg.packet_count),
                     _format_float(agg.gyro_x_sum / agg.packet_count),
                     _format_float(agg.gyro_y_sum / agg.packet_count),
                     _format_float(agg.gyro_z_sum / agg.packet_count),
@@ -1601,9 +1639,9 @@ def decode_real_imu_raw_packets_to_csv(
                 "raw_gyro_y",
                 "raw_gyro_z",
                 "temp_raw",
-                "accel_x_mps2",
-                "accel_y_mps2",
-                "accel_z_mps2",
+                "accel_x_g",
+                "accel_y_g",
+                "accel_z_g",
                 "gyro_x_deg_s",
                 "gyro_y_deg_s",
                 "gyro_z_deg_s",
@@ -1635,9 +1673,9 @@ def decode_real_imu_raw_packets_to_csv(
                         row["raw_gyro_y"],
                         row["raw_gyro_z"],
                         row["temp_raw"],
-                        _format_float(float(row["accel_x_mps2"])),
-                        _format_float(float(row["accel_y_mps2"])),
-                        _format_float(float(row["accel_z_mps2"])),
+                        _format_float(float(row["accel_x_g"])),
+                        _format_float(float(row["accel_y_g"])),
+                        _format_float(float(row["accel_z_g"])),
                         _format_float(float(row["gyro_x_deg_s"])),
                         _format_float(float(row["gyro_y_deg_s"])),
                         _format_float(float(row["gyro_z_deg_s"])),
@@ -2098,14 +2136,64 @@ def _count_csv_data_rows(csv_path: Path) -> int:
 def _collect_poll_comparison_stats(comparison_csv_path: Path) -> dict[str, object]:
     poll_row_count = 0
     packet_sum_by_imu = {imu_id: 0 for imu_id in IMU_ID_TO_NAME}
+    packet_min_by_imu: dict[int, int | None] = {imu_id: None for imu_id in IMU_ID_TO_NAME}
+    packet_max_by_imu = {imu_id: 0 for imu_id in IMU_ID_TO_NAME}
+    zero_packet_poll_count_by_imu = {imu_id: 0 for imu_id in IMU_ID_TO_NAME}
+    nonzero_poll_count_by_imu = {imu_id: 0 for imu_id in IMU_ID_TO_NAME}
+    poll_gap_count = 0
+    missing_poll_count = 0
+    max_poll_gap = 0
+    poll_reversal_count = 0
+    poll_gap_events: list[dict[str, int]] = []
+    prev_poll_count: int | None = None
 
     with comparison_csv_path.open("r", newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
+        fieldnames = set(reader.fieldnames or [])
         for row in reader:
+            poll_count_raw = row.get("poll_count", "0")
+            poll_count = int(float(poll_count_raw or 0))
             poll_row_count += 1
+            if prev_poll_count is not None:
+                poll_delta = poll_count - prev_poll_count
+                if poll_delta > 1:
+                    gap_size = poll_delta - 1
+                    poll_gap_count += 1
+                    missing_poll_count += gap_size
+                    max_poll_gap = max(max_poll_gap, gap_size)
+                    poll_gap_events.append(
+                        {
+                            "prev_poll_count": prev_poll_count,
+                            "curr_poll_count": poll_count,
+                            "missing_poll_count": gap_size,
+                        }
+                    )
+                elif poll_delta <= 0:
+                    poll_reversal_count += 1
+            prev_poll_count = poll_count
+
             for imu_id, imu_name in IMU_ID_TO_NAME.items():
                 pkt_count_field = f"{imu_name}_pkt_count"
-                packet_sum_by_imu[imu_id] += int(float(row.get(pkt_count_field, "0") or 0))
+                if pkt_count_field in fieldnames:
+                    pkt_count = int(float(row.get(pkt_count_field, "0") or 0))
+                else:
+                    # Backward compatibility for older compare CSV without *_pkt_count columns.
+                    accel_g_field = f"{imu_name}_accel_x_g"
+                    accel_legacy_field = f"{imu_name}_accel_x_mps2"
+                    pkt_count = 1 if (
+                        str(row.get(accel_g_field, "") or "").strip()
+                        or str(row.get(accel_legacy_field, "") or "").strip()
+                    ) else 0
+                packet_sum_by_imu[imu_id] += pkt_count
+                if pkt_count > 0:
+                    nonzero_poll_count_by_imu[imu_id] += 1
+                    current_min = packet_min_by_imu[imu_id]
+                    if current_min is None or pkt_count < current_min:
+                        packet_min_by_imu[imu_id] = pkt_count
+                    if pkt_count > packet_max_by_imu[imu_id]:
+                        packet_max_by_imu[imu_id] = pkt_count
+                else:
+                    zero_packet_poll_count_by_imu[imu_id] += 1
 
     avg_packets_per_poll = {
         imu_id: (packet_sum_by_imu[imu_id] / poll_row_count if poll_row_count > 0 else 0.0)
@@ -2115,6 +2203,21 @@ def _collect_poll_comparison_stats(comparison_csv_path: Path) -> dict[str, objec
         "poll_row_count": poll_row_count,
         "poll_total_duration_s": poll_row_count * ARW_REPORT_POLL_PERIOD_S,
         "avg_packets_per_poll": avg_packets_per_poll,
+        "poll_gap_count": poll_gap_count,
+        "missing_poll_count": missing_poll_count,
+        "max_poll_gap": max_poll_gap,
+        "poll_reversal_count": poll_reversal_count,
+        "poll_gap_events": poll_gap_events[:8],
+        "per_imu": {
+            imu_id: {
+                "avg_packets_per_poll": avg_packets_per_poll[imu_id],
+                "min_packets_per_poll": int(packet_min_by_imu[imu_id] or 0),
+                "max_packets_per_poll": int(packet_max_by_imu[imu_id]),
+                "nonzero_poll_count": int(nonzero_poll_count_by_imu[imu_id]),
+                "zero_packet_poll_count": int(zero_packet_poll_count_by_imu[imu_id]),
+            }
+            for imu_id in IMU_ID_TO_NAME
+        },
     }
 
 
@@ -2132,7 +2235,6 @@ def _load_decimated_imu_csv_series(imu_id: int, csv_path: Path, decimation_facto
     prefix = f"{imu_name}_"
     ts_field = f"{prefix}packet_timestamp_continuous"
     gyro_fields = {axis: f"{prefix}gyro_{axis}_deg_s" for axis in ("x", "y", "z")}
-    accel_fields = {axis: f"{prefix}accel_{axis}_mps2" for axis in ("x", "y", "z")}
 
     series = DecimatedImuSeries(decimation_factor=max(decimation_factor, 1))
     with csv_path.open("r", newline="", encoding="utf-8") as handle:
@@ -2143,9 +2245,9 @@ def _load_decimated_imu_csv_series(imu_id: int, csv_path: Path, decimation_facto
                 gyro_x_deg_s=float(row.get(gyro_fields["x"], "0") or 0.0),
                 gyro_y_deg_s=float(row.get(gyro_fields["y"], "0") or 0.0),
                 gyro_z_deg_s=float(row.get(gyro_fields["z"], "0") or 0.0),
-                acc_x_mps2=float(row.get(accel_fields["x"], "0") or 0.0),
-                acc_y_mps2=float(row.get(accel_fields["y"], "0") or 0.0),
-                acc_z_mps2=float(row.get(accel_fields["z"], "0") or 0.0),
+                acc_x_mps2=_read_accel_csv_value_mps2(row, prefix, "x"),
+                acc_y_mps2=_read_accel_csv_value_mps2(row, prefix, "y"),
+                acc_z_mps2=_read_accel_csv_value_mps2(row, prefix, "z"),
             )
     return series
 
@@ -2160,6 +2262,290 @@ def _format_file_size(byte_count: int) -> str:
     return f"{value:.2f} {units[unit_index]}"
 
 
+def _nominal_packet_period_us(imu_id: int) -> float:
+    odr_hz = float(IMU_CONFIGS.get(imu_id, {}).get("odr_hz", 0.0) or 0.0)
+    if odr_hz <= 0.0:
+        return 0.0
+    return 1_000_000.0 / odr_hz
+
+
+def _classify_vibe_continuity(report: dict[str, object]) -> tuple[str, list[str]]:
+    notes: list[str] = []
+
+    estimated_missing_samples = int(report.get("estimated_missing_samples", 0) or 0)
+    duplicate_timestamp_count = int(report.get("duplicate_timestamp_count", 0) or 0)
+    backward_timestamp_count = int(report.get("backward_timestamp_count", 0) or 0)
+    poll_gap_count = int(report.get("poll_gap_count", 0) or 0)
+    missing_poll_count = int(report.get("missing_poll_count", 0) or 0)
+    poll_reversal_count = int(report.get("poll_reversal_count", 0) or 0)
+    longest_identical_run_samples = int(report.get("longest_identical_run_samples", 0) or 0)
+    saturated_packet_ratio_pct = float(report.get("saturated_packet_ratio_pct", 0.0) or 0.0)
+    timestamp_abnormal_step_count = int(report.get("timestamp_abnormal_step_count", 0) or 0)
+
+    if estimated_missing_samples > 0:
+        notes.append(f"估算丢样 {estimated_missing_samples} 包")
+    if duplicate_timestamp_count > 0:
+        notes.append(f"重复时间戳 {duplicate_timestamp_count} 次")
+    if backward_timestamp_count > 0:
+        notes.append(f"时间戳回跳 {backward_timestamp_count} 次")
+    if poll_gap_count > 0:
+        notes.append(f"poll 缺口 {poll_gap_count} 处 / 缺失 {missing_poll_count} 个 poll")
+    if poll_reversal_count > 0:
+        notes.append(f"poll 回跳 {poll_reversal_count} 次")
+
+    hard_fail = bool(notes)
+    if hard_fail:
+        if longest_identical_run_samples >= 4:
+            notes.append(f"连续重复输出最长 {longest_identical_run_samples} 包")
+        if saturated_packet_ratio_pct >= 1.0:
+            notes.append(f"满量程裁剪 {saturated_packet_ratio_pct:.2f}%")
+        if timestamp_abnormal_step_count > 0:
+            notes.append(f"异常时间步长 {timestamp_abnormal_step_count} 次")
+        return "失败", notes
+
+    if longest_identical_run_samples >= 8:
+        notes.append(f"连续重复输出最长 {longest_identical_run_samples} 包")
+    if saturated_packet_ratio_pct >= 1.0:
+        notes.append(f"满量程裁剪 {saturated_packet_ratio_pct:.2f}%")
+    if timestamp_abnormal_step_count > 0:
+        notes.append(f"异常时间步长 {timestamp_abnormal_step_count} 次")
+
+    if notes:
+        return "需关注", notes
+    return "通过", ["未见掉样、回跳或长时间重复输出"]
+
+
+def _analyze_vibe_single_imu_csv(
+    imu_id: int,
+    csv_path: Path,
+    progress: ParseProgressReporter | None = None,
+) -> dict[str, object]:
+    imu_name = _imu_name_from_id(imu_id)
+    prefix = f"{imu_name}_"
+    ts_field = f"{prefix}packet_timestamp_continuous"
+    poll_ts_field = f"{prefix}poll_timestamp_us"
+    packet_index_in_capture_field = f"{prefix}packet_index_in_capture"
+    temp_field = f"{prefix}temp_c"
+    temp_raw_field = f"{prefix}temp_raw"
+    raw_accel_fields = {axis: f"{prefix}raw_accel_{axis}" for axis in ("x", "y", "z")}
+    raw_gyro_fields = {axis: f"{prefix}raw_gyro_{axis}" for axis in ("x", "y", "z")}
+
+    sample_count = 0
+    first_timestamp_us = 0
+    last_timestamp_us = 0
+    last_poll_timestamp_us = 0
+    prev_timestamp_us: int | None = None
+    valid_steps_us: list[int] = []
+    gap_events: list[dict[str, int]] = []
+    timestamp_gap_count = 0
+    estimated_missing_samples = 0
+    duplicate_timestamp_count = 0
+    backward_timestamp_count = 0
+    timestamp_abnormal_step_count = 0
+    temp_sum_c = 0.0
+    temp_min_c = float("inf")
+    temp_max_c = float("-inf")
+    repeated_sample_transition_count = 0
+    longest_identical_run_samples = 0
+    identical_run_events: list[dict[str, int]] = []
+    prev_sample_signature: tuple[int, ...] | None = None
+    identical_run_length = 0
+    identical_run_start_sample_index = 0
+    identical_run_start_timestamp_us = 0
+    saturated_packet_count = 0
+    accel_saturated_packet_count = 0
+    gyro_saturated_packet_count = 0
+    nominal_packet_period_us = _nominal_packet_period_us(imu_id)
+    timestamp_tolerance_us = max(2.0, nominal_packet_period_us * 0.2) if nominal_packet_period_us > 0.0 else 2.0
+
+    def _finalize_identical_run(end_sample_index: int, end_timestamp_us: int) -> None:
+        nonlocal longest_identical_run_samples
+        if identical_run_length <= 0:
+            return
+        if identical_run_length > longest_identical_run_samples:
+            longest_identical_run_samples = identical_run_length
+        if identical_run_length >= 2:
+            identical_run_events.append(
+                {
+                    "start_sample_index": identical_run_start_sample_index,
+                    "end_sample_index": end_sample_index,
+                    "sample_count": identical_run_length,
+                    "duration_us": max(end_timestamp_us - identical_run_start_timestamp_us, 0),
+                }
+            )
+
+    with csv_path.open("r", newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        for row_index, row in enumerate(reader, start=1):
+            timestamp_us = int(float(row.get(ts_field, "0") or 0))
+            poll_timestamp_us = int(float(row.get(poll_ts_field, "0") or 0))
+            packet_index_in_capture = int(float(row.get(packet_index_in_capture_field, "0") or 0))
+            temp_c = float(row.get(temp_field, "0") or 0.0)
+            temp_raw = int(float(row.get(temp_raw_field, "0") or 0))
+            raw_accel = tuple(int(float(row.get(raw_accel_fields[axis], "0") or 0)) for axis in ("x", "y", "z"))
+            raw_gyro = tuple(int(float(row.get(raw_gyro_fields[axis], "0") or 0)) for axis in ("x", "y", "z"))
+            previous_timestamp_us = prev_timestamp_us
+
+            if sample_count == 0:
+                first_timestamp_us = timestamp_us
+            last_timestamp_us = timestamp_us
+            last_poll_timestamp_us = poll_timestamp_us
+            sample_count += 1
+
+            temp_sum_c += temp_c
+            if temp_c < temp_min_c:
+                temp_min_c = temp_c
+            if temp_c > temp_max_c:
+                temp_max_c = temp_c
+
+            if previous_timestamp_us is not None:
+                dt_us = timestamp_us - previous_timestamp_us
+                if dt_us > 0:
+                    valid_steps_us.append(dt_us)
+                    if nominal_packet_period_us > 0.0:
+                        if dt_us > nominal_packet_period_us + timestamp_tolerance_us:
+                            estimated_total_steps = max(int(round(dt_us / nominal_packet_period_us)), 1)
+                            missing_samples = max(estimated_total_steps - 1, 1)
+                            timestamp_gap_count += 1
+                            estimated_missing_samples += missing_samples
+                            gap_events.append(
+                                {
+                                    "sample_index": sample_count,
+                                    "packet_index_in_capture": packet_index_in_capture,
+                                    "delta_us": dt_us,
+                                    "estimated_missing_samples": missing_samples,
+                                }
+                            )
+                        elif dt_us < max(nominal_packet_period_us - timestamp_tolerance_us, 1.0):
+                            timestamp_abnormal_step_count += 1
+                elif dt_us == 0:
+                    duplicate_timestamp_count += 1
+                else:
+                    backward_timestamp_count += 1
+            prev_timestamp_us = timestamp_us
+
+            sample_signature = raw_accel + raw_gyro + (temp_raw,)
+            if prev_sample_signature is None:
+                identical_run_length = 1
+                identical_run_start_sample_index = sample_count
+                identical_run_start_timestamp_us = timestamp_us
+            elif sample_signature == prev_sample_signature:
+                identical_run_length += 1
+                repeated_sample_transition_count += 1
+            else:
+                _finalize_identical_run(sample_count - 1, previous_timestamp_us if previous_timestamp_us is not None else timestamp_us)
+                identical_run_length = 1
+                identical_run_start_sample_index = sample_count
+                identical_run_start_timestamp_us = timestamp_us
+            prev_sample_signature = sample_signature
+
+            accel_saturated = any(value in (ACCEL_RAW_MIN, ACCEL_RAW_MAX) for value in raw_accel)
+            gyro_saturated = any(value in (GYRO_RAW_MIN, GYRO_RAW_MAX) for value in raw_gyro)
+            if accel_saturated:
+                accel_saturated_packet_count += 1
+            if gyro_saturated:
+                gyro_saturated_packet_count += 1
+            if accel_saturated or gyro_saturated:
+                saturated_packet_count += 1
+
+            if progress is not None:
+                progress.packet_count = row_index
+                progress.maybe_report()
+
+    if sample_count > 0:
+        _finalize_identical_run(sample_count, last_timestamp_us)
+
+    duration_s = (last_timestamp_us - first_timestamp_us) / 1_000_000.0 if sample_count >= 2 else 0.0
+    packet_period_mean_us = _mean([float(step) for step in valid_steps_us]) if valid_steps_us else 0.0
+    packet_period_std_us = _std([float(step) for step in valid_steps_us]) if valid_steps_us else 0.0
+    packet_rate_hz = 1_000_000.0 / packet_period_mean_us if packet_period_mean_us > 0.0 else 0.0
+    temp_mean_c = temp_sum_c / sample_count if sample_count > 0 else 0.0
+    effective_sample_total = sample_count + estimated_missing_samples
+    continuity_ratio_pct = sample_count / effective_sample_total * 100.0 if effective_sample_total > 0 else 0.0
+    repeated_packet_ratio_pct = (
+        repeated_sample_transition_count / max(sample_count - 1, 1) * 100.0 if sample_count > 1 else 0.0
+    )
+    saturated_packet_ratio_pct = saturated_packet_count / sample_count * 100.0 if sample_count > 0 else 0.0
+
+    identical_run_events.sort(key=lambda item: (-int(item["sample_count"]), -int(item["duration_us"])))
+    gap_events.sort(key=lambda item: (-int(item["estimated_missing_samples"]), -int(item["delta_us"])))
+
+    return {
+        "imu_id": imu_id,
+        "imu_name": imu_name,
+        "configured_odr_hz": float(IMU_CONFIGS.get(imu_id, {}).get("odr_hz", 0.0) or 0.0),
+        "accel_range_g": float(IMU_CONFIGS.get(imu_id, {}).get("accel_range_g", 0.0) or 0.0),
+        "gyro_range_dps": float(IMU_CONFIGS.get(imu_id, {}).get("gyro_range_dps", 0.0) or 0.0),
+        "sample_count": sample_count,
+        "duration_s": duration_s,
+        "packet_period_mean_us": packet_period_mean_us,
+        "packet_period_std_us": packet_period_std_us,
+        "packet_rate_hz": packet_rate_hz,
+        "nominal_packet_period_us": nominal_packet_period_us,
+        "timestamp_gap_count": timestamp_gap_count,
+        "estimated_missing_samples": estimated_missing_samples,
+        "duplicate_timestamp_count": duplicate_timestamp_count,
+        "backward_timestamp_count": backward_timestamp_count,
+        "timestamp_abnormal_step_count": timestamp_abnormal_step_count,
+        "gap_events": gap_events[:8],
+        "continuity_ratio_pct": continuity_ratio_pct,
+        "first_timestamp_us": first_timestamp_us,
+        "last_timestamp_us": last_timestamp_us,
+        "last_poll_timestamp_us": last_poll_timestamp_us,
+        "temp_mean_c": temp_mean_c,
+        "temp_min_c": temp_min_c if sample_count > 0 else 0.0,
+        "temp_max_c": temp_max_c if sample_count > 0 else 0.0,
+        "repeated_sample_transition_count": repeated_sample_transition_count,
+        "repeated_packet_ratio_pct": repeated_packet_ratio_pct,
+        "longest_identical_run_samples": longest_identical_run_samples,
+        "identical_run_events": identical_run_events[:8],
+        "accel_saturated_packet_count": accel_saturated_packet_count,
+        "gyro_saturated_packet_count": gyro_saturated_packet_count,
+        "saturated_packet_count": saturated_packet_count,
+        "saturated_packet_ratio_pct": saturated_packet_ratio_pct,
+    }
+
+
+def _analyze_vibe_per_imu_from_csvs(
+    per_imu_csv_paths: dict[int, Path],
+    poll_stats: dict[str, object],
+    progress_callback: Callable[[str], None] | None = None,
+) -> dict[int, dict[str, object]]:
+    report: dict[int, dict[str, object]] = {}
+    poll_per_imu = poll_stats.get("per_imu", {})
+    if not isinstance(poll_per_imu, dict):
+        poll_per_imu = {}
+
+    for imu_id, path in sorted(per_imu_csv_paths.items()):
+        progress = ParseProgressReporter(
+            total_bytes=path.stat().st_size,
+            callback=progress_callback,
+            stage=f"{_imu_name_from_id(imu_id)} 连续性统计",
+        )
+        progress.log(f"{_imu_name_from_id(imu_id)}: 开始统计振动条件下输出连续性")
+        report_item = _analyze_vibe_single_imu_csv(imu_id, path, progress=progress)
+
+        poll_item = poll_per_imu.get(imu_id) or poll_per_imu.get(str(imu_id)) or {}
+        report_item["avg_packets_per_poll"] = float(poll_item.get("avg_packets_per_poll", 0.0) or 0.0)
+        report_item["min_packets_per_poll"] = int(poll_item.get("min_packets_per_poll", 0) or 0)
+        report_item["max_packets_per_poll"] = int(poll_item.get("max_packets_per_poll", 0) or 0)
+        report_item["nonzero_poll_count"] = int(poll_item.get("nonzero_poll_count", 0) or 0)
+        report_item["zero_packet_poll_count"] = int(poll_item.get("zero_packet_poll_count", 0) or 0)
+        report_item["poll_gap_count"] = int(poll_stats.get("poll_gap_count", 0) or 0)
+        report_item["missing_poll_count"] = int(poll_stats.get("missing_poll_count", 0) or 0)
+        report_item["max_poll_gap"] = int(poll_stats.get("max_poll_gap", 0) or 0)
+        report_item["poll_reversal_count"] = int(poll_stats.get("poll_reversal_count", 0) or 0)
+        report_item["poll_gap_events"] = list(poll_stats.get("poll_gap_events", []) or [])
+        report_item["poll_row_count"] = int(poll_stats.get("poll_row_count", 0) or 0)
+
+        continuity_status, continuity_notes = _classify_vibe_continuity(report_item)
+        report_item["continuity_status"] = continuity_status
+        report_item["continuity_notes"] = continuity_notes
+        report[imu_id] = report_item
+        progress.maybe_report(force=True, extra="统计完成")
+    return report
+
+
 def _analyze_single_imu_csv(
     imu_id: int,
     csv_path: Path,
@@ -2172,7 +2558,6 @@ def _analyze_single_imu_csv(
     poll_ts_field = f"{prefix}poll_timestamp_us"
     temp_field = f"{prefix}temp_c"
     gyro_fields = {axis: f"{prefix}gyro_{axis}_deg_s" for axis in ("x", "y", "z")}
-    accel_fields = {axis: f"{prefix}accel_{axis}_mps2" for axis in ("x", "y", "z")}
 
     series = DecimatedImuSeries(decimation_factor=max(decimation_factor, 1))
     sample_count = 0
@@ -2196,9 +2581,9 @@ def _analyze_single_imu_csv(
             gyro_x_deg_s = float(row.get(gyro_fields["x"], "0") or 0.0)
             gyro_y_deg_s = float(row.get(gyro_fields["y"], "0") or 0.0)
             gyro_z_deg_s = float(row.get(gyro_fields["z"], "0") or 0.0)
-            acc_x_mps2 = float(row.get(accel_fields["x"], "0") or 0.0)
-            acc_y_mps2 = float(row.get(accel_fields["y"], "0") or 0.0)
-            acc_z_mps2 = float(row.get(accel_fields["z"], "0") or 0.0)
+            acc_x_mps2 = _read_accel_csv_value_mps2(row, prefix, "x")
+            acc_y_mps2 = _read_accel_csv_value_mps2(row, prefix, "y")
+            acc_z_mps2 = _read_accel_csv_value_mps2(row, prefix, "z")
             temp_c = float(row.get(temp_field, "0") or 0.0)
 
             if sample_count == 0:
@@ -2457,7 +2842,6 @@ def _analyze_temp_single_imu_csv(
     poll_ts_field = f"{prefix}poll_timestamp_us"
     temp_field = f"{prefix}temp_c"
     gyro_fields = {axis: f"{prefix}gyro_{axis}_deg_s" for axis in ("x", "y", "z")}
-    accel_fields = {axis: f"{prefix}accel_{axis}_mps2" for axis in ("x", "y", "z")}
 
     sample_count = 0
     first_timestamp_us = 0
@@ -2496,9 +2880,9 @@ def _analyze_temp_single_imu_csv(
             gyro_x_deg_s = float(row.get(gyro_fields["x"], "0") or 0.0)
             gyro_y_deg_s = float(row.get(gyro_fields["y"], "0") or 0.0)
             gyro_z_deg_s = float(row.get(gyro_fields["z"], "0") or 0.0)
-            acc_x_mps2 = float(row.get(accel_fields["x"], "0") or 0.0)
-            acc_y_mps2 = float(row.get(accel_fields["y"], "0") or 0.0)
-            acc_z_mps2 = float(row.get(accel_fields["z"], "0") or 0.0)
+            acc_x_mps2 = _read_accel_csv_value_mps2(row, prefix, "x")
+            acc_y_mps2 = _read_accel_csv_value_mps2(row, prefix, "y")
+            acc_z_mps2 = _read_accel_csv_value_mps2(row, prefix, "z")
 
             if sample_count == 0:
                 first_timestamp_us = timestamp_us
@@ -2822,6 +3206,77 @@ def _write_temp_summary_csv(destination: Path, per_imu_report: dict[int, dict[st
     return csv_path
 
 
+def _write_vibe_summary_csv(destination: Path, per_imu_report: dict[int, dict[str, object]]) -> Path:
+    csv_path = destination.parent / f"{destination.stem}_vibe_summary.csv"
+    with csv_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(
+            [
+                "imu_id",
+                "imu_name",
+                "continuity_status",
+                "sample_count",
+                "packet_rate_hz",
+                "packet_period_mean_us",
+                "packet_period_std_us",
+                "timestamp_gap_count",
+                "estimated_missing_samples",
+                "duplicate_timestamp_count",
+                "backward_timestamp_count",
+                "timestamp_abnormal_step_count",
+                "poll_gap_count",
+                "missing_poll_count",
+                "poll_reversal_count",
+                "avg_packets_per_poll",
+                "min_packets_per_poll",
+                "max_packets_per_poll",
+                "zero_packet_poll_count",
+                "longest_identical_run_samples",
+                "repeated_packet_ratio_pct",
+                "saturated_packet_ratio_pct",
+                "accel_saturated_packet_count",
+                "gyro_saturated_packet_count",
+                "temp_min_c",
+                "temp_max_c",
+                "continuity_notes",
+            ]
+        )
+        for imu_id in sorted(int(key) for key in per_imu_report):
+            sr = per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id)) or {}
+            writer.writerow(
+                [
+                    imu_id,
+                    sr.get("imu_name", _imu_name_from_id(imu_id)),
+                    sr.get("continuity_status", ""),
+                    int(sr.get("sample_count", 0)),
+                    _format_float(float(sr.get("packet_rate_hz", 0.0))),
+                    _format_float(float(sr.get("packet_period_mean_us", 0.0))),
+                    _format_float(float(sr.get("packet_period_std_us", 0.0))),
+                    int(sr.get("timestamp_gap_count", 0)),
+                    int(sr.get("estimated_missing_samples", 0)),
+                    int(sr.get("duplicate_timestamp_count", 0)),
+                    int(sr.get("backward_timestamp_count", 0)),
+                    int(sr.get("timestamp_abnormal_step_count", 0)),
+                    int(sr.get("poll_gap_count", 0)),
+                    int(sr.get("missing_poll_count", 0)),
+                    int(sr.get("poll_reversal_count", 0)),
+                    _format_float(float(sr.get("avg_packets_per_poll", 0.0))),
+                    int(sr.get("min_packets_per_poll", 0)),
+                    int(sr.get("max_packets_per_poll", 0)),
+                    int(sr.get("zero_packet_poll_count", 0)),
+                    int(sr.get("longest_identical_run_samples", 0)),
+                    _format_float(float(sr.get("repeated_packet_ratio_pct", 0.0))),
+                    _format_float(float(sr.get("saturated_packet_ratio_pct", 0.0))),
+                    int(sr.get("accel_saturated_packet_count", 0)),
+                    int(sr.get("gyro_saturated_packet_count", 0)),
+                    _format_float(float(sr.get("temp_min_c", 0.0))),
+                    _format_float(float(sr.get("temp_max_c", 0.0))),
+                    "；".join(str(item) for item in sr.get("continuity_notes", [])),
+                ]
+            )
+    return csv_path
+
+
 def _coefficient_of_variation_pct(values: list[float]) -> float:
     if len(values) < 2:
         return 0.0
@@ -2837,9 +3292,9 @@ def analyze_real_imu_frames(
     if not frames:
         raise ValueError("no frames found")
 
-    acc_x = [_raw_accel_to_mps2(frame.accel_x, 1) for frame in frames]
-    acc_y = [_raw_accel_to_mps2(frame.accel_y, 1) for frame in frames]
-    acc_z = [_raw_accel_to_mps2(frame.accel_z, 1) for frame in frames]
+    acc_x = [_raw_accel_to_g(frame.accel_x, 1) for frame in frames]
+    acc_y = [_raw_accel_to_g(frame.accel_y, 1) for frame in frames]
+    acc_z = [_raw_accel_to_g(frame.accel_z, 1) for frame in frames]
     gyro_x = [_raw_gyro_to_rad_s(frame.gyro_x, 1) for frame in frames]
     gyro_y = [_raw_gyro_to_rad_s(frame.gyro_y, 1) for frame in frames]
     gyro_z = [_raw_gyro_to_rad_s(frame.gyro_z, 1) for frame in frames]
@@ -2880,9 +3335,9 @@ def analyze_real_imu_frames(
     if test_key == "bias":
         common.update(
             {
-                "acc_mean_x_mps2": f"{_mean(acc_x):.3f}",
-                "acc_mean_y_mps2": f"{_mean(acc_y):.3f}",
-                "acc_mean_z_mps2": f"{_mean(acc_z):.3f}",
+                "acc_mean_x_g": f"{_mean(acc_x):.3f}",
+                "acc_mean_y_g": f"{_mean(acc_y):.3f}",
+                "acc_mean_z_g": f"{_mean(acc_z):.3f}",
                 "gyro_mean_x_rad_s": f"{_mean(gyro_x):.3f}",
                 "gyro_mean_y_rad_s": f"{_mean(gyro_y):.3f}",
                 "gyro_mean_z_rad_s": f"{_mean(gyro_z):.3f}",
@@ -2933,9 +3388,9 @@ def analyze_real_imu_frames(
                 "allan_point_count_x": str(int(axis_metrics["x"]["allan_point_count"])),
                 "allan_point_count_y": str(int(axis_metrics["y"]["allan_point_count"])),
                 "allan_point_count_z": str(int(axis_metrics["z"]["allan_point_count"])),
-                "acc_rms_x_mps2": f"{_rms(acc_x):.3f}",
-                "acc_rms_y_mps2": f"{_rms(acc_y):.3f}",
-                "acc_rms_z_mps2": f"{_rms(acc_z):.3f}",
+                "acc_rms_x_g": f"{_rms(acc_x):.3f}",
+                "acc_rms_y_g": f"{_rms(acc_y):.3f}",
+                "acc_rms_z_g": f"{_rms(acc_z):.3f}",
             }
         )
         if raw_captures:
@@ -2965,9 +3420,9 @@ def analyze_real_imu_frames(
         common.update(
             {
                 "fifo_abnormal_count": str(sum(1 for value in fifo_counts if value != 1)),
-                "acc_peak_x_mps2": f"{max(abs(v) for v in acc_x):.3f}",
-                "acc_peak_y_mps2": f"{max(abs(v) for v in acc_y):.3f}",
-                "acc_peak_z_mps2": f"{max(abs(v) for v in acc_z):.3f}",
+                "acc_peak_x_g": f"{max(abs(v) for v in acc_x):.3f}",
+                "acc_peak_y_g": f"{max(abs(v) for v in acc_y):.3f}",
+                "acc_peak_z_g": f"{max(abs(v) for v in acc_z):.3f}",
             }
         )
     elif test_key == "shock":
@@ -3760,6 +4215,175 @@ def _build_temp_markdown_lines(source: Path, summary: dict[str, object], destina
     return lines
 
 
+def _build_vibe_markdown_lines(source: Path, summary: dict[str, object], destination: Path) -> list[str]:
+    per_imu_report = summary.get("per_imu_report", {}) or {}
+    all_imu_ids = [
+        imu_id
+        for imu_id in sorted(int(k) for k in per_imu_report)
+        if per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id))
+    ]
+    if not all_imu_ids:
+        return ["# 振动环境输出连续性分析结果", "", f"- 源文件: `{source.name}`", "", "- 未解析到可用于连续性分析的 IMU 数据。"]
+
+    source_size_text = str(summary.get("source_size_text", _format_file_size(source.stat().st_size if source.exists() else 0)))
+    poll_total_duration_s = float(summary.get("poll_total_duration_s", 0.0) or 0.0)
+    poll_row_count = int(summary.get("poll_row_count", 0) or 0)
+    poll_gap_count = int(summary.get("poll_gap_count", 0) or 0)
+    missing_poll_count = int(summary.get("missing_poll_count", 0) or 0)
+    poll_reversal_count = int(summary.get("poll_reversal_count", 0) or 0)
+    summary_csv_name = str(summary.get("vibe_summary_csv", "-"))
+
+    status_counts = {"通过": 0, "需关注": 0, "失败": 0}
+    total_estimated_missing_samples = 0
+    total_duplicate_timestamps = 0
+    max_saturated_ratio_pct = 0.0
+    for imu_id in all_imu_ids:
+        sr = per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id)) or {}
+        status = str(sr.get("continuity_status", "需关注"))
+        status_counts[status] = status_counts.get(status, 0) + 1
+        total_estimated_missing_samples += int(sr.get("estimated_missing_samples", 0) or 0)
+        total_duplicate_timestamps += int(sr.get("duplicate_timestamp_count", 0) or 0)
+        max_saturated_ratio_pct = max(max_saturated_ratio_pct, float(sr.get("saturated_packet_ratio_pct", 0.0) or 0.0))
+
+    lines = [
+        "# 振动环境输出连续性分析结果",
+        "",
+        "## 结论先看",
+        "",
+        f"- BIN 文件: `{source.name}`，序号 `{source.stem}`，文件大小 `{source_size_text}`。",
+        (
+            f"- 本次记录的 poll 总时长: `{_format_duration_minutes_seconds(poll_total_duration_s)}`，共 `{poll_row_count}` 个 poll。"
+            if poll_row_count > 0
+            else "- 本次记录未统计到有效 poll。"
+        ),
+        (
+            f"- 全局 poll 连续性: 缺口 `{poll_gap_count}` 处，累计缺失 `{missing_poll_count}` 个 poll，"
+            f"poll 回跳 `{poll_reversal_count}` 次。"
+        ),
+        (
+            f"- IMU 结论分布: 通过 `{status_counts.get('通过', 0)}` 个，"
+            f"需关注 `{status_counts.get('需关注', 0)}` 个，失败 `{status_counts.get('失败', 0)}` 个。"
+        ),
+        (
+            f"- 汇总观察: 估算丢样 `{total_estimated_missing_samples}` 包，"
+            f"重复时间戳 `{total_duplicate_timestamps}` 次，"
+            f"最高满量程裁剪比例 `{max_saturated_ratio_pct:.2f}%`。"
+        ),
+        "- 本报告先解析 BIN 为每颗 IMU 的逐包 CSV，再使用 `packet_timestamp_continuous` 与 `poll_count` 联合判断连续性，避免只看 frame 汇总带来的误判。",
+        "",
+        "### 各 IMU 结论",
+        "",
+    ]
+
+    for imu_id in all_imu_ids:
+        sr = per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id)) or {}
+        note_text = "；".join(str(item) for item in sr.get("continuity_notes", []))
+        lines.append(
+            "- "
+            f"`{sr['imu_name']}`: `{sr.get('continuity_status', '需关注')}`，"
+            f"{note_text}；实测刷新率 `{float(sr.get('packet_rate_hz', 0.0)):.3f} Hz`，"
+            f"样本 `{int(sr.get('sample_count', 0))}`，"
+            f"平均每 poll `{float(sr.get('avg_packets_per_poll', 0.0)):.3f}` 包。"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## 连续性指标汇总",
+            "",
+            "| IMU | 结果 | 样本数 | 实测刷新率 (Hz) | 时间戳缺口 | 估算丢样 | 重复时间戳 | poll 缺口 | 平均每 poll 包数 | 最长重复输出 | 满量程裁剪 (%) |",
+            "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    for imu_id in all_imu_ids:
+        sr = per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id)) or {}
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    str(sr.get("imu_name", _imu_name_from_id(imu_id))),
+                    str(sr.get("continuity_status", "")),
+                    str(int(sr.get("sample_count", 0))),
+                    _format_float(float(sr.get("packet_rate_hz", 0.0))),
+                    str(int(sr.get("timestamp_gap_count", 0))),
+                    str(int(sr.get("estimated_missing_samples", 0))),
+                    str(int(sr.get("duplicate_timestamp_count", 0))),
+                    str(int(sr.get("poll_gap_count", 0))),
+                    _format_float(float(sr.get("avg_packets_per_poll", 0.0))),
+                    str(int(sr.get("longest_identical_run_samples", 0))),
+                    _format_float(float(sr.get("saturated_packet_ratio_pct", 0.0))),
+                ]
+            )
+            + " |"
+        )
+
+    lines.extend(["", "## 异常摘要", ""])
+    has_exception_details = False
+    for imu_id in all_imu_ids:
+        sr = per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id)) or {}
+        gap_events = list(sr.get("gap_events", []) or [])
+        identical_run_events = [
+            event for event in list(sr.get("identical_run_events", []) or []) if int(event.get("sample_count", 0)) >= 4
+        ]
+        should_render = bool(
+            gap_events
+            or identical_run_events
+            or float(sr.get("saturated_packet_ratio_pct", 0.0) or 0.0) > 0.0
+            or int(sr.get("duplicate_timestamp_count", 0) or 0) > 0
+        )
+        if not should_render:
+            continue
+        has_exception_details = True
+        lines.extend([f"### {sr.get('imu_name', _imu_name_from_id(imu_id))}", ""])
+        if gap_events:
+            for event in gap_events[:3]:
+                lines.append(
+                    "- "
+                    f"样本 `{int(event['sample_index'])}` 附近出现时间戳跳变 `{int(event['delta_us'])} us`，"
+                    f"估算丢失 `{int(event['estimated_missing_samples'])}` 包。"
+                )
+        if int(sr.get("duplicate_timestamp_count", 0) or 0) > 0:
+            lines.append(f"- 检测到重复时间戳 `{int(sr.get('duplicate_timestamp_count', 0))}` 次。")
+        if identical_run_events:
+            for event in identical_run_events[:2]:
+                lines.append(
+                    "- "
+                    f"样本 `{int(event['start_sample_index'])}~{int(event['end_sample_index'])}` "
+                    f"连续输出相同原始值 `{int(event['sample_count'])}` 包，持续 `{int(event['duration_us'])} us`。"
+                )
+        saturated_ratio_pct = float(sr.get("saturated_packet_ratio_pct", 0.0) or 0.0)
+        if saturated_ratio_pct > 0.0:
+            lines.append(
+                "- "
+                f"存在满量程裁剪：Accel 饱和 `{int(sr.get('accel_saturated_packet_count', 0))}` 包，"
+                f"Gyro 饱和 `{int(sr.get('gyro_saturated_packet_count', 0))}` 包，"
+                f"总体占比 `{saturated_ratio_pct:.2f}%`。"
+            )
+        lines.append("")
+    if not has_exception_details:
+        lines.append("- 所有 IMU 未见需要单独展开说明的异常事件。")
+        lines.append("")
+
+    lines.extend(
+        [
+            "## 判定逻辑",
+            "",
+            "- `时间戳缺口 / 估算丢样`: 基于每颗 IMU 的 `packet_timestamp_continuous` 做差分，并用配置 ODR 对应的理论包间隔 `1e6 / ODR` 估算缺失包数。",
+            "- `重复时间戳 / 回跳`: 若相邻逐包时间戳 `dt == 0` 记为重复，`dt < 0` 记为回跳；二者都直接判为连续性失败。",
+            "- `poll 缺口`: 来自 `poll_compare.csv` 的 `poll_count` 序列，若 `poll_count[n] - poll_count[n-1] > 1` 则认为中间 poll 丢失。",
+            "- `最长重复输出`: 以原始 `accel/gyro/temp` 元组做逐包比较；振动环境下若长时间完全相同，更像冻结或重复搬运，不像真实输出。",
+            "- `满量程裁剪`: 任一轴原始值达到 `int16` 上下限即记为裁剪，这不一定说明掉样，但会明显削弱振动测试结论可信度。",
+            "",
+            "## 导出文件",
+            "",
+            f"- 连续性汇总 CSV: `{summary_csv_name}`。",
+            f"- 逐 poll 对比 CSV: `{summary.get('comparison_csv', '-')}`。",
+            f"- 每颗 IMU 的逐包 CSV: `{summary.get('per_imu_csvs', '-')}`。",
+        ]
+    )
+    return lines
+
+
 def _family_best_average(rankings: list[dict[str, object]], family: str, metric_type: str) -> float:
     values = []
     for ranking in rankings:
@@ -3904,7 +4528,7 @@ def _build_arw_markdown_lines(source: Path, summary: dict[str, object], destinat
             "## 指标计算过程",
             "",
             f"- 以下以 `{example_imu_name}` 的 `X` 轴为例说明；`Y/Z` 轴和其他 IMU 的处理流程完全一致，只是替换对应 CSV 列名。",
-            f"- 数据来源来自该 IMU 独立 CSV 中的原始列：时间轴使用 `{example_imu_name}_packet_timestamp_continuous`，Gyro X 使用 `{example_imu_name}_gyro_x_deg_s`，Acc X 使用 `{example_imu_name}_accel_x_mps2`。",
+            f"- 数据来源来自该 IMU 独立 CSV 中的原始列：时间轴使用 `{example_imu_name}_packet_timestamp_continuous`，Gyro X 使用 `{example_imu_name}_gyro_x_deg_s`，Acc X 使用 `{example_imu_name}_accel_x_g`。",
             "- 采样周期不再使用 poll 周期，而是直接对 `*_packet_timestamp_continuous` 做正向差分统计，取均值作为该 IMU 的实际包间隔。",
             (
                 f"- 以本例为例，实际平均包间隔约为 `{example_dt_us:.3f} us`，即 `dt = {example_dt_s:.9f} s`。"
@@ -3918,11 +4542,12 @@ def _build_arw_markdown_lines(source: Path, summary: dict[str, object], destinat
             "```text",
             "timestamp_us[n] = *_packet_timestamp_continuous",
             "gyro_x[n]      = *_gyro_x_deg_s",
-            "acc_x[n]       = *_accel_x_mps2",
+            "acc_x_g[n]     = *_accel_x_g",
             "```",
             "",
             "- 其中 `timestamp_us[n]` 是解析后连续展开的包时间戳，单位 `us`，用于恢复该 IMU 自身的真实采样节拍。",
             "- Gyro 序列在 Allan 计算前会按脚本实现转换到 `rad/s` 再参与统计，但提取 ARW 时又按 `deg/s` 口径输出，最终单位为 `°/√hr`。",
+            "- Accel CSV 现在直接输出 `g`；进入 Allan/噪声统计前，脚本会再乘 `9.80665` 转回 `m/s²`，以保持噪声密度计算口径不变。",
             "",
             "### 2. 去均值",
             "",
@@ -3982,7 +4607,7 @@ def _build_arw_markdown_lines(source: Path, summary: dict[str, object], destinat
             "",
             "### 7. 为什么同一套流程可用于所有轴",
             "",
-            "- 各轴唯一变化的只是输入列名，例如 `gyro_y_deg_s`、`gyro_z_deg_s`、`accel_y_mps2`、`accel_z_mps2`。",
+            "- 各轴唯一变化的只是输入列名，例如 `gyro_y_deg_s`、`gyro_z_deg_s`、`accel_y_g`、`accel_z_g`。",
             "- 去均值、Allan deviation、白噪声区筛选和单位换算完全一致，因此说明一个轴即可覆盖全部轴的计算过程。",
         ]
     )
@@ -3995,6 +4620,9 @@ def _write_markdown_report(destination: Path, source: Path, summary: dict[str, o
         return
     if summary.get("test") == "temp":
         destination.write_text("\n".join(_build_temp_markdown_lines(source, summary, destination)) + "\n", encoding="utf-8")
+        return
+    if summary.get("test") == "vibe":
+        destination.write_text("\n".join(_build_vibe_markdown_lines(source, summary, destination)) + "\n", encoding="utf-8")
         return
 
     lines = ["# 数据分析报告", "", f"- 源文件: `{source}`", "", "## 摘要", ""]
@@ -4141,6 +4769,34 @@ def analyze_real_imu_bin_file(
             "temp_binned_csv": temp_binned_csv.name,
             "temp_summary_csv": temp_summary_csv.name,
             **temp_meta,
+        }
+    elif test_key == "vibe":
+        progress.log("逐包 CSV 已写出，开始基于每个 IMU 的 CSV 统计振动条件下输出连续性")
+        poll_stats = _collect_poll_comparison_stats(csv_path)
+        per_imu_report = _analyze_vibe_per_imu_from_csvs(
+            per_imu_csv_paths,
+            poll_stats,
+            progress_callback=progress_callback,
+        )
+        vibe_summary_csv = _write_vibe_summary_csv(md_path, per_imu_report)
+        primary_report = per_imu_report.get(primary_imu_id, {}) if primary_imu_id else {}
+        summary = {
+            "test": test_key,
+            "source": str(source),
+            "comparison_csv": csv_path.name,
+            "per_imu_csvs": ", ".join(path.name for _, path in sorted(per_imu_csv_paths.items())),
+            "per_imu_report": per_imu_report,
+            "source_size_text": _format_file_size(source.stat().st_size),
+            "poll_row_count": int(poll_stats.get("poll_row_count", 0)),
+            "poll_total_duration_s": float(poll_stats.get("poll_total_duration_s", 0.0)),
+            "poll_gap_count": int(poll_stats.get("poll_gap_count", 0)),
+            "missing_poll_count": int(poll_stats.get("missing_poll_count", 0)),
+            "max_poll_gap": int(poll_stats.get("max_poll_gap", 0)),
+            "poll_reversal_count": int(poll_stats.get("poll_reversal_count", 0)),
+            "vibe_summary_csv": vibe_summary_csv.name,
+            "primary_imu_name": _imu_name_from_id(primary_imu_id) if primary_imu_id else "unknown",
+            "frames": str(primary_report.get("sample_count", 0)),
+            "duration_s": f"{float(primary_report.get('duration_s', 0.0)):.3f}",
         }
     else:
         primary_captures = [capture for capture in legacy_raw_captures if capture.imu_id == primary_imu_id]
