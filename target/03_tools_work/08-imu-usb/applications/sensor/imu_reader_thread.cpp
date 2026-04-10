@@ -9,6 +9,7 @@ extern "C" {
 #include "fatfs_sdcard_port.h"
 #include "file_naming.h"
 #include "imu.h"
+#include "led_status.h"
 #include "session_manager.h"
 #include "usb_mode_manager.h"
 }
@@ -697,6 +698,7 @@ static void imu_poll_writer_thread_entry(void *parameter)
                 writer->thread = RT_NULL;
                 g_imu_poll_ctx.recording = RT_FALSE;
                 imu_poll_unlock();
+                led_status_set_mode(LED_STATUS_IDLE);
                 session_complete_current();
                 return;
             }
@@ -715,6 +717,7 @@ static void imu_poll_writer_thread_entry(void *parameter)
                 g_imu_poll_ctx.recording = RT_FALSE;
                 g_imu_poll_ctx.last_error = write_result;
                 imu_poll_unlock();
+                led_status_set_mode(LED_STATUS_ERROR);
                 session_complete_current();
                 return;
             }
@@ -891,6 +894,7 @@ static void imu_poll_thread_entry(void *parameter)
     g_imu_poll_ctx.stop_requested = RT_FALSE;
     g_imu_poll_ctx.poll_thread = RT_NULL;
     imu_poll_unlock();
+    led_status_set_mode((result == RT_EOK) ? LED_STATUS_IDLE : LED_STATUS_ERROR);
 }
 
 extern "C" int imu_reader_thread_probe_count(void)
@@ -981,6 +985,7 @@ extern "C" int imu_reader_thread_start_for_test(const char *test_name)
         {
             g_imu_poll_ctx.recording = RT_FALSE;
             imu_poll_unlock();
+            led_status_set_mode(LED_STATUS_ERROR);
             return -RT_ERROR;
         }
         mounted_here = RT_TRUE;
@@ -999,6 +1004,7 @@ extern "C" int imu_reader_thread_start_for_test(const char *test_name)
         }
         g_imu_poll_ctx.recording = RT_FALSE;
         imu_poll_unlock();
+        led_status_set_mode(LED_STATUS_ERROR);
         return -RT_ERROR;
     }
 
@@ -1017,6 +1023,7 @@ extern "C" int imu_reader_thread_start_for_test(const char *test_name)
     {
         g_imu_poll_ctx.recording = RT_FALSE;
         imu_poll_unlock();
+        led_status_set_mode(LED_STATUS_ERROR);
         return -RT_ENOMEM;
     }
 
@@ -1031,12 +1038,14 @@ extern "C" int imu_reader_thread_start_for_test(const char *test_name)
         g_imu_poll_ctx.writer.thread = RT_NULL;
         g_imu_poll_ctx.recording = RT_FALSE;
         imu_poll_unlock();
+        led_status_set_mode(LED_STATUS_ERROR);
         return -RT_ENOMEM;
     }
 
     rt_thread_startup(g_imu_poll_ctx.writer.thread);
     rt_thread_startup(g_imu_poll_ctx.poll_thread);
     imu_poll_unlock();
+    led_status_set_mode(LED_STATUS_RUNNING);
     return RT_EOK;
 }
 

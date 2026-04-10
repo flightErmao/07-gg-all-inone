@@ -2,10 +2,26 @@ from __future__ import annotations
 
 import unittest
 
-from imu_usb_tool import parse_noise_status_response
+from imu_usb_tool import parse_noise_start_response, parse_noise_status_response
 
 
 class TestParseNoiseStatusResponse(unittest.TestCase):
+
+    def test_parses_start_response(self) -> None:
+        response = (
+            "ACK cmd=noise_test_start received\r\n"
+            "RESULT cmd=noise_test_start status=accepted detected=4 duration_s=600 "
+            "dir=0:/03_arw file=0:/03_arw/141.BIN index=141\r\n"
+        )
+
+        result = parse_noise_start_response(response)
+
+        self.assertEqual(result.status, "accepted")
+        self.assertEqual(result.detected, 4)
+        self.assertEqual(result.duration_s, 600)
+        self.assertEqual(result.dir, "0:/03_arw")
+        self.assertEqual(result.file, "0:/03_arw/141.BIN")
+        self.assertEqual(result.index, 141)
 
     def test_parses_clean_response(self) -> None:
         response = (

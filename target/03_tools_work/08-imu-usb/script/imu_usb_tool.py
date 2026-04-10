@@ -213,7 +213,7 @@ class PacketRowBuilderState:
 
 @dataclass
 class DecimatedImuSeries:
-    max_points: int = MAX_ANALYSIS_SERIES_POINTS
+    max_points: int = 0
     raw_index: int = 0
     decimation_factor: int = 1
     timestamps_us: array = None  # type: ignore[assignment]
@@ -251,7 +251,7 @@ class DecimatedImuSeries:
             self.acc_x_mps2.append(float(acc_x_mps2))
             self.acc_y_mps2.append(float(acc_y_mps2))
             self.acc_z_mps2.append(float(acc_z_mps2))
-            if len(self.timestamps_us) > self.max_points:
+            if self.max_points > 0 and len(self.timestamps_us) > self.max_points:
                 self._downsample()
         self.raw_index += 1
 
@@ -316,6 +316,16 @@ class NoisePrepareResult:
     detected: int
     duration_s: int
     recording: int
+    status: str
+
+
+@dataclass(frozen=True)
+class NoiseStartResult:
+    detected: int
+    duration_s: int
+    dir: str
+    file: str
+    index: int
     status: str
 
 
@@ -605,6 +615,27 @@ def parse_noise_prepare_response(response: str) -> NoisePrepareResult:
         )
 
     raise ValueError("NOISE_TEST line not found")
+
+
+def parse_noise_start_response(response: str) -> NoiseStartResult:
+    sanitized = _sanitize_shell_response(response)
+
+    for line in sanitized.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("RESULT cmd=noise_test_start "):
+            continue
+
+        parts = _parse_response_parts(stripped[28:])
+        return NoiseStartResult(
+            detected=_parse_int_field(parts, "detected"),
+            duration_s=_parse_int_field(parts, "duration_s"),
+            dir=parts.get("dir", ""),
+            file=parts.get("file", ""),
+            index=_parse_int_field(parts, "index"),
+            status=parts.get("status", "unknown"),
+        )
+
+    raise ValueError("RESULT cmd=noise_test_start line not found")
 
 
 def parse_noise_status_response(response: str) -> NoiseStatusResult:
@@ -1658,14 +1689,25 @@ def _build_allan_cluster_sizes(sample_count: int) -> list[int]:
         return []
 
     clusters: list[int] = []
-    cluster = 1
-    while cluster <= max_cluster:
-        if not clusters or cluster != clusters[-1]:
+    dense_limit = min(max_cluster, 64)
+    clusters.extend(range(1, dense_limit + 1))
+    if dense_limit >= max_cluster:
+        return clusters
+
+    tail_points = 96
+    log_start = math.log(float(dense_limit + 1))
+    log_end = math.log(float(max_cluster))
+    for index in range(tail_points):
+        if tail_points <= 1:
+            cluster = max_cluster
+        else:
+            ratio = float(index) / float(tail_points - 1)
+            cluster = int(round(math.exp(log_start + (log_end - log_start) * ratio)))
+        cluster = max(min(cluster, max_cluster), dense_limit + 1)
+        if cluster != clusters[-1]:
             clusters.append(cluster)
-        next_cluster = max(cluster + 1, int(round(cluster * 1.6)))
-        if next_cluster == cluster:
-            next_cluster += 1
-        cluster = next_cluster
+    if clusters[-1] != max_cluster:
+        clusters.append(max_cluster)
     return clusters
 
 
@@ -1673,27 +1715,154 @@ def _allan_deviation_from_rate(rate_values: list[float], sample_period_s: float)
     if len(rate_values) < 4 or sample_period_s <= 0.0:
         return []
 
-    centered = _remove_mean(rate_values)
-    result: list[tuple[float, float]] = []
-    for cluster_size in _build_allan_cluster_sizes(len(centered)):
-        cluster_count = len(centered) // cluster_size
-        if cluster_count < 2:
-            continue
+    try:
+        import numpy as np  # type: ignore
 
-        cluster_averages = [
-            _mean(centered[index * cluster_size : (index + 1) * cluster_size]) for index in range(cluster_count)
-        ]
-        diffs = [
-            cluster_averages[index + 1] - cluster_averages[index] for index in range(len(cluster_averages) - 1)
-        ]
-        if not diffs:
-            continue
+        centered = np.asarray(rate_values, dtype=np.float64)
+        if centered.size < 4:
+            return []
+        centered = centered - np.mean(centered)
+        csum = np.concatenate((np.array([0.0], dtype=np.float64), np.cumsum(centered)))
+        result: list[tuple[float, float]] = []
+        for cluster_size in _build_allan_cluster_sizes(int(centered.size)):
+            diff_count = int(centered.size) - 2 * cluster_size + 1
+            if diff_count < 1:
+                continue
+            diffs = (csum[2 * cluster_size :] - 2.0 * csum[cluster_size:-cluster_size] + csum[:-2 * cluster_size]) / float(cluster_size)
+            allan_variance = 0.5 * float(np.mean(diffs * diffs))
+            if allan_variance < 0.0:
+                continue
+            result.append((cluster_size * sample_period_s, math.sqrt(allan_variance)))
+        return result
+    except Exception:
+        centered = _remove_mean(rate_values)
+        result: list[tuple[float, float]] = []
+        for cluster_size in _build_allan_cluster_sizes(len(centered)):
+            moving_sum = sum(centered[:cluster_size])
+            moving_averages = [moving_sum / float(cluster_size)]
+            for index in range(cluster_size, len(centered)):
+                moving_sum += centered[index] - centered[index - cluster_size]
+                moving_averages.append(moving_sum / float(cluster_size))
+            if len(moving_averages) <= cluster_size:
+                continue
+            diffs = [
+                moving_averages[index + cluster_size] - moving_averages[index]
+                for index in range(len(moving_averages) - cluster_size)
+            ]
+            if not diffs:
+                continue
+            allan_variance = 0.5 * _mean([diff * diff for diff in diffs])
+            if allan_variance < 0.0:
+                continue
+            result.append((cluster_size * sample_period_s, sqrt(allan_variance)))
+        return result
 
-        allan_variance = 0.5 * _mean([diff * diff for diff in diffs])
-        if allan_variance < 0.0:
-            continue
-        result.append((cluster_size * sample_period_s, sqrt(allan_variance)))
-    return result
+
+def _fit_allan_white_noise_window(
+    allan_points: list[tuple[float, float]],
+    target_slope: float = -0.5,
+    min_window_size: int = 5,
+    max_window_size: int = 9,
+) -> dict[str, float]:
+    if len(allan_points) < 2:
+        return {
+            "fit_tau_s": 0.0,
+            "fit_slope": 0.0,
+            "fit_error": float("inf"),
+            "noise_density_at_1s": 0.0,
+            "window_start_index": 0.0,
+            "window_size": 0.0,
+        }
+
+    try:
+        import numpy as np  # type: ignore
+
+        taus = np.asarray([float(item[0]) for item in allan_points], dtype=np.float64)
+        sigmas = np.asarray([float(item[1]) for item in allan_points], dtype=np.float64)
+        best = {
+            "fit_tau_s": 0.0,
+            "fit_slope": 0.0,
+            "fit_error": float("inf"),
+            "noise_density_at_1s": 0.0,
+            "window_start_index": 0.0,
+            "window_size": 0.0,
+        }
+
+        max_size = min(max_window_size, len(allan_points))
+        min_size = min(min_window_size, max_size)
+        for window_size in range(min_size, max_size + 1):
+            for start in range(0, len(allan_points) - window_size + 1):
+                tau_window = taus[start : start + window_size]
+                sigma_window = sigmas[start : start + window_size]
+                if np.any(tau_window <= 0.0) or np.any(sigma_window <= 0.0):
+                    continue
+                log_tau = np.log(tau_window)
+                log_sigma = np.log(sigma_window)
+                slope, intercept = np.polyfit(log_tau, log_sigma, 1)
+                error = abs(float(slope) - target_slope)
+                noise_candidates = sigma_window * np.sqrt(tau_window)
+                noise_density_at_1s = float(np.median(noise_candidates))
+                fit_tau_s = float(np.exp(np.mean(log_tau)))
+                if (
+                    error < float(best["fit_error"]) - 1e-12
+                    or (
+                        abs(error - float(best["fit_error"])) <= 1e-12
+                        and fit_tau_s < float(best["fit_tau_s"])
+                    )
+                ):
+                    best = {
+                        "fit_tau_s": fit_tau_s,
+                        "fit_slope": float(slope),
+                        "fit_error": error,
+                        "noise_density_at_1s": noise_density_at_1s,
+                        "window_start_index": float(start),
+                        "window_size": float(window_size),
+                    }
+        return best
+    except Exception:
+        best = {
+            "fit_tau_s": 0.0,
+            "fit_slope": 0.0,
+            "fit_error": float("inf"),
+            "noise_density_at_1s": 0.0,
+            "window_start_index": 0.0,
+            "window_size": 0.0,
+        }
+        max_size = min(max_window_size, len(allan_points))
+        min_size = min(min_window_size, max_size)
+        for window_size in range(min_size, max_size + 1):
+            for start in range(0, len(allan_points) - window_size + 1):
+                window = allan_points[start : start + window_size]
+                if any(tau <= 0.0 or sigma <= 0.0 for tau, sigma in window):
+                    continue
+                log_tau = [math.log(tau) for tau, _ in window]
+                log_sigma = [math.log(sigma) for _, sigma in window]
+                tau_mean = _mean(log_tau)
+                sigma_mean = _mean(log_sigma)
+                denom = sum((value - tau_mean) ** 2 for value in log_tau)
+                if abs(denom) < 1e-18:
+                    continue
+                numer = sum((tx - tau_mean) * (sy - sigma_mean) for tx, sy in zip(log_tau, log_sigma))
+                slope = numer / denom
+                error = abs(slope - target_slope)
+                noise_density_at_1s = _mean([sigma * math.sqrt(tau) for tau, sigma in window])
+                fit_tau_s = math.exp(_mean(log_tau))
+                if (
+                    error < float(best["fit_error"]) - 1e-12
+                    or (
+                        abs(error - float(best["fit_error"])) <= 1e-12
+                        and fit_tau_s < float(best["fit_tau_s"])
+                    )
+                ):
+                    best = {
+                        "fit_tau_s": fit_tau_s,
+                        "fit_slope": slope,
+                        "fit_error": error,
+                        "noise_density_at_1s": noise_density_at_1s,
+                        "window_start_index": float(start),
+                        "window_size": float(window_size),
+                    }
+        return best
 
 
 def _estimate_arw_metrics(rate_values_rad_s: list[float], sample_period_s: float) -> dict[str, float]:
@@ -1702,22 +1871,10 @@ def _estimate_arw_metrics(rate_values_rad_s: list[float], sample_period_s: float
     centered_rad_s = _remove_mean(rate_values_rad_s)
     allan_points = _allan_deviation_from_rate(rate_values_deg_s, sample_period_s)
 
-    best_tau_s = 0.0
-    best_slope = 0.0
-    best_arw_deg_sqrt_hr = 0.0
-    best_error = float("inf")
-    for index in range(len(allan_points) - 1):
-        tau0_s, adev0_deg_s = allan_points[index]
-        tau1_s, adev1_deg_s = allan_points[index + 1]
-        if tau0_s <= 0.0 or tau1_s <= 0.0 or adev0_deg_s <= 0.0 or adev1_deg_s <= 0.0:
-            continue
-        slope = math.log(adev1_deg_s / adev0_deg_s) / math.log(tau1_s / tau0_s)
-        error = abs(slope + 0.5)
-        if error < best_error:
-            best_error = error
-            best_tau_s = tau0_s
-            best_slope = slope
-            best_arw_deg_sqrt_hr = adev0_deg_s * math.sqrt(tau0_s) * 60.0
+    fit_result = _fit_allan_white_noise_window(allan_points, target_slope=-0.5)
+    best_tau_s = float(fit_result["fit_tau_s"])
+    best_slope = float(fit_result["fit_slope"])
+    best_arw_deg_sqrt_hr = float(fit_result["noise_density_at_1s"]) * 60.0
 
     allan_min_tau_s = 0.0
     allan_min_deg_s = 0.0
@@ -1740,22 +1897,10 @@ def _estimate_allan_white_noise_metrics(values: list[float], sample_period_s: fl
     centered_values = _remove_mean(values)
     allan_points = _allan_deviation_from_rate(values, sample_period_s)
 
-    best_tau_s = 0.0
-    best_slope = 0.0
-    best_random_walk = 0.0
-    best_error = float("inf")
-    for index in range(len(allan_points) - 1):
-        tau0_s, adev0 = allan_points[index]
-        tau1_s, adev1 = allan_points[index + 1]
-        if tau0_s <= 0.0 or tau1_s <= 0.0 or adev0 <= 0.0 or adev1 <= 0.0:
-            continue
-        slope = math.log(adev1 / adev0) / math.log(tau1_s / tau0_s)
-        error = abs(slope + 0.5)
-        if error < best_error:
-            best_error = error
-            best_tau_s = tau0_s
-            best_slope = slope
-            best_random_walk = adev0 * math.sqrt(tau0_s) * 60.0
+    fit_result = _fit_allan_white_noise_window(allan_points, target_slope=-0.5)
+    best_tau_s = float(fit_result["fit_tau_s"])
+    best_slope = float(fit_result["fit_slope"])
+    best_random_walk = float(fit_result["noise_density_at_1s"]) * 60.0
 
     allan_min_tau_s = 0.0
     allan_min_value = 0.0
@@ -1982,6 +2127,29 @@ def _choose_common_decimation_factor(per_imu_csv_paths: dict[int, Path]) -> tupl
     return decimation_factor, sample_counts
 
 
+def _load_decimated_imu_csv_series(imu_id: int, csv_path: Path, decimation_factor: int = 1) -> DecimatedImuSeries:
+    imu_name = _imu_name_from_id(imu_id)
+    prefix = f"{imu_name}_"
+    ts_field = f"{prefix}packet_timestamp_continuous"
+    gyro_fields = {axis: f"{prefix}gyro_{axis}_deg_s" for axis in ("x", "y", "z")}
+    accel_fields = {axis: f"{prefix}accel_{axis}_mps2" for axis in ("x", "y", "z")}
+
+    series = DecimatedImuSeries(decimation_factor=max(decimation_factor, 1))
+    with csv_path.open("r", newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            series.add(
+                timestamp_us=int(float(row.get(ts_field, "0") or 0)),
+                gyro_x_deg_s=float(row.get(gyro_fields["x"], "0") or 0.0),
+                gyro_y_deg_s=float(row.get(gyro_fields["y"], "0") or 0.0),
+                gyro_z_deg_s=float(row.get(gyro_fields["z"], "0") or 0.0),
+                acc_x_mps2=float(row.get(accel_fields["x"], "0") or 0.0),
+                acc_y_mps2=float(row.get(accel_fields["y"], "0") or 0.0),
+                acc_z_mps2=float(row.get(accel_fields["z"], "0") or 0.0),
+            )
+    return series
+
+
 def _format_file_size(byte_count: int) -> str:
     value = float(byte_count)
     units = ["B", "KB", "MB", "GB"]
@@ -2152,13 +2320,10 @@ def _analyze_arw_per_imu_from_csvs(
     per_imu_csv_paths: dict[int, Path], progress_callback: Callable[[str], None] | None = None
 ) -> dict[int, dict[str, object]]:
     report: dict[int, dict[str, object]] = {}
-    common_decimation_factor, sample_counts = _choose_common_decimation_factor(per_imu_csv_paths)
+    common_decimation_factor = 1
+    sample_counts = {imu_id: _count_csv_data_rows(path) for imu_id, path in per_imu_csv_paths.items()}
     if progress_callback is not None:
-        progress_callback(
-            "统计阶段使用统一降采样倍率: "
-            f"`x{common_decimation_factor}`，用于控制 Allan/ARW 内存占用；"
-            "各 IMU 统一使用同倍率，不影响横向排序，实际点数/包周期统计仍基于全量数据。"
-        )
+        progress_callback("统计阶段使用每颗 IMU 的全量逐包时间序列，不再做固定步长降采样。")
     for imu_id in sorted(per_imu_csv_paths):
         csv_path = per_imu_csv_paths[imu_id]
         progress = ParseProgressReporter(
@@ -2178,6 +2343,483 @@ def _analyze_arw_per_imu_from_csvs(
         progress.bytes_processed = progress.total_bytes
         progress.maybe_report(force=True, extra="统计完成")
     return report
+
+
+def _build_temperature_bin_specs(temp_min_c: float, temp_max_c: float, bin_width_c: float) -> list[dict[str, float]]:
+    width = max(float(bin_width_c), 0.1)
+    if temp_max_c < temp_min_c:
+        temp_max_c = temp_min_c
+
+    specs: list[dict[str, float]] = []
+    target_c = float(temp_min_c)
+    half_width_c = width * 0.5
+    index = 0
+    while True:
+        specs.append(
+            {
+                "index": float(index),
+                "target_c": target_c,
+                "start_c": target_c - half_width_c,
+                "end_c": target_c + half_width_c,
+                "center_c": target_c,
+                "half_width_c": half_width_c,
+            }
+        )
+        if target_c + half_width_c >= temp_max_c - 1e-9:
+            break
+        target_c += width
+        index += 1
+    return specs
+
+
+def _scan_temperature_range_from_csv(imu_id: int, csv_path: Path) -> tuple[float, float, int]:
+    imu_name = _imu_name_from_id(imu_id)
+    temp_field = f"{imu_name}_temp_c"
+    sample_count = 0
+    temp_min_c = float("inf")
+    temp_max_c = float("-inf")
+
+    with csv_path.open("r", newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            temp_c = float(row.get(temp_field, "0") or 0.0)
+            sample_count += 1
+            temp_min_c = min(temp_min_c, temp_c)
+            temp_max_c = max(temp_max_c, temp_c)
+
+    if sample_count <= 0:
+        return 0.0, 0.0, 0
+    return temp_min_c, temp_max_c, sample_count
+
+
+def _estimate_linear_fit_slope(x_values: list[float], y_values: list[float]) -> float:
+    if len(x_values) < 2 or len(x_values) != len(y_values):
+        return 0.0
+
+    x_mean = _mean(x_values)
+    y_mean = _mean(y_values)
+    denom = sum((float(value) - x_mean) ** 2 for value in x_values)
+    if abs(denom) < 1e-18:
+        return 0.0
+    numer = sum((float(x) - x_mean) * (float(y) - y_mean) for x, y in zip(x_values, y_values))
+    return numer / denom
+
+
+def _robust_weighted_mean(values: list[float], weights: list[float]) -> tuple[float, int]:
+    if not values:
+        return 0.0, 0
+    if len(values) == 1:
+        return float(values[0]), 1
+
+    try:
+        import numpy as np  # type: ignore
+
+        arr = np.asarray(values, dtype=np.float64)
+        w = np.asarray(weights, dtype=np.float64)
+        if arr.size != w.size or arr.size == 0:
+            return 0.0, 0
+        median = float(np.median(arr))
+        abs_dev = np.abs(arr - median)
+        mad = float(np.median(abs_dev))
+        if mad > 1e-12:
+            sigma = 1.4826 * mad
+            mask = abs_dev <= 3.5 * sigma
+        else:
+            low = float(np.quantile(arr, 0.10))
+            high = float(np.quantile(arr, 0.90))
+            mask = (arr >= low) & (arr <= high)
+        if int(np.count_nonzero(mask)) < max(8, arr.size // 5):
+            mask = np.ones(arr.shape, dtype=bool)
+        arr = arr[mask]
+        w = w[mask]
+        if arr.size == 0:
+            return 0.0, 0
+        if float(np.sum(w)) <= 0.0:
+            w = np.ones(arr.shape, dtype=np.float64)
+        return float(np.average(arr, weights=w)), int(arr.size)
+    except Exception:
+        sorted_values = sorted(float(value) for value in values)
+        count = len(sorted_values)
+        trim = int(count * 0.1)
+        trimmed = sorted_values[trim : count - trim] if count - 2 * trim >= 1 else sorted_values
+        return _mean(trimmed), len(trimmed)
+
+
+def _analyze_temp_single_imu_csv(
+    imu_id: int,
+    csv_path: Path,
+    temp_bin_specs: list[dict[str, float]],
+    progress: ParseProgressReporter | None = None,
+) -> dict[str, object]:
+    imu_name = _imu_name_from_id(imu_id)
+    prefix = f"{imu_name}_"
+    ts_field = f"{prefix}packet_timestamp_continuous"
+    poll_ts_field = f"{prefix}poll_timestamp_us"
+    temp_field = f"{prefix}temp_c"
+    gyro_fields = {axis: f"{prefix}gyro_{axis}_deg_s" for axis in ("x", "y", "z")}
+    accel_fields = {axis: f"{prefix}accel_{axis}_mps2" for axis in ("x", "y", "z")}
+
+    sample_count = 0
+    first_timestamp_us = 0
+    last_timestamp_us = 0
+    last_poll_timestamp_us = 0
+    step_count = 0
+    step_sum_us = 0.0
+    step_sum_sq_us = 0.0
+    prev_timestamp_us: int | None = None
+    temp_sum_c = 0.0
+    temp_min_c = float("inf")
+    temp_max_c = float("-inf")
+
+    bin_width_c = float(temp_bin_specs[1]["center_c"] - temp_bin_specs[0]["center_c"]) if len(temp_bin_specs) >= 2 else 2.0
+    global_temp_start_c = float(temp_bin_specs[0]["center_c"]) if temp_bin_specs else 0.0
+    half_width_c = float(temp_bin_specs[0]["half_width_c"]) if temp_bin_specs else 1.0
+    bin_accumulators = [
+        {
+            "temp_values_c": array("d"),
+            "gyro_x_values_deg_s": array("d"),
+            "gyro_y_values_deg_s": array("d"),
+            "gyro_z_values_deg_s": array("d"),
+            "acc_x_values_mps2": array("d"),
+            "acc_y_values_mps2": array("d"),
+            "acc_z_values_mps2": array("d"),
+        }
+        for _ in temp_bin_specs
+    ]
+
+    with csv_path.open("r", newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        for row_index, row in enumerate(reader, start=1):
+            timestamp_us = int(float(row.get(ts_field, "0") or 0))
+            poll_timestamp_us = int(float(row.get(poll_ts_field, "0") or 0))
+            temp_c = float(row.get(temp_field, "0") or 0.0)
+            gyro_x_deg_s = float(row.get(gyro_fields["x"], "0") or 0.0)
+            gyro_y_deg_s = float(row.get(gyro_fields["y"], "0") or 0.0)
+            gyro_z_deg_s = float(row.get(gyro_fields["z"], "0") or 0.0)
+            acc_x_mps2 = float(row.get(accel_fields["x"], "0") or 0.0)
+            acc_y_mps2 = float(row.get(accel_fields["y"], "0") or 0.0)
+            acc_z_mps2 = float(row.get(accel_fields["z"], "0") or 0.0)
+
+            if sample_count == 0:
+                first_timestamp_us = timestamp_us
+            last_timestamp_us = timestamp_us
+            last_poll_timestamp_us = poll_timestamp_us
+            sample_count += 1
+            temp_sum_c += temp_c
+            temp_min_c = min(temp_min_c, temp_c)
+            temp_max_c = max(temp_max_c, temp_c)
+            if prev_timestamp_us is not None:
+                step_us = timestamp_us - prev_timestamp_us
+                if step_us > 0:
+                    step_count += 1
+                    step_sum_us += step_us
+                    step_sum_sq_us += float(step_us) * float(step_us)
+            prev_timestamp_us = timestamp_us
+
+            if temp_bin_specs:
+                relative = (temp_c - global_temp_start_c + half_width_c) / bin_width_c if bin_width_c > 0.0 else 0.0
+                bin_index = int(math.floor(relative))
+                if bin_index < 0:
+                    bin_index = 0
+                if bin_index >= len(bin_accumulators):
+                    bin_index = len(bin_accumulators) - 1
+                acc = bin_accumulators[bin_index]
+                spec = temp_bin_specs[bin_index]
+                if temp_c < float(spec["start_c"]) - 1e-9 or temp_c > float(spec["end_c"]) + 1e-9:
+                    if bin_index > 0 and float(temp_bin_specs[bin_index - 1]["start_c"]) - 1e-9 <= temp_c <= float(temp_bin_specs[bin_index - 1]["end_c"]) + 1e-9:
+                        bin_index -= 1
+                        acc = bin_accumulators[bin_index]
+                        spec = temp_bin_specs[bin_index]
+                    elif bin_index + 1 < len(bin_accumulators) and float(temp_bin_specs[bin_index + 1]["start_c"]) - 1e-9 <= temp_c <= float(temp_bin_specs[bin_index + 1]["end_c"]) + 1e-9:
+                        bin_index += 1
+                        acc = bin_accumulators[bin_index]
+                        spec = temp_bin_specs[bin_index]
+                acc["temp_values_c"].append(temp_c)
+                acc["gyro_x_values_deg_s"].append(gyro_x_deg_s)
+                acc["gyro_y_values_deg_s"].append(gyro_y_deg_s)
+                acc["gyro_z_values_deg_s"].append(gyro_z_deg_s)
+                acc["acc_x_values_mps2"].append(acc_x_mps2)
+                acc["acc_y_values_mps2"].append(acc_y_mps2)
+                acc["acc_z_values_mps2"].append(acc_z_mps2)
+
+            if progress is not None and row_index % 2048 == 0:
+                progress.bytes_processed = handle.buffer.tell()
+                progress.packet_count = row_index
+                progress.maybe_report()
+
+    if sample_count <= 0:
+        return {}
+
+    if progress is not None:
+        progress.bytes_processed = progress.total_bytes
+        progress.packet_count = sample_count
+
+    packet_period_mean_us = step_sum_us / step_count if step_count > 0 else 0.0
+    packet_period_std_us = _estimate_std_from_sums(step_count, step_sum_us, step_sum_sq_us)
+    packet_period_s = packet_period_mean_us / 1_000_000.0 if packet_period_mean_us > 0.0 else 0.0
+    cfg = _imu_config(imu_id)
+    if packet_period_s <= 0.0 and cfg["odr_hz"] > 0.0:
+        packet_period_s = 1.0 / cfg["odr_hz"]
+
+    valid_bins: list[dict[str, object]] = []
+    accel_by_axis: dict[str, list[float]] = {axis: [] for axis in ("x", "y", "z")}
+    gyro_by_axis: dict[str, list[float]] = {axis: [] for axis in ("x", "y", "z")}
+    mean_temps: list[float] = []
+
+    for spec, acc in zip(temp_bin_specs, bin_accumulators):
+        count = len(acc["temp_values_c"])
+        if count <= 0:
+            continue
+        target_temp_c = float(spec["center_c"])
+        sigma_c = max(float(spec["half_width_c"]) * 0.5, 0.2)
+        temp_values = [float(value) for value in acc["temp_values_c"]]
+        weights = [math.exp(-0.5 * ((float(value) - target_temp_c) / sigma_c) ** 2) for value in temp_values]
+        mean_temp_c, filtered_temp_count = _robust_weighted_mean(temp_values, weights)
+        accel_means_mps2 = {
+            axis: _robust_weighted_mean([float(value) for value in acc[f"acc_{axis}_values_mps2"]], weights)[0]
+            for axis in ("x", "y", "z")
+        }
+        accel_means_mg = {
+            axis: accel_means_mps2[axis] / 9.80665 * 1000.0
+            for axis in ("x", "y", "z")
+        }
+        gyro_means_deg_s = {
+            axis: _robust_weighted_mean([float(value) for value in acc[f"gyro_{axis}_values_deg_s"]], weights)[0]
+            for axis in ("x", "y", "z")
+        }
+        valid_bins.append(
+            {
+                "bin_index": int(spec["index"]),
+                "temp_start_c": float(spec["start_c"]),
+                "temp_end_c": float(spec["end_c"]),
+                "temp_center_c": float(spec["center_c"]),
+                "target_temp_c": target_temp_c,
+                "sample_count": count,
+                "filtered_temp_count": filtered_temp_count,
+                "mean_temp_c": mean_temp_c,
+                "gyro": gyro_means_deg_s,
+                "accel": accel_means_mg,
+            }
+        )
+        mean_temps.append(mean_temp_c)
+        for axis in ("x", "y", "z"):
+            accel_by_axis[axis].append(accel_means_mg[axis])
+            gyro_by_axis[axis].append(gyro_means_deg_s[axis])
+
+    accel_tc = {axis: _estimate_linear_fit_slope(mean_temps, accel_by_axis[axis]) for axis in ("x", "y", "z")}
+    gyro_tc = {axis: _estimate_linear_fit_slope(mean_temps, gyro_by_axis[axis]) for axis in ("x", "y", "z")}
+    accel_span = {
+        axis: (max(accel_by_axis[axis]) - min(accel_by_axis[axis])) if accel_by_axis[axis] else 0.0
+        for axis in ("x", "y", "z")
+    }
+    gyro_span = {
+        axis: (max(gyro_by_axis[axis]) - min(gyro_by_axis[axis])) if gyro_by_axis[axis] else 0.0
+        for axis in ("x", "y", "z")
+    }
+
+    return {
+        "imu_name": imu_name,
+        "csv_path": str(csv_path),
+        "sample_count": sample_count,
+        "duration_s": (last_timestamp_us - first_timestamp_us) / 1_000_000.0 if sample_count >= 2 else 0.0,
+        "packet_period_s": packet_period_s,
+        "packet_rate_hz": 1.0 / packet_period_s if packet_period_s > 0.0 else 0.0,
+        "packet_period_mean_us": packet_period_mean_us,
+        "packet_period_std_us": packet_period_std_us,
+        "configured_odr_hz": cfg["odr_hz"],
+        "accel_range_g": cfg["accel_range_g"],
+        "gyro_range_dps": cfg["gyro_range_dps"],
+        "temp_mean_c": temp_sum_c / sample_count,
+        "temp_min_c": temp_min_c if temp_min_c != float("inf") else 0.0,
+        "temp_max_c": temp_max_c if temp_max_c != float("-inf") else 0.0,
+        "temp_range_c": (temp_max_c - temp_min_c) if temp_max_c != float("-inf") and temp_min_c != float("inf") else 0.0,
+        "last_poll_timestamp_us": last_poll_timestamp_us,
+        "temp_bin_width_c": bin_width_c,
+        "temp_bins": valid_bins,
+        "temp_bin_count": len(temp_bin_specs),
+        "temp_bin_used_count": len(valid_bins),
+        "gyro_tc_deg_s_per_c": gyro_tc,
+        "accel_tc_mg_per_c": accel_tc,
+        "gyro_span_deg_s": gyro_span,
+        "accel_span_mg": accel_span,
+        "gyro_tc_abs_mean_deg_s_per_c": _mean([abs(value) for value in gyro_tc.values()]),
+        "accel_tc_abs_mean_mg_per_c": _mean([abs(value) for value in accel_tc.values()]),
+    }
+
+
+def _analyze_temp_per_imu_from_csvs(
+    per_imu_csv_paths: dict[int, Path],
+    bin_width_c: float = 2.0,
+    progress_callback: Callable[[str], None] | None = None,
+) -> tuple[dict[int, dict[str, object]], dict[str, object]]:
+    global_temp_min_c = float("inf")
+    global_temp_max_c = float("-inf")
+    sample_count_by_imu: dict[int, int] = {}
+
+    for imu_id in sorted(per_imu_csv_paths):
+        csv_path = per_imu_csv_paths[imu_id]
+        if progress_callback is not None:
+            progress_callback(f"{_imu_name_from_id(imu_id)}: 扫描温度范围")
+        imu_temp_min_c, imu_temp_max_c, imu_sample_count = _scan_temperature_range_from_csv(imu_id, csv_path)
+        sample_count_by_imu[imu_id] = imu_sample_count
+        if imu_sample_count <= 0:
+            continue
+        global_temp_min_c = min(global_temp_min_c, imu_temp_min_c)
+        global_temp_max_c = max(global_temp_max_c, imu_temp_max_c)
+
+    if global_temp_min_c == float("inf") or global_temp_max_c == float("-inf"):
+        return {}, {
+            "global_temp_min_c": 0.0,
+            "global_temp_max_c": 0.0,
+            "global_temp_range_c": 0.0,
+            "temp_bin_width_c": bin_width_c,
+            "temp_bin_specs": [],
+            "sample_count_by_imu": sample_count_by_imu,
+        }
+
+    temp_bin_specs = _build_temperature_bin_specs(global_temp_min_c, global_temp_max_c, bin_width_c)
+    half_width_c = float(temp_bin_specs[0]["half_width_c"]) if temp_bin_specs else bin_width_c * 0.5
+    if progress_callback is not None:
+        progress_callback(
+            "温漂统计使用全局目标温点: "
+            f"起点 `{global_temp_min_c:.3f} °C`，终点 `{global_temp_max_c:.3f} °C`，"
+            f"目标间隔 `{bin_width_c:.1f} °C`，邻域窗口 `±{half_width_c:.1f} °C`，"
+            f"共 `{len(temp_bin_specs)}` 个目标温点。"
+        )
+
+    report: dict[int, dict[str, object]] = {}
+    for imu_id in sorted(per_imu_csv_paths):
+        csv_path = per_imu_csv_paths[imu_id]
+        progress = ParseProgressReporter(
+            total_bytes=csv_path.stat().st_size,
+            callback=progress_callback,
+            stage=f"{_imu_name_from_id(imu_id)} 温漂统计",
+        )
+        progress.log(f"{_imu_name_from_id(imu_id)}: 开始按目标温点统计各轴稳健均值")
+        report[imu_id] = _analyze_temp_single_imu_csv(
+            imu_id,
+            csv_path,
+            temp_bin_specs=temp_bin_specs,
+            progress=progress,
+        )
+        if report[imu_id]:
+            report[imu_id]["full_sample_count"] = sample_count_by_imu.get(imu_id, int(report[imu_id].get("sample_count", 0)))
+        progress.bytes_processed = progress.total_bytes
+        progress.maybe_report(force=True, extra="统计完成")
+
+    return report, {
+        "global_temp_min_c": global_temp_min_c,
+        "global_temp_max_c": global_temp_max_c,
+        "global_temp_range_c": global_temp_max_c - global_temp_min_c,
+        "temp_bin_width_c": bin_width_c,
+        "temp_bin_specs": temp_bin_specs,
+        "sample_count_by_imu": sample_count_by_imu,
+    }
+
+
+def _write_temp_binned_csv(destination: Path, per_imu_report: dict[int, dict[str, object]]) -> Path:
+    csv_path = destination.parent / f"{destination.stem}_temp_bins.csv"
+    with csv_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(
+            [
+                "imu_id",
+                "imu_name",
+                "bin_index",
+                "temp_start_c",
+                "temp_end_c",
+                "temp_center_c",
+                "target_temp_c",
+                "sample_count",
+                "filtered_temp_count",
+                "mean_temp_c",
+                "gyro_x_deg_s",
+                "gyro_y_deg_s",
+                "gyro_z_deg_s",
+                "acc_x_mg",
+                "acc_y_mg",
+                "acc_z_mg",
+            ]
+        )
+        for imu_id in sorted(int(key) for key in per_imu_report):
+            sr = per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id)) or {}
+            for bin_row in sr.get("temp_bins", []):
+                writer.writerow(
+                    [
+                        imu_id,
+                        sr.get("imu_name", _imu_name_from_id(imu_id)),
+                        int(bin_row["bin_index"]),
+                        _format_float(float(bin_row["temp_start_c"])),
+                        _format_float(float(bin_row["temp_end_c"])),
+                        _format_float(float(bin_row["temp_center_c"])),
+                        _format_float(float(bin_row.get("target_temp_c", bin_row["temp_center_c"]))),
+                        int(bin_row["sample_count"]),
+                        int(bin_row.get("filtered_temp_count", bin_row["sample_count"])),
+                        _format_float(float(bin_row["mean_temp_c"])),
+                        _format_float(float(bin_row["gyro"]["x"])),
+                        _format_float(float(bin_row["gyro"]["y"])),
+                        _format_float(float(bin_row["gyro"]["z"])),
+                        _format_float(float(bin_row["accel"]["x"])),
+                        _format_float(float(bin_row["accel"]["y"])),
+                        _format_float(float(bin_row["accel"]["z"])),
+                    ]
+                )
+    return csv_path
+
+
+def _write_temp_summary_csv(destination: Path, per_imu_report: dict[int, dict[str, object]]) -> Path:
+    csv_path = destination.parent / f"{destination.stem}_temp_summary.csv"
+    with csv_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(
+            [
+                "imu_id",
+                "imu_name",
+                "sample_count",
+                "packet_rate_hz",
+                "temp_min_c",
+                "temp_max_c",
+                "temp_range_c",
+                "gyro_tc_x_deg_s_per_c",
+                "gyro_tc_y_deg_s_per_c",
+                "gyro_tc_z_deg_s_per_c",
+                "accel_tc_x_mg_per_c",
+                "accel_tc_y_mg_per_c",
+                "accel_tc_z_mg_per_c",
+                "gyro_span_x_deg_s",
+                "gyro_span_y_deg_s",
+                "gyro_span_z_deg_s",
+                "accel_span_x_mg",
+                "accel_span_y_mg",
+                "accel_span_z_mg",
+            ]
+        )
+        for imu_id in sorted(int(key) for key in per_imu_report):
+            sr = per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id)) or {}
+            writer.writerow(
+                [
+                    imu_id,
+                    sr.get("imu_name", _imu_name_from_id(imu_id)),
+                    int(sr.get("sample_count", 0)),
+                    _format_float(float(sr.get("packet_rate_hz", 0.0))),
+                    _format_float(float(sr.get("temp_min_c", 0.0))),
+                    _format_float(float(sr.get("temp_max_c", 0.0))),
+                    _format_float(float(sr.get("temp_range_c", 0.0))),
+                    _format_float(float(sr.get("gyro_tc_deg_s_per_c", {}).get("x", 0.0))),
+                    _format_float(float(sr.get("gyro_tc_deg_s_per_c", {}).get("y", 0.0))),
+                    _format_float(float(sr.get("gyro_tc_deg_s_per_c", {}).get("z", 0.0))),
+                    _format_float(float(sr.get("accel_tc_mg_per_c", {}).get("x", 0.0))),
+                    _format_float(float(sr.get("accel_tc_mg_per_c", {}).get("y", 0.0))),
+                    _format_float(float(sr.get("accel_tc_mg_per_c", {}).get("z", 0.0))),
+                    _format_float(float(sr.get("gyro_span_deg_s", {}).get("x", 0.0))),
+                    _format_float(float(sr.get("gyro_span_deg_s", {}).get("y", 0.0))),
+                    _format_float(float(sr.get("gyro_span_deg_s", {}).get("z", 0.0))),
+                    _format_float(float(sr.get("accel_span_mg", {}).get("x", 0.0))),
+                    _format_float(float(sr.get("accel_span_mg", {}).get("y", 0.0))),
+                    _format_float(float(sr.get("accel_span_mg", {}).get("z", 0.0))),
+                ]
+            )
+    return csv_path
 
 
 def _coefficient_of_variation_pct(values: list[float]) -> float:
@@ -2497,14 +3139,7 @@ def _generate_arw_charts(per_imu_report: dict, destination: Path) -> list[str]:
         markdown_lines.extend([f"> 图表生成失败，仅保留排序表: `{exc}`", ""])
         return markdown_lines
 
-    cjk_candidates = ["SimHei", "Microsoft YaHei", "SimSun", "Arial Unicode MS", "Noto Sans JP"]
-    cjk_font = next(
-        (font.name for candidate in cjk_candidates for font in _fm.fontManager.ttflist if font.name == candidate),
-        None,
-    )
-    if cjk_font:
-        plt.rcParams["font.family"] = cjk_font
-    plt.rcParams["axes.unicode_minus"] = False
+    _configure_cjk_plot_font(plt, _fm)
 
     def _render_duel_chart(metric_type: str, title: str, filename_suffix: str) -> Path:
         chart_rankings = [ranking for ranking in rankings if str(ranking["metric_type"]) == metric_type]
@@ -2559,6 +3194,570 @@ def _generate_arw_charts(per_imu_report: dict, destination: Path) -> list[str]:
         ]
     )
     return markdown_lines
+
+
+def _configure_cjk_plot_font(plt, font_manager) -> None:
+    cjk_candidates = ["SimHei", "Microsoft YaHei", "SimSun", "Arial Unicode MS", "Noto Sans JP"]
+    cjk_font = next(
+        (font.name for candidate in cjk_candidates for font in font_manager.fontManager.ttflist if font.name == candidate),
+        None,
+    )
+    if cjk_font:
+        plt.rcParams["font.family"] = cjk_font
+    plt.rcParams["axes.unicode_minus"] = False
+    plt.rcParams["mathtext.fontset"] = "dejavusans"
+
+
+def _generate_allan_curve_charts(per_imu_report: dict, destination: Path) -> list[str]:
+    if not per_imu_report:
+        return []
+
+    try:
+        import matplotlib  # type: ignore
+        matplotlib.use("Agg")
+        import matplotlib.font_manager as _fm  # type: ignore
+        import matplotlib.pyplot as plt  # type: ignore
+        import matplotlib.ticker as mticker  # type: ignore
+    except Exception as exc:  # noqa: BLE001
+        return ["", "## 4个 IMU 的 Allan 曲线", "", f"> Allan 曲线生成失败: `{exc}`", ""]
+
+    _configure_cjk_plot_font(plt, _fm)
+
+    markdown_lines = [
+        "## 4个 IMU 的 Allan 曲线",
+        "",
+        "- 下图使用 Allan deviation 双对数曲线来展示 4 颗 IMU 的原始噪声时域特征；它等于 Allan variance 开方，更便于直接观察白噪声区的 `-1/2` 斜率。",
+        "",
+    ]
+    out_dir = destination.parent
+    stem = destination.stem
+    axis_colors = {"x": "#D64B45", "y": "#2E9F5B", "z": "#2F6FDB"}
+
+    def _axis_rank_text(value_map: dict[str, float], axis: str) -> str:
+        ranked = sorted(value_map.items(), key=lambda item: item[1])
+        if not ranked:
+            return "缺少可比较数据"
+        index = next((idx for idx, item in enumerate(ranked) if item[0] == axis), 0)
+        if len(ranked) == 1:
+            return "当前仅此一轴有有效数据"
+        if index == 0:
+            return "在三轴中最低"
+        if index == len(ranked) - 1:
+            return "在三轴中最高"
+        return "在三轴中居中"
+
+    def _tail_trend_text(points: list[tuple[float, float]]) -> str:
+        if len(points) < 3:
+            return "长积分时间端样本不足，暂不判断尾部趋势"
+        min_sigma = min(float(value) for _, value in points if value > 0.0)
+        tail_sigma = _mean([float(value) for _, value in points[-3:]])
+        if min_sigma <= 0.0:
+            return "长积分时间端趋势无法稳定评估"
+        ratio = tail_sigma / min_sigma
+        if ratio >= 2.0:
+            return "长积分时间端明显上扬，说明低频漂移或偏置不稳定开始主导"
+        if ratio >= 1.25:
+            return "长积分时间端有一定回升，说明慢变漂移已经开始进入主导区"
+        return "长积分时间端整体较平缓，说明长时间漂移抬升不明显"
+
+    def _build_axis_description_lines(
+        metric_type: str,
+        sr_metric: dict[str, object],
+        points_by_axis: dict[str, list[tuple[float, float]]],
+    ) -> list[str]:
+        if metric_type == "gyro":
+            primary_value_map = {
+                axis: float((sr_metric.get(axis) or {}).get("arw_deg_sqrt_hr", 0.0))
+                for axis in ("x", "y", "z")
+                if float((sr_metric.get(axis) or {}).get("arw_deg_sqrt_hr", 0.0)) > 0.0
+            }
+            unit_value = "°/√hr"
+            unit_min = "deg/s"
+            title = "Gyro 三轴特征"
+        else:
+            primary_value_map = {
+                axis: float((sr_metric.get(axis) or {}).get("noise_density_ug_sqhz", 0.0))
+                for axis in ("x", "y", "z")
+                if float((sr_metric.get(axis) or {}).get("noise_density_ug_sqhz", 0.0)) > 0.0
+            }
+            unit_value = "µg/√Hz"
+            unit_min = "m/s^2"
+            title = "Accel 三轴特征"
+
+        lines = [f"#### {title}", ""]
+        for axis in ("x", "y", "z"):
+            axis_metric = sr_metric.get(axis) or {}
+            if metric_type == "gyro":
+                primary_value = float(axis_metric.get("arw_deg_sqrt_hr", 0.0))
+                fit_tau_s = float(axis_metric.get("arw_fit_tau_s", 0.0))
+                min_tau_s = float(axis_metric.get("allan_min_tau_s", 0.0))
+                min_value = float(axis_metric.get("allan_min_deg_s", 0.0))
+            else:
+                primary_value = float(axis_metric.get("noise_density_ug_sqhz", 0.0))
+                fit_tau_s = float(axis_metric.get("fit_tau_s", 0.0))
+                min_tau_s = float(axis_metric.get("allan_min_tau_s", 0.0))
+                min_value = float(axis_metric.get("allan_min_value", 0.0))
+
+            points = points_by_axis.get(axis, [])
+            rank_text = _axis_rank_text(primary_value_map, axis) if primary_value > 0.0 else "缺少可比较数据"
+            tail_text = _tail_trend_text(points)
+            lines.append(
+                "- "
+                f"`{axis.upper()}` 轴: 小 `tau` 端对应的白噪声水平 `{rank_text}`，"
+                f"换算指标约为 `{primary_value:.6f} {unit_value}`；"
+                f"白噪声拟合主要落在 `tau ≈ {fit_tau_s:.6f} s` 附近；"
+                f"曲线最低点约在 `tau = {min_tau_s:.6f} s`，最小 ADEV 约为 `{min_value:.6f} {unit_min}`；"
+                f"{tail_text}。"
+            )
+        lines.extend(
+            [
+                "",
+                "- 从 Gyro Allan 曲线通常可以读出: 小 `tau` 端看白噪声强弱，中间最低点看最佳积分时间，长 `tau` 端回升看低频漂移/偏置稳定性。"
+                if metric_type == "gyro"
+                else "- 从 Accel Allan 曲线通常可以读出: 小 `tau` 端看噪声密度，中间谷底看最佳平均时间，长 `tau` 端回升看慢变偏置和温漂/环境漂移的影响。",
+                "",
+            ]
+        )
+        return lines
+
+    def _format_log_tick(value: float, _position: float) -> str:
+        if value <= 0.0:
+            return ""
+        exponent = math.log10(value)
+        rounded = int(round(exponent))
+        if abs(exponent - rounded) > 1e-9:
+            return ""
+        return f"1e{rounded}"
+
+    for imu_id in sorted(int(key) for key in per_imu_report):
+        sr = per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id)) or {}
+        if not sr:
+            continue
+
+        imu_name = str(sr.get("imu_name", _imu_name_from_id(imu_id)))
+        csv_path_text = str(sr.get("csv_path", "")).strip()
+        if not csv_path_text:
+            markdown_lines.extend([f"### `{imu_name}`", "", "> 缺少 CSV 路径，无法生成 Allan 曲线。", ""])
+            continue
+
+        csv_path = Path(csv_path_text)
+        if not csv_path.exists():
+            markdown_lines.extend([f"### `{imu_name}`", "", f"> CSV 不存在: `{csv_path}`", ""])
+            continue
+
+        decimation_factor = max(
+            int(float(sr.get("analysis_common_decimation_factor", sr.get("analysis_decimation_factor", 1)) or 1)),
+            1,
+        )
+        series = _load_decimated_imu_csv_series(imu_id, csv_path, decimation_factor=decimation_factor)
+        timestamps_us = [int(value) for value in series.timestamps_us]
+        analysis_packet_period_s = _estimate_sample_period_s(timestamps_us)
+        if analysis_packet_period_s <= 0.0:
+            packet_period_s = float(sr.get("packet_period_s", 0.0) or 0.0)
+            if packet_period_s > 0.0:
+                analysis_packet_period_s = packet_period_s * series.decimation_factor
+        if analysis_packet_period_s <= 0.0:
+            markdown_lines.extend([f"### `{imu_name}`", "", "> 采样周期无效，无法生成 Allan 曲线。", ""])
+            continue
+
+        gyro_points = {
+            axis: _allan_deviation_from_rate(list(getattr(series, f"gyro_{axis}_deg_s")), analysis_packet_period_s)
+            for axis in ("x", "y", "z")
+        }
+        accel_points = {
+            axis: _allan_deviation_from_rate(list(getattr(series, f"acc_{axis}_mps2")), analysis_packet_period_s)
+            for axis in ("x", "y", "z")
+        }
+
+        if not any(gyro_points.values()) and not any(accel_points.values()):
+            markdown_lines.extend([f"### `{imu_name}`", "", "> 未得到有效 Allan 曲线点。", ""])
+            continue
+
+        fig, axes = plt.subplots(1, 2, figsize=(12.6, 4.8))
+        gyro_ax, accel_ax = axes
+        for axis in ("x", "y", "z"):
+            points = gyro_points[axis]
+            if points:
+                tau_values, sigma_values = zip(*points)
+                gyro_ax.loglog(tau_values, sigma_values, linewidth=1.4, color=axis_colors[axis], label=f"{axis.upper()} axis")
+            points = accel_points[axis]
+            if points:
+                tau_values, sigma_values = zip(*points)
+                accel_ax.loglog(tau_values, sigma_values, linewidth=1.4, color=axis_colors[axis], label=f"{axis.upper()} axis")
+
+        gyro_ax.set_title(f"{imu_name} Gyro Allan deviation")
+        gyro_ax.set_xlabel("Tau (s)")
+        gyro_ax.set_ylabel("ADEV (deg/s)")
+        gyro_ax.grid(True, which="both", linestyle=":", linewidth=0.7, alpha=0.6)
+        gyro_ax.legend(loc="best", fontsize=8)
+
+        accel_ax.set_title(f"{imu_name} Accel Allan deviation")
+        accel_ax.set_xlabel("Tau (s)")
+        accel_ax.set_ylabel("ADEV (m/s^2)")
+        accel_ax.grid(True, which="both", linestyle=":", linewidth=0.7, alpha=0.6)
+        accel_ax.legend(loc="best", fontsize=8)
+
+        for axis_plot in (gyro_ax, accel_ax):
+            axis_plot.xaxis.set_major_locator(mticker.LogLocator(base=10.0))
+            axis_plot.yaxis.set_major_locator(mticker.LogLocator(base=10.0))
+            axis_plot.xaxis.set_major_formatter(mticker.FuncFormatter(_format_log_tick))
+            axis_plot.yaxis.set_major_formatter(mticker.FuncFormatter(_format_log_tick))
+            axis_plot.xaxis.set_minor_formatter(mticker.NullFormatter())
+            axis_plot.yaxis.set_minor_formatter(mticker.NullFormatter())
+
+        sample_rate_hz = float(sr.get("packet_rate_hz", 0.0) or 0.0)
+        analysis_sample_count = int(float(sr.get("analysis_sample_count", len(timestamps_us)) or len(timestamps_us)))
+        fig.suptitle(
+            f"{imu_name} | sample rate {sample_rate_hz:.3f} Hz | decimation x{series.decimation_factor} | analysis samples {analysis_sample_count}",
+            fontsize=11,
+        )
+        fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.94))
+
+        chart_path = out_dir / f"{stem}_allan_curve_{imu_name}.png"
+        fig.savefig(chart_path, dpi=140, bbox_inches="tight", facecolor="white")
+        plt.close(fig)
+
+        markdown_lines.extend(
+            [
+                f"### `{imu_name}`",
+                "",
+                f"- 实测刷新率 `{sample_rate_hz:.3f} Hz`，Allan 统计直接使用全量逐包序列，用于曲线计算的样本数 `{analysis_sample_count}`。",
+                "",
+                f"![{imu_name} Allan 曲线](./{chart_path.name})",
+                "",
+            ]
+        )
+        markdown_lines.extend(_build_axis_description_lines("gyro", sr.get("gyro", {}), gyro_points))
+        markdown_lines.extend(_build_axis_description_lines("accel", sr.get("accel", {}), accel_points))
+
+    return markdown_lines
+
+
+def _format_temperature_bin_label(start_c: float, end_c: float) -> str:
+    center_c = (float(start_c) + float(end_c)) * 0.5
+    half_width_c = abs(float(end_c) - float(start_c)) * 0.5
+    return f"{center_c:.1f}±{half_width_c:.1f}"
+
+
+def _family_temp_metric_average(per_imu_report: dict, family: str, value_key: str) -> float:
+    values = []
+    for imu_id in sorted(int(key) for key in per_imu_report):
+        sr = per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id)) or {}
+        imu_name = str(sr.get("imu_name", _imu_name_from_id(imu_id)))
+        if family not in imu_name:
+            continue
+        value = float(sr.get(value_key, 0.0) or 0.0)
+        if value > 0.0:
+            values.append(value)
+    return _mean(values)
+
+
+def _generate_temp_drift_charts(per_imu_report: dict, destination: Path) -> list[str]:
+    if not per_imu_report:
+        return []
+
+    try:
+        import matplotlib  # type: ignore
+        matplotlib.use("Agg")
+        import matplotlib.font_manager as _fm  # type: ignore
+        import matplotlib.pyplot as plt  # type: ignore
+    except Exception as exc:  # noqa: BLE001
+        return ["", "## 温漂对齐曲线", "", f"> 温漂曲线生成失败: `{exc}`", ""]
+
+    _configure_cjk_plot_font(plt, _fm)
+
+    style_map = {
+        1: {"color": "#D64B45", "linestyle": "-", "marker": "o"},
+        2: {"color": "#D64B45", "linestyle": "--", "marker": "s"},
+        3: {"color": "#2E9F5B", "linestyle": "-", "marker": "o"},
+        4: {"color": "#2E9F5B", "linestyle": "--", "marker": "s"},
+    }
+    metric_specs = [
+        ("gyro", "x", "Gyro X 温漂对齐曲线", "相对变化 (deg/s，已减去各自均值)", "gyro_tc_deg_s_per_c", "°/s/°C", "deg/s"),
+        ("gyro", "y", "Gyro Y 温漂对齐曲线", "相对变化 (deg/s，已减去各自均值)", "gyro_tc_deg_s_per_c", "°/s/°C", "deg/s"),
+        ("gyro", "z", "Gyro Z 温漂对齐曲线", "相对变化 (deg/s，已减去各自均值)", "gyro_tc_deg_s_per_c", "°/s/°C", "deg/s"),
+        ("accel", "x", "Accel X 温漂对齐曲线", "相对变化 (mg，已减去各自均值)", "accel_tc_mg_per_c", "mg/°C", "mg"),
+        ("accel", "y", "Accel Y 温漂对齐曲线", "相对变化 (mg，已减去各自均值)", "accel_tc_mg_per_c", "mg/°C", "mg"),
+        ("accel", "z", "Accel Z 温漂对齐曲线", "相对变化 (mg，已减去各自均值)", "accel_tc_mg_per_c", "mg/°C", "mg"),
+    ]
+
+    out_dir = destination.parent
+    stem = destination.stem
+    markdown_lines = ["", "## 温漂对齐曲线", ""]
+
+    for metric_type, axis, title, y_label, tc_key, tc_unit, span_unit in metric_specs:
+        fig, ax = plt.subplots(figsize=(8.8, 4.8))
+        plotted = False
+        axis_series_stats: list[dict[str, object]] = []
+        for imu_id in sorted(int(key) for key in per_imu_report):
+            sr = per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id)) or {}
+            temp_bins = sr.get("temp_bins", [])
+            if not temp_bins:
+                continue
+            x_values = [float(row.get("target_temp_c", row["mean_temp_c"])) for row in temp_bins]
+            raw_y_values = [float(row[metric_type][axis]) for row in temp_bins]
+            center_value = _mean(raw_y_values)
+            y_values = [float(value) - center_value for value in raw_y_values]
+            if not x_values or not y_values:
+                continue
+            imu_name = str(sr.get("imu_name", _imu_name_from_id(imu_id)))
+            tc_value = float(sr.get(tc_key, {}).get(axis, 0.0))
+            style = style_map.get(imu_id, {"color": "#34495E", "linestyle": "-", "marker": "o"})
+            ax.plot(
+                x_values,
+                y_values,
+                label=f"{imu_name} (TC {tc_value:+.4f} {tc_unit}, shift {center_value:+.4f})",
+                color=style["color"],
+                linestyle=style["linestyle"],
+                marker=style["marker"],
+                linewidth=1.5,
+                markersize=4.5,
+            )
+            axis_series_stats.append(
+                {
+                    "imu_name": imu_name,
+                    "tc_abs": abs(tc_value),
+                    "aligned_span": (max(y_values) - min(y_values)) if len(y_values) >= 2 else 0.0,
+                }
+            )
+            plotted = True
+
+        if not plotted:
+            plt.close(fig)
+            continue
+
+        ax.set_title(title)
+        ax.set_xlabel("温度 (°C)")
+        ax.set_ylabel(y_label)
+        ax.axhline(0.0, color="#7F8C8D", linestyle="--", linewidth=1.0, alpha=0.7)
+        ax.grid(True, linestyle=":", linewidth=0.7, alpha=0.6)
+        ax.legend(loc="best", fontsize=8)
+        fig.tight_layout()
+
+        chart_path = out_dir / f"{stem}_temp_curve_{metric_type}_{axis}.png"
+        fig.savefig(chart_path, dpi=140, bbox_inches="tight", facecolor="white")
+        plt.close(fig)
+        markdown_lines.extend([f"![{title}](./{chart_path.name})", ""])
+        if axis_series_stats:
+            best_tc_item = min(axis_series_stats, key=lambda item: float(item["tc_abs"]))
+            best_span_item = min(axis_series_stats, key=lambda item: float(item["aligned_span"]))
+            markdown_lines.extend(
+                [
+                    "- 该图已对每颗 IMU 的该轴曲线减去自身均值，主要比较随温度变化的相对波动，不再比较安装姿态带来的绝对偏置差异。",
+                    (
+                        f"- 该轴上 `|TC|` 最小的是 `{best_tc_item['imu_name']}` "
+                        f"(`{float(best_tc_item['tc_abs']):.4f} {tc_unit}`)，"
+                        f"对齐后总波动幅度最小的是 `{best_span_item['imu_name']}` "
+                        f"(`{float(best_span_item['aligned_span']):.4f} {span_unit}`)。"
+                    ),
+                    "",
+                ]
+            )
+
+    return markdown_lines
+
+
+def _build_temp_markdown_lines(source: Path, summary: dict[str, object], destination: Path) -> list[str]:
+    per_imu_report = summary.get("per_imu_report", {}) or {}
+    all_imu_ids = [
+        imu_id
+        for imu_id in sorted(int(k) for k in per_imu_report)
+        if per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id))
+    ]
+    if not all_imu_ids:
+        return ["# 温漂分析结果", "", f"- 源文件: `{source.name}`", "", "- 未解析到可用于温漂分析的 IMU 数据。"]
+
+    global_temp_min_c = float(summary.get("global_temp_min_c", 0.0) or 0.0)
+    global_temp_max_c = float(summary.get("global_temp_max_c", 0.0) or 0.0)
+    global_temp_range_c = float(summary.get("global_temp_range_c", 0.0) or 0.0)
+    temp_bin_width_c = float(summary.get("temp_bin_width_c", 2.0) or 2.0)
+    temp_bin_specs = list(summary.get("temp_bin_specs", []) or [])
+    temp_window_half_width_c = float(temp_bin_specs[0]["half_width_c"]) if temp_bin_specs else temp_bin_width_c * 0.5
+    source_size_text = str(summary.get("source_size_text", _format_file_size(source.stat().st_size if source.exists() else 0)))
+    poll_total_duration_s = float(summary.get("poll_total_duration_s", 0.0) or 0.0)
+
+    accel_42688 = _family_temp_metric_average(per_imu_report, "42688", "accel_tc_abs_mean_mg_per_c")
+    accel_45686 = _family_temp_metric_average(per_imu_report, "45686", "accel_tc_abs_mean_mg_per_c")
+    gyro_42688 = _family_temp_metric_average(per_imu_report, "42688", "gyro_tc_abs_mean_deg_s_per_c")
+    gyro_45686 = _family_temp_metric_average(per_imu_report, "45686", "gyro_tc_abs_mean_deg_s_per_c")
+
+    lines = [
+        "# 温漂分析结果",
+        "",
+        "## 结论先看",
+        "",
+        f"- BIN 文件: `{source.name}`，序号 `{source.stem}`，文件大小 `{source_size_text}`。",
+        (
+            f"- 本次记录的 poll 总时长: `{_format_duration_minutes_seconds(poll_total_duration_s)}`。"
+            if poll_total_duration_s > 0.0
+            else "- 本次记录的 poll 总时长: `0 分 0 秒`。"
+        ),
+        f"- 全局温度范围: `{global_temp_min_c:.3f} ~ {global_temp_max_c:.3f} °C`，总跨度 `{global_temp_range_c:.3f} °C`。",
+        (
+            f"- 从最低温度起每 `{temp_bin_width_c:.1f} °C` 设置一个目标温点，"
+            f"每个目标点收纳 `±{temp_window_half_width_c:.1f} °C` 邻域样本做稳健加权均值，"
+            f"本次共得到 `{len(temp_bin_specs)}` 个目标温点。"
+        ),
+        "- 温漂对比曲线已按轴分别减去各自均值后再绘制，主要用于比较温度引起的变化趋势，而不是比较安装姿态造成的绝对零偏差异。",
+        (
+            f"- 按型号统计三轴绝对温漂系数均值，42688 的 Accel TC 为 `{accel_42688:.6f} mg/°C`，"
+            f"45686 为 `{accel_45686:.6f} mg/°C`，"
+            f"{'42688 更稳' if 0.0 < accel_42688 < accel_45686 else '45686 更稳' if 0.0 < accel_45686 < accel_42688 else '两者接近'}。"
+        ),
+        (
+            f"- 按型号统计三轴绝对温漂系数均值，42688 的 Gyro TC 为 `{gyro_42688:.6f} °/s/°C`，"
+            f"45686 为 `{gyro_45686:.6f} °/s/°C`，"
+            f"{'42688 更稳' if 0.0 < gyro_42688 < gyro_45686 else '45686 更稳' if 0.0 < gyro_45686 < gyro_42688 else '两者接近'}。"
+        ),
+        "",
+        "### 基础配置与实测采样",
+        "",
+    ]
+
+    for imu_id in all_imu_ids:
+        sr = per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id))
+        if not sr:
+            continue
+        lines.append(
+            "- "
+            f"`{sr['imu_name']}`: 配置 `ODR {float(sr['configured_odr_hz']):.1f} Hz / ±{float(sr['accel_range_g']):.0f} g / ±{float(sr['gyro_range_dps']):.0f} dps`，"
+            f"实测包间隔 `{float(sr['packet_period_mean_us']):.3f} us`，"
+            f"实测刷新率 `{float(sr['packet_rate_hz']):.3f} Hz`，"
+            f"采样点数 `{int(sr['sample_count'])}`，"
+            f"温度范围 `{float(sr['temp_min_c']):.3f} ~ {float(sr['temp_max_c']):.3f} °C`，"
+            f"有效目标温点 `{int(sr.get('temp_bin_used_count', 0))}` 个。"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## 温漂系数汇总",
+            "",
+            "| 指标 | 42688_A | 42688_B | 45686_A | 45686_B |",
+            "| --- | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    for axis in ("x", "y", "z"):
+        row = [f"Gyro {axis.upper()} TC (°/s/°C)"]
+        for imu_id in (1, 2, 3, 4):
+            sr = per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id))
+            row.append(_format_float(float(sr["gyro_tc_deg_s_per_c"][axis])) if sr else "-")
+        lines.append("| " + " | ".join(row) + " |")
+    for axis in ("x", "y", "z"):
+        row = [f"Acc {axis.upper()} TC (mg/°C)"]
+        for imu_id in (1, 2, 3, 4):
+            sr = per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id))
+            row.append(_format_float(float(sr["accel_tc_mg_per_c"][axis])) if sr else "-")
+        lines.append("| " + " | ".join(row) + " |")
+
+    bin_map_by_imu = {
+        imu_id: {
+            int(bin_row["bin_index"]): bin_row
+            for bin_row in (per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id)) or {}).get("temp_bins", [])
+        }
+        for imu_id in all_imu_ids
+    }
+
+    lines.extend(
+        [
+            "",
+            "## 温点均值表",
+            "",
+            "### Gyro 各目标温点均值 (°/s)",
+            "",
+            "| 目标温点 (°C) | 42688_A X | 42688_A Y | 42688_A Z | 42688_B X | 42688_B Y | 42688_B Z | 45686_A X | 45686_A Y | 45686_A Z | 45686_B X | 45686_B Y | 45686_B Z |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    for spec in temp_bin_specs:
+        row = [_format_temperature_bin_label(float(spec["start_c"]), float(spec["end_c"]))]
+        for imu_id in (1, 2, 3, 4):
+            bin_row = bin_map_by_imu.get(imu_id, {}).get(int(spec["index"]))
+            for axis in ("x", "y", "z"):
+                row.append(_format_float(float(bin_row["gyro"][axis])) if bin_row else "-")
+        lines.append("| " + " | ".join(row) + " |")
+
+    lines.extend(
+        [
+            "",
+            "### Accel 各目标温点均值 (mg)",
+            "",
+            "| 目标温点 (°C) | 42688_A X | 42688_A Y | 42688_A Z | 42688_B X | 42688_B Y | 42688_B Z | 45686_A X | 45686_A Y | 45686_A Z | 45686_B X | 45686_B Y | 45686_B Z |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    for spec in temp_bin_specs:
+        row = [_format_temperature_bin_label(float(spec["start_c"]), float(spec["end_c"]))]
+        for imu_id in (1, 2, 3, 4):
+            bin_row = bin_map_by_imu.get(imu_id, {}).get(int(spec["index"]))
+            for axis in ("x", "y", "z"):
+                row.append(_format_float(float(bin_row["accel"][axis])) if bin_row else "-")
+        lines.append("| " + " | ".join(row) + " |")
+
+    lines.extend(_generate_temp_drift_charts(per_imu_report, destination))
+    lines.extend(
+        [
+            "## 说明",
+            "",
+            "- 温漂分析直接基于每颗 IMU 的逐包 CSV 原始列，温度使用各自的 `*_temp_c`，不会混用其他 IMU 的温度。",
+            (
+                f"- 目标温点从全局最低温度起按固定 `{temp_bin_width_c:.0f} °C` 间隔递增；"
+                f"每个目标点使用 `±{temp_window_half_width_c:.1f} °C` 邻域样本，而不是只取某个单点温度。"
+            ),
+            "- 邻域样本会先按距离目标温度的远近赋予高斯权重，再经过 MAD/截尾的稳健过滤后求均值，用来抑制离群点和偶发抖动。",
+            "- 表格中的 Gyro 单位为 `°/s`，Accel 单位为 `mg`，保留的是各目标温点附近的原始代表均值。",
+            "- 曲线图为了便于对比温度引起的变化趋势，额外对每条序列减去了自身均值；因此图上主要看斜率、弯曲和波动，不看绝对高低。",
+            "- 温漂系数 `TC` 由各目标温点的代表值做一阶线性拟合得到，单位分别为 `°/s/°C` 和 `mg/°C`。",
+            "",
+            "## 计算过程",
+            "",
+            "### 1. 按最低温度起点设置目标温点",
+            "",
+            "```text",
+            "T_target[0] = T_min",
+            f"T_target[k+1] = T_target[k] + {temp_bin_width_c:.0f}",
+            f"window(T_target) = [T_target - {temp_window_half_width_c:.1f}, T_target + {temp_window_half_width_c:.1f}]",
+            "```",
+            "",
+            "- 这里的 `T_min` 取 4 个 IMU 全部样本中的最低温度。",
+            "- 因此横轴不是粗分箱后的 5°C 大温区，而是更密一些的目标温点序列。",
+            "",
+            "### 2. 统计目标温点附近的稳健均值",
+            "",
+            "```text",
+            "w_i = exp(-0.5 * ((T_i - T_target) / sigma)^2)",
+            "mean_axis(T_target) = robust_weighted_mean(x_i, w_i)",
+            "```",
+            "",
+            "- 这里的 `x_i` 可以是 `gyro_x_deg_s`、`gyro_y_deg_s`、`gyro_z_deg_s`，也可以是 `accel_*` 转换后的 `mg`。",
+            "- 先按离目标温度越近权重越大，再用 MAD/截尾方式滤除异常点，所以每个曲线点代表的是该目标温度附近的一簇样本，而不是单个瞬时采样值。",
+            "",
+            "### 3. 对齐曲线用于比较相对变化",
+            "",
+            "```text",
+            "aligned_axis(T_target) = mean_axis(T_target) - avg(mean_axis)",
+            "```",
+            "",
+            "- 这一步只用于绘图，不会改动表格中的原始代表均值，也不会改动 `TC` 的计算。",
+            "- 处理后 4 个 IMU 会被拉到同一条横线附近，更容易观察哪一条随温度变化更平、哪一条弯折更明显。",
+            "",
+            "### 4. 基于目标温点均值拟合温漂斜率",
+            "",
+            "```text",
+            "x(T) = k * T + b",
+            "TC = k",
+            "```",
+            "",
+            "- 对每个轴分别用目标温点代表值做最小二乘直线拟合，斜率 `k` 就作为该轴的温漂系数。",
+            "- 若某个轴有效目标温点不足 2 个，则其 `TC` 自动记为 `0`，避免无意义拟合。",
+            "",
+            "### 5. 导出的辅助文件",
+            "",
+            f"- 目标温点均值明细 CSV: `{summary.get('temp_binned_csv', '-')}`。",
+            f"- 温漂系数汇总 CSV: `{summary.get('temp_summary_csv', '-')}`。",
+        ]
+    )
+    return lines
 
 
 def _family_best_average(rankings: list[dict[str, object]], family: str, metric_type: str) -> float:
@@ -2643,10 +3842,7 @@ def _build_arw_markdown_lines(source: Path, summary: dict[str, object], destinat
             f"45686 为 `{accel_45686_best:.6f} µg/√Hz`，"
             f"{'42688 更好' if 0.0 < accel_42688_best < accel_45686_best else '45686 更好' if 0.0 < accel_45686_best < accel_42688_best else '两者接近'}。"
         ),
-        (
-            f"- Allan/ARW 统计阶段统一使用 `x{common_decimation_factor}` 时间序列降采样；"
-            "四颗 IMU 使用相同倍率，因此不会引入型号间比较偏置。"
-        ) if common_decimation_factor > 1 else "- Allan/ARW 统计阶段本次未触发降采样。",
+        "- Allan/ARW 统计阶段改为直接使用每颗 IMU 的全量逐包时间序列，并采用 overlapping Allan deviation；不再做固定步长抽样。",
         "",
         "### 基础配置与实测采样",
         "",
@@ -2696,13 +3892,14 @@ def _build_arw_markdown_lines(source: Path, summary: dict[str, object], destinat
         lines.append("| " + " | ".join(row) + " |")
 
     lines.extend(_generate_arw_charts(per_imu_report, destination))
+    lines.extend(_generate_allan_curve_charts(per_imu_report, destination))
     lines.extend(
         [
             "## 说明",
             "",
-            "- Gyro 指标显示为 `°/√hr`，按 Allan deviation 曲线上斜率最接近 `-1/2` 的区段提取。",
-            "- Acc 指标显示为 `µg/√Hz`，由 Allan 白噪声区段估计值换算得到，更贴近数据手册口径。",
-            "- 表中的采样点数、包间隔和刷新率都来自全量逐包数据，不受 Allan/ARW 降采样设置影响。",
+            "- Gyro 指标显示为 `°/√hr`，按 overlapping Allan deviation 曲线上斜率最接近 `-1/2` 的连续窗口拟合提取。",
+            "- Acc 指标显示为 `µg/√Hz`，由 overlapping Allan 白噪声区段拟合结果换算得到，更贴近数据手册口径。",
+            "- 表中的采样点数、包间隔和刷新率都来自全量逐包数据；Allan/ARW 统计本次也直接使用全量逐包序列。",
             "",
             "## 指标计算过程",
             "",
@@ -2714,7 +3911,7 @@ def _build_arw_markdown_lines(source: Path, summary: dict[str, object], destinat
                 if example_dt_s > 0.0
                 else "- 实际平均包间隔由 `*_packet_timestamp_continuous` 差分均值给出。"
             ),
-            f"- 若 Allan/ARW 阶段启用了统一降采样 `x{common_decimation_factor}`，则只对噪声计算序列按固定步长抽取；包间隔、刷新率、点数统计仍基于全量 CSV。",
+            "- Allan/ARW 阶段本次直接使用全量逐包 CSV 序列，不再额外做固定步长降采样。",
             "",
             "### 1. 从 CSV 取原始单轴序列",
             "",
@@ -2745,37 +3942,37 @@ def _build_arw_markdown_lines(source: Path, summary: dict[str, object], destinat
             "sigma(tau) = sqrt(0.5 * mean((avg_{k+1} - avg_k)^2))",
             "```",
             "",
-            "- 脚本会自动生成一组递增的 `m`，在每个 `tau` 上得到一个 Allan 点 `(tau, sigma)`。",
+            "- 脚本会自动生成一组更密的 `m`，并使用 overlapping Allan deviation 在每个 `tau` 上得到一个 Allan 点 `(tau, sigma)`。",
             "- 这里的实现对应脚本中的 `_allan_deviation_from_rate(...)`。",
             "",
             "### 4. 选择白噪声区段",
             "",
-            "对于相邻两个 Allan 点 `(tau0, sigma0)`、`(tau1, sigma1)`，计算局部斜率：",
+            "对于一段连续 Allan 点窗口，在对数坐标系中做直线拟合：",
             "",
             "```text",
-            "slope = log(sigma1 / sigma0) / log(tau1 / tau0)",
+            "log(sigma) = slope * log(tau) + intercept",
             "```",
             "",
             "- 理想白噪声区在 Allan 图上斜率应接近 `-1/2`。",
-            "- 脚本会遍历所有相邻点，选取 `abs(slope + 0.5)` 最小的那一段作为指标提取点。",
+            "- 脚本会遍历多个连续窗口，选取 `abs(slope + 0.5)` 最小的那一段拟合作为指标提取区间，而不是只看相邻两个点。",
             "",
             "### 5. Gyro X 的 ARW 计算",
             "",
-            "在选中的白噪声点 `(tau0, sigma0_deg_s)` 上，脚本按下面公式计算：",
+            "在选中的白噪声窗口上，脚本先对每个 Allan 点计算白噪声密度候选值，再取窗口中值：",
             "",
             "```text",
-            "ARW_deg_sqrt_hr = sigma0_deg_s * sqrt(tau0) * 60",
+            "ARW_deg_sqrt_hr = median(sigma_deg_s(tau_i) * sqrt(tau_i)) * 60",
             "```",
             "",
-            "- 其中 `sigma0_deg_s` 的单位是 `deg/s`，乘 `sqrt(s)` 后得到 `deg/sqrt(s)`，再乘 `60` 换算为 `deg/sqrt(hr)`。",
-            "- 这正对应脚本 `_estimate_arw_metrics(...)` 中的 `adev0_deg_s * sqrt(tau0_s) * 60.0`。",
+            "- 其中 `sigma_deg_s(tau_i)` 的单位是 `deg/s`，乘 `sqrt(s)` 后得到 `deg/sqrt(s)`，再乘 `60` 换算为 `deg/sqrt(hr)`。",
+            "- 这正对应脚本 `_estimate_arw_metrics(...)` 中基于窗口中值的白噪声密度估计。",
             "",
             "### 6. Acc X 的噪声密度计算",
             "",
-            "脚本先在白噪声点上取随机游走量：",
+            "脚本先在白噪声窗口上估计噪声密度：",
             "",
             "```text",
-            "random_walk = sigma0_mps2 * sqrt(tau0) * 60",
+            "random_walk = median(sigma_mps2(tau_i) * sqrt(tau_i)) * 60",
             "noise_density_mps2_sqrtHz = random_walk / 60",
             "noise_density_ug_sqrtHz = noise_density_mps2_sqrtHz / 9.80665 * 1e6",
             "```",
@@ -2795,6 +3992,9 @@ def _build_arw_markdown_lines(source: Path, summary: dict[str, object], destinat
 def _write_markdown_report(destination: Path, source: Path, summary: dict[str, object]) -> None:
     if summary.get("test") == "arw":
         destination.write_text("\n".join(_build_arw_markdown_lines(source, summary, destination)) + "\n", encoding="utf-8")
+        return
+    if summary.get("test") == "temp":
+        destination.write_text("\n".join(_build_temp_markdown_lines(source, summary, destination)) + "\n", encoding="utf-8")
         return
 
     lines = ["# 数据分析报告", "", f"- 源文件: `{source}`", "", "## 摘要", ""]
@@ -2908,6 +4108,39 @@ def analyze_real_imu_bin_file(
             "primary_imu_name": _imu_name_from_id(primary_imu_id) if primary_imu_id else "unknown",
             "frames": str(primary_report.get("sample_count", 0)),
             "duration_s": f"{float(primary_report.get('duration_s', 0.0)):.3f}",
+        }
+    elif test_key == "temp":
+        progress.log("逐包 CSV 已写出，开始基于每个 IMU 的 CSV 统计温漂指标")
+        per_imu_report, temp_meta = _analyze_temp_per_imu_from_csvs(
+            per_imu_csv_paths,
+            bin_width_c=2.0,
+            progress_callback=progress_callback,
+        )
+        poll_stats = _collect_poll_comparison_stats(csv_path)
+        avg_packets_per_poll = poll_stats.get("avg_packets_per_poll", {})
+        if isinstance(avg_packets_per_poll, dict):
+            for imu_id, average_value in avg_packets_per_poll.items():
+                report_item = per_imu_report.get(imu_id)
+                if report_item is not None:
+                    report_item["avg_packets_per_poll"] = float(average_value)
+        temp_binned_csv = _write_temp_binned_csv(md_path, per_imu_report)
+        temp_summary_csv = _write_temp_summary_csv(md_path, per_imu_report)
+        primary_report = per_imu_report.get(primary_imu_id, {}) if primary_imu_id else {}
+        summary = {
+            "test": test_key,
+            "source": str(source),
+            "comparison_csv": csv_path.name,
+            "per_imu_csvs": ", ".join(path.name for _, path in sorted(per_imu_csv_paths.items())),
+            "per_imu_report": per_imu_report,
+            "source_size_text": _format_file_size(source.stat().st_size),
+            "poll_row_count": int(poll_stats.get("poll_row_count", 0)),
+            "poll_total_duration_s": float(poll_stats.get("poll_total_duration_s", 0.0)),
+            "primary_imu_name": _imu_name_from_id(primary_imu_id) if primary_imu_id else "unknown",
+            "frames": str(primary_report.get("sample_count", 0)),
+            "duration_s": f"{float(primary_report.get('duration_s', 0.0)):.3f}",
+            "temp_binned_csv": temp_binned_csv.name,
+            "temp_summary_csv": temp_summary_csv.name,
+            **temp_meta,
         }
     else:
         primary_captures = [capture for capture in legacy_raw_captures if capture.imu_id == primary_imu_id]

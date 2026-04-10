@@ -16,7 +16,7 @@ from imu_usb_tool import (
     find_cdc_port,
     parse_imu_probe_response,
     parse_noise_prepare_response,
-    parse_noise_status_response,
+    parse_noise_start_response,
     parse_status_response,
     snapshot_volumes,
     wait_for_any_target_port,
@@ -62,6 +62,7 @@ class App:
         self.connected_port: PortInfo | None = None
         self.session_log_path: Path | None = None
         self.active_test_key: str | None = None
+        self.active_test_output_path: str = ""
         self.test_stop_event = threading.Event()
         self.build_flash_running = threading.Event()
         self.device_mode: str = "unknown"
@@ -504,28 +505,6 @@ class App:
         finally:
             temp_client.close()
 
-    def _query_noise_status_with_retry(self, port: PortInfo, timeouts: tuple[float, ...] = (4.0, 8.0)):
-        last_error: Exception | None = None
-        strategies = (False, True)
-
-        for attempt, timeout in enumerate(timeouts):
-            force_reopen = strategies[min(attempt, len(strategies) - 1)]
-            try:
-                status_response = self._send_shell_command(
-                    port,
-                    "noise_test_status",
-                    timeout=timeout,
-                    force_reopen=force_reopen,
-                )
-                return parse_noise_status_response(status_response)
-            except Exception as exc:  # noqa: BLE001
-                last_error = exc
-                threading.Event().wait(0.2)
-
-        if last_error is not None:
-            raise last_error
-        raise RuntimeError("noise_test_status 查询失败")
-
     @staticmethod
     def _status_text_from_response(response: str) -> str:
         try:
@@ -781,17 +760,26 @@ class App:
             timeout=2.0,
         )
         self.message_queue.put(("info", self._format_simple_response("noise_test_start", start_response)))
+        try:
+            start_result = parse_noise_start_response(start_response)
+        except Exception:
+            start_result = None
+
         if "status=accepted" not in start_response:
             self.active_test_key = None
+            self.active_test_output_path = ""
             self.test_stop_event.set()
             self.message_queue.put(("info", "噪声测试启动失败"))
             return
         self.active_test_key = "arw"
+        self.active_test_output_path = self._format_device_path(start_result.file) if start_result is not None else "03_arw/000.BIN"
         self.test_stop_event.clear()
         self.message_queue.put(("info", f"噪声测试已启动，固件将记录 {duration_s} 秒 IMU 数据到测试目录下的新 BIN 文件"))
-        self._monitor_noise_test(port, duration_s)
+        self.message_queue.put(("info", f"本次计划输出 BIN: {self.active_test_output_path}"))
+        self.message_queue.put(("info", "测试期间上位机不再轮询串口查询进度，请以板载 LED 闪烁作为 poll 运行指示"))
+        self._monitor_noise_test(duration_s)
 
-    def _monitor_noise_test(self, port: PortInfo, duration_s: int) -> None:
+    def _monitor_noise_test(self, duration_s: int) -> None:
         if duration_s >= 1800:
             update_interval = 60.0
         elif duration_s >= 300:
@@ -806,58 +794,14 @@ class App:
                 return
 
             elapsed = min(elapsed + wait_seconds, float(duration_s))
-            status = self._query_noise_status_once(port)
-            if status is None:
-                self.message_queue.put(("info", f"噪声测试进度: {int(elapsed)}/{duration_s}s"))
-                continue
-
-            if status.recording == 0:
-                self.active_test_key = None
-                self.test_stop_event.set()
-                if self._noise_test_completed_normally(status, int(elapsed), duration_s, update_interval):
-                    if status.last_error != 0:
-                        self.message_queue.put(("error", self._format_noise_test_error(status)))
-                    else:
-                        self.message_queue.put((
-                            "info",
-                            f"噪声测试完成: frames={status.frames} duration={status.duration_s}s last_error={status.last_error}",
-                        ))
-                else:
-                    message_kind = "error" if status.last_error != 0 else "info"
-                    self.message_queue.put((message_kind, self._format_noise_test_stopped_early(status, int(elapsed), duration_s)))
-                self.message_queue.put(("info", f"bin 文件路径: {self._format_device_path(status.file)}"))
-                return
-
             self.message_queue.put(("info", f"噪声测试进度: {int(elapsed)}/{duration_s}s"))
 
-        self._finalize_noise_test(port)
-
-    def _finalize_noise_test(self, port: PortInfo) -> None:
-        last_error: Exception | None = None
-        threading.Event().wait(0.6)
-        for _ in range(3):
-            try:
-                status = self._query_noise_status_with_retry(port, timeouts=(6.0, 10.0, 12.0))
-                self.active_test_key = None
-                if status.last_error != 0:
-                    self.message_queue.put(("error", self._format_noise_test_error(status)))
-                else:
-                    self.message_queue.put((
-                        "info",
-                        f"噪声测试完成: frames={status.frames} duration={status.duration_s}s last_error={status.last_error}",
-                    ))
-                self.message_queue.put(("info", f"bin 文件路径: {self._format_device_path(status.file)}"))
-                self._reconnect_preferred_port(3.0, "测试结束后已恢复串口连接", preferred_port=port)
-                return
-            except Exception as exc:  # noqa: BLE001
-                last_error = exc
-                threading.Event().wait(0.5)
-
         self.active_test_key = None
-        self.message_queue.put(("info", "噪声测试已结束，但状态查询失败"))
-        self.message_queue.put(("info", "bin 文件路径: 03_arw/000.BIN"))
-        if last_error is not None:
-            self.message_queue.put(("info", f"状态查询异常: {last_error}"))
+        threading.Event().wait(1.0)
+        self.message_queue.put(("info", "噪声测试计时结束，请观察设备 LED：停止闪烁后表示 poll/落盘已完成"))
+        self.message_queue.put(("info", f"bin 文件路径: {self.active_test_output_path or '03_arw/000.BIN'}"))
+        self.message_queue.put(("info", "如需确认结果，请在测试结束后手动导出 BIN 或切换到 U 盘模式查看文件"))
+        self.active_test_output_path = ""
 
     def _stop_test(self) -> None:
         if self.active_test_key != "arw":
@@ -869,49 +813,8 @@ class App:
         self.test_stop_event.set()
         self.active_test_key = None
         self.message_queue.put(("info", self._format_simple_response("noise_test_stop", response)))
-        self.message_queue.put(("info", "测试已中止，bin 文件路径请以状态查询返回为准"))
-
-    def _query_noise_status_once(self, port: PortInfo):
-        try:
-            return self._query_noise_status_with_retry(port)
-        except Exception as exc:  # noqa: BLE001
-            self.message_queue.put(("info", f"测试中状态查询失败: {exc}"))
-            return None
-
-    @staticmethod
-    def _noise_error_text(error_code: int, reason: str) -> str:
-        if reason:
-            return reason
-        return NOISE_ERROR_TEXT.get(error_code, f"未知错误({error_code})")
-
-    @staticmethod
-    def _noise_test_completed_normally(status, elapsed: int, duration_s: int, update_interval: float) -> bool:
-        if status.last_error != 0:
-            return False
-        if status.last_run_ok == 1:
-            return True
-        return (duration_s - elapsed) <= max(1, int(update_interval))
-
-    def _format_noise_test_error(self, status) -> str:
-        imu_label = IMU_SLOT_LABELS.get(status.fault_imu, f"IMU{status.fault_imu}" if status.fault_imu else "未知IMU")
-        detail = self._noise_error_text(status.last_error, status.reason)
-        location = []
-        if status.fault_imu:
-            location.append(f"imu={imu_label}")
-        if status.fault_poll:
-            location.append(f"poll={status.fault_poll}")
-        if status.fault_packet:
-            location.append(f"packet={status.fault_packet}")
-        suffix = f" ({', '.join(location)})" if location else ""
-        return f"噪声测试异常停止: {detail}{suffix}，last_error={status.last_error}"
-
-    def _format_noise_test_stopped_early(self, status, elapsed: int, duration_s: int) -> str:
-        if status.last_error != 0:
-            return self._format_noise_test_error(status)
-        return (
-            f"噪声测试提前停止: recording=0, 已运行约 {elapsed}/{duration_s}s"
-            f"，frames={status.frames}，请检查固件日志与设备状态"
-        )
+        self.message_queue.put(("info", f"测试已中止，bin 文件路径: {self.active_test_output_path or '03_arw/000.BIN'}"))
+        self.active_test_output_path = ""
 
     def _choose_analysis_bin(self) -> None:
         chosen = filedialog.askopenfilename(
