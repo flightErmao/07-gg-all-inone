@@ -135,6 +135,47 @@ py -3 .\imu_usb_tool.py export-log --port COM78 --reset-to-cdc
 py -3 .\imu_usb_tool.py reset-to-cdc --port COM78
 ```
 
+振动 CSV 额外积分分析：
+
+```powershell
+py -3 .\vibration_accel_integrate_plot.py `
+  ..\data\04_vibration\161_20260410_150946_waveform\161_42688_A.csv `
+  --dt 0.01
+```
+
+说明：
+
+- 这个脚本会优先自动识别 `*_accel_z_g` 列，先自动识别前静止段，并用这段静止数据估计 bias，再做 `x[k] - bias` 去偏置，最后按离散公式 `y[k] = y[k-1] + (x[k] - bias) * dt` 做积分。
+- 输出 CSV 会同时给出原始 `g`、去偏置后的 `g`、积分后的 `g*s`，以及换算后的 `m/s`。
+- 输出文件默认放在输入 CSV 同目录下，分别是独立的 `.csv` 和 `.png`。
+
+振动目录级静止段 bias 去除 + 6 轴批量积分分析：
+
+```powershell
+py -3 .\vibration_static_bias_batch_report.py `
+  ..\data\04_vibration\161_20260410_150946_waveform `
+  --dt 0.01
+```
+
+说明：
+
+- 这个脚本会先用每颗 IMU 的 `accel_z_g` 自动识别前静止段，再用这段静止数据给该 IMU 的 `3` 个加速度轴和 `3` 个陀螺轴分别估计 bias。
+- 加速度轴会输出去偏置后的积分速度 `m/s`，陀螺轴会输出去偏置后的积分角度 `deg`。
+- 会为每颗 IMU 生成一份独立 `6` 轴 CSV 和一张总览图，并把结果章节补充进同目录下的 `*_vibe_analysis.md`。
+
+冲击恢复批量分析：
+
+```powershell
+py -3 .\run_shock_bin_batch_analysis.py `
+  ..\data\98-raw-bin\04-敲击测试\01-第一个轻敲-第二个是3个敲击-由轻到重
+```
+
+说明：
+
+- 这个脚本会对目录下每个 `BIN` 单独创建一个输出文件夹，并按 `document/02-各方案选项备注.md` 中 `3.5` 的方案生成冲击恢复报告。
+- 指标包括 `peak_ratio_shock`、`dropout_flag_shock`、`t_first_valid`、`recovery_time`、`post_shock_shift`。
+- GUI 里选择 `测试项目 5：冲击后数据恢复` 再点“选择 BIN 分析”时，也会走同一套解析逻辑并输出对应报告。
+
 ## 推荐上位机测试流程
 
 ### 1. 确认命令链路正常

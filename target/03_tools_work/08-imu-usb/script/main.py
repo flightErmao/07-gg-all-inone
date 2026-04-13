@@ -845,6 +845,10 @@ class App:
         self.message_queue.put(("info", f"CSV: {csv_path}"))
         if packet_csv_path != csv_path:
             self.message_queue.put(("info", f"逐包 CSV: {packet_csv_path}"))
+        for extra_key in ("shock_summary_csv", "shock_events_csv", "temp_binned_csv", "temp_summary_csv", "vibe_summary_csv"):
+            extra_name = str(summary.get(extra_key, "") or "").strip()
+            if extra_name:
+                self.message_queue.put(("info", f"{extra_key}: {output_dir / extra_name}"))
         self.message_queue.put(("info", f"报告: {md_path}"))
 
     def _drain_messages(self) -> None:

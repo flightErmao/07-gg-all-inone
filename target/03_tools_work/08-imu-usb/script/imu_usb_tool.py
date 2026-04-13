@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import bisect
 import ctypes
 import csv
 import math
@@ -19,6 +20,7 @@ from math import sqrt
 from pathlib import Path
 
 from serial_client import DeviceClient, PortInfo
+from shock_analysis import analyze_shock_per_imu_from_csvs, build_shock_markdown_lines
 
 
 DEFAULT_VID = 0x0FFE
@@ -2315,6 +2317,203 @@ def _classify_vibe_continuity(report: dict[str, object]) -> tuple[str, list[str]
     return "通过", ["未见掉样、回跳或长时间重复输出"]
 
 
+def _median(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(float(value) for value in values)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return float(ordered[middle])
+    return (float(ordered[middle - 1]) + float(ordered[middle])) * 0.5
+
+
+def _estimate_vibe_abnormal_jump_ratio_pct(values: list[float]) -> float:
+    if len(values) < 3:
+        return 0.0
+    second_diff = [
+        float(values[index]) - 2.0 * float(values[index - 1]) + float(values[index - 2])
+        for index in range(2, len(values))
+    ]
+    abs_second_diff = [abs(value) for value in second_diff]
+    baseline = _median(abs_second_diff)
+    threshold = max(baseline * 8.0, 3.0)
+    abnormal_count = sum(1 for value in abs_second_diff if value > threshold)
+    return abnormal_count / len(abs_second_diff) * 100.0 if abs_second_diff else 0.0
+
+
+def _estimate_vibe_zero_crossing_frequency_hz(values: list[float], sample_period_s: float) -> float:
+    if len(values) < 8 or sample_period_s <= 0.0:
+        return 0.0
+    mean_value = _mean(values)
+    centered = [float(value) - mean_value for value in values]
+    crossing_indices: list[int] = []
+    previous = centered[0]
+    for index in range(1, len(centered)):
+        current = centered[index]
+        if previous == 0.0:
+            previous = current
+            continue
+        if current == 0.0:
+            continue
+        if (previous < 0.0 and current > 0.0) or (previous > 0.0 and current < 0.0):
+            crossing_indices.append(index)
+        previous = current
+    if len(crossing_indices) < 2:
+        return 0.0
+    periods_s = [
+        (crossing_indices[index] - crossing_indices[index - 2]) * sample_period_s
+        for index in range(2, len(crossing_indices))
+    ]
+    valid_periods = [period for period in periods_s if period > 1e-9]
+    if not valid_periods:
+        return 0.0
+    return 1.0 / _mean(valid_periods)
+
+
+def _estimate_vibe_spectral_metrics(values: list[float], sample_rate_hz: float) -> dict[str, float]:
+    if len(values) < 64 or sample_rate_hz <= 0.0:
+        zero_crossing_freq = _estimate_vibe_zero_crossing_frequency_hz(values, 1.0 / sample_rate_hz if sample_rate_hz > 0.0 else 0.0)
+        return {
+            "dominant_frequency_hz": zero_crossing_freq,
+            "fundamental_energy_ratio_pct": 0.0,
+            "harmonic_energy_ratio_pct": 0.0,
+        }
+
+    try:
+        import numpy as np  # type: ignore
+
+        arr = np.asarray([float(value) for value in values], dtype=np.float64)
+        arr = arr - float(np.mean(arr))
+        if arr.size < 64:
+            raise ValueError("not enough points")
+        window = np.hanning(arr.size)
+        fft = np.fft.rfft(arr * window)
+        power = np.abs(fft) ** 2
+        freqs = np.fft.rfftfreq(arr.size, d=1.0 / sample_rate_hz)
+        if power.size < 2:
+            raise ValueError("fft too short")
+        power[0] = 0.0
+        dominant_index = int(np.argmax(power))
+        dominant_frequency_hz = float(freqs[dominant_index]) if dominant_index < freqs.size else 0.0
+        total_energy = float(np.sum(power))
+        if total_energy <= 1e-18 or dominant_frequency_hz <= 0.0:
+            raise ValueError("invalid spectrum")
+        band_half_width = max(int(round(arr.size / max(sample_rate_hz, 1.0))), 1)
+        start = max(dominant_index - band_half_width, 1)
+        end = min(dominant_index + band_half_width + 1, power.size)
+        fundamental_energy = float(np.sum(power[start:end]))
+        harmonic_energy = 0.0
+        for harmonic in range(2, 6):
+            harmonic_frequency = dominant_frequency_hz * harmonic
+            if harmonic_frequency >= sample_rate_hz * 0.5:
+                break
+            harmonic_index = int(np.argmin(np.abs(freqs - harmonic_frequency)))
+            h_start = max(harmonic_index - band_half_width, 1)
+            h_end = min(harmonic_index + band_half_width + 1, power.size)
+            harmonic_energy += float(np.sum(power[h_start:h_end]))
+        return {
+            "dominant_frequency_hz": dominant_frequency_hz,
+            "fundamental_energy_ratio_pct": fundamental_energy / total_energy * 100.0,
+            "harmonic_energy_ratio_pct": harmonic_energy / total_energy * 100.0,
+        }
+    except Exception:
+        zero_crossing_freq = _estimate_vibe_zero_crossing_frequency_hz(values, 1.0 / sample_rate_hz if sample_rate_hz > 0.0 else 0.0)
+        return {
+            "dominant_frequency_hz": zero_crossing_freq,
+            "fundamental_energy_ratio_pct": 0.0,
+            "harmonic_energy_ratio_pct": 0.0,
+        }
+
+
+def _detect_vibe_high_amplitude_windows(
+    timestamps_us: list[int],
+    accel_z_g: list[float],
+    full_scale_g: float,
+) -> list[dict[str, int | float]]:
+    if not timestamps_us or not accel_z_g or len(timestamps_us) != len(accel_z_g) or full_scale_g <= 0.0:
+        return []
+
+    high_threshold_g = full_scale_g * 0.90
+    merge_gap_us = 80_000
+    extend_us = 120_000
+    seed_indices = [index for index, value in enumerate(accel_z_g) if abs(float(value)) >= high_threshold_g]
+    if not seed_indices:
+        return []
+
+    windows: list[dict[str, int | float]] = []
+    seed_start = seed_indices[0]
+    seed_end = seed_indices[0]
+    for index in seed_indices[1:]:
+        if timestamps_us[index] - timestamps_us[seed_end] <= merge_gap_us:
+            seed_end = index
+            continue
+        windows.append(
+            {
+                "seed_start_index": seed_start,
+                "seed_end_index": seed_end,
+            }
+        )
+        seed_start = index
+        seed_end = index
+    windows.append(
+        {
+            "seed_start_index": seed_start,
+            "seed_end_index": seed_end,
+        }
+    )
+
+    expanded: list[dict[str, int | float]] = []
+    for window in windows:
+        seed_start_index = int(window["seed_start_index"])
+        seed_end_index = int(window["seed_end_index"])
+        start_time_us = timestamps_us[seed_start_index] - extend_us
+        end_time_us = timestamps_us[seed_end_index] + extend_us
+        start_index = bisect.bisect_left(timestamps_us, start_time_us)
+        end_index = max(bisect.bisect_right(timestamps_us, end_time_us) - 1, start_index)
+        expanded.append(
+            {
+                "start_index": start_index,
+                "end_index": end_index,
+                "seed_start_index": seed_start_index,
+                "seed_end_index": seed_end_index,
+                "seed_count": seed_end_index - seed_start_index + 1,
+            }
+        )
+    return expanded
+
+
+def _classify_vibe_waveform_quality(report: dict[str, object]) -> tuple[str, list[str]]:
+    if int(report.get("high_window_count", 0) or 0) <= 0:
+        return "未达到高幅条件", ["主响应轴未进入 90%FS 高幅窗口"]
+
+    cross_yz = float(report.get("high_window_cross_axis_yz_ratio", 0.0) or 0.0)
+    cross_xz = float(report.get("high_window_cross_axis_xz_ratio", 0.0) or 0.0)
+    fundamental_ratio_pct = float(report.get("high_window_fundamental_energy_ratio_pct", 0.0) or 0.0)
+    harmonic_ratio_pct = float(report.get("high_window_harmonic_energy_ratio_pct", 0.0) or 0.0)
+    saturated_ratio_pct = float(report.get("high_window_saturated_sample_ratio_pct", 0.0) or 0.0)
+    jump_ratio_pct = float(report.get("high_window_abnormal_jump_ratio_pct", 0.0) or 0.0)
+
+    notes: list[str] = []
+    if cross_xz > 0.20:
+        notes.append(f"X/Z 耦合偏大 {cross_xz:.3f}")
+    if cross_yz > 0.25:
+        notes.append(f"Y/Z 耦合偏大 {cross_yz:.3f}")
+    if fundamental_ratio_pct > 0.0 and fundamental_ratio_pct < 45.0:
+        notes.append(f"主频能量占比偏低 {fundamental_ratio_pct:.1f}%")
+    if harmonic_ratio_pct > 35.0:
+        notes.append(f"谐波占比偏高 {harmonic_ratio_pct:.1f}%")
+    if saturated_ratio_pct > 0.20:
+        notes.append(f"高幅窗口内饱和 {saturated_ratio_pct:.2f}%")
+    if jump_ratio_pct > 1.00:
+        notes.append(f"高幅窗口异常跳变 {jump_ratio_pct:.2f}%")
+
+    if not notes:
+        return "较好", ["主轴占优且高幅窗口波形连续"]
+    if len(notes) <= 2:
+        return "需改进", notes
+    return "较差", notes
+
+
 def _analyze_vibe_single_imu_csv(
     imu_id: int,
     csv_path: Path,
@@ -2329,6 +2528,7 @@ def _analyze_vibe_single_imu_csv(
     temp_raw_field = f"{prefix}temp_raw"
     raw_accel_fields = {axis: f"{prefix}raw_accel_{axis}" for axis in ("x", "y", "z")}
     raw_gyro_fields = {axis: f"{prefix}raw_gyro_{axis}" for axis in ("x", "y", "z")}
+    accel_fields = {axis: f"{prefix}accel_{axis}_g" for axis in ("x", "y", "z")}
 
     sample_count = 0
     first_timestamp_us = 0
@@ -2357,6 +2557,13 @@ def _analyze_vibe_single_imu_csv(
     gyro_saturated_packet_count = 0
     nominal_packet_period_us = _nominal_packet_period_us(imu_id)
     timestamp_tolerance_us = max(2.0, nominal_packet_period_us * 0.2) if nominal_packet_period_us > 0.0 else 2.0
+    timestamps_us: list[int] = []
+    accel_x_g_values: list[float] = []
+    accel_y_g_values: list[float] = []
+    accel_z_g_values: list[float] = []
+    raw_accel_x_values: list[int] = []
+    raw_accel_y_values: list[int] = []
+    raw_accel_z_values: list[int] = []
 
     def _finalize_identical_run(end_sample_index: int, end_timestamp_us: int) -> None:
         nonlocal longest_identical_run_samples
@@ -2384,6 +2591,9 @@ def _analyze_vibe_single_imu_csv(
             temp_raw = int(float(row.get(temp_raw_field, "0") or 0))
             raw_accel = tuple(int(float(row.get(raw_accel_fields[axis], "0") or 0)) for axis in ("x", "y", "z"))
             raw_gyro = tuple(int(float(row.get(raw_gyro_fields[axis], "0") or 0)) for axis in ("x", "y", "z"))
+            accel_x_g = _read_accel_csv_value_g(row, prefix, "x")
+            accel_y_g = _read_accel_csv_value_g(row, prefix, "y")
+            accel_z_g = _read_accel_csv_value_g(row, prefix, "z")
             previous_timestamp_us = prev_timestamp_us
 
             if sample_count == 0:
@@ -2391,6 +2601,13 @@ def _analyze_vibe_single_imu_csv(
             last_timestamp_us = timestamp_us
             last_poll_timestamp_us = poll_timestamp_us
             sample_count += 1
+            timestamps_us.append(timestamp_us)
+            accel_x_g_values.append(accel_x_g)
+            accel_y_g_values.append(accel_y_g)
+            accel_z_g_values.append(accel_z_g)
+            raw_accel_x_values.append(raw_accel[0])
+            raw_accel_y_values.append(raw_accel[1])
+            raw_accel_z_values.append(raw_accel[2])
 
             temp_sum_c += temp_c
             if temp_c < temp_min_c:
@@ -2466,15 +2683,111 @@ def _analyze_vibe_single_imu_csv(
         repeated_sample_transition_count / max(sample_count - 1, 1) * 100.0 if sample_count > 1 else 0.0
     )
     saturated_packet_ratio_pct = saturated_packet_count / sample_count * 100.0 if sample_count > 0 else 0.0
+    full_scale_g = float(IMU_CONFIGS.get(imu_id, {}).get("accel_range_g", 0.0) or 0.0)
+    high_windows = _detect_vibe_high_amplitude_windows(timestamps_us, accel_z_g_values, full_scale_g)
+
+    high_window_summaries: list[dict[str, object]] = []
+    high_window_sample_count = 0
+    high_window_total_duration_s = 0.0
+    high_window_peak_abs_z_g = 0.0
+    weighted_cross_xz = 0.0
+    weighted_cross_yz = 0.0
+    weighted_dominant_frequency_hz = 0.0
+    weighted_fundamental_ratio_pct = 0.0
+    weighted_harmonic_ratio_pct = 0.0
+    weighted_jump_ratio_pct = 0.0
+    high_window_abnormal_point_count = 0
+    high_window_saturated_point_count = 0
+
+    for window_index, window in enumerate(high_windows, start=1):
+        start_index = int(window["start_index"])
+        end_index = int(window["end_index"])
+        if start_index < 0 or end_index < start_index or end_index >= len(timestamps_us):
+            continue
+        x_window = accel_x_g_values[start_index : end_index + 1]
+        y_window = accel_y_g_values[start_index : end_index + 1]
+        z_window = accel_z_g_values[start_index : end_index + 1]
+        raw_x_window = raw_accel_x_values[start_index : end_index + 1]
+        raw_y_window = raw_accel_y_values[start_index : end_index + 1]
+        raw_z_window = raw_accel_z_values[start_index : end_index + 1]
+        sample_total = len(z_window)
+        if sample_total <= 0:
+            continue
+
+        duration_window_s = (timestamps_us[end_index] - timestamps_us[start_index]) / 1_000_000.0 if sample_total >= 2 else 0.0
+        rms_x_g = _rms(x_window)
+        rms_y_g = _rms(y_window)
+        rms_z_g = _rms(z_window)
+        cross_xz_ratio = rms_x_g / rms_z_g if rms_z_g > 1e-9 else 0.0
+        cross_yz_ratio = rms_y_g / rms_z_g if rms_z_g > 1e-9 else 0.0
+        spectral = _estimate_vibe_spectral_metrics(z_window, packet_rate_hz)
+        abnormal_jump_ratio_pct = _estimate_vibe_abnormal_jump_ratio_pct(z_window)
+        saturated_point_count = sum(
+            1
+            for raw_x, raw_y, raw_z in zip(raw_x_window, raw_y_window, raw_z_window)
+            if raw_x in (ACCEL_RAW_MIN, ACCEL_RAW_MAX)
+            or raw_y in (ACCEL_RAW_MIN, ACCEL_RAW_MAX)
+            or raw_z in (ACCEL_RAW_MIN, ACCEL_RAW_MAX)
+        )
+        saturated_ratio_pct = saturated_point_count / sample_total * 100.0 if sample_total > 0 else 0.0
+        high_window_sample_count += sample_total
+        high_window_total_duration_s += duration_window_s
+        high_window_peak_abs_z_g = max(high_window_peak_abs_z_g, max(abs(value) for value in z_window))
+        weighted_cross_xz += cross_xz_ratio * sample_total
+        weighted_cross_yz += cross_yz_ratio * sample_total
+        weighted_dominant_frequency_hz += float(spectral["dominant_frequency_hz"]) * sample_total
+        weighted_fundamental_ratio_pct += float(spectral["fundamental_energy_ratio_pct"]) * sample_total
+        weighted_harmonic_ratio_pct += float(spectral["harmonic_energy_ratio_pct"]) * sample_total
+        weighted_jump_ratio_pct += abnormal_jump_ratio_pct * sample_total
+        high_window_abnormal_point_count += int(round(abnormal_jump_ratio_pct / 100.0 * sample_total))
+        high_window_saturated_point_count += saturated_point_count
+        high_window_summaries.append(
+            {
+                "window_index": window_index,
+                "start_sample_index": start_index + 1,
+                "end_sample_index": end_index + 1,
+                "start_time_s": (timestamps_us[start_index] - first_timestamp_us) / 1_000_000.0,
+                "end_time_s": (timestamps_us[end_index] - first_timestamp_us) / 1_000_000.0,
+                "duration_s": duration_window_s,
+                "sample_count": sample_total,
+                "seed_count": int(window.get("seed_count", 0)),
+                "peak_abs_z_g": max(abs(value) for value in z_window),
+                "mean_abs_z_g": _mean([abs(value) for value in z_window]),
+                "rms_x_g": rms_x_g,
+                "rms_y_g": rms_y_g,
+                "rms_z_g": rms_z_g,
+                "cross_axis_xz_ratio": cross_xz_ratio,
+                "cross_axis_yz_ratio": cross_yz_ratio,
+                "dominant_frequency_hz": float(spectral["dominant_frequency_hz"]),
+                "fundamental_energy_ratio_pct": float(spectral["fundamental_energy_ratio_pct"]),
+                "harmonic_energy_ratio_pct": float(spectral["harmonic_energy_ratio_pct"]),
+                "abnormal_jump_ratio_pct": abnormal_jump_ratio_pct,
+                "saturated_point_count": saturated_point_count,
+                "saturated_ratio_pct": saturated_ratio_pct,
+            }
+        )
+
+    weighted_denominator = max(high_window_sample_count, 1)
+    high_window_cross_xz_ratio = weighted_cross_xz / weighted_denominator if high_window_sample_count > 0 else 0.0
+    high_window_cross_yz_ratio = weighted_cross_yz / weighted_denominator if high_window_sample_count > 0 else 0.0
+    high_window_dominant_frequency_hz = weighted_dominant_frequency_hz / weighted_denominator if high_window_sample_count > 0 else 0.0
+    high_window_fundamental_ratio_pct = weighted_fundamental_ratio_pct / weighted_denominator if high_window_sample_count > 0 else 0.0
+    high_window_harmonic_ratio_pct = weighted_harmonic_ratio_pct / weighted_denominator if high_window_sample_count > 0 else 0.0
+    high_window_jump_ratio_pct = weighted_jump_ratio_pct / weighted_denominator if high_window_sample_count > 0 else 0.0
+    high_window_saturated_ratio_pct = high_window_saturated_point_count / high_window_sample_count * 100.0 if high_window_sample_count > 0 else 0.0
+    high_window_peak_fraction_pct = high_window_peak_abs_z_g / full_scale_g * 100.0 if full_scale_g > 0.0 else 0.0
+    high_window_abnormal_point_ratio_pct = (
+        high_window_abnormal_point_count / high_window_sample_count * 100.0 if high_window_sample_count > 0 else 0.0
+    )
 
     identical_run_events.sort(key=lambda item: (-int(item["sample_count"]), -int(item["duration_us"])))
     gap_events.sort(key=lambda item: (-int(item["estimated_missing_samples"]), -int(item["delta_us"])))
 
-    return {
+    report = {
         "imu_id": imu_id,
         "imu_name": imu_name,
         "configured_odr_hz": float(IMU_CONFIGS.get(imu_id, {}).get("odr_hz", 0.0) or 0.0),
-        "accel_range_g": float(IMU_CONFIGS.get(imu_id, {}).get("accel_range_g", 0.0) or 0.0),
+        "accel_range_g": full_scale_g,
         "gyro_range_dps": float(IMU_CONFIGS.get(imu_id, {}).get("gyro_range_dps", 0.0) or 0.0),
         "sample_count": sample_count,
         "duration_s": duration_s,
@@ -2503,7 +2816,26 @@ def _analyze_vibe_single_imu_csv(
         "gyro_saturated_packet_count": gyro_saturated_packet_count,
         "saturated_packet_count": saturated_packet_count,
         "saturated_packet_ratio_pct": saturated_packet_ratio_pct,
+        "high_window_threshold_g": full_scale_g * 0.90 if full_scale_g > 0.0 else 0.0,
+        "high_window_count": len(high_window_summaries),
+        "high_window_total_samples": high_window_sample_count,
+        "high_window_total_duration_s": high_window_total_duration_s,
+        "high_window_peak_abs_z_g": high_window_peak_abs_z_g,
+        "high_window_peak_fraction_pct": high_window_peak_fraction_pct,
+        "high_window_cross_axis_xz_ratio": high_window_cross_xz_ratio,
+        "high_window_cross_axis_yz_ratio": high_window_cross_yz_ratio,
+        "high_window_dominant_frequency_hz": high_window_dominant_frequency_hz,
+        "high_window_fundamental_energy_ratio_pct": high_window_fundamental_ratio_pct,
+        "high_window_harmonic_energy_ratio_pct": high_window_harmonic_ratio_pct,
+        "high_window_abnormal_jump_ratio_pct": high_window_jump_ratio_pct,
+        "high_window_abnormal_point_ratio_pct": high_window_abnormal_point_ratio_pct,
+        "high_window_saturated_sample_ratio_pct": high_window_saturated_ratio_pct,
+        "high_windows": high_window_summaries,
     }
+    waveform_status, waveform_notes = _classify_vibe_waveform_quality(report)
+    report["waveform_status"] = waveform_status
+    report["waveform_notes"] = waveform_notes
+    return report
 
 
 def _analyze_vibe_per_imu_from_csvs(
@@ -3236,9 +3568,22 @@ def _write_vibe_summary_csv(destination: Path, per_imu_report: dict[int, dict[st
                 "saturated_packet_ratio_pct",
                 "accel_saturated_packet_count",
                 "gyro_saturated_packet_count",
+                "high_window_count",
+                "high_window_total_duration_s",
+                "high_window_peak_abs_z_g",
+                "high_window_peak_fraction_pct",
+                "high_window_cross_axis_xz_ratio",
+                "high_window_cross_axis_yz_ratio",
+                "high_window_dominant_frequency_hz",
+                "high_window_fundamental_energy_ratio_pct",
+                "high_window_harmonic_energy_ratio_pct",
+                "high_window_abnormal_point_ratio_pct",
+                "high_window_saturated_sample_ratio_pct",
+                "waveform_status",
                 "temp_min_c",
                 "temp_max_c",
                 "continuity_notes",
+                "waveform_notes",
             ]
         )
         for imu_id in sorted(int(key) for key in per_imu_report):
@@ -3269,9 +3614,22 @@ def _write_vibe_summary_csv(destination: Path, per_imu_report: dict[int, dict[st
                     _format_float(float(sr.get("saturated_packet_ratio_pct", 0.0))),
                     int(sr.get("accel_saturated_packet_count", 0)),
                     int(sr.get("gyro_saturated_packet_count", 0)),
+                    int(sr.get("high_window_count", 0)),
+                    _format_float(float(sr.get("high_window_total_duration_s", 0.0))),
+                    _format_float(float(sr.get("high_window_peak_abs_z_g", 0.0))),
+                    _format_float(float(sr.get("high_window_peak_fraction_pct", 0.0))),
+                    _format_float(float(sr.get("high_window_cross_axis_xz_ratio", 0.0))),
+                    _format_float(float(sr.get("high_window_cross_axis_yz_ratio", 0.0))),
+                    _format_float(float(sr.get("high_window_dominant_frequency_hz", 0.0))),
+                    _format_float(float(sr.get("high_window_fundamental_energy_ratio_pct", 0.0))),
+                    _format_float(float(sr.get("high_window_harmonic_energy_ratio_pct", 0.0))),
+                    _format_float(float(sr.get("high_window_abnormal_point_ratio_pct", 0.0))),
+                    _format_float(float(sr.get("high_window_saturated_sample_ratio_pct", 0.0))),
+                    sr.get("waveform_status", ""),
                     _format_float(float(sr.get("temp_min_c", 0.0))),
                     _format_float(float(sr.get("temp_max_c", 0.0))),
                     "；".join(str(item) for item in sr.get("continuity_notes", [])),
+                    "；".join(str(item) for item in sr.get("waveform_notes", [])),
                 ]
             )
     return csv_path
@@ -4234,16 +4592,21 @@ def _build_vibe_markdown_lines(source: Path, summary: dict[str, object], destina
     summary_csv_name = str(summary.get("vibe_summary_csv", "-"))
 
     status_counts = {"通过": 0, "需关注": 0, "失败": 0}
+    waveform_status_counts: dict[str, int] = {}
     total_estimated_missing_samples = 0
     total_duplicate_timestamps = 0
     max_saturated_ratio_pct = 0.0
+    max_peak_fraction_pct = 0.0
     for imu_id in all_imu_ids:
         sr = per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id)) or {}
         status = str(sr.get("continuity_status", "需关注"))
         status_counts[status] = status_counts.get(status, 0) + 1
+        waveform_status = str(sr.get("waveform_status", "未达到高幅条件"))
+        waveform_status_counts[waveform_status] = waveform_status_counts.get(waveform_status, 0) + 1
         total_estimated_missing_samples += int(sr.get("estimated_missing_samples", 0) or 0)
         total_duplicate_timestamps += int(sr.get("duplicate_timestamp_count", 0) or 0)
         max_saturated_ratio_pct = max(max_saturated_ratio_pct, float(sr.get("saturated_packet_ratio_pct", 0.0) or 0.0))
+        max_peak_fraction_pct = max(max_peak_fraction_pct, float(sr.get("high_window_peak_fraction_pct", 0.0) or 0.0))
 
     lines = [
         "# 振动环境输出连续性分析结果",
@@ -4265,10 +4628,17 @@ def _build_vibe_markdown_lines(source: Path, summary: dict[str, object], destina
             f"需关注 `{status_counts.get('需关注', 0)}` 个，失败 `{status_counts.get('失败', 0)}` 个。"
         ),
         (
+            f"- 高幅窗口波形结论: 较好 `{waveform_status_counts.get('较好', 0)}` 个，"
+            f"需改进 `{waveform_status_counts.get('需改进', 0)}` 个，"
+            f"较差 `{waveform_status_counts.get('较差', 0)}` 个，"
+            f"未达到高幅条件 `{waveform_status_counts.get('未达到高幅条件', 0)}` 个。"
+        ),
+        (
             f"- 汇总观察: 估算丢样 `{total_estimated_missing_samples}` 包，"
             f"重复时间戳 `{total_duplicate_timestamps}` 次，"
             f"最高满量程裁剪比例 `{max_saturated_ratio_pct:.2f}%`。"
         ),
+        f"- 主响应轴最高峰值达到满量程的 `{max_peak_fraction_pct:.1f}%`，高幅窗口按 `|acc_z| >= 0.9 FS` 自动识别并合并相邻峰值周期。",
         "- 本报告先解析 BIN 为每颗 IMU 的逐包 CSV，再使用 `packet_timestamp_continuous` 与 `poll_count` 联合判断连续性，避免只看 frame 汇总带来的误判。",
         "",
         "### 各 IMU 结论",
@@ -4278,12 +4648,15 @@ def _build_vibe_markdown_lines(source: Path, summary: dict[str, object], destina
     for imu_id in all_imu_ids:
         sr = per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id)) or {}
         note_text = "；".join(str(item) for item in sr.get("continuity_notes", []))
+        waveform_note_text = "；".join(str(item) for item in sr.get("waveform_notes", []))
         lines.append(
             "- "
             f"`{sr['imu_name']}`: `{sr.get('continuity_status', '需关注')}`，"
             f"{note_text}；实测刷新率 `{float(sr.get('packet_rate_hz', 0.0)):.3f} Hz`，"
             f"样本 `{int(sr.get('sample_count', 0))}`，"
-            f"平均每 poll `{float(sr.get('avg_packets_per_poll', 0.0)):.3f}` 包。"
+            f"平均每 poll `{float(sr.get('avg_packets_per_poll', 0.0)):.3f}` 包；"
+            f"波形合理性 `{sr.get('waveform_status', '未达到高幅条件')}`"
+            f"{f'，{waveform_note_text}' if waveform_note_text else ''}。"
         )
 
     lines.extend(
@@ -4317,6 +4690,37 @@ def _build_vibe_markdown_lines(source: Path, summary: dict[str, object], destina
             + " |"
         )
 
+    lines.extend(
+        [
+            "",
+            "## 高幅窗口与波形合理性",
+            "",
+            "| IMU | 高幅窗口数 | 高幅总时长 (s) | Z 轴峰值 (g) | 峰值占满量程 (%) | 主频 (Hz) | 主频能量占比 (%) | 谐波占比 (%) | X/Z RMS | Y/Z RMS | 波形结论 |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+        ]
+    )
+    for imu_id in all_imu_ids:
+        sr = per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id)) or {}
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    str(sr.get("imu_name", _imu_name_from_id(imu_id))),
+                    str(int(sr.get("high_window_count", 0))),
+                    _format_float(float(sr.get("high_window_total_duration_s", 0.0))),
+                    _format_float(float(sr.get("high_window_peak_abs_z_g", 0.0))),
+                    _format_float(float(sr.get("high_window_peak_fraction_pct", 0.0))),
+                    _format_float(float(sr.get("high_window_dominant_frequency_hz", 0.0))),
+                    _format_float(float(sr.get("high_window_fundamental_energy_ratio_pct", 0.0))),
+                    _format_float(float(sr.get("high_window_harmonic_energy_ratio_pct", 0.0))),
+                    _format_float(float(sr.get("high_window_cross_axis_xz_ratio", 0.0))),
+                    _format_float(float(sr.get("high_window_cross_axis_yz_ratio", 0.0))),
+                    str(sr.get("waveform_status", "")),
+                ]
+            )
+            + " |"
+        )
+
     lines.extend(["", "## 异常摘要", ""])
     has_exception_details = False
     for imu_id in all_imu_ids:
@@ -4325,16 +4729,39 @@ def _build_vibe_markdown_lines(source: Path, summary: dict[str, object], destina
         identical_run_events = [
             event for event in list(sr.get("identical_run_events", []) or []) if int(event.get("sample_count", 0)) >= 4
         ]
+        high_windows = list(sr.get("high_windows", []) or [])
         should_render = bool(
             gap_events
             or identical_run_events
+            or high_windows
             or float(sr.get("saturated_packet_ratio_pct", 0.0) or 0.0) > 0.0
             or int(sr.get("duplicate_timestamp_count", 0) or 0) > 0
+            or str(sr.get("waveform_status", "")) in ("需改进", "较差", "未达到高幅条件")
         )
         if not should_render:
             continue
         has_exception_details = True
         lines.extend([f"### {sr.get('imu_name', _imu_name_from_id(imu_id))}", ""])
+        if high_windows:
+            for window in high_windows[:2]:
+                lines.append(
+                    "- "
+                    f"高幅窗口 `{int(window['window_index'])}`: "
+                    f"`{float(window['start_time_s']):.3f} ~ {float(window['end_time_s']):.3f} s`，"
+                    f"时长 `{float(window['duration_s']):.3f} s`，"
+                    f"Z 峰值 `{float(window['peak_abs_z_g']):.3f} g`，"
+                    f"主频 `{float(window['dominant_frequency_hz']):.3f} Hz`，"
+                    f"主频能量占比 `{float(window['fundamental_energy_ratio_pct']):.1f}%`，"
+                    f"谐波占比 `{float(window['harmonic_energy_ratio_pct']):.1f}%`。"
+                )
+        waveform_notes = list(sr.get("waveform_notes", []) or [])
+        if waveform_notes:
+            lines.append(
+                "- "
+                f"波形合理性结论 `{sr.get('waveform_status', '')}`："
+                + "；".join(str(item) for item in waveform_notes)
+                + "。"
+            )
         if gap_events:
             for event in gap_events[:3]:
                 lines.append(
@@ -4371,6 +4798,8 @@ def _build_vibe_markdown_lines(source: Path, summary: dict[str, object], destina
             "- `时间戳缺口 / 估算丢样`: 基于每颗 IMU 的 `packet_timestamp_continuous` 做差分，并用配置 ODR 对应的理论包间隔 `1e6 / ODR` 估算缺失包数。",
             "- `重复时间戳 / 回跳`: 若相邻逐包时间戳 `dt == 0` 记为重复，`dt < 0` 记为回跳；二者都直接判为连续性失败。",
             "- `poll 缺口`: 来自 `poll_compare.csv` 的 `poll_count` 序列，若 `poll_count[n] - poll_count[n-1] > 1` 则认为中间 poll 丢失。",
+            "- `高幅窗口`: 先在主响应轴 `acc_z` 上找出 `|acc_z| >= 0.9 FS` 的种子点，再把相邻峰值周期合并为一个连续高幅窗口，用于高动态阶段专项分析。",
+            "- `波形合理性`: 重点看高幅窗口内的主频能量占比、谐波占比、交叉轴耦合比 `X/Z` 与 `Y/Z`，以及是否存在异常跳变和明显饱和。",
             "- `最长重复输出`: 以原始 `accel/gyro/temp` 元组做逐包比较；振动环境下若长时间完全相同，更像冻结或重复搬运，不像真实输出。",
             "- `满量程裁剪`: 任一轴原始值达到 `int16` 上下限即记为裁剪，这不一定说明掉样，但会明显削弱振动测试结论可信度。",
             "",
@@ -4624,6 +5053,9 @@ def _write_markdown_report(destination: Path, source: Path, summary: dict[str, o
     if summary.get("test") == "vibe":
         destination.write_text("\n".join(_build_vibe_markdown_lines(source, summary, destination)) + "\n", encoding="utf-8")
         return
+    if summary.get("test") == "shock":
+        destination.write_text("\n".join(build_shock_markdown_lines(source, summary, destination)) + "\n", encoding="utf-8")
+        return
 
     lines = ["# 数据分析报告", "", f"- 源文件: `{source}`", "", "## 摘要", ""]
     for key, value in summary.items():
@@ -4794,6 +5226,31 @@ def analyze_real_imu_bin_file(
             "max_poll_gap": int(poll_stats.get("max_poll_gap", 0)),
             "poll_reversal_count": int(poll_stats.get("poll_reversal_count", 0)),
             "vibe_summary_csv": vibe_summary_csv.name,
+            "primary_imu_name": _imu_name_from_id(primary_imu_id) if primary_imu_id else "unknown",
+            "frames": str(primary_report.get("sample_count", 0)),
+            "duration_s": f"{float(primary_report.get('duration_s', 0.0)):.3f}",
+        }
+    elif test_key == "shock":
+        progress.log("逐包 CSV 已写出，开始按 3.5 方案统计冲击后数据恢复")
+        per_imu_report, shock_summary_csv, shock_events_csv = analyze_shock_per_imu_from_csvs(
+            per_imu_csv_paths=per_imu_csv_paths,
+            source=source,
+            output_dir=output_dir,
+            progress_callback=progress_callback,
+        )
+        poll_stats = _collect_poll_comparison_stats(csv_path)
+        primary_report = per_imu_report.get(primary_imu_id, {}) if primary_imu_id else {}
+        summary = {
+            "test": test_key,
+            "source": str(source),
+            "comparison_csv": csv_path.name,
+            "per_imu_csvs": ", ".join(path.name for _, path in sorted(per_imu_csv_paths.items())),
+            "per_imu_report": per_imu_report,
+            "source_size_text": _format_file_size(source.stat().st_size),
+            "poll_row_count": int(poll_stats.get("poll_row_count", 0)),
+            "poll_total_duration_s": float(poll_stats.get("poll_total_duration_s", 0.0)),
+            "shock_summary_csv": shock_summary_csv.name,
+            "shock_events_csv": shock_events_csv.name,
             "primary_imu_name": _imu_name_from_id(primary_imu_id) if primary_imu_id else "unknown",
             "frames": str(primary_report.get("sample_count", 0)),
             "duration_s": f"{float(primary_report.get('duration_s', 0.0)):.3f}",
