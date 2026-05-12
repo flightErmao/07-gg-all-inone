@@ -135,6 +135,32 @@ py -3 .\imu_usb_tool.py export-log --port COM78 --reset-to-cdc
 py -3 .\imu_usb_tool.py reset-to-cdc --port COM78
 ```
 
+零偏多次上电批量分析：
+
+```powershell
+py -3 .\imu_usb_tool.py bias-batch `
+  ..\data\01_bias\007
+```
+
+也可以直接传入多个 BIN：
+
+```powershell
+py -3 .\imu_usb_tool.py bias-batch `
+  ..\data\01_bias\007\001.BIN `
+  ..\data\01_bias\007\002.BIN `
+  ..\data\01_bias\007\003.BIN `
+  ..\data\01_bias\007\004.BIN `
+  ..\data\01_bias\007\005.BIN `
+  ..\data\01_bias\007\006.BIN
+```
+
+说明：
+
+- 每个 BIN 视为一次重新上电后的静置采集段，适配 `document/02-各方案选项备注.md` 中零偏测试要求。
+- 脚本会先给每个 BIN 输出一次单轮分析，再在顶层生成 `*_bias_runs.csv`、`*_bias_aggregate.csv`、`*_bias_batch_analysis.md` 和 6 张上电轮次趋势图。
+- `*_bias_runs.csv` 是每轮上电的段均值/段内标准差/段内极差；`*_bias_aggregate.csv` 是按多次上电段均值计算的最终均值、样本标准差和上电间偏差。
+- GUI 中选择 `测试项目 1：零偏及零偏稳定性` 后点击“选择 BIN 分析”支持一次多选 BIN，输出同一套批量结果。
+
 振动 CSV 额外积分分析：
 
 ```powershell

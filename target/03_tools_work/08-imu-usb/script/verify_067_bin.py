@@ -54,7 +54,8 @@ def _crc16_ccitt(data: bytes, init: int = 0) -> int:
 
 
 def _imu_uses_little_endian(imu_id: int) -> bool:
-    return imu_id in (3, 4)
+    # Firmware configures FIFO sensor data as big-endian for both IMU families.
+    return False
 
 
 def _packet_s16(packet: bytes, start: int, imu_id: int) -> int:

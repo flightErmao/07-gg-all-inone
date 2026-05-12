@@ -113,6 +113,7 @@ PAPER_TARGETS = {
 PROGRESS_REPORT_INTERVAL_S = 2.0
 MAX_ANALYSIS_SERIES_POINTS = 120_000
 ARW_REPORT_POLL_PERIOD_S = 0.002
+BIAS_CENTER_WINDOW_SECONDS = 4.0
 JLINK_CANDIDATES = [
     Path(r"C:\Program Files\SEGGER\JLink_V844a\JLink.exe"),
     Path(r"C:\Program Files\SEGGER\JLink\JLink.exe"),
@@ -1702,6 +1703,43 @@ def _std(values: list[float]) -> float:
     return sqrt(sum((float(v) - avg) ** 2 for v in values) / float(len(values)))
 
 
+def _sample_std(values: list[float]) -> float:
+    if len(values) < 2:
+        return 0.0
+    avg = _mean(values)
+    return sqrt(sum((float(v) - avg) ** 2 for v in values) / float(len(values) - 1))
+
+
+@dataclass
+class _RunningStats:
+    count: int = 0
+    mean: float = 0.0
+    m2: float = 0.0
+    minimum: float = float("inf")
+    maximum: float = float("-inf")
+
+    def add(self, value: float) -> None:
+        value = float(value)
+        self.count += 1
+        delta = value - self.mean
+        self.mean += delta / float(self.count)
+        self.m2 += delta * (value - self.mean)
+        self.minimum = min(self.minimum, value)
+        self.maximum = max(self.maximum, value)
+
+    @property
+    def sample_std(self) -> float:
+        if self.count < 2:
+            return 0.0
+        return sqrt(max(self.m2 / float(self.count - 1), 0.0))
+
+    @property
+    def range(self) -> float:
+        if self.count <= 0 or self.minimum == float("inf") or self.maximum == float("-inf"):
+            return 0.0
+        return self.maximum - self.minimum
+
+
 def _rms(values: list[float]) -> float:
     if not values:
         return 0.0
@@ -2220,6 +2258,988 @@ def _collect_poll_comparison_stats(comparison_csv_path: Path) -> dict[str, objec
             }
             for imu_id in IMU_ID_TO_NAME
         },
+    }
+
+
+def _imu_family_from_name(imu_name: str) -> str:
+    if "45686" in imu_name:
+        return "45686"
+    if "42688" in imu_name:
+        return "42688"
+    return "unknown"
+
+
+def _safe_filename_component(value: str, default: str = "output") -> str:
+    cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1F]+', "_", value.strip())
+    cleaned = re.sub(r"\s+", "_", cleaned).strip("._ ")
+    return cleaned or default
+
+
+def _bias_axis_value(report: dict[str, object], metric_type: str, axis: str, value_key: str) -> float:
+    axis_group = report.get(metric_type, {})
+    if not isinstance(axis_group, dict):
+        return 0.0
+    axis_report = axis_group.get(axis, {})
+    if not isinstance(axis_report, dict):
+        return 0.0
+    return float(axis_report.get(value_key, 0.0) or 0.0)
+
+
+def _bias_center_window_bounds(
+    first_timestamp_us: int,
+    last_timestamp_us: int,
+    source_duration_s: float,
+) -> tuple[int, int, float, float]:
+    if source_duration_s <= 0.0 or last_timestamp_us < first_timestamp_us:
+        return first_timestamp_us, last_timestamp_us, 0.0, max(source_duration_s, 0.0)
+
+    window_duration_s = min(BIAS_CENTER_WINDOW_SECONDS, source_duration_s)
+    center_timestamp_us = (float(first_timestamp_us) + float(last_timestamp_us)) * 0.5
+    half_window_us = window_duration_s * 500_000.0
+    start_timestamp_us = int(round(center_timestamp_us - half_window_us))
+    end_timestamp_us = int(round(center_timestamp_us + half_window_us))
+
+    start_timestamp_us = max(first_timestamp_us, start_timestamp_us)
+    end_timestamp_us = min(last_timestamp_us, end_timestamp_us)
+    start_s = (start_timestamp_us - first_timestamp_us) / 1_000_000.0
+    end_s = (end_timestamp_us - first_timestamp_us) / 1_000_000.0
+    return start_timestamp_us, end_timestamp_us, start_s, end_s
+
+
+def _analyze_bias_single_imu_csv(
+    imu_id: int,
+    csv_path: Path,
+    progress: ParseProgressReporter | None = None,
+) -> dict[str, object]:
+    imu_name = _imu_name_from_id(imu_id)
+    prefix = f"{imu_name}_"
+    ts_field = f"{prefix}packet_timestamp_continuous"
+    poll_ts_field = f"{prefix}poll_timestamp_us"
+    temp_field = f"{prefix}temp_c"
+    gyro_fields = {axis: f"{prefix}gyro_{axis}_deg_s" for axis in ("x", "y", "z")}
+
+    accel_stats = {axis: _RunningStats() for axis in ("x", "y", "z")}
+    gyro_stats = {axis: _RunningStats() for axis in ("x", "y", "z")}
+    temp_stats = _RunningStats()
+    timestamp_step_stats = _RunningStats()
+    source_timestamp_step_stats = _RunningStats()
+    sample_count = 0
+    source_sample_count = 0
+    first_timestamp_us = 0
+    last_timestamp_us = 0
+    source_first_timestamp_us = 0
+    source_last_timestamp_us = 0
+    last_poll_timestamp_us = 0
+    prev_timestamp_us: int | None = None
+
+    with csv_path.open("r", newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        for row_index, row in enumerate(reader, start=1):
+            timestamp_us = int(float(row.get(ts_field, "0") or 0))
+            if source_sample_count == 0:
+                source_first_timestamp_us = timestamp_us
+            source_last_timestamp_us = timestamp_us
+            source_sample_count += 1
+            if prev_timestamp_us is not None:
+                step_us = timestamp_us - prev_timestamp_us
+                if step_us > 0:
+                    source_timestamp_step_stats.add(step_us)
+            prev_timestamp_us = timestamp_us
+
+            if progress is not None and row_index % 2048 == 0:
+                progress.bytes_processed = handle.buffer.tell()
+                progress.packet_count = row_index
+                progress.maybe_report()
+
+    if source_sample_count <= 0:
+        return {}
+
+    cfg = _imu_config(imu_id)
+    source_packet_period_mean_us = source_timestamp_step_stats.mean if source_timestamp_step_stats.count > 0 else 0.0
+    source_packet_period_s = source_packet_period_mean_us / 1_000_000.0 if source_packet_period_mean_us > 0.0 else 0.0
+    if source_packet_period_s <= 0.0 and cfg["odr_hz"] > 0.0:
+        source_packet_period_s = 1.0 / cfg["odr_hz"]
+
+    source_duration_s = 0.0
+    if source_sample_count >= 2 and source_last_timestamp_us >= source_first_timestamp_us:
+        source_duration_s = (source_last_timestamp_us - source_first_timestamp_us) / 1_000_000.0
+    if source_duration_s <= 0.0 and source_packet_period_s > 0.0:
+        source_duration_s = max(source_sample_count - 1, 0) * source_packet_period_s
+
+    window_start_timestamp_us, window_end_timestamp_us, window_start_s, window_end_s = _bias_center_window_bounds(
+        source_first_timestamp_us,
+        source_last_timestamp_us,
+        source_duration_s,
+    )
+
+    prev_timestamp_us = None
+    with csv_path.open("r", newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        for row_index, row in enumerate(reader, start=1):
+            timestamp_us = int(float(row.get(ts_field, "0") or 0))
+            if timestamp_us < window_start_timestamp_us or timestamp_us > window_end_timestamp_us:
+                continue
+
+            poll_timestamp_us = int(float(row.get(poll_ts_field, "0") or 0))
+            temp_c = float(row.get(temp_field, "0") or 0.0)
+
+            if sample_count == 0:
+                first_timestamp_us = timestamp_us
+            last_timestamp_us = timestamp_us
+            last_poll_timestamp_us = poll_timestamp_us
+            sample_count += 1
+            temp_stats.add(temp_c)
+
+            if prev_timestamp_us is not None:
+                step_us = timestamp_us - prev_timestamp_us
+                if step_us > 0:
+                    timestamp_step_stats.add(step_us)
+            prev_timestamp_us = timestamp_us
+
+            for axis in ("x", "y", "z"):
+                accel_stats[axis].add(_read_accel_csv_value_g(row, prefix, axis) * 1000.0)
+                gyro_stats[axis].add(float(row.get(gyro_fields[axis], "0") or 0.0))
+
+            if progress is not None and row_index % 2048 == 0:
+                progress.bytes_processed = handle.buffer.tell()
+                progress.packet_count = row_index
+                progress.maybe_report()
+
+    if sample_count <= 0:
+        return {}
+
+    packet_period_mean_us = timestamp_step_stats.mean if timestamp_step_stats.count > 0 else source_packet_period_mean_us
+    packet_period_s = packet_period_mean_us / 1_000_000.0 if packet_period_mean_us > 0.0 else source_packet_period_s
+    if packet_period_s <= 0.0 and cfg["odr_hz"] > 0.0:
+        packet_period_s = 1.0 / cfg["odr_hz"]
+
+    duration_s = 0.0
+    if sample_count >= 2 and last_timestamp_us >= first_timestamp_us:
+        duration_s = (last_timestamp_us - first_timestamp_us) / 1_000_000.0
+    if duration_s <= 0.0 and packet_period_s > 0.0:
+        duration_s = max(sample_count - 1, 0) * packet_period_s
+
+    accel_report = {
+        axis: {
+            "mean_mg": accel_stats[axis].mean,
+            "std_mg": accel_stats[axis].sample_std,
+            "range_mg": accel_stats[axis].range,
+            "min_mg": accel_stats[axis].minimum if accel_stats[axis].count > 0 else 0.0,
+            "max_mg": accel_stats[axis].maximum if accel_stats[axis].count > 0 else 0.0,
+        }
+        for axis in ("x", "y", "z")
+    }
+    gyro_report = {
+        axis: {
+            "mean_deg_s": gyro_stats[axis].mean,
+            "std_deg_s": gyro_stats[axis].sample_std,
+            "range_deg_s": gyro_stats[axis].range,
+            "min_deg_s": gyro_stats[axis].minimum if gyro_stats[axis].count > 0 else 0.0,
+            "max_deg_s": gyro_stats[axis].maximum if gyro_stats[axis].count > 0 else 0.0,
+        }
+        for axis in ("x", "y", "z")
+    }
+
+    report: dict[str, object] = {
+        "imu_id": imu_id,
+        "imu_name": imu_name,
+        "family": _imu_family_from_name(imu_name),
+        "csv_path": str(csv_path),
+        "sample_count": sample_count,
+        "duration_s": duration_s,
+        "source_sample_count": source_sample_count,
+        "source_duration_s": source_duration_s,
+        "analysis_window_start_s": window_start_s,
+        "analysis_window_end_s": window_end_s,
+        "analysis_window_duration_s": max(window_end_s - window_start_s, 0.0),
+        "packet_period_s": packet_period_s,
+        "packet_rate_hz": 1.0 / packet_period_s if packet_period_s > 0.0 else 0.0,
+        "packet_period_mean_us": packet_period_mean_us,
+        "packet_period_std_us": timestamp_step_stats.sample_std,
+        "configured_odr_hz": cfg["odr_hz"],
+        "accel_range_g": cfg["accel_range_g"],
+        "gyro_range_dps": cfg["gyro_range_dps"],
+        "temp_mean_c": temp_stats.mean,
+        "temp_std_c": temp_stats.sample_std,
+        "temp_range_c": temp_stats.range,
+        "temp_min_c": temp_stats.minimum if temp_stats.count > 0 else 0.0,
+        "temp_max_c": temp_stats.maximum if temp_stats.count > 0 else 0.0,
+        "last_poll_timestamp_us": last_poll_timestamp_us,
+        "accel": accel_report,
+        "gyro": gyro_report,
+    }
+
+    for axis in ("x", "y", "z"):
+        report[f"acc_mean_{axis}_mg"] = accel_report[axis]["mean_mg"]
+        report[f"acc_std_{axis}_mg"] = accel_report[axis]["std_mg"]
+        report[f"acc_range_{axis}_mg"] = accel_report[axis]["range_mg"]
+        report[f"gyro_mean_{axis}_deg_s"] = gyro_report[axis]["mean_deg_s"]
+        report[f"gyro_std_{axis}_deg_s"] = gyro_report[axis]["std_deg_s"]
+        report[f"gyro_range_{axis}_deg_s"] = gyro_report[axis]["range_deg_s"]
+
+    if progress is not None:
+        progress.bytes_processed = progress.total_bytes
+        progress.packet_count = sample_count
+
+    return report
+
+
+def _analyze_bias_per_imu_from_csvs(
+    per_imu_csv_paths: dict[int, Path],
+    progress_callback: Callable[[str], None] | None = None,
+) -> dict[int, dict[str, object]]:
+    report: dict[int, dict[str, object]] = {}
+    for imu_id in sorted(per_imu_csv_paths):
+        csv_path = per_imu_csv_paths[imu_id]
+        progress = ParseProgressReporter(
+            total_bytes=csv_path.stat().st_size,
+            callback=progress_callback,
+            stage=f"{_imu_name_from_id(imu_id)} 零偏统计",
+        )
+        progress.log(
+            f"{_imu_name_from_id(imu_id)}: 开始基于 CSV 统计中间 {BIAS_CENTER_WINDOW_SECONDS:.1f} s "
+            "稳定窗口的均值、标准差和极差"
+        )
+        report[imu_id] = _analyze_bias_single_imu_csv(imu_id, csv_path, progress)
+        progress.bytes_processed = progress.total_bytes
+        progress.maybe_report(force=True, extra="统计完成")
+    return report
+
+
+def _write_bias_summary_csv(destination: Path, per_imu_report: dict[int, dict[str, object]]) -> Path:
+    csv_path = destination.parent / f"{destination.stem}_bias_summary.csv"
+    with csv_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(
+            [
+                "imu_id",
+                "imu_name",
+                "family",
+                "sample_count",
+                "duration_s",
+                "source_sample_count",
+                "source_duration_s",
+                "analysis_window_start_s",
+                "analysis_window_end_s",
+                "packet_rate_hz",
+                "temp_mean_c",
+                "temp_std_c",
+                "temp_range_c",
+                "acc_mean_x_mg",
+                "acc_mean_y_mg",
+                "acc_mean_z_mg",
+                "acc_std_x_mg",
+                "acc_std_y_mg",
+                "acc_std_z_mg",
+                "acc_range_x_mg",
+                "acc_range_y_mg",
+                "acc_range_z_mg",
+                "gyro_mean_x_deg_s",
+                "gyro_mean_y_deg_s",
+                "gyro_mean_z_deg_s",
+                "gyro_std_x_deg_s",
+                "gyro_std_y_deg_s",
+                "gyro_std_z_deg_s",
+                "gyro_range_x_deg_s",
+                "gyro_range_y_deg_s",
+                "gyro_range_z_deg_s",
+            ]
+        )
+        for imu_id in sorted(int(key) for key in per_imu_report):
+            sr = per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id)) or {}
+            if not sr:
+                continue
+            writer.writerow(
+                [
+                    imu_id,
+                    sr.get("imu_name", _imu_name_from_id(imu_id)),
+                    sr.get("family", _imu_family_from_name(str(sr.get("imu_name", "")))),
+                    int(sr.get("sample_count", 0) or 0),
+                    _format_float(float(sr.get("duration_s", 0.0) or 0.0)),
+                    int(sr.get("source_sample_count", 0) or 0),
+                    _format_float(float(sr.get("source_duration_s", 0.0) or 0.0)),
+                    _format_float(float(sr.get("analysis_window_start_s", 0.0) or 0.0)),
+                    _format_float(float(sr.get("analysis_window_end_s", 0.0) or 0.0)),
+                    _format_float(float(sr.get("packet_rate_hz", 0.0) or 0.0)),
+                    _format_float(float(sr.get("temp_mean_c", 0.0) or 0.0)),
+                    _format_float(float(sr.get("temp_std_c", 0.0) or 0.0)),
+                    _format_float(float(sr.get("temp_range_c", 0.0) or 0.0)),
+                    _format_float(_bias_axis_value(sr, "accel", "x", "mean_mg")),
+                    _format_float(_bias_axis_value(sr, "accel", "y", "mean_mg")),
+                    _format_float(_bias_axis_value(sr, "accel", "z", "mean_mg")),
+                    _format_float(_bias_axis_value(sr, "accel", "x", "std_mg")),
+                    _format_float(_bias_axis_value(sr, "accel", "y", "std_mg")),
+                    _format_float(_bias_axis_value(sr, "accel", "z", "std_mg")),
+                    _format_float(_bias_axis_value(sr, "accel", "x", "range_mg")),
+                    _format_float(_bias_axis_value(sr, "accel", "y", "range_mg")),
+                    _format_float(_bias_axis_value(sr, "accel", "z", "range_mg")),
+                    _format_float(_bias_axis_value(sr, "gyro", "x", "mean_deg_s")),
+                    _format_float(_bias_axis_value(sr, "gyro", "y", "mean_deg_s")),
+                    _format_float(_bias_axis_value(sr, "gyro", "z", "mean_deg_s")),
+                    _format_float(_bias_axis_value(sr, "gyro", "x", "std_deg_s")),
+                    _format_float(_bias_axis_value(sr, "gyro", "y", "std_deg_s")),
+                    _format_float(_bias_axis_value(sr, "gyro", "z", "std_deg_s")),
+                    _format_float(_bias_axis_value(sr, "gyro", "x", "range_deg_s")),
+                    _format_float(_bias_axis_value(sr, "gyro", "y", "range_deg_s")),
+                    _format_float(_bias_axis_value(sr, "gyro", "z", "range_deg_s")),
+                ]
+            )
+    return csv_path
+
+
+def _path_text_relative_to(path: Path, base: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(base.resolve()))
+    except ValueError:
+        return str(path)
+
+
+def _expand_bin_input_paths(inputs: list[Path]) -> list[Path]:
+    expanded: list[Path] = []
+    for item in inputs:
+        path = Path(item).resolve()
+        if path.is_dir():
+            expanded.extend(sorted(path.glob("*.BIN")))
+            expanded.extend(sorted(path.glob("*.bin")))
+        else:
+            expanded.append(path)
+
+    unique_paths: list[Path] = []
+    seen: set[str] = set()
+    for path in expanded:
+        key = str(path.resolve()).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_paths.append(path.resolve())
+    return unique_paths
+
+
+def _default_bias_batch_output_dir(sources: list[Path]) -> Path:
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    if len(sources) == 1:
+        base = sources[0].stem
+    elif all(path.parent == sources[0].parent for path in sources):
+        base = sources[0].parent.name
+    else:
+        base = "bias_batch"
+    return ANALYSIS_OUTPUT_DIRS["bias"] / f"{_safe_filename_component(base, 'bias_batch')}_{timestamp}"
+
+
+def _bias_run_dir_name(index: int, source: Path, used_names: set[str]) -> str:
+    stem = _safe_filename_component(source.stem, f"{index:03d}")
+    if stem not in used_names:
+        used_names.add(stem)
+        return stem
+    candidate = f"{index:03d}_{stem}"
+    suffix = 2
+    while candidate in used_names:
+        candidate = f"{index:03d}_{stem}_{suffix}"
+        suffix += 1
+    used_names.add(candidate)
+    return candidate
+
+
+def _make_bias_run_records(
+    run_index: int,
+    run_name: str,
+    source: Path,
+    run_dir: Path,
+    md_path: Path,
+    summary: dict[str, object],
+) -> list[dict[str, object]]:
+    per_imu_report = summary.get("per_imu_report", {})
+    if not isinstance(per_imu_report, dict):
+        return []
+
+    records: list[dict[str, object]] = []
+    for imu_id in sorted(int(key) for key in per_imu_report):
+        sr = per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id)) or {}
+        if not sr:
+            continue
+        record: dict[str, object] = {
+            "run_index": run_index,
+            "run_name": run_name,
+            "source_file": str(source),
+            "run_output_dir": str(run_dir),
+            "run_report": str(md_path),
+            "summary_csv": str(run_dir / str(summary.get("bias_summary_csv", ""))),
+            "imu_id": imu_id,
+            "imu_name": sr.get("imu_name", _imu_name_from_id(imu_id)),
+            "family": sr.get("family", _imu_family_from_name(str(sr.get("imu_name", "")))),
+            "sample_count": int(sr.get("sample_count", 0) or 0),
+            "duration_s": float(sr.get("duration_s", 0.0) or 0.0),
+            "source_sample_count": int(sr.get("source_sample_count", 0) or 0),
+            "source_duration_s": float(sr.get("source_duration_s", 0.0) or 0.0),
+            "analysis_window_start_s": float(sr.get("analysis_window_start_s", 0.0) or 0.0),
+            "analysis_window_end_s": float(sr.get("analysis_window_end_s", 0.0) or 0.0),
+            "packet_rate_hz": float(sr.get("packet_rate_hz", 0.0) or 0.0),
+            "temp_mean_c": float(sr.get("temp_mean_c", 0.0) or 0.0),
+            "temp_std_c": float(sr.get("temp_std_c", 0.0) or 0.0),
+            "temp_range_c": float(sr.get("temp_range_c", 0.0) or 0.0),
+            "accel": sr.get("accel", {}),
+            "gyro": sr.get("gyro", {}),
+        }
+        for axis in ("x", "y", "z"):
+            record[f"acc_mean_{axis}_mg"] = _bias_axis_value(sr, "accel", axis, "mean_mg")
+            record[f"acc_std_{axis}_mg"] = _bias_axis_value(sr, "accel", axis, "std_mg")
+            record[f"acc_range_{axis}_mg"] = _bias_axis_value(sr, "accel", axis, "range_mg")
+            record[f"gyro_mean_{axis}_deg_s"] = _bias_axis_value(sr, "gyro", axis, "mean_deg_s")
+            record[f"gyro_std_{axis}_deg_s"] = _bias_axis_value(sr, "gyro", axis, "std_deg_s")
+            record[f"gyro_range_{axis}_deg_s"] = _bias_axis_value(sr, "gyro", axis, "range_deg_s")
+        records.append(record)
+    return records
+
+
+def _write_bias_runs_csv(output_dir: Path, batch_stem: str, run_records: list[dict[str, object]]) -> Path:
+    csv_path = output_dir / f"{batch_stem}_bias_runs.csv"
+    with csv_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(
+            [
+                "run_index",
+                "run_name",
+                "source_file",
+                "run_report",
+                "imu_id",
+                "imu_name",
+                "family",
+                "sample_count",
+                "duration_s",
+                "source_sample_count",
+                "source_duration_s",
+                "analysis_window_start_s",
+                "analysis_window_end_s",
+                "packet_rate_hz",
+                "temp_mean_c",
+                "temp_std_c",
+                "temp_range_c",
+                "acc_mean_x_mg",
+                "acc_mean_y_mg",
+                "acc_mean_z_mg",
+                "acc_std_x_mg",
+                "acc_std_y_mg",
+                "acc_std_z_mg",
+                "acc_range_x_mg",
+                "acc_range_y_mg",
+                "acc_range_z_mg",
+                "gyro_mean_x_deg_s",
+                "gyro_mean_y_deg_s",
+                "gyro_mean_z_deg_s",
+                "gyro_std_x_deg_s",
+                "gyro_std_y_deg_s",
+                "gyro_std_z_deg_s",
+                "gyro_range_x_deg_s",
+                "gyro_range_y_deg_s",
+                "gyro_range_z_deg_s",
+            ]
+        )
+        for record in run_records:
+            writer.writerow(
+                [
+                    int(record.get("run_index", 0) or 0),
+                    record.get("run_name", ""),
+                    record.get("source_file", ""),
+                    _path_text_relative_to(Path(str(record.get("run_report", ""))), output_dir),
+                    int(record.get("imu_id", 0) or 0),
+                    record.get("imu_name", ""),
+                    record.get("family", ""),
+                    int(record.get("sample_count", 0) or 0),
+                    _format_float(float(record.get("duration_s", 0.0) or 0.0)),
+                    int(record.get("source_sample_count", 0) or 0),
+                    _format_float(float(record.get("source_duration_s", 0.0) or 0.0)),
+                    _format_float(float(record.get("analysis_window_start_s", 0.0) or 0.0)),
+                    _format_float(float(record.get("analysis_window_end_s", 0.0) or 0.0)),
+                    _format_float(float(record.get("packet_rate_hz", 0.0) or 0.0)),
+                    _format_float(float(record.get("temp_mean_c", 0.0) or 0.0)),
+                    _format_float(float(record.get("temp_std_c", 0.0) or 0.0)),
+                    _format_float(float(record.get("temp_range_c", 0.0) or 0.0)),
+                    _format_float(float(record.get("acc_mean_x_mg", 0.0) or 0.0)),
+                    _format_float(float(record.get("acc_mean_y_mg", 0.0) or 0.0)),
+                    _format_float(float(record.get("acc_mean_z_mg", 0.0) or 0.0)),
+                    _format_float(float(record.get("acc_std_x_mg", 0.0) or 0.0)),
+                    _format_float(float(record.get("acc_std_y_mg", 0.0) or 0.0)),
+                    _format_float(float(record.get("acc_std_z_mg", 0.0) or 0.0)),
+                    _format_float(float(record.get("acc_range_x_mg", 0.0) or 0.0)),
+                    _format_float(float(record.get("acc_range_y_mg", 0.0) or 0.0)),
+                    _format_float(float(record.get("acc_range_z_mg", 0.0) or 0.0)),
+                    _format_float(float(record.get("gyro_mean_x_deg_s", 0.0) or 0.0)),
+                    _format_float(float(record.get("gyro_mean_y_deg_s", 0.0) or 0.0)),
+                    _format_float(float(record.get("gyro_mean_z_deg_s", 0.0) or 0.0)),
+                    _format_float(float(record.get("gyro_std_x_deg_s", 0.0) or 0.0)),
+                    _format_float(float(record.get("gyro_std_y_deg_s", 0.0) or 0.0)),
+                    _format_float(float(record.get("gyro_std_z_deg_s", 0.0) or 0.0)),
+                    _format_float(float(record.get("gyro_range_x_deg_s", 0.0) or 0.0)),
+                    _format_float(float(record.get("gyro_range_y_deg_s", 0.0) or 0.0)),
+                    _format_float(float(record.get("gyro_range_z_deg_s", 0.0) or 0.0)),
+                ]
+            )
+    return csv_path
+
+
+def _aggregate_bias_run_records(run_records: list[dict[str, object]]) -> dict[int, dict[str, object]]:
+    records_by_imu: dict[int, list[dict[str, object]]] = {}
+    for record in run_records:
+        imu_id = int(record.get("imu_id", 0) or 0)
+        if imu_id <= 0:
+            continue
+        records_by_imu.setdefault(imu_id, []).append(record)
+
+    aggregate: dict[int, dict[str, object]] = {}
+    for imu_id, records in sorted(records_by_imu.items()):
+        imu_name = str(records[0].get("imu_name", _imu_name_from_id(imu_id)))
+        item: dict[str, object] = {
+            "imu_id": imu_id,
+            "imu_name": imu_name,
+            "family": str(records[0].get("family", _imu_family_from_name(imu_name))),
+            "run_count": len(records),
+            "total_sample_count": sum(int(record.get("sample_count", 0) or 0) for record in records),
+            "duration_mean_s": _mean([float(record.get("duration_s", 0.0) or 0.0) for record in records]),
+            "temp_mean_c": _mean([float(record.get("temp_mean_c", 0.0) or 0.0) for record in records]),
+            "accel": {},
+            "gyro": {},
+        }
+
+        accel_axes: dict[str, dict[str, float]] = {}
+        gyro_axes: dict[str, dict[str, float]] = {}
+        for axis in ("x", "y", "z"):
+            acc_values = [float(record.get(f"acc_mean_{axis}_mg", 0.0) or 0.0) for record in records]
+            acc_within_std_values = [float(record.get(f"acc_std_{axis}_mg", 0.0) or 0.0) for record in records]
+            acc_range_values = [float(record.get(f"acc_range_{axis}_mg", 0.0) or 0.0) for record in records]
+            gyro_values = [float(record.get(f"gyro_mean_{axis}_deg_s", 0.0) or 0.0) for record in records]
+            gyro_within_std_values = [float(record.get(f"gyro_std_{axis}_deg_s", 0.0) or 0.0) for record in records]
+            gyro_range_values = [float(record.get(f"gyro_range_{axis}_deg_s", 0.0) or 0.0) for record in records]
+
+            accel_axes[axis] = {
+                "mean_mg": _mean(acc_values),
+                "std_mg": _sample_std(acc_values),
+                "delta_mg": (max(acc_values) - min(acc_values)) if acc_values else 0.0,
+                "within_std_mean_mg": _mean(acc_within_std_values),
+                "within_range_mean_mg": _mean(acc_range_values),
+            }
+            gyro_axes[axis] = {
+                "mean_deg_s": _mean(gyro_values),
+                "std_deg_s": _sample_std(gyro_values),
+                "delta_deg_s": (max(gyro_values) - min(gyro_values)) if gyro_values else 0.0,
+                "within_std_mean_deg_s": _mean(gyro_within_std_values),
+                "within_range_mean_deg_s": _mean(gyro_range_values),
+            }
+        item["accel"] = accel_axes
+        item["gyro"] = gyro_axes
+        aggregate[imu_id] = item
+    return aggregate
+
+
+def _write_bias_aggregate_csv(output_dir: Path, batch_stem: str, aggregate: dict[int, dict[str, object]]) -> Path:
+    csv_path = output_dir / f"{batch_stem}_bias_aggregate.csv"
+    with csv_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(
+            [
+                "imu_id",
+                "imu_name",
+                "family",
+                "run_count",
+                "total_sample_count",
+                "duration_mean_s",
+                "temp_mean_c",
+                "acc_mean_x_mg",
+                "acc_mean_y_mg",
+                "acc_mean_z_mg",
+                "acc_std_x_mg",
+                "acc_std_y_mg",
+                "acc_std_z_mg",
+                "acc_delta_x_mg",
+                "acc_delta_y_mg",
+                "acc_delta_z_mg",
+                "acc_in_run_std_mean_x_mg",
+                "acc_in_run_std_mean_y_mg",
+                "acc_in_run_std_mean_z_mg",
+                "gyro_mean_x_deg_s",
+                "gyro_mean_y_deg_s",
+                "gyro_mean_z_deg_s",
+                "gyro_std_x_deg_s",
+                "gyro_std_y_deg_s",
+                "gyro_std_z_deg_s",
+                "gyro_delta_x_deg_s",
+                "gyro_delta_y_deg_s",
+                "gyro_delta_z_deg_s",
+                "gyro_in_run_std_mean_x_deg_s",
+                "gyro_in_run_std_mean_y_deg_s",
+                "gyro_in_run_std_mean_z_deg_s",
+            ]
+        )
+        for imu_id in sorted(aggregate):
+            item = aggregate[imu_id]
+            accel = item.get("accel", {})
+            gyro = item.get("gyro", {})
+            writer.writerow(
+                [
+                    imu_id,
+                    item.get("imu_name", _imu_name_from_id(imu_id)),
+                    item.get("family", ""),
+                    int(item.get("run_count", 0) or 0),
+                    int(item.get("total_sample_count", 0) or 0),
+                    _format_float(float(item.get("duration_mean_s", 0.0) or 0.0)),
+                    _format_float(float(item.get("temp_mean_c", 0.0) or 0.0)),
+                    *[
+                        _format_float(float((accel.get(axis, {}) if isinstance(accel, dict) else {}).get("mean_mg", 0.0) or 0.0))
+                        for axis in ("x", "y", "z")
+                    ],
+                    *[
+                        _format_float(float((accel.get(axis, {}) if isinstance(accel, dict) else {}).get("std_mg", 0.0) or 0.0))
+                        for axis in ("x", "y", "z")
+                    ],
+                    *[
+                        _format_float(float((accel.get(axis, {}) if isinstance(accel, dict) else {}).get("delta_mg", 0.0) or 0.0))
+                        for axis in ("x", "y", "z")
+                    ],
+                    *[
+                        _format_float(float((accel.get(axis, {}) if isinstance(accel, dict) else {}).get("within_std_mean_mg", 0.0) or 0.0))
+                        for axis in ("x", "y", "z")
+                    ],
+                    *[
+                        _format_float(float((gyro.get(axis, {}) if isinstance(gyro, dict) else {}).get("mean_deg_s", 0.0) or 0.0))
+                        for axis in ("x", "y", "z")
+                    ],
+                    *[
+                        _format_float(float((gyro.get(axis, {}) if isinstance(gyro, dict) else {}).get("std_deg_s", 0.0) or 0.0))
+                        for axis in ("x", "y", "z")
+                    ],
+                    *[
+                        _format_float(float((gyro.get(axis, {}) if isinstance(gyro, dict) else {}).get("delta_deg_s", 0.0) or 0.0))
+                        for axis in ("x", "y", "z")
+                    ],
+                    *[
+                        _format_float(float((gyro.get(axis, {}) if isinstance(gyro, dict) else {}).get("within_std_mean_deg_s", 0.0) or 0.0))
+                        for axis in ("x", "y", "z")
+                    ],
+                ]
+            )
+    return csv_path
+
+
+def _generate_bias_run_charts(
+    output_dir: Path,
+    batch_stem: str,
+    run_records: list[dict[str, object]],
+    progress_callback: Callable[[str], None] | None = None,
+) -> list[Path]:
+    if not run_records:
+        return []
+
+    try:
+        import matplotlib.pyplot as plt  # type: ignore
+    except Exception as exc:  # noqa: BLE001
+        if progress_callback is not None:
+            progress_callback(f"matplotlib 不可用，跳过零偏趋势图生成: {exc}")
+        return []
+
+    colors = {
+        1: "#4E79A7",
+        2: "#F28E2B",
+        3: "#59A14F",
+        4: "#E15759",
+    }
+    chart_paths: list[Path] = []
+    specs = [
+        ("accel", "mean_mg", "mg", "acc", "Accel"),
+        ("gyro", "mean_deg_s", "deg/s", "gyro", "Gyro"),
+    ]
+    for metric_type, value_key, unit, filename_prefix, title_prefix in specs:
+        for axis in ("x", "y", "z"):
+            fig, ax = plt.subplots(figsize=(8.0, 4.5))
+            has_line = False
+            for imu_id in sorted({int(record.get("imu_id", 0) or 0) for record in run_records}):
+                imu_records = [
+                    record
+                    for record in run_records
+                    if int(record.get("imu_id", 0) or 0) == imu_id
+                ]
+                imu_records.sort(key=lambda record: int(record.get("run_index", 0) or 0))
+                if not imu_records:
+                    continue
+                x_values = [int(record.get("run_index", 0) or 0) for record in imu_records]
+                y_values = [_bias_axis_value(record, metric_type, axis, value_key) for record in imu_records]
+                ax.plot(
+                    x_values,
+                    y_values,
+                    marker="o",
+                    linewidth=1.4,
+                    markersize=4,
+                    label=str(imu_records[0].get("imu_name", _imu_name_from_id(imu_id))),
+                    color=colors.get(imu_id),
+                )
+                has_line = True
+            if not has_line:
+                plt.close(fig)
+                continue
+            ax.set_title(f"{title_prefix} {axis.upper()} bias mean by power cycle")
+            ax.set_xlabel("Power cycle run")
+            ax.set_ylabel(f"Mean ({unit})")
+            ax.grid(True, linewidth=0.4, alpha=0.35)
+            ax.legend(loc="best", fontsize=8)
+            fig.tight_layout()
+            chart_path = output_dir / f"{batch_stem}_bias_{filename_prefix}_{axis}_{unit.replace('/', '_').replace(' ', '_')}.png"
+            fig.savefig(chart_path, dpi=150)
+            plt.close(fig)
+            chart_paths.append(chart_path)
+    return chart_paths
+
+
+def _family_consistency_rows(aggregate: dict[int, dict[str, object]]) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for family in ("42688", "45686"):
+        family_items = [item for item in aggregate.values() if str(item.get("family", "")) == family]
+        if len(family_items) < 2:
+            continue
+        for metric_type, unit, value_key in (
+            ("accel", "mg", "mean_mg"),
+            ("gyro", "deg/s", "mean_deg_s"),
+        ):
+            for axis in ("x", "y", "z"):
+                values = [
+                    float((item.get(metric_type, {}) if isinstance(item.get(metric_type, {}), dict) else {}).get(axis, {}).get(value_key, 0.0) or 0.0)
+                    for item in family_items
+                ]
+                rows.append(
+                    {
+                        "family": family,
+                        "metric_type": metric_type,
+                        "axis": axis,
+                        "unit": unit,
+                        "sample_count": len(values),
+                        "sample_std": _sample_std(values),
+                        "delta": (max(values) - min(values)) if values else 0.0,
+                    }
+                )
+    return rows
+
+
+def _build_bias_batch_markdown_lines(
+    sources: list[Path],
+    output_dir: Path,
+    batch_stem: str,
+    run_records: list[dict[str, object]],
+    aggregate: dict[int, dict[str, object]],
+    runs_csv: Path,
+    aggregate_csv: Path,
+    chart_paths: list[Path],
+    run_report_paths: list[Path],
+) -> list[str]:
+    lines = [
+        "# 零偏及零偏稳定性批量分析结果",
+        "",
+        "## 结论先看",
+        "",
+        f"- 本次按多次重新上电口径分析 `{len(sources)}` 个 BIN，每个 BIN 视为一次独立上电采集。",
+        f"- 输出目录: `{output_dir}`",
+        f"- 轮次明细 CSV: `{runs_csv.name}`",
+        f"- 跨上电聚合 CSV: `{aggregate_csv.name}`",
+        f"- 统计流程: 先计算每个 BIN 内中间 `{BIAS_CENTER_WINDOW_SECONDS:.1f} s` 稳定窗口均值，再对多次上电得到的窗口均值计算最终均值、样本标准差和极差。",
+        "",
+        "## 输入 BIN",
+        "",
+    ]
+    for index, source in enumerate(sources, start=1):
+        lines.append(f"- Run {index}: `{source}`")
+
+    lines.extend(
+        [
+            "",
+            "## 加速度计零偏结果（单位：mg）",
+            "",
+            "| IMU | 型号 | 有效轮次 | X 均值 | Y 均值 | Z 均值 | X 上电标准差 | Y 上电标准差 | Z 上电标准差 | X 极差 | Y 极差 | Z 极差 | 上电间偏差(max) |",
+            "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    for imu_id in sorted(aggregate):
+        item = aggregate[imu_id]
+        accel = item.get("accel", {})
+        if not isinstance(accel, dict):
+            accel = {}
+        deltas = [float((accel.get(axis, {}) or {}).get("delta_mg", 0.0) or 0.0) for axis in ("x", "y", "z")]
+        row = [
+            str(item.get("imu_name", _imu_name_from_id(imu_id))),
+            str(item.get("family", "")),
+            str(int(item.get("run_count", 0) or 0)),
+            *[_format_float(float((accel.get(axis, {}) or {}).get("mean_mg", 0.0) or 0.0)) for axis in ("x", "y", "z")],
+            *[_format_float(float((accel.get(axis, {}) or {}).get("std_mg", 0.0) or 0.0)) for axis in ("x", "y", "z")],
+            *[_format_float(float((accel.get(axis, {}) or {}).get("delta_mg", 0.0) or 0.0)) for axis in ("x", "y", "z")],
+            _format_float(max(deltas) if deltas else 0.0),
+        ]
+        lines.append("| " + " | ".join(row) + " |")
+
+    lines.extend(
+        [
+            "",
+            "## 陀螺零偏结果（单位：°/s）",
+            "",
+            "| IMU | 型号 | 有效轮次 | X 均值 | Y 均值 | Z 均值 | X 上电标准差 | Y 上电标准差 | Z 上电标准差 | X 极差 | Y 极差 | Z 极差 | 上电间偏差(max) |",
+            "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    for imu_id in sorted(aggregate):
+        item = aggregate[imu_id]
+        gyro = item.get("gyro", {})
+        if not isinstance(gyro, dict):
+            gyro = {}
+        deltas = [float((gyro.get(axis, {}) or {}).get("delta_deg_s", 0.0) or 0.0) for axis in ("x", "y", "z")]
+        row = [
+            str(item.get("imu_name", _imu_name_from_id(imu_id))),
+            str(item.get("family", "")),
+            str(int(item.get("run_count", 0) or 0)),
+            *[_format_float(float((gyro.get(axis, {}) or {}).get("mean_deg_s", 0.0) or 0.0)) for axis in ("x", "y", "z")],
+            *[_format_float(float((gyro.get(axis, {}) or {}).get("std_deg_s", 0.0) or 0.0)) for axis in ("x", "y", "z")],
+            *[_format_float(float((gyro.get(axis, {}) or {}).get("delta_deg_s", 0.0) or 0.0)) for axis in ("x", "y", "z")],
+            _format_float(max(deltas) if deltas else 0.0),
+        ]
+        lines.append("| " + " | ".join(row) + " |")
+
+    consistency_rows = _family_consistency_rows(aggregate)
+    if consistency_rows:
+        lines.extend(
+            [
+                "",
+                "## 同型号双样本一致性",
+                "",
+                "| 型号 | 指标 | 轴 | 样本数 | 一致性标准差 | 样本间极差 | 单位 |",
+                "| --- | --- | --- | ---: | ---: | ---: | --- |",
+            ]
+        )
+        for row in consistency_rows:
+            lines.append(
+                "| "
+                + " | ".join(
+                    [
+                        str(row["family"]),
+                        "Acc" if row["metric_type"] == "accel" else "Gyro",
+                        str(row["axis"]).upper(),
+                        str(int(row["sample_count"])),
+                        _format_float(float(row["sample_std"])),
+                        _format_float(float(row["delta"])),
+                        str(row["unit"]),
+                    ]
+                )
+                + " |"
+            )
+
+    if chart_paths:
+        lines.extend(["", "## 轮次趋势图", ""])
+        for chart_path in chart_paths:
+            lines.append(f"![{chart_path.stem}](./{chart_path.name})")
+            lines.append("")
+
+    lines.extend(
+        [
+            "## 单次 BIN 子报告",
+            "",
+        ]
+    )
+    for report_path in run_report_paths:
+        lines.append(f"- `{report_path.parent.name}`: `{_path_text_relative_to(report_path, output_dir)}`")
+
+    lines.extend(
+        [
+            "",
+            "## 计算口径",
+            "",
+            "- `runs.csv` 中每一行是一次上电、一个 IMU 的段内统计结果。",
+            "- `aggregate.csv` 中的均值、标准差和极差，均基于各轮 `runs.csv` 里的段均值计算。",
+            f"- 单轮零偏数据源默认取该 IMU 记录时轴中间 `{BIAS_CENTER_WINDOW_SECONDS:.1f} s`；若记录不足该时长，则使用整段可用数据。",
+            "- 跨上电标准差按样本标准差 `sqrt(sum((mu_i - mu)^2) / (K - 1))` 计算，`K` 为有效上电轮次。",
+            "- 上电间偏差按 `max(mu_i) - min(mu_i)` 计算。",
+            "- 段内标准差和段内极差只反映单次静置采集的短时波动，不与跨上电标准差混用。",
+        ]
+    )
+    return lines
+
+
+def analyze_bias_bin_files(
+    sources: list[Path],
+    output_dir: Path | None = None,
+    progress_callback: Callable[[str], None] | None = None,
+) -> dict[str, object]:
+    source_paths = _expand_bin_input_paths(sources)
+    if not source_paths:
+        raise FileNotFoundError("no BIN files selected for bias analysis")
+    missing = [path for path in source_paths if not path.exists()]
+    if missing:
+        raise FileNotFoundError(missing[0])
+
+    if output_dir is None:
+        output_dir = _default_bias_batch_output_dir(source_paths)
+    output_dir = output_dir.resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    batch_stem = _safe_filename_component(output_dir.name, "bias_batch")
+
+    if progress_callback is not None:
+        progress_callback(f"零偏批量分析: 共 {len(source_paths)} 个 BIN，输出目录 `{output_dir}`")
+
+    run_records: list[dict[str, object]] = []
+    run_report_paths: list[Path] = []
+    used_run_names: set[str] = set()
+
+    for run_index, source in enumerate(source_paths, start=1):
+        run_name = _bias_run_dir_name(run_index, source, used_run_names)
+        run_dir = output_dir / run_name
+        run_dir.mkdir(parents=True, exist_ok=True)
+        if progress_callback is not None:
+            progress_callback(f"零偏 Run {run_index}/{len(source_paths)}: 开始分析 `{source}`")
+
+        def _run_progress(message: str, run_index: int = run_index) -> None:
+            if progress_callback is not None:
+                progress_callback(f"[Run {run_index}] {message}")
+
+        _csv_path, _packet_csv_path, md_path, summary = analyze_real_imu_bin_file(
+            "bias",
+            source,
+            output_dir=run_dir,
+            progress_callback=_run_progress,
+        )
+        run_report_paths.append(md_path)
+        run_records.extend(_make_bias_run_records(run_index, run_name, source, run_dir, md_path, summary))
+
+    if not run_records:
+        raise ValueError("no IMU samples found in selected bias BIN files")
+
+    runs_csv = _write_bias_runs_csv(output_dir, batch_stem, run_records)
+    aggregate = _aggregate_bias_run_records(run_records)
+    aggregate_csv = _write_bias_aggregate_csv(output_dir, batch_stem, aggregate)
+    chart_paths = _generate_bias_run_charts(output_dir, batch_stem, run_records, progress_callback)
+    report_path = output_dir / f"{batch_stem}_bias_batch_analysis.md"
+    report_path.write_text(
+        "\n".join(
+            _build_bias_batch_markdown_lines(
+                source_paths,
+                output_dir,
+                batch_stem,
+                run_records,
+                aggregate,
+                runs_csv,
+                aggregate_csv,
+                chart_paths,
+                run_report_paths,
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    if progress_callback is not None:
+        progress_callback(f"零偏批量分析完成: `{report_path}`")
+
+    return {
+        "test": "bias",
+        "sources": source_paths,
+        "output_dir": output_dir,
+        "runs_csv": runs_csv,
+        "aggregate_csv": aggregate_csv,
+        "report": report_path,
+        "chart_paths": chart_paths,
+        "run_report_paths": run_report_paths,
+        "run_records": run_records,
+        "aggregate": aggregate,
     }
 
 
@@ -4824,6 +5844,91 @@ def _family_best_average(rankings: list[dict[str, object]], family: str, metric_
     return _mean(values)
 
 
+def _build_bias_markdown_lines(source: Path, summary: dict[str, object], destination: Path) -> list[str]:
+    per_imu_report = summary.get("per_imu_report", {})
+    if not isinstance(per_imu_report, dict):
+        per_imu_report = {}
+    all_imu_ids = [
+        imu_id
+        for imu_id in sorted(int(k) for k in per_imu_report)
+        if per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id))
+    ]
+    if not all_imu_ids:
+        return ["# 零偏及零偏稳定性分析结果", "", f"- 源文件: `{source.name}`", "", "- 未解析到可用于零偏分析的 IMU 数据。"]
+
+    if source.exists():
+        source_size_text = _format_file_size(source.stat().st_size)
+    else:
+        source_size_text = str(summary.get("source_size_text", "未知"))
+
+    lines = [
+        "# 零偏及零偏稳定性分析结果",
+        "",
+        f"- 源文件: `{source}`",
+        f"- 源文件大小: `{source_size_text}`",
+        f"- 对比 CSV: `{summary.get('comparison_csv', '-')}`",
+        f"- 每 IMU CSV: `{summary.get('per_imu_csvs', '-')}`",
+        f"- 汇总 CSV: `{summary.get('bias_summary_csv', '-')}`",
+        "",
+        "## 分样本结果",
+        "",
+    ]
+
+    for imu_id in all_imu_ids:
+        sr = per_imu_report.get(imu_id) or per_imu_report.get(str(imu_id)) or {}
+        imu_name = str(sr.get("imu_name", _imu_name_from_id(imu_id)))
+        source_sample_count = int(sr.get("source_sample_count", sr.get("sample_count", 0)) or 0)
+        source_duration_s = float(sr.get("source_duration_s", sr.get("duration_s", 0.0)) or 0.0)
+        window_start_s = float(sr.get("analysis_window_start_s", 0.0) or 0.0)
+        window_end_s = float(sr.get("analysis_window_end_s", sr.get("duration_s", 0.0)) or 0.0)
+        lines.extend(
+            [
+                f"### `{imu_name}`",
+                "",
+                (
+                    f"- 原始样本数 `{source_sample_count}`，原始时长 `{source_duration_s:.3f} s`；"
+                    f"本次零偏取中间窗口 `{window_start_s:.3f}~{window_end_s:.3f} s`，"
+                    f"窗口样本数 `{int(sr.get('sample_count', 0) or 0)}`，窗口时长 "
+                    f"`{float(sr.get('duration_s', 0.0) or 0.0):.3f} s`，"
+                    f"平均温度 `{float(sr.get('temp_mean_c', 0.0) or 0.0):.3f} °C`，"
+                    f"温度波动标准差 `{float(sr.get('temp_std_c', 0.0) or 0.0):.3f} °C`。"
+                ),
+                "",
+                "| 轴 | Acc Mean (mg) | Acc Std (mg) | Acc Range (mg) | Gyro Mean (deg/s) | Gyro Std (deg/s) | Gyro Range (deg/s) |",
+                "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+            ]
+        )
+        for axis in ("x", "y", "z"):
+            lines.append(
+                "| "
+                + " | ".join(
+                    [
+                        axis.upper(),
+                        _format_float(_bias_axis_value(sr, "accel", axis, "mean_mg")),
+                        _format_float(_bias_axis_value(sr, "accel", axis, "std_mg")),
+                        _format_float(_bias_axis_value(sr, "accel", axis, "range_mg")),
+                        _format_float(_bias_axis_value(sr, "gyro", axis, "mean_deg_s")),
+                        _format_float(_bias_axis_value(sr, "gyro", axis, "std_deg_s")),
+                        _format_float(_bias_axis_value(sr, "gyro", axis, "range_deg_s")),
+                    ]
+                )
+                + " |"
+            )
+        lines.append("")
+
+    lines.extend(
+        [
+            "## 计算口径",
+            "",
+            "- 单个 BIN 视为一次重新上电后的静置采集段。",
+            f"- 对每颗 IMU、每个轴，先在该 BIN 内取时轴中间 `{BIAS_CENTER_WINDOW_SECONDS:.1f} s` 稳定窗口计算均值，作为该次上电的零偏结果。",
+            "- 段内标准差按 `sqrt(sum((x_i - mean)^2) / (N - 1))` 计算，用于观察本次静置短时波动。",
+            "- 段内极差按 `max(x_i) - min(x_i)` 计算。",
+        ]
+    )
+    return lines
+
+
 def _build_arw_markdown_lines(source: Path, summary: dict[str, object], destination: Path) -> list[str]:
     per_imu_report = summary.get("per_imu_report", {})
     if not isinstance(per_imu_report, dict):
@@ -5044,6 +6149,9 @@ def _build_arw_markdown_lines(source: Path, summary: dict[str, object], destinat
 
 
 def _write_markdown_report(destination: Path, source: Path, summary: dict[str, object]) -> None:
+    if summary.get("test") == "bias":
+        destination.write_text("\n".join(_build_bias_markdown_lines(source, summary, destination)) + "\n", encoding="utf-8")
+        return
     if summary.get("test") == "arw":
         destination.write_text("\n".join(_build_arw_markdown_lines(source, summary, destination)) + "\n", encoding="utf-8")
         return
@@ -5137,7 +6245,35 @@ def analyze_real_imu_bin_file(
         primary_packet_csv_path = per_imu_csv_paths[primary_imu_id]
 
     summary: dict[str, object]
-    if test_key == "arw":
+    if test_key == "bias":
+        progress.log(
+            f"逐包 CSV 已写出，开始基于每个 IMU 的 CSV 统计中间 {BIAS_CENTER_WINDOW_SECONDS:.1f} s 零偏窗口"
+        )
+        per_imu_report = _analyze_bias_per_imu_from_csvs(per_imu_csv_paths, progress_callback=progress_callback)
+        poll_stats = _collect_poll_comparison_stats(csv_path)
+        avg_packets_per_poll = poll_stats.get("avg_packets_per_poll", {})
+        if isinstance(avg_packets_per_poll, dict):
+            for imu_id, average_value in avg_packets_per_poll.items():
+                report_item = per_imu_report.get(imu_id)
+                if report_item is not None:
+                    report_item["avg_packets_per_poll"] = float(average_value)
+        bias_summary_csv = _write_bias_summary_csv(md_path, per_imu_report)
+        primary_report = per_imu_report.get(primary_imu_id, {}) if primary_imu_id else {}
+        summary = {
+            "test": test_key,
+            "source": str(source),
+            "comparison_csv": csv_path.name,
+            "per_imu_csvs": ", ".join(path.name for _, path in sorted(per_imu_csv_paths.items())),
+            "per_imu_report": per_imu_report,
+            "source_size_text": _format_file_size(source.stat().st_size),
+            "poll_row_count": int(poll_stats.get("poll_row_count", 0)),
+            "poll_total_duration_s": float(poll_stats.get("poll_total_duration_s", 0.0)),
+            "bias_summary_csv": bias_summary_csv.name,
+            "primary_imu_name": _imu_name_from_id(primary_imu_id) if primary_imu_id else "unknown",
+            "frames": str(primary_report.get("sample_count", 0)),
+            "duration_s": f"{float(primary_report.get('duration_s', 0.0)):.3f}",
+        }
+    elif test_key == "arw":
         progress.log("逐包 CSV 已写出，开始基于每个 IMU 的 CSV 统计实际采样率和噪声指标")
         per_imu_report = _analyze_arw_per_imu_from_csvs(per_imu_csv_paths, progress_callback=progress_callback)
         poll_stats = _collect_poll_comparison_stats(csv_path)
@@ -5430,6 +6566,24 @@ def command_decode_real_bin(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_bias_batch(args: argparse.Namespace) -> int:
+    sources = [Path(item).resolve() for item in args.inputs]
+    output_dir = Path(args.output).resolve() if args.output else None
+    result = analyze_bias_bin_files(
+        sources,
+        output_dir=output_dir,
+        progress_callback=lambda message: print(message),
+    )
+    print(f"output_dir: {result['output_dir']}")
+    print(f"runs_csv: {result['runs_csv']}")
+    print(f"aggregate_csv: {result['aggregate_csv']}")
+    print(f"report: {result['report']}")
+    chart_paths = result.get("chart_paths", [])
+    if isinstance(chart_paths, list):
+        print(f"charts: {len(chart_paths)}")
+    return 0
+
+
 def command_reset_to_cdc(args: argparse.Namespace) -> int:
     jlink_reset(device=args.device, speed=args.speed)
     if args.port:
@@ -5501,6 +6655,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser_decode_real.add_argument("input", help="path to IMUNOISE.BIN")
     parser_decode_real.add_argument("--output", help="output csv path")
     parser_decode_real.set_defaults(func=command_decode_real_bin)
+
+    parser_bias_batch = subparsers.add_parser(
+        "bias-batch",
+        help="analyze one or more zero-bias BIN files as power-cycle runs",
+    )
+    parser_bias_batch.add_argument(
+        "inputs",
+        nargs="+",
+        help="BIN files or directories containing BIN files",
+    )
+    parser_bias_batch.add_argument(
+        "--output",
+        help="Output directory, default: data/01_bias/<input>_<timestamp>",
+    )
+    parser_bias_batch.set_defaults(func=command_bias_batch)
 
     parser_export = subparsers.add_parser("export-log", help="switch to CDC+MSC export mode and copy IMU_LOG.CSV")
     parser_export.add_argument("--port", help="CDC serial port, e.g. COM78")

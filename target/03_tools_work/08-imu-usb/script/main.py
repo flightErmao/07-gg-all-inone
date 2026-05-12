@@ -12,6 +12,7 @@ from imu_usb_tool import (
     DEFAULT_BAUDRATE,
     DEFAULT_WAIT_SECONDS,
     TEST_OPTIONS,
+    analyze_bias_bin_files,
     analyze_real_imu_bin_file,
     find_cdc_port,
     parse_imu_probe_response,
@@ -817,20 +818,67 @@ class App:
         self.active_test_output_path = ""
 
     def _choose_analysis_bin(self) -> None:
+        test_key = self._selected_test_key(self.analysis_option_var.get())
+        if test_key == "bias":
+            chosen = filedialog.askopenfilenames(
+                title="选择零偏 BIN 文件，可多选",
+                filetypes=[("BIN files", "*.bin *.BIN"), ("All files", "*.*")],
+            )
+            if chosen:
+                self._run_async(lambda: self._start_analysis([Path(item) for item in chosen]))
+            return
+
         chosen = filedialog.askopenfilename(
             title="选择 BIN 文件",
-            filetypes=[("BIN files", "*.bin"), ("All files", "*.*")],
+            filetypes=[("BIN files", "*.bin *.BIN"), ("All files", "*.*")],
         )
         if chosen:
-            self._run_async(lambda: self._start_analysis(Path(chosen)))
+            self._run_async(lambda: self._start_analysis([Path(chosen)]))
 
-    def _start_analysis(self, source: Path) -> None:
+    @staticmethod
+    def _analysis_batch_base(sources: list[Path]) -> str:
+        if len(sources) == 1:
+            return sources[0].stem
+        if all(source.parent == sources[0].parent for source in sources):
+            return sources[0].parent.name or "bias_batch"
+        return "bias_batch"
+
+    def _start_analysis(self, sources: list[Path]) -> None:
         test_key = self._selected_test_key(self.analysis_option_var.get())
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        resolved_sources = [source.resolve() for source in sources]
+        if not resolved_sources:
+            self.message_queue.put(("info", "未选择 BIN 文件"))
+            return
+
+        if test_key == "bias":
+            batch_base = self._analysis_batch_base(resolved_sources)
+            output_dir = ANALYSIS_OUTPUT_DIRS[test_key] / f"{batch_base}_{timestamp}"
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+            self.message_queue.put(("info", f"开始零偏批量分析，BIN 数量: {len(resolved_sources)}"))
+            for index, source in enumerate(resolved_sources, start=1):
+                self.message_queue.put(("info", f"Run {index}: {source}"))
+            self.message_queue.put(("info", f"输出目录: {output_dir}"))
+            result = analyze_bias_bin_files(
+                resolved_sources,
+                output_dir=output_dir,
+                progress_callback=lambda message: self.message_queue.put(("info", message)),
+            )
+            self.message_queue.put(("info", f"{TEST_LABELS[test_key]} 分析完成"))
+            self.message_queue.put(("info", f"输出目录: {result['output_dir']}"))
+            self.message_queue.put(("info", f"轮次明细 CSV: {result['runs_csv']}"))
+            self.message_queue.put(("info", f"跨上电聚合 CSV: {result['aggregate_csv']}"))
+            chart_paths = result.get("chart_paths", [])
+            if isinstance(chart_paths, list) and chart_paths:
+                self.message_queue.put(("info", f"趋势图数量: {len(chart_paths)}"))
+            self.message_queue.put(("info", f"报告: {result['report']}"))
+            return
+
+        source = resolved_sources[0]
         output_dir = ANALYSIS_OUTPUT_DIRS[test_key] / f"{source.stem}_{timestamp}"
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        source = source.resolve()
         self.message_queue.put(("info", f"开始分析: {source}"))
         self.message_queue.put(("info", f"输出目录: {output_dir}"))
         csv_path, packet_csv_path, md_path, summary = analyze_real_imu_bin_file(
