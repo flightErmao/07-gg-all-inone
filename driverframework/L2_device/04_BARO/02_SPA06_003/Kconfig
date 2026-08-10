@@ -15,6 +15,12 @@ if BSP_USING_SPA06_003
                 config SENSOR_SPA06_003_NUM1_ID
                     int "SPA06_003_I2C_NUM1_ID"
                     default 0
+                config SENSOR_SPA06_003_NUM1_ALLOW_ABSENT
+                    bool "Allow boot when SPA06-003 NUM1 is absent"
+                    default y
+                    help
+                        Continue booting instead of asserting when the optional
+                        sensor is not connected or does not respond during init.
             endif
         menuconfig SENSOR_SPA06_003_NUM2
             bool "ENABLE: SENSOR_SPA06_003_NUM2"
@@ -32,5 +38,11 @@ if BSP_USING_SPA06_003
                 config SENSOR_SPA06_003_NUM2_ID
                     int "SPA06_003_I2C_NUM2_ID"
                     default 1
+                config SENSOR_SPA06_003_NUM2_ALLOW_ABSENT
+                    bool "Allow boot when SPA06-003 NUM2 is absent"
+                    default y
+                    help
+                        Continue booting instead of asserting when the optional
+                        sensor is not connected or does not respond during init.
             endif
     endif

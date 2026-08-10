@@ -213,8 +213,11 @@ static rt_err_t _i2c_dev_init(const char* i2c_dev_name, uint8_t id) {
     LOG_E("can't find %s device!", i2c_dev_name);
     return RT_ERROR;
   }
-  RT_ASSERT(i2c_dev != NULL);
-  RT_ASSERT(rt_device_open(i2c_dev, RT_DEVICE_OFLAG_RDWR) == RT_EOK);
+  ret = rt_device_open(i2c_dev, RT_DEVICE_OFLAG_RDWR);
+  if (ret != RT_EOK) {
+    LOG_E("open %s device failed: %d", i2c_dev_name, ret);
+    return ret;
+  }
 
   if (id == 0) {
 #ifdef SENSOR_SPA06_003_NUM1
@@ -229,39 +232,67 @@ static rt_err_t _i2c_dev_init(const char* i2c_dev_name, uint8_t id) {
   return ret;
 }
 
-static void _drv_hal_reg(uint8_t id, const char* baro_device_name) {
+static rt_err_t _drv_hal_reg(uint8_t id, const char* baro_device_name) {
   if (id == 0) {
 #ifdef SENSOR_SPA06_003_NUM1
     spa06_003_num1_.baro_dev.ops = &_baro_ops;
     spa06_003_num1_.baro_dev.id = id;
-    RT_ASSERT(hal_baro_register(&spa06_003_num1_.baro_dev, baro_device_name, RT_DEVICE_FLAG_RDWR, RT_NULL) == RT_EOK);
+    return hal_baro_register(&spa06_003_num1_.baro_dev, baro_device_name, RT_DEVICE_FLAG_RDWR, RT_NULL);
 #endif
   } else if (id == 1) {
 #ifdef SENSOR_SPA06_003_NUM2
     spa06_003_num2_.baro_dev.ops = &_baro_ops;
     spa06_003_num2_.baro_dev.id = id;
-    RT_ASSERT(hal_baro_register(&spa06_003_num2_.baro_dev, baro_device_name, RT_DEVICE_FLAG_RDWR, RT_NULL) == RT_EOK);
+    return hal_baro_register(&spa06_003_num2_.baro_dev, baro_device_name, RT_DEVICE_FLAG_RDWR, RT_NULL);
 #endif
   }
+  return RT_ERROR;
 }
 
 rt_err_t drv_spa06_003_init(const char* i2c_dev_ice_name, const char* baro_device_name, uint8_t id) {
-  RT_ASSERT(_i2c_dev_init(i2c_dev_ice_name, id) == RT_EOK);
+  rt_err_t ret = _i2c_dev_init(i2c_dev_ice_name, id);
+  if (ret != RT_EOK) {
+    return ret;
+  }
   /* device low-level initialization */
-  RT_ASSERT(lowlevel_init(id) == RT_EOK);
+  ret = lowlevel_init(id);
+  if (ret != RT_EOK) {
+    LOG_E("SPA06-003 id %d low-level init failed", id);
+    return ret;
+  }
   /* register barometer device */
-  _drv_hal_reg(id, baro_device_name);
+  ret = _drv_hal_reg(id, baro_device_name);
+  if (ret != RT_EOK) {
+    LOG_E("register barometer %s failed: %d", baro_device_name, ret);
+    return ret;
+  }
 
   return RT_EOK;
 }
 
 static int _drv_spa06_003_reg(void) {
 #ifdef SENSOR_SPA06_003_NUM1
-  drv_spa06_003_init(SENSOR_SPA06_003_NUM1_I2C_NAME, SENSOR_SPA06_003_NUM1_DEVICE_NAME, SENSOR_SPA06_003_NUM1_ID);
+  rt_err_t ret_num1 =
+      drv_spa06_003_init(SENSOR_SPA06_003_NUM1_I2C_NAME, SENSOR_SPA06_003_NUM1_DEVICE_NAME, SENSOR_SPA06_003_NUM1_ID);
+#ifdef SENSOR_SPA06_003_NUM1_ALLOW_ABSENT
+  if (ret_num1 != RT_EOK) {
+    LOG_W("optional SPA06-003 NUM1 is absent; system will continue");
+  }
+#else
+  RT_ASSERT(ret_num1 == RT_EOK);
+#endif
 #endif
 
 #ifdef SENSOR_SPA06_003_NUM2
-  drv_spa06_003_init(SENSOR_SPA06_003_NUM2_I2C_NAME, SENSOR_SPA06_003_NUM2_DEVICE_NAME, SENSOR_SPA06_003_NUM2_ID);
+  rt_err_t ret_num2 =
+      drv_spa06_003_init(SENSOR_SPA06_003_NUM2_I2C_NAME, SENSOR_SPA06_003_NUM2_DEVICE_NAME, SENSOR_SPA06_003_NUM2_ID);
+#ifdef SENSOR_SPA06_003_NUM2_ALLOW_ABSENT
+  if (ret_num2 != RT_EOK) {
+    LOG_W("optional SPA06-003 NUM2 is absent; system will continue");
+  }
+#else
+  RT_ASSERT(ret_num2 == RT_EOK);
+#endif
 #endif
   return 0;
 }

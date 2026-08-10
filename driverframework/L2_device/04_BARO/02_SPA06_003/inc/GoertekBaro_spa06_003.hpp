@@ -143,7 +143,7 @@ class GoertekBaro {
  public:
   static constexpr uint8_t WHO_AM_I_001 = 0x10;
   static constexpr uint8_t WHO_AM_I_003 = 0x11;
-  static constexpr uint8_t GoertekBaro_I2C_SLAVE_ADDRESS = 0x76;
+  static constexpr uint8_t GoertekBaro_I2C_SLAVE_ADDRESS = 0x77;
 
   uint8_t baro_model_;
 

@@ -3,7 +3,21 @@ import os
 
 cwd = GetCurrentDir()
 
-src = Glob('./src/*.c')
+bf_features = [
+    'PROJECT_BF_BMI270_EN',
+    'PROJECT_BF_GYRO_FILTER_EN',
+    'PROJECT_BF_RC_EN',
+    'PROJECT_BF_PARAM_EN',
+    'PROJECT_BF_ANOTC_EN',
+    'PROJECT_BF_MOTOR_EN',
+    'PROJECT_BF_ACC_EN',
+    'PROJECT_BF_ATTITUDE_EN',
+    'PROJECT_BF_PID_EN',
+]
+
+src = []
+if any(GetDepend(feature) for feature in bf_features):
+    src = Glob('./src/*.c')
 
 inc_path = [
     os.path.join(cwd, 'inc'),
